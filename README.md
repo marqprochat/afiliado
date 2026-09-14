@@ -33,3 +33,17 @@ set -a && . ./.env && set +a && pnpm test
 - `packages/core` — regras de negócio puras (template, janela, agendamento, shuffle, URLs, SubID)
 - `packages/db` — Prisma, `forTenant`, criptografia, seed
 - `packages/marketplaces` — adapters (Shopee na F1; `SHOPEE_MOCK=1` para rodar sem credenciais)
+
+## Web (painel)
+
+```bash
+pnpm --filter @afilados/web dev     # http://localhost:3000 (proxy /api → :3001)
+```
+
+E2E (API rodando com `SHOPEE_MOCK=1`; não rode `pnpm build` da web com o `dev` ativo — ambos usam `.next/`):
+
+```bash
+set -a && . ./.env && set +a
+pnpm --filter @afilados/web e2e:seed
+pnpm --filter @afilados/web e2e
+```

@@ -11,3 +11,5 @@ coverage/
 # Next
 apps/web/.next/
 apps/web/next-env.d.ts
+apps/web/test-results/
+apps/web/playwright-report/
