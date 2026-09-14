@@ -81,6 +81,14 @@ export async function sendOffer(
   if (!isWithinOperatingWindow(t, window)) {
     const runAt = nextWindowOpen(t, window);
     await prisma.batchItem.update({ where: { id: item.id }, data: { runAt } });
+    const last = await prisma.batchItem.findFirst({
+      where: { batchId: batch.id },
+      orderBy: { runAt: 'desc' },
+    });
+    await prisma.batch.update({
+      where: { id: batch.id },
+      data: { estimatedEndAt: last?.runAt ?? runAt },
+    });
     await publishProgress(batch.id, tenantId);
     return { outcome: 'rescheduled', runAt };
   }
@@ -89,105 +97,145 @@ export async function sendOffer(
   if (batch.status === 'SCHEDULED')
     await prisma.batch.update({ where: { id: batch.id }, data: { status: 'RUNNING' } });
 
-  // Link de afiliado (uma vez por item)
-  let affiliateLink = product.originalUrl;
-  if (product.source === 'SHOPEE' && conn?.encryptedCredentials) {
-    const creds = decryptJson<ShopeeCredentials>(Buffer.from(conn.encryptedCredentials));
-    const subId = generateSubId(subIdPattern, {
-      now: t,
-      batchId: batch.id,
-      timezone: window.timezone,
-    });
-    affiliateLink = await deps.shopee.toAffiliateLink(creds, product.originalUrl, subId);
-  }
-
-  const pd: ProductData = {
-    source: product.source,
-    title: product.title,
-    price: Number(product.price),
-    images: product.images,
-    shipping: product.shipping,
-    originalUrl: product.originalUrl,
-    raw: product.raw,
-    ...(product.externalId ? { externalId: product.externalId } : {}),
-    ...(product.originalPrice !== null ? { originalPrice: Number(product.originalPrice) } : {}),
-    ...(product.discountPct !== null ? { discountPct: product.discountPct } : {}),
-    ...(product.salesCount !== null ? { salesCount: product.salesCount } : {}),
-    ...(product.commissionPct !== null ? { commissionPct: Number(product.commissionPct) } : {}),
-    ...(product.flashSaleEndsAt ? { flashSaleEndsAt: product.flashSaleEndsAt.toISOString() } : {}),
-    ...(product.couponCode ? { couponCode: product.couponCode } : {}),
-    ...(product.couponValue !== null ? { couponValue: Number(product.couponValue) } : {}),
-  };
-  const text = renderTemplate(batch.template.body, pd, { affiliateLink, now: t.toISOString() });
-  const image = product.images[0];
-  const message: OutgoingMessage =
-    batch.mediaMode === 'IMAGE' && image
-      ? { kind: 'image', imageUrl: image, caption: text }
-      : {
-          kind: 'preview',
-          text,
-          title: product.title,
-          description: `R$ ${Number(product.price).toFixed(2).replace('.', ',')}`,
-          thumbnailUrl: image ?? '',
-          url: affiliateLink,
-        };
-
-  const existing = await prisma.sendLog.findMany({
-    where: { batchItemId: item.id, waMessageId: { not: null } },
-  });
-  const done = new Set(existing.map((l) => l.groupJid));
-  const bucket = bucketFor(batch.sessionId, ratePerMin);
-  let sentCount = 0;
-  let first = true;
-  for (const groupJid of batch.groupJids) {
-    if (done.has(groupJid)) continue;
-    if (!first) await sleep(jitter(GROUP_GAP_MS, 0.15, rng));
-    first = false;
-    await waitForToken(bucket, sleep);
-    try {
-      const { messageId } = await deps.gateway.sendMessage(batch.sessionId, groupJid, message);
-      await prisma.sendLog.upsert({
-        where: { batchItemId_groupJid: { batchItemId: item.id, groupJid } },
-        update: { waMessageId: messageId, status: 'SENT', error: null, sentAt: now() },
-        create: {
-          tenantId,
-          batchItemId: item.id,
-          groupJid,
-          waMessageId: messageId,
-          status: 'SENT',
-        },
+  try {
+    // Link de afiliado (uma vez por item)
+    let affiliateLink = product.originalUrl;
+    if (product.source === 'SHOPEE' && conn?.encryptedCredentials) {
+      const creds = decryptJson<ShopeeCredentials>(Buffer.from(conn.encryptedCredentials));
+      const subId = generateSubId(subIdPattern, {
+        now: t,
+        batchId: batch.id,
+        timezone: window.timezone,
       });
-      sentCount++;
-    } catch (e) {
-      const error = e instanceof Error ? e.message : String(e);
-      log.warn({ batchItemId: item.id, groupJid, error }, 'falha ao enviar');
-      await prisma.sendLog.upsert({
-        where: { batchItemId_groupJid: { batchItemId: item.id, groupJid } },
-        update: { status: 'ERROR', error, sentAt: now() },
-        create: { tenantId, batchItemId: item.id, groupJid, status: 'ERROR', error },
-      });
+      affiliateLink = await deps.shopee.toAffiliateLink(creds, product.originalUrl, subId);
     }
+
+    const pd: ProductData = {
+      source: product.source,
+      title: product.title,
+      price: Number(product.price),
+      images: product.images,
+      shipping: product.shipping,
+      originalUrl: product.originalUrl,
+      raw: product.raw,
+      ...(product.externalId ? { externalId: product.externalId } : {}),
+      ...(product.originalPrice !== null ? { originalPrice: Number(product.originalPrice) } : {}),
+      ...(product.discountPct !== null ? { discountPct: product.discountPct } : {}),
+      ...(product.salesCount !== null ? { salesCount: product.salesCount } : {}),
+      ...(product.commissionPct !== null ? { commissionPct: Number(product.commissionPct) } : {}),
+      ...(product.flashSaleEndsAt
+        ? { flashSaleEndsAt: product.flashSaleEndsAt.toISOString() }
+        : {}),
+      ...(product.couponCode ? { couponCode: product.couponCode } : {}),
+      ...(product.couponValue !== null ? { couponValue: Number(product.couponValue) } : {}),
+    };
+    const text = renderTemplate(batch.template.body, pd, { affiliateLink, now: t.toISOString() });
+    const image = product.images[0];
+    const message: OutgoingMessage =
+      batch.mediaMode === 'IMAGE' && image
+        ? { kind: 'image', imageUrl: image, caption: text }
+        : {
+            kind: 'preview',
+            text,
+            title: product.title,
+            description: `R$ ${Number(product.price).toFixed(2).replace('.', ',')}`,
+            thumbnailUrl: image ?? '',
+            url: affiliateLink,
+          };
+
+    const existing = await prisma.sendLog.findMany({
+      where: { batchItemId: item.id, waMessageId: { not: null } },
+    });
+    const done = new Set(existing.map((l) => l.groupJid));
+    const bucket = bucketFor(batch.sessionId, ratePerMin);
+    let sentCount = 0;
+    let first = true;
+    for (const groupJid of batch.groupJids) {
+      if (done.has(groupJid)) continue;
+      if (!first) await sleep(jitter(GROUP_GAP_MS, 0.15, rng));
+      first = false;
+      await waitForToken(bucket, sleep);
+      try {
+        const { messageId } = await deps.gateway.sendMessage(batch.sessionId, groupJid, message);
+        await prisma.sendLog.upsert({
+          where: { batchItemId_groupJid: { batchItemId: item.id, groupJid } },
+          update: { waMessageId: messageId, status: 'SENT', error: null, sentAt: now() },
+          create: {
+            tenantId,
+            batchItemId: item.id,
+            groupJid,
+            waMessageId: messageId,
+            status: 'SENT',
+          },
+        });
+        sentCount++;
+      } catch (e) {
+        const error = e instanceof Error ? e.message : String(e);
+        log.warn({ batchItemId: item.id, groupJid, error }, 'falha ao enviar');
+        await prisma.sendLog.upsert({
+          where: { batchItemId_groupJid: { batchItemId: item.id, groupJid } },
+          update: { status: 'ERROR', error, sentAt: now() },
+          create: { tenantId, batchItemId: item.id, groupJid, status: 'ERROR', error },
+        });
+      }
+    }
+
+    const anySent = sentCount > 0 || done.size > 0;
+    const status = anySent ? 'SENT' : 'ERROR';
+    await prisma.batchItem.update({
+      where: { id: item.id },
+      data: { status, error: anySent ? null : 'nenhum grupo recebeu' },
+    });
+    await prisma.queueItem.updateMany({
+      where: { tenantId, productId: product.id },
+      data: { status },
+    });
+    await publishEvent(tenantId, {
+      type: 'batch.item',
+      batchId: batch.id,
+      itemId: item.id,
+      status,
+    });
+
+    await finalizeBatchIfComplete(batch.id);
+    await publishProgress(batch.id, tenantId);
+    return { outcome: 'sent', groups: sentCount };
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    await prisma.batchItem.update({
+      where: { id: item.id },
+      data: { status: 'ERROR', error },
+    });
+    await prisma.queueItem.updateMany({
+      where: { tenantId, productId: product.id },
+      data: { status: 'ERROR' },
+    });
+    await publishEvent(tenantId, {
+      type: 'batch.item',
+      batchId: batch.id,
+      itemId: item.id,
+      status: 'ERROR',
+    });
+    await finalizeBatchIfComplete(batch.id);
+    await publishProgress(batch.id, tenantId);
+    throw e;
   }
+}
 
-  const anySent = sentCount > 0 || done.size > 0;
-  const status = anySent ? 'SENT' : 'ERROR';
-  await prisma.batchItem.update({
-    where: { id: item.id },
-    data: { status, error: anySent ? null : 'nenhum grupo recebeu' },
-  });
-  await prisma.queueItem.updateMany({
-    where: { tenantId, productId: product.id },
-    data: { status },
-  });
-  await publishEvent(tenantId, { type: 'batch.item', batchId: batch.id, itemId: item.id, status });
-
+/**
+ * Marca o lote como DONE quando não há mais itens pendentes/enviando.
+ * Nunca sobrescreve CANCELLED/PAUSED: só transiciona a partir de SCHEDULED/RUNNING.
+ */
+export async function finalizeBatchIfComplete(batchId: string) {
   const remaining = await prisma.batchItem.count({
-    where: { batchId: batch.id, status: { in: ['PENDING', 'SENDING'] } },
+    where: { batchId, status: { in: ['PENDING', 'SENDING'] } },
   });
-  if (remaining === 0)
-    await prisma.batch.update({ where: { id: batch.id }, data: { status: 'DONE' } });
-  await publishProgress(batch.id, tenantId);
-  return { outcome: 'sent', groups: sentCount };
+  if (remaining === 0) {
+    await prisma.batch.updateMany({
+      where: { id: batchId, status: { in: ['SCHEDULED', 'RUNNING'] } },
+      data: { status: 'DONE' },
+    });
+  }
 }
 
 async function publishProgress(batchId: string, tenantId: string) {

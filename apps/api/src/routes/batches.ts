@@ -73,7 +73,16 @@ export async function batchesRoutes(app: FastifyInstance) {
       },
       include: { items: { orderBy: { order: 'asc' } } },
     });
-    await enqueueBatchItems(batch.items, req.tenantId, now);
+    try {
+      await enqueueBatchItems(batch.items, req.tenantId, now);
+    } catch {
+      await req.db.batch.updateMany({ where: { id: batch.id }, data: { status: 'CANCELLED' } });
+      await req.db.batchItem.updateMany({
+        where: { id: { in: batch.items.map((i) => i.id) } },
+        data: { status: 'ERROR', error: 'falha ao enfileirar' },
+      });
+      throw new ApiError('INTERNAL', 'Falha ao enfileirar lote', 500);
+    }
     return reply.status(201).send({ batch: { ...batch, items: undefined }, items: batch.items });
   });
 
@@ -127,11 +136,16 @@ export async function batchesRoutes(app: FastifyInstance) {
       where: { id: b.id },
       data: { status: 'SCHEDULED', estimatedEndAt },
     });
-    await enqueueBatchItems(
-      pending.map((it, i) => ({ id: it.id, runAt: runAt[i]! })),
-      req.tenantId,
-      now,
-    );
+    try {
+      await enqueueBatchItems(
+        pending.map((it, i) => ({ id: it.id, runAt: runAt[i]! })),
+        req.tenantId,
+        now,
+      );
+    } catch {
+      await req.db.batch.updateMany({ where: { id: b.id }, data: { status: 'PAUSED' } });
+      throw new ApiError('INTERNAL', 'Falha ao enfileirar lote', 500);
+    }
     return { status: 'SCHEDULED', estimatedEndAt };
   });
 

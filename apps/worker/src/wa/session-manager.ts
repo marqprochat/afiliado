@@ -145,6 +145,13 @@ export class WaSessionManager {
 
   async syncGroups(sessionId: string, tenantId: string) {
     const groups = await this.gateway.fetchGroups(sessionId);
+    if (groups.length === 0) {
+      log.warn(
+        { sessionId },
+        'sincronização de grupos retornou lista vazia; mantendo grupos existentes',
+      );
+      return;
+    }
     await prisma.$transaction([
       prisma.waGroup.deleteMany({
         where: { sessionId, jid: { notIn: groups.map((g) => g.jid) } },

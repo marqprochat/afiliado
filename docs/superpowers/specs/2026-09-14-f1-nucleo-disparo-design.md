@@ -187,3 +187,11 @@ Layout: sidebar (Principal/Configurações), topbar com pills de status alimenta
 - [ ] Lote criado às 23:25 com janela até 23:30 e intervalo 10 min: 1º item sai às 23:25, 2º às 07:30 do dia seguinte.
 - [ ] Todos os testes passam em CI local (`pnpm test`).
 - [ ] `deploy.sh` no VPS entrega o painel em HTTPS.
+
+## 12. Decisões registradas na F1-B
+
+- (a) Canais/newsletter ficam deferidos para a F2 — Baileys não expõe listagem estável de canais no momento. A UI não deve exibir o prefixo `[CANAL]` até essa listagem ser confiável.
+- (b) `GET /marketplaces` lista todas as lojas de uma vez, em vez de `GET /marketplaces/:kind` para leitura individual (o `:kind` continua existindo para as operações de escrita/conexão).
+- (c) `GET /me` não inclui `settings` — o cliente deve chamar `GET /settings` separadamente.
+- (d) Sem CORS: o app web faz proxy same-origin de `/api/*`. A proteção contra CSRF na F1 é `SameSite=Lax` + `httpOnly` no cookie de sessão.
+- (e) O commit `8d8fccc` tem um trailer de atribuição divergente do padrão vigente; isso foi aceito conscientemente e o histórico não foi reescrito.

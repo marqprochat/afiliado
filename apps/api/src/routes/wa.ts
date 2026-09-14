@@ -54,6 +54,14 @@ export async function waRoutes(app: FastifyInstance) {
 
   app.delete('/wa/sessions/:id', async (req, reply) => {
     const s = await findSession(req);
+    const inUse = await req.db.batch.count({ where: { sessionId: s.id } });
+    if (inUse > 0) {
+      throw new ApiError(
+        'VALIDATION',
+        'Sessão possui lotes; cancele/remova os lotes antes de excluir',
+        409,
+      );
+    }
     if (s.status !== 'DISCONNECTED' && s.status !== 'LOGGED_OUT') {
       await enqueue({ tenantId: req.tenantId, sessionId: s.id, command: 'logout' });
     }

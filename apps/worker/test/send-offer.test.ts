@@ -166,7 +166,7 @@ describe('sendOffer', () => {
   });
 
   it('fora da janela → rescheduled para a próxima abertura', async () => {
-    const { item } = await makeBatch();
+    const { batch, item } = await makeBatch();
     const r = await sendOffer(
       { ...deps, now: () => new Date('2026-09-14T03:00:00-03:00') },
       item.id,
@@ -176,6 +176,9 @@ describe('sendOffer', () => {
     expect((await prisma.batchItem.findUniqueOrThrow({ where: { id: item.id } })).runAt).toEqual(
       new Date('2026-09-14T07:30:00-03:00'),
     );
+    expect(
+      (await prisma.batch.findUniqueOrThrow({ where: { id: batch.id } })).estimatedEndAt,
+    ).toEqual(new Date('2026-09-14T07:30:00-03:00'));
   });
 
   it('falha em um grupo grava ERROR e segue para o próximo; item fica SENT', async () => {
@@ -198,5 +201,23 @@ describe('sendOffer', () => {
     expect((await prisma.batchItem.findUniqueOrThrow({ where: { id: item.id } })).status).toBe(
       'ERROR',
     );
+  });
+
+  it('erro antes do envio (ex.: link de afiliado) marca item ERROR e conclui o lote', async () => {
+    const { batch, item } = await makeBatch();
+    const brokenDeps: SendOfferDeps = {
+      ...deps,
+      shopee: {
+        ...deps.shopee,
+        toAffiliateLink: async () => {
+          throw new Error('shopee down');
+        },
+      },
+    };
+    await expect(sendOffer(brokenDeps, item.id)).rejects.toThrow(/shopee down/);
+    const updated = await prisma.batchItem.findUniqueOrThrow({ where: { id: item.id } });
+    expect(updated.status).toBe('ERROR');
+    expect(updated.error).toBe('shopee down');
+    expect((await prisma.batch.findUniqueOrThrow({ where: { id: batch.id } })).status).toBe('DONE');
   });
 });

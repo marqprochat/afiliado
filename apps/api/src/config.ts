@@ -8,6 +8,8 @@ const schema = z.object({
   SESSION_SECRET: z.string().min(16),
   APP_ENCRYPTION_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/),
   SHOPEE_MOCK: z.string().optional(),
+  // Web faz proxy same-origin de /api/*, então não há CORS a configurar; WEB_ORIGIN
+  // só é usada para validar o header Origin em /ws quando presente (produção).
   WEB_ORIGIN: z.string().url().default('http://localhost:3000'),
 });
 

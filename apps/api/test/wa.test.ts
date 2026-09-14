@@ -95,7 +95,28 @@ describe('wa sessions', () => {
     });
     expect(r.json().map((g: { name: string }) => g.name)).toEqual(['Alfa', 'Zeta']);
   });
-  it('delete remove a sessão', async () => {
+  it('delete com lote referenciando a sessão → 409; após remover o lote, 204', async () => {
+    const template = await prisma.template.findFirstOrThrow({ where: { tenantId: t.tenantId } });
+    const batch = await prisma.batch.create({
+      data: {
+        tenantId: t.tenantId,
+        sessionId: id,
+        templateId: template.id,
+        name: 'b',
+        groupJids: [],
+        intervalMin: 1,
+        mediaMode: 'IMAGE',
+      },
+    });
+    const blocked = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/wa/sessions/${id}`,
+      headers: { cookie },
+    });
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.json().error.code).toBe('VALIDATION');
+
+    await prisma.batch.delete({ where: { id: batch.id } });
     const r = await app.inject({
       method: 'DELETE',
       url: `/api/v1/wa/sessions/${id}`,
