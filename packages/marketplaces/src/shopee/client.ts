@@ -22,7 +22,16 @@ export class ShopeeGraphQLClient {
       },
       body: payload,
     });
-    if (!res.ok) throw new ShopeeApiError(`HTTP ${res.status}`);
+    if (!res.ok) {
+      let detail = '';
+      try {
+        const body = (await res.json()) as { errors?: { message: string }[] };
+        detail = body.errors?.map((e) => e.message).join('; ') ?? '';
+      } catch {
+        /* corpo não-JSON: mantém só o status */
+      }
+      throw new ShopeeApiError(detail ? `HTTP ${res.status}: ${detail}` : `HTTP ${res.status}`);
+    }
     const json = (await res.json()) as { data?: T; errors?: { message: string }[] };
     if (json.errors?.length) throw new ShopeeApiError(json.errors.map((e) => e.message).join('; '));
     if (!json.data) throw new ShopeeApiError('Resposta sem data');

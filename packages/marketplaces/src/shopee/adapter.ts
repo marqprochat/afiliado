@@ -99,9 +99,7 @@ export function createShopeeAdapter(opts: ShopeeAdapterOptions = {}): Marketplac
         const parsed = parseProductUrl(url);
         if (parsed.source !== 'SHOPEE') continue;
         const res = await searchPage(creds, { itemId: Number(parsed.externalId), limit: 1, page: 1 });
-        const node =
-          res.productOfferV2.nodes.find((n) => String(n.itemId) === parsed.externalId) ??
-          res.productOfferV2.nodes[0];
+        const node = res.productOfferV2.nodes.find((n) => String(n.itemId) === parsed.externalId);
         if (node) out.push(mapProductOffer(node));
       }
       return out;
