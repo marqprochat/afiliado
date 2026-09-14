@@ -1,0 +1,34 @@
+{
+  "name": "@afilados/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=../../.env src/main.ts",
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@afilados/core": "workspace:*",
+    "@afilados/db": "workspace:*",
+    "@afilados/marketplaces": "workspace:*",
+    "@afilados/shared": "workspace:*",
+    "@fastify/cookie": "^11.0.1",
+    "@fastify/multipart": "^9.0.1",
+    "@fastify/rate-limit": "^10.1.1",
+    "@fastify/websocket": "^11.0.1",
+    "@node-rs/argon2": "^2.0.0",
+    "bullmq": "^5.13.0",
+    "fastify": "^5.0.0",
+    "ioredis": "^5.4.1",
+    "pino": "^9.4.0",
+    "tsx": "^4.19.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.1",
+    "@types/node": "^22.7.0"
+  }
+}
