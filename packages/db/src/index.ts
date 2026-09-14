@@ -42,6 +42,11 @@ const FILTERED_OPS = new Set([
  *
  * Atenção: `findUnique`/`update`/`delete` por chave única NÃO são filtrados (o Prisma não aceita
  * campos extras no where único). Sempre localize com `findFirst` escopado antes de mutar por id.
+ *
+ * Limitação de tipos conhecida: o `$extends` do Prisma não estreita o tipo de entrada de
+ * `create()`/`createMany()`/`upsert()` — o TypeScript ainda exige `tenantId`/`tenant` mesmo que
+ * a extensão os injete em runtime. Até isso ser melhorado, quem chamar `create` (etc.) no client
+ * escopado deve usar `// @ts-expect-error` no site da chamada ou passar `tenantId` explicitamente.
  */
 export function forTenant(tenantId: string) {
   return prisma.$extends({

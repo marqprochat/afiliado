@@ -22,6 +22,7 @@ describe('forTenant', () => {
     expect(rows.map((r) => r.name)).toEqual(['ta']);
   });
   it('create injeta tenantId', async () => {
+    // @ts-expect-error tenantId é injetado em runtime pela extensão forTenant; o tipo do Prisma não reflete isso
     const t = await forTenant(b).template.create({ data: { name: 'tb2', body: 'z' } });
     expect(t.tenantId).toBe(b);
   });

@@ -20,7 +20,7 @@ export function parseProductUrl(raw: string): ParsedProductUrl {
     const m2 = path.match(/^\/product\/(\d+)\/(\d+)/);
     if (m2) return { source: 'SHOPEE', shopId: m2[1]!, externalId: m2[2]! };
   }
-  if (host.endsWith('mercadolivre.com.br')) {
+  if (host === 'mercadolivre.com.br' || host.endsWith('.mercadolivre.com.br')) {
     const m = path.match(/MLB-?(\d+)/);
     if (m) return { source: 'MERCADOLIVRE', externalId: `MLB${m[1]}` };
   }

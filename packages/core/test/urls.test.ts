@@ -34,5 +34,6 @@ describe('parseProductUrl', () => {
     expect(parseProductUrl('https://s.shopee.com.br/abc').source).toBe('UNSUPPORTED');
     expect(parseProductUrl('https://meli.la/abc').source).toBe('UNSUPPORTED');
     expect(parseProductUrl('nao-e-url').source).toBe('UNSUPPORTED');
+    expect(parseProductUrl('https://evilmercadolivre.com.br/MLB123').source).toBe('UNSUPPORTED');
   });
 });
