@@ -1,0 +1,47 @@
+{
+  "name": "@afilados/web",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "e2e": "playwright test",
+    "e2e:seed": "tsx e2e/seed.ts"
+  },
+  "dependencies": {
+    "@afilados/core": "workspace:*",
+    "@afilados/shared": "workspace:*",
+    "@base-ui/react": "^1.8.0",
+    "@tanstack/react-query": "^5.59.0",
+    "class-variance-authority": "^0.7.1",
+    "cn": "^0.3.0",
+    "lucide-react": "^0.447.0",
+    "next": "15.5.25",
+    "qrcode.react": "^4.0.1",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "shadcn": "^4.21.0",
+    "sonner": "^1.5.0",
+    "tw-animate-css": "^1.4.0"
+  },
+  "devDependencies": {
+    "@afilados/db": "workspace:*",
+    "@node-rs/argon2": "^2.0.0",
+    "@playwright/test": "^1.47.0",
+    "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^6.5.0",
+    "@testing-library/react": "^16.0.1",
+    "@types/node": "^22.7.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^4.3.2",
+    "jsdom": "^25.0.1",
+    "tailwindcss": "^4",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.1"
+  }
+}

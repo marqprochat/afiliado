@@ -7,3 +7,7 @@ dist/
 .turbo/
 coverage/
 .superpowers/
+
+# Next
+apps/web/.next/
+apps/web/next-env.d.ts

@@ -1,0 +1,121 @@
+import type {
+  MarketplaceKind,
+  MediaMode,
+  WaSessionStatus,
+  BatchStatus,
+  BatchItemStatus,
+} from '@afilados/shared';
+
+export interface Me {
+  user: { id: string; email: string; name: string; role: string };
+  tenant: { id: string; name: string };
+}
+export interface Settings {
+  window: { startTime: string; endTime: string; timezone: string; enabled: boolean };
+  queueLimit: number;
+  globalRateLimitPerMin: number;
+  subIdPattern: string;
+}
+export interface WaSession {
+  id: string;
+  label: string;
+  phone: string | null;
+  status: WaSessionStatus;
+  lastQr: string | null;
+  pairCode: string | null;
+  lastSeenAt: string | null;
+  createdAt: string;
+}
+export interface WaGroup {
+  id: string;
+  jid: string;
+  name: string;
+  kind: 'GROUP' | 'COMMUNITY' | 'CHANNEL';
+  botIsAdmin: boolean;
+  memberCount: number;
+}
+export interface MarketplaceConnection {
+  kind: MarketplaceKind;
+  status: 'UNCONFIGURED' | 'OK' | 'ERROR';
+  affiliateTag: string | null;
+  appId: string | null;
+  hasSecret: boolean;
+  lastCheckedAt: string | null;
+  lastError: string | null;
+}
+export interface ApiProduct {
+  id: string;
+  source: string;
+  externalId: string | null;
+  title: string;
+  price: number;
+  originalPrice: number | null;
+  discountPct: number | null;
+  salesCount: number | null;
+  commissionPct: number | null;
+  images: string[];
+  shipping: string;
+  flashSaleEndsAt: string | null;
+  couponCode: string | null;
+  originalUrl: string;
+  shopId: string | null;
+  shopName: string | null;
+}
+export interface QueueItem {
+  id: string;
+  productId: string;
+  selected: boolean;
+  status: 'PENDING' | 'SENT' | 'ERROR';
+  addedAt: string;
+  product: ApiProduct;
+}
+export interface QueueResponse {
+  items: QueueItem[];
+  limit: number;
+  count: number;
+}
+export interface Template {
+  id: string;
+  name: string;
+  body: string;
+  isDefault: boolean;
+}
+export interface BatchSummary {
+  id: string;
+  name: string;
+  status: BatchStatus;
+  intervalMin: number;
+  mediaMode: MediaMode;
+  shuffled: boolean;
+  groupJids: string[];
+  estimatedEndAt: string | null;
+  createdAt: string;
+  total: number;
+  sent: number;
+  errors: number;
+}
+export interface BatchItem {
+  id: string;
+  order: number;
+  runAt: string;
+  status: BatchItemStatus;
+  error: string | null;
+  product: ApiProduct;
+}
+export interface BatchDetail extends Omit<BatchSummary, 'total' | 'sent' | 'errors'> {
+  items: BatchItem[];
+}
+export interface Overview {
+  wa: { id: string; label: string; status: WaSessionStatus; phone: string | null }[];
+  shopee: 'UNCONFIGURED' | 'OK' | 'ERROR';
+  queue: { count: number; limit: number };
+  batches: {
+    id: string;
+    name: string;
+    status: BatchStatus;
+    estimatedEndAt: string | null;
+    total: number;
+    sent: number;
+  }[];
+  errors: { id: string; groupJid: string; error: string | null; sentAt: string }[];
+}
