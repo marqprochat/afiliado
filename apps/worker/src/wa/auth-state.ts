@@ -15,11 +15,14 @@ const toJson = (v: unknown) => JSON.parse(JSON.stringify(v, BufferJSON.replacer)
 const fromJson = <T>(v: unknown) => JSON.parse(JSON.stringify(v), BufferJSON.reviver) as T;
 
 export async function usePostgresAuthState(sessionId: string) {
-  const row = await prisma.waSession.findUniqueOrThrow({
+  // `findUnique` (e não `findUniqueOrThrow`): a sessão pode já ter sido apagada —
+  // nesse caso `saveCreds`/`clear` viram no-ops em vez de estourar (ver `logout`).
+  const row = await prisma.waSession.findUnique({
     where: { id: sessionId },
     select: { authCreds: true },
   });
-  const creds = row.authCreds
+  const exists = row !== null;
+  const creds = row?.authCreds
     ? fromJson<AuthenticationState['creds']>(row.authCreds)
     : initAuthCreds();
 
@@ -67,12 +70,17 @@ export async function usePostgresAuthState(sessionId: string) {
   return {
     state,
     saveCreds: async () => {
+      if (!exists) return;
       await prisma.waSession.update({
         where: { id: sessionId },
         data: { authCreds: toJson(state.creds) },
       });
     },
     clear: async () => {
+      if (!exists) {
+        await prisma.waAuthKey.deleteMany({ where: { sessionId } });
+        return;
+      }
       await prisma.$transaction([
         prisma.waAuthKey.deleteMany({ where: { sessionId } }),
         prisma.waSession.update({ where: { id: sessionId }, data: { authCreds: Prisma.DbNull } }),

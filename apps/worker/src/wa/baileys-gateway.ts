@@ -1,6 +1,7 @@
 import makeWASocket, {
   DisconnectReason,
   fetchLatestBaileysVersion,
+  jidNormalizedUser,
   type WASocket,
   type WAUrlInfo,
 } from '@whiskeysockets/baileys';
@@ -16,18 +17,62 @@ interface Live {
   sock: WASocket;
   tenantId: string;
   attempt: number;
+  /** desligamento pedido por nós (disconnect/logout) — não reconecta */
   stopping: boolean;
+  /** logout() é o dono da escrita final de LOGGED_OUT; o close handler não mexe */
+  loggingOut: boolean;
+  /** true só entre `connection: 'open'` e `connection: 'close'` */
+  connected: boolean;
   mode: 'qr' | 'pair';
   phone?: string;
+  /** reconexão agendada por este socket (também em `pendingReconnects`) */
+  reconnectTimer?: NodeJS.Timeout;
+  /** listeners/timers a remover quando o socket morre */
+  cleanup: (() => void)[];
+  /** resolve quando o `connection.update` de close chega */
+  closed: Promise<void>;
+  resolveClosed: () => void;
 }
 
 const log = pino({ name: 'baileys' });
 
+const VERSION_TTL_MS = 6 * 60 * 60 * 1000;
+type WaVersion = Awaited<ReturnType<typeof fetchLatestBaileysVersion>>['version'];
+let versionCache: { version: WaVersion; at: number } | undefined;
+let versionInflight: Promise<WaVersion> | undefined;
+
+/**
+ * `fetchLatestBaileysVersion()` é uma chamada de rede; numa tempestade de reconexão
+ * viraria uma requisição externa por tentativa. Cacheia por processo (6h) e, em caso
+ * de falha, cai de volta na última versão conhecida.
+ */
+async function getWaVersion(): Promise<WaVersion> {
+  if (versionCache && Date.now() - versionCache.at < VERSION_TTL_MS) return versionCache.version;
+  if (!versionInflight) {
+    versionInflight = fetchLatestBaileysVersion()
+      .then((r) => {
+        versionCache = { version: r.version, at: Date.now() };
+        return r.version;
+      })
+      .catch((e: unknown) => {
+        log.warn({ err: e }, 'falha ao buscar versão do Baileys');
+        if (versionCache) return versionCache.version;
+        throw e;
+      })
+      .finally(() => {
+        versionInflight = undefined;
+      });
+  }
+  return versionInflight;
+}
+
 export class BaileysGateway implements WhatsAppGateway {
   private live = new Map<string, Live>();
+  /** reconexões agendadas, mesmo sem socket vivo no mapa `live` */
+  private pendingReconnects = new Map<string, NodeJS.Timeout>();
 
   isConnected(sessionId: string) {
-    return this.live.get(sessionId)?.sock.user !== undefined;
+    return this.live.get(sessionId)?.connected === true;
   }
 
   count() {
@@ -53,14 +98,25 @@ export class BaileysGateway implements WhatsAppGateway {
     await publishEvent(tenantId, ev);
   }
 
+  private cancelReconnect(sessionId: string) {
+    const t = this.pendingReconnects.get(sessionId);
+    if (t) clearTimeout(t);
+    this.pendingReconnects.delete(sessionId);
+    const entry = this.live.get(sessionId);
+    if (entry?.reconnectTimer) {
+      clearTimeout(entry.reconnectTimer);
+      delete entry.reconnectTimer;
+    }
+  }
+
   async connect(
     session: { id: string; tenantId: string },
     opts: { mode: 'qr' | 'pair'; phone?: string },
   ) {
     if (this.live.has(session.id)) return;
-    const prev = this.live.get(session.id);
-    const attempt = prev?.attempt ?? 0;
-    await this.open(session.id, session.tenantId, opts, attempt);
+    // um connect explícito ganha de uma reconexão agendada: cancela e abre agora
+    this.cancelReconnect(session.id);
+    await this.open(session.id, session.tenantId, opts, 0);
   }
 
   private async open(
@@ -70,7 +126,7 @@ export class BaileysGateway implements WhatsAppGateway {
     attempt: number,
   ) {
     const { state, saveCreds, clear } = await usePostgresAuthState(sessionId);
-    const { version } = await fetchLatestBaileysVersion();
+    const version = await getWaVersion();
     const sock = makeWASocket({
       version,
       auth: state,
@@ -79,84 +135,184 @@ export class BaileysGateway implements WhatsAppGateway {
       logger: log.child({ sessionId }) as never,
       markOnlineOnConnect: false,
     });
-    const entry: Live = { sock, tenantId, attempt, stopping: false, mode: opts.mode };
+    let resolveClosed!: () => void;
+    const closed = new Promise<void>((resolve) => {
+      resolveClosed = resolve;
+    });
+    const entry: Live = {
+      sock,
+      tenantId,
+      attempt,
+      stopping: false,
+      loggingOut: false,
+      connected: false,
+      mode: opts.mode,
+      cleanup: [],
+      closed,
+      resolveClosed,
+    };
     if (opts.phone) entry.phone = opts.phone;
     this.live.set(sessionId, entry);
     await this.setStatus(sessionId, tenantId, 'CONNECTING');
 
-    sock.ev.on('creds.update', saveCreds);
+    sock.ev.on('creds.update', () => {
+      void (async () => {
+        try {
+          await saveCreds();
+        } catch (e) {
+          log.error({ err: e, sessionId }, 'falha ao salvar creds');
+        }
+      })();
+    });
 
-    sock.ev.on('connection.update', async (u) => {
-      if (u.qr && opts.mode === 'qr') {
-        await prisma.waSession.update({
-          where: { id: sessionId },
-          data: { status: 'NEEDS_QR', lastQr: u.qr },
-        });
-        await publishEvent(tenantId, { type: 'wa.qr', sessionId, qr: u.qr });
-        await publishEvent(tenantId, { type: 'wa.status', sessionId, status: 'NEEDS_QR' });
-      }
-      if (u.connection === 'open') {
-        entry.attempt = 0;
-        const phone = sock.user?.id.split(':')[0]?.split('@')[0];
-        const extra: { phone?: string; lastQr: null; pairCode: null } = {
-          lastQr: null,
-          pairCode: null,
-        };
-        if (phone) extra.phone = phone;
-        await this.setStatus(sessionId, tenantId, 'CONNECTED', extra);
-      }
-      if (u.connection === 'close') {
-        this.live.delete(sessionId);
-        const code = (u.lastDisconnect?.error as Boom | undefined)?.output?.statusCode;
-        if (entry.stopping) {
-          await this.setStatus(sessionId, tenantId, 'DISCONNECTED');
-          return;
+    sock.ev.on('connection.update', (u) => {
+      void (async () => {
+        try {
+          if (u.qr && opts.mode === 'qr') {
+            await prisma.waSession.update({
+              where: { id: sessionId },
+              data: { status: 'NEEDS_QR', lastQr: u.qr },
+            });
+            await publishEvent(tenantId, { type: 'wa.qr', sessionId, qr: u.qr });
+            await publishEvent(tenantId, { type: 'wa.status', sessionId, status: 'NEEDS_QR' });
+          }
+          if (u.connection === 'open') {
+            entry.attempt = 0;
+            entry.connected = true;
+            const phone = sock.user?.id.split(':')[0]?.split('@')[0];
+            const extra: { phone?: string; lastQr: null; pairCode: null } = {
+              lastQr: null,
+              pairCode: null,
+            };
+            if (phone) extra.phone = phone;
+            await this.setStatus(sessionId, tenantId, 'CONNECTED', extra);
+          }
+          if (u.connection === 'close') {
+            entry.connected = false;
+            entry.resolveClosed();
+            for (const fn of entry.cleanup.splice(0)) fn();
+            // só remove do mapa se ainda formos o socket corrente da sessão
+            if (this.live.get(sessionId) === entry) this.live.delete(sessionId);
+
+            // logout() é o dono da escrita final de LOGGED_OUT
+            if (entry.loggingOut) return;
+
+            const code = (u.lastDisconnect?.error as Boom | undefined)?.output?.statusCode;
+            if (entry.stopping) {
+              await this.setStatus(sessionId, tenantId, 'DISCONNECTED');
+              return;
+            }
+            if (code === DisconnectReason.loggedOut) {
+              await clear();
+              await this.setStatus(sessionId, tenantId, 'LOGGED_OUT', {
+                lastQr: null,
+                pairCode: null,
+              });
+              return;
+            }
+            const delay = Math.min(60_000, 2_000 * 2 ** entry.attempt);
+            log.warn({ sessionId, code, delay }, 'conexão fechada; reconectando');
+            const nextAttempt = entry.attempt + 1;
+            const timer = setTimeout(() => {
+              this.pendingReconnects.delete(sessionId);
+              delete entry.reconnectTimer;
+              // outro socket já foi aberto para esta sessão: não abrir um segundo
+              if (this.live.has(sessionId)) return;
+              this.open(sessionId, tenantId, opts, nextAttempt).catch((e: unknown) =>
+                log.error({ err: e, sessionId }, 'falha ao reconectar'),
+              );
+            }, delay);
+            this.pendingReconnects.set(sessionId, timer);
+            entry.reconnectTimer = timer;
+          }
+        } catch (e) {
+          log.error({ err: e, sessionId }, 'erro no handler connection.update');
         }
-        if (code === DisconnectReason.loggedOut) {
-          await clear();
-          await this.setStatus(sessionId, tenantId, 'LOGGED_OUT', { lastQr: null, pairCode: null });
-          return;
-        }
-        const delay = Math.min(60_000, 2_000 * 2 ** entry.attempt);
-        log.warn({ sessionId, code, delay }, 'conexão fechada; reconectando');
-        setTimeout(() => {
-          this.open(sessionId, tenantId, opts, entry.attempt + 1).catch((e) => log.error(e));
-        }, delay);
-      }
+      })();
     });
 
     if (opts.mode === 'pair' && opts.phone && !state.creds.registered) {
       const phone = opts.phone;
-      // Pair code só pode ser pedido depois que o socket abriu o WebSocket
-      setTimeout(() => {
-        void (async () => {
-          try {
-            const code = await sock.requestPairingCode(phone);
-            await prisma.waSession.update({
-              where: { id: sessionId },
-              data: { status: 'NEEDS_QR', pairCode: code },
-            });
-            await publishEvent(tenantId, { type: 'wa.pair-code', sessionId, code });
-          } catch (e) {
-            log.error(e, 'falha ao pedir pair code');
-          }
-        })();
-      }, 3_000);
+      // O pair code só pode ser pedido depois que o WebSocket abriu.
+      const request = () => {
+        void this.requestPairCode(sessionId, tenantId, entry, phone);
+      };
+      if (sock.ws.isOpen) {
+        request();
+      } else {
+        sock.ws.once('open', request);
+        entry.cleanup.push(() => sock.ws.off('open', request));
+      }
+    }
+  }
+
+  private async requestPairCode(
+    sessionId: string,
+    tenantId: string,
+    entry: Live,
+    phone: string,
+  ): Promise<void> {
+    try {
+      const code = await entry.sock.requestPairingCode(phone);
+      await prisma.waSession.update({
+        where: { id: sessionId },
+        data: { status: 'NEEDS_QR', pairCode: code },
+      });
+      await publishEvent(tenantId, { type: 'wa.pair-code', sessionId, code });
+      await publishEvent(tenantId, { type: 'wa.status', sessionId, status: 'NEEDS_QR' });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      log.error({ err: e, sessionId }, 'falha ao pedir pair code');
+      try {
+        await this.setStatus(sessionId, tenantId, 'DISCONNECTED');
+      } catch (e2) {
+        log.error({ err: e2, sessionId }, 'falha ao marcar DISCONNECTED após pair code');
+      }
+      await publishEvent(tenantId, {
+        type: 'error',
+        code: 'WA_PAIR_CODE_FAILED',
+        message,
+      });
     }
   }
 
   async disconnect(sessionId: string) {
+    this.cancelReconnect(sessionId);
     const l = this.live.get(sessionId);
     if (!l) return;
     l.stopping = true;
+    for (const fn of l.cleanup.splice(0)) fn();
     l.sock.end(undefined);
   }
 
+  /** Encerra todas as sessões vivas e cancela toda reconexão pendente. */
+  async stopAll() {
+    for (const t of this.pendingReconnects.values()) clearTimeout(t);
+    this.pendingReconnects.clear();
+    for (const sessionId of [...this.live.keys()]) {
+      await this.disconnect(sessionId);
+    }
+  }
+
   async logout(sessionId: string) {
+    this.cancelReconnect(sessionId);
     const l = this.live.get(sessionId);
     if (l) {
       l.stopping = true;
-      await l.sock.logout().catch(() => undefined);
+      l.loggingOut = true;
+      for (const fn of l.cleanup.splice(0)) fn();
+      try {
+        await l.sock.logout();
+      } catch (e) {
+        log.warn({ err: e, sessionId }, 'falha no logout remoto; encerrando socket');
+      }
+      l.sock.end(undefined);
+      // espera o socket realmente fechar antes de escrever o status final
+      await Promise.race([
+        l.closed,
+        new Promise<void>((resolve) => setTimeout(resolve, 10_000).unref?.()),
+      ]);
+      if (this.live.get(sessionId) === l) this.live.delete(sessionId);
     }
     const { clear } = await usePostgresAuthState(sessionId);
     await clear();
@@ -190,13 +346,23 @@ export class BaileysGateway implements WhatsAppGateway {
   async fetchGroups(sessionId: string): Promise<GroupInfo[]> {
     const l = this.live.get(sessionId);
     if (!l || !this.isConnected(sessionId)) throw new Error('WA_NOT_CONNECTED');
-    const me = l.sock.user?.id.split(':')[0] + '@s.whatsapp.net';
+    const user = l.sock.user;
+    if (!user) throw new Error('WA_NOT_CONNECTED');
+    // a conta aparece nos participantes ora com o JID de telefone, ora com o LID
+    const meJid = jidNormalizedUser(user.id);
+    const meLid = user.lid ? jidNormalizedUser(user.lid) : undefined;
+    const isMe = (...ids: (string | undefined)[]) =>
+      ids.some((id) => {
+        if (!id) return false;
+        const n = jidNormalizedUser(id);
+        return n === meJid || (meLid !== undefined && n === meLid);
+      });
     const groups = await l.sock.groupFetchAllParticipating();
     const out: GroupInfo[] = Object.values(groups).map((g) => ({
       jid: g.id,
       name: g.subject,
       kind: g.isCommunity ? 'COMMUNITY' : 'GROUP',
-      botIsAdmin: g.participants.some((p) => p.id === me && !!p.admin),
+      botIsAdmin: g.participants.some((p) => isMe(p.id, p.lid) && !!p.admin),
       memberCount: g.participants.length,
     }));
     return out;

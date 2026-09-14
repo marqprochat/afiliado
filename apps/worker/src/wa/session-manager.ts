@@ -8,6 +8,14 @@ import type { BaileysGateway } from './baileys-gateway';
 
 const log = pino({ name: 'wa-manager' });
 const LOCK_TTL_MS = 30_000;
+const LOCK_RENEW_MS = 10_000;
+
+/** só renova se ainda formos o dono do lock */
+const RENEW_LUA = `if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('PEXPIRE', KEYS[1], ARGV[2]) else return 0 end`;
+/** só apaga se ainda formos o dono do lock */
+const RELEASE_LUA = `if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end`;
+
+const lockKey = (sessionId: string) => `wa:lock:${sessionId}`;
 
 export class WaSessionManager {
   private locks = new Map<string, NodeJS.Timeout>();
@@ -31,15 +39,19 @@ export class WaSessionManager {
   }
 
   async stop() {
-    for (const [id, t] of this.locks) {
-      clearInterval(t);
-      await getRedis().del(`wa:lock:${id}`);
+    for (const id of [...this.locks.keys()]) {
+      try {
+        await this.gateway.disconnect(id);
+      } catch (e) {
+        log.error({ err: e, sessionId: id }, 'falha ao desconectar sessão no stop');
+      }
+      await this.releaseLock(id);
     }
     this.locks.clear();
   }
 
   private async acquireLock(sessionId: string): Promise<boolean> {
-    const key = `wa:lock:${sessionId}`;
+    const key = lockKey(sessionId);
     const ok = await getRedis().set(key, this.owner, 'PX', LOCK_TTL_MS, 'NX');
     if (ok !== 'OK') {
       const holder = await getRedis().get(key);
@@ -47,26 +59,65 @@ export class WaSessionManager {
     }
     if (!this.locks.has(sessionId)) {
       const t = setInterval(() => {
-        getRedis()
-          .pexpire(key, LOCK_TTL_MS)
-          .catch(() => undefined);
-      }, 10_000);
+        void this.renewLock(sessionId);
+      }, LOCK_RENEW_MS);
       this.locks.set(sessionId, t);
     }
     return true;
   }
 
+  /** Compare-and-renew: se perdemos o lock, paramos de dirigir a sessão. */
+  private async renewLock(sessionId: string) {
+    try {
+      const res = await getRedis().eval(
+        RENEW_LUA,
+        1,
+        lockKey(sessionId),
+        this.owner,
+        String(LOCK_TTL_MS),
+      );
+      if (Number(res) !== 1) {
+        log.warn({ sessionId }, 'lock perdido para outro worker; desconectando sessão');
+        const t = this.locks.get(sessionId);
+        if (t) clearInterval(t);
+        this.locks.delete(sessionId);
+        await this.gateway.disconnect(sessionId);
+      }
+    } catch (e) {
+      log.error({ err: e, sessionId }, 'falha ao renovar lock');
+    }
+  }
+
+  /** Compare-and-delete: nunca apaga o lock de outro worker. */
   private async releaseLock(sessionId: string) {
     const t = this.locks.get(sessionId);
     if (t) clearInterval(t);
     this.locks.delete(sessionId);
-    await getRedis().del(`wa:lock:${sessionId}`);
+    try {
+      await getRedis().eval(RELEASE_LUA, 1, lockKey(sessionId), this.owner);
+    } catch (e) {
+      log.error({ err: e, sessionId }, 'falha ao liberar lock');
+    }
   }
 
   async handle(job: Job<WaCommandJob>) {
     const { sessionId, tenantId, command } = job.data;
     const session = await prisma.waSession.findUnique({ where: { id: sessionId } });
-    if (!session && command !== 'logout') return; // sessão apagada
+    if (!session) {
+      // sessão apagada: no logout ainda limpamos o que este worker segura
+      if (command === 'logout') {
+        await this.gateway.disconnect(sessionId);
+        await this.releaseLock(sessionId);
+      }
+      return;
+    }
+    if (session.tenantId !== tenantId) {
+      log.warn(
+        { sessionId, tenantId, owner: session.tenantId },
+        'tenant do job não bate com o da sessão',
+      );
+      return;
+    }
     switch (command) {
       case 'connect': {
         if (!(await this.acquireLock(sessionId))) {
