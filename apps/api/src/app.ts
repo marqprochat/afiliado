@@ -9,6 +9,7 @@ import { authRoutes } from './routes/auth';
 import { meRoutes } from './routes/me';
 import { settingsRoutes } from './routes/settings';
 import { wsRoutes } from './routes/ws';
+import { waRoutes } from './routes/wa';
 import { EventHub } from './lib/events';
 import { closeRedis } from './lib/redis';
 
@@ -42,6 +43,7 @@ export async function buildApp(opts: BuildAppOptions = {}) {
       await api.register(meRoutes);
       await api.register(settingsRoutes);
       await api.register(wsRoutes);
+      await api.register(waRoutes);
     },
     { prefix: '/api/v1' },
   );
