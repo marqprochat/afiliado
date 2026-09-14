@@ -31,4 +31,10 @@ describe('forTenant', () => {
     const res = await forTenant(b).template.updateMany({ where: { id: other.id }, data: { name: 'hack' } });
     expect(res.count).toBe(0);
   });
+  it('operatingWindow é escopado por tenant', async () => {
+    await prisma.operatingWindow.upsert({ where: { tenantId: a }, update: {}, create: { tenantId: a } });
+    await prisma.operatingWindow.upsert({ where: { tenantId: b }, update: {}, create: { tenantId: b } });
+    const rows = await forTenant(a).operatingWindow.findMany();
+    expect(rows.map((r) => r.tenantId)).toEqual([a]);
+  });
 });

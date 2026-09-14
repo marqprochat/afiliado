@@ -16,6 +16,7 @@ const TENANT_MODELS = new Set([
   'Product',
   'QueueItem',
   'Template',
+  'OperatingWindow',
   'Batch',
   'SendLog',
   'Setting',
