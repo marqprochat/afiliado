@@ -6,3 +6,4 @@ dist/
 .superpowers/
 node_modules/
 coverage/
+docs/

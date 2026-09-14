@@ -18,18 +18,18 @@ Construir uma plataforma de automação de ofertas para afiliados que:
 
 ## 2. Decisões fixas
 
-| Decisão           | Escolha                                                 | Motivo                                                   |
-| ----------------- | ------------------------------------------------------- | -------------------------------------------------------- |
-| Linguagem         | TypeScript em tudo                                      | Baileys só roda em Node; uma linguagem só                |
-| Monorepo          | pnpm workspaces + Turborepo                             | Compartilhar `db`, `core`, `shared` entre api/worker/web |
-| API               | Fastify + Zod + Prisma                                  | Leve, tipado, rápido de testar                           |
-| Worker            | Node + Baileys + BullMQ (Redis) + node-cron             | Sessões WA vivem fora da API                             |
-| Web               | Next.js 15 (App Router) + Tailwind + shadcn/ui          | UI dark, acento verde-água, mesma IA do modelo           |
-| Banco             | PostgreSQL 16                                           | Relacional, JSONB para payloads de marketplace           |
-| Fila/cache/pubsub | Redis 7                                                 | BullMQ + eventos api↔worker                              |
-| Auth              | e-mail/senha, sessão em cookie httpOnly (Lucia)         | Simples; troca por OAuth na F7 se quiser                 |
-| Infra             | Docker Compose no VPS do dono, Caddy para TLS           | Já existe VPS                                            |
-| Testes            | Vitest, Testcontainers (Postgres), Playwright (crítico) | Ver §8                                                   |
+| Decisão | Escolha | Motivo |
+|---|---|---|
+| Linguagem | TypeScript em tudo | Baileys só roda em Node; uma linguagem só |
+| Monorepo | pnpm workspaces + Turborepo | Compartilhar `db`, `core`, `shared` entre api/worker/web |
+| API | Fastify + Zod + Prisma | Leve, tipado, rápido de testar |
+| Worker | Node + Baileys + BullMQ (Redis) + node-cron | Sessões WA vivem fora da API |
+| Web | Next.js 15 (App Router) + Tailwind + shadcn/ui | UI dark, acento verde-água, mesma IA do modelo |
+| Banco | PostgreSQL 16 | Relacional, JSONB para payloads de marketplace |
+| Fila/cache/pubsub | Redis 7 | BullMQ + eventos api↔worker |
+| Auth | e-mail/senha, sessão em cookie httpOnly (Lucia) | Simples; troca por OAuth na F7 se quiser |
+| Infra | Docker Compose no VPS do dono, Caddy para TLS | Já existe VPS |
+| Testes | Vitest, Testcontainers (Postgres), Playwright (crítico) | Ver §8 |
 
 ## 3. Estrutura do repositório
 
@@ -57,7 +57,6 @@ afilados/
 ## 4. Componentes e responsabilidades
 
 ### 4.1 `apps/api`
-
 - Autenticação, sessão, middleware que injeta `tenantId` em toda requisição.
 - CRUD de todas as entidades (§5).
 - Enfileira jobs no BullMQ (nunca envia WhatsApp diretamente).
@@ -65,22 +64,18 @@ afilados/
 - Endpoint de busca de produtos que chama os adapters de marketplace de forma síncrona (a busca é interativa).
 
 ### 4.2 `apps/worker`
-
 - **WaSessionManager**: uma instância Baileys por `WaSession` ativa; auth-state persistido em Postgres; lock em Redis (`wa:lock:{sessionId}`) garante um único processo por número; reconexão com backoff exponencial; em `loggedOut` marca sessão como `NEEDS_QR` e publica evento.
 - **Processors BullMQ**: `send-offer`, `mirror-message`, `scheduled-message`, `coupon-crawl`, `product-enrich`, `image-decorate`.
 - **Listeners Baileys**: `messages.upsert` (espelhamento + moderação), `group-participants.update` (analytics + anti-bot), `message-receipt.update` (leitura).
 - **Crons**: crawler de cupons (60 min), mensagens institucionais (3 horários), agregação diária de métricas, limpeza de logs.
 
 ### 4.3 `apps/web`
-
 Sidebar espelhando o produto modelo:
-
 - **Principal:** Visão Geral, Dashboard & Métricas, Buscar Produtos, Enviar Ofertas, Espelhamento, Gestor de Tráfego IA (placeholder), Afiliados (placeholder).
 - **Configurações:** WhatsApp, Template das mensagens, Central de Cupons, API Shopee, Conexão Mercado Livre, Conexão Amazon, Conexão Magalu, Minha Conta.
 - Barra superior com pills de status: WhatsApp, Shopee, Mercado Livre, Amazon, Magalu.
 
 ### 4.4 `packages/core` (funções puras)
-
 - `renderTemplate(template, product, ctx)` → texto WhatsApp com placeholders (§6).
 - `applyCoupon(price, coupon)` → preço final e texto.
 - `isWithinOperatingWindow(now, window)` / `nextWindowOpen(now, window)`.
@@ -92,38 +87,35 @@ Sidebar espelhando o produto modelo:
 - `flashSaleLabel(endsAt, now)` → "Faltam 47 minutos".
 
 ### 4.5 `packages/marketplaces`
-
 Interface comum:
-
 ```ts
 interface MarketplaceAdapter {
   id: 'shopee' | 'mercadolivre' | 'amazon' | 'magalu';
   checkConnection(conn): Promise<ConnectionStatus>;
-  search?(conn, query: SearchQuery): Promise<Product[]>; // Shopee
-  fetchByUrls(conn, urls: string[]): Promise<Product[]>; // todos
+  search?(conn, query: SearchQuery): Promise<Product[]>;        // Shopee
+  fetchByUrls(conn, urls: string[]): Promise<Product[]>;         // todos
   toAffiliateLink(conn, url: string, subId?: string): Promise<string>;
   fetchCoupons?(conn): Promise<Coupon[]>;
 }
 ```
-
 Cada adapter tem fixtures (JSON/HTML reais gravados) e testes que quebram quando o formato muda.
 
 ## 5. Modelo de dados (Prisma, resumido)
 
 Todas as tabelas de negócio têm `tenantId` (FK) + índice composto com a chave de negócio.
 
-| Domínio      | Tabelas                                                                                                                                                                                                                                      |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Conta        | `Tenant`, `User`, `Session`, `Plan`, `Subscription`, `Referral` (F7)                                                                                                                                                                         |
-| WhatsApp     | `WaSession`(status, phone, authState JSONB), `WaGroup`(jid, name, kind: GROUP/COMMUNITY/CHANNEL, botIsAdmin, memberCount, inviteLink)                                                                                                        |
-| Marketplaces | `MarketplaceConnection`(kind, encryptedCredentials, affiliateTag, status, lastCheckedAt)                                                                                                                                                     |
-| Produtos     | `Product`(source, externalId, title, price, originalPrice, discountPct, salesCount, commissionPct, images[], shipping, flashSaleEndsAt, couponCode, couponValue, originalUrl, raw JSONB), `QueueItem`(productId, selected, status)           |
-| Disparo      | `Template`, `CtaPhrase`, `Batch`(name, groupJids[], intervalMin, mediaMode: IMAGE/PREVIEW, shuffled, status, estimatedEndAt), `BatchItem`(order, runAt, status), `SendLog`(batchItemId?, mirrorLogId?, groupJid, waMessageId, status, error) |
-| Espelhamento | `MirrorRule`(sourceJids[], targetJids[], mode: TEMPLATE/CLONE, mediaMode, badges), `MirrorLog`                                                                                                                                               |
-| Cupons       | `Coupon`, `Banner`                                                                                                                                                                                                                           |
-| Agendamento  | `ScheduledMessage`, `OperatingWindow`                                                                                                                                                                                                        |
-| Moderação    | `ModerationRule`, `ModerationEvent`                                                                                                                                                                                                          |
-| Analytics    | `GroupMemberEvent`(jid, phone, ddd, uf, action, origin, at), `MessageReceipt`, `DailyGroupStats`                                                                                                                                             |
+| Domínio | Tabelas |
+|---|---|
+| Conta | `Tenant`, `User`, `Session`, `Plan`, `Subscription`, `Referral` (F7) |
+| WhatsApp | `WaSession`(status, phone, authState JSONB), `WaGroup`(jid, name, kind: GROUP/COMMUNITY/CHANNEL, botIsAdmin, memberCount, inviteLink) |
+| Marketplaces | `MarketplaceConnection`(kind, encryptedCredentials, affiliateTag, status, lastCheckedAt) |
+| Produtos | `Product`(source, externalId, title, price, originalPrice, discountPct, salesCount, commissionPct, images[], shipping, flashSaleEndsAt, couponCode, couponValue, originalUrl, raw JSONB), `QueueItem`(productId, selected, status) |
+| Disparo | `Template`, `CtaPhrase`, `Batch`(name, groupJids[], intervalMin, mediaMode: IMAGE/PREVIEW, shuffled, status, estimatedEndAt), `BatchItem`(order, runAt, status), `SendLog`(batchItemId?, mirrorLogId?, groupJid, waMessageId, status, error) |
+| Espelhamento | `MirrorRule`(sourceJids[], targetJids[], mode: TEMPLATE/CLONE, mediaMode, badges), `MirrorLog` |
+| Cupons | `Coupon`, `Banner` |
+| Agendamento | `ScheduledMessage`, `OperatingWindow` |
+| Moderação | `ModerationRule`, `ModerationEvent` |
+| Analytics | `GroupMemberEvent`(jid, phone, ddd, uf, action, origin, at), `MessageReceipt`, `DailyGroupStats` |
 
 ## 6. Templates e variáveis
 
@@ -155,14 +147,14 @@ Placeholders suportados: `{titulo}`, `{preco}`, `{preco_antigo}`, `{desconto}`, 
 
 ## 10. Roadmap por fase
 
-| Fase                               | Escopo                                                                                                                                                                                                                                                                  | Módulos do brief           |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| **F1 – Núcleo de disparo**         | Monorepo, auth, tenant, WA (QR/pair, grupos, admin check), Shopee API (busca, filtros, categorias, mais buscados, lojas, SubID), importar por links/CSV, fila de triagem, templates, lotes + shuffle + cadência + janela + previsão, Imagem/Preview, Visão Geral básica | 1.1, 2.1, 2.3, 3.1, 3.3, 5 |
-| **F2 – Espelhamento**              | Listeners, extração de links oficiais, Clone/Template, conversão ML/Amazon/Magalu por URL, logs                                                                                                                                                                         | 6                          |
-| **F3 – Ingestão ML/Amazon/Magalu** | Extensão Chrome "Connect", conexão por cookies, scraper de metadados, ofertas relâmpago, dedução de cupom                                                                                                                                                               | 1.2, 2.2, 3.2              |
-| **F4 – Cupons e mídia**            | Crawler de cupons, banners, selos na imagem, CTAs rotativas + IA, mensagens institucionais                                                                                                                                                                              | 3.4, 3.5, 3.6, 4           |
-| **F5 – Moderação**                 | Guilhotina, anti-bot/anti-scraping                                                                                                                                                                                                                                      | 7                          |
-| **F6 – Analytics/CRM**             | Métricas de disparo, membros, churn, DDD→UF, picos, taxa de leitura, export                                                                                                                                                                                             | 8                          |
-| **F7 – SaaS**                      | Cadastro, planos, Mercado Pago, trial, programa de afiliados, admin, Meta Ads                                                                                                                                                                                           | 1.3 + billing              |
+| Fase | Escopo | Módulos do brief |
+|---|---|---|
+| **F1 – Núcleo de disparo** | Monorepo, auth, tenant, WA (QR/pair, grupos, admin check), Shopee API (busca, filtros, categorias, mais buscados, lojas, SubID), importar por links/CSV, fila de triagem, templates, lotes + shuffle + cadência + janela + previsão, Imagem/Preview, Visão Geral básica | 1.1, 2.1, 2.3, 3.1, 3.3, 5 |
+| **F2 – Espelhamento** | Listeners, extração de links oficiais, Clone/Template, conversão ML/Amazon/Magalu por URL, logs | 6 |
+| **F3 – Ingestão ML/Amazon/Magalu** | Extensão Chrome "Connect", conexão por cookies, scraper de metadados, ofertas relâmpago, dedução de cupom | 1.2, 2.2, 3.2 |
+| **F4 – Cupons e mídia** | Crawler de cupons, banners, selos na imagem, CTAs rotativas + IA, mensagens institucionais | 3.4, 3.5, 3.6, 4 |
+| **F5 – Moderação** | Guilhotina, anti-bot/anti-scraping | 7 |
+| **F6 – Analytics/CRM** | Métricas de disparo, membros, churn, DDD→UF, picos, taxa de leitura, export | 8 |
+| **F7 – SaaS** | Cadastro, planos, Mercado Pago, trial, programa de afiliados, admin, Meta Ads | 1.3 + billing |
 
 Cada fase recebe seu próprio spec e plano em `docs/superpowers/` antes de começar.
