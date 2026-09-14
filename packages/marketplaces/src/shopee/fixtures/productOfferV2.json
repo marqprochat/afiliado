@@ -1,0 +1,43 @@
+{
+  "data": {
+    "productOfferV2": {
+      "nodes": [
+        {
+          "itemId": 987654,
+          "shopId": 123456,
+          "productName": "Processador AMD Ryzen 5 5500",
+          "priceMin": "848.48",
+          "priceMax": "848.48",
+          "priceDiscountRate": 29,
+          "sales": 6,
+          "commissionRate": "0.03",
+          "imageUrl": "https://cf.shopee.com.br/file/abc",
+          "shopName": "Loja Oficial AMD",
+          "shopType": [1],
+          "productLink": "https://shopee.com.br/product/123456/987654",
+          "offerLink": "https://s.shopee.com.br/xyz",
+          "periodStartTime": 0,
+          "periodEndTime": 0
+        },
+        {
+          "itemId": 111,
+          "shopId": 222,
+          "productName": "Kit Upgrade",
+          "priceMin": "2029.90",
+          "priceMax": "2100.00",
+          "priceDiscountRate": 0,
+          "sales": 1,
+          "commissionRate": "0.05",
+          "imageUrl": "https://cf.shopee.com.br/file/def",
+          "shopName": "Loja X",
+          "shopType": [],
+          "productLink": "https://shopee.com.br/product/222/111",
+          "offerLink": "https://s.shopee.com.br/uvw",
+          "periodStartTime": 0,
+          "periodEndTime": 1789000000
+        }
+      ],
+      "pageInfo": { "page": 1, "limit": 50, "hasNextPage": false }
+    }
+  }
+}
