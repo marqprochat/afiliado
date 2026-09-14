@@ -33,7 +33,7 @@ export class TokenBucket {
 }
 
 export async function waitForToken(
-  bucket: TokenBucket,
+  bucket: { take(): Promise<number> },
   sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
 ) {
   for (;;) {
