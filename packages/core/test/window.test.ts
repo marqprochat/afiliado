@@ -18,7 +18,9 @@ describe('isWithinOperatingWindow', () => {
   it('no fim é fora', () =>
     expect(isWithinOperatingWindow(sp('2026-09-14T23:30:00'), w)).toBe(false));
   it('desabilitada = sempre dentro', () =>
-    expect(isWithinOperatingWindow(sp('2026-09-14T03:00:00'), { ...w, enabled: false })).toBe(true));
+    expect(isWithinOperatingWindow(sp('2026-09-14T03:00:00'), { ...w, enabled: false })).toBe(
+      true,
+    ));
   it('janela que cruza meia-noite', () => {
     const night = { ...w, startTime: '22:00', endTime: '02:00' };
     expect(isWithinOperatingWindow(sp('2026-09-14T23:00:00'), night)).toBe(true);

@@ -23,7 +23,13 @@ async function main() {
   await prisma.user.upsert({
     where: { email },
     update: {},
-    create: { tenantId: tenant.id, email, name: 'Admin', role: 'OWNER', passwordHash: await hash(password) },
+    create: {
+      tenantId: tenant.id,
+      email,
+      name: 'Admin',
+      role: 'OWNER',
+      passwordHash: await hash(password),
+    },
   });
 
   await prisma.operatingWindow.upsert({
@@ -32,7 +38,9 @@ async function main() {
     create: { tenantId: tenant.id },
   });
 
-  const hasDefault = await prisma.template.findFirst({ where: { tenantId: tenant.id, isDefault: true } });
+  const hasDefault = await prisma.template.findFirst({
+    where: { tenantId: tenant.id, isDefault: true },
+  });
   if (!hasDefault) {
     await prisma.template.create({
       data: { tenantId: tenant.id, name: 'Padrão', body: DEFAULT_TEMPLATE, isDefault: true },

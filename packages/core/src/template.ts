@@ -7,6 +7,7 @@ export function flashSaleLabel(endsAt: string | undefined, nowIso: string): stri
   const end = DateTime.fromISO(endsAt);
   const now = DateTime.fromISO(nowIso);
   const minutes = Math.floor(end.diff(now, 'minutes').minutes);
+  if (!end.isValid || !now.isValid || !Number.isFinite(minutes)) return '';
   if (minutes <= 0) return '';
   if (minutes < 60) return `⚡ Faltam ${minutes} minutos para expirar`;
   const hours = Math.floor(minutes / 60);
@@ -35,7 +36,7 @@ const VAR_RE = /\{(\w+)\}/g;
 
 /**
  * Renderiza o template do usuário.
- * - `{var}` → valor (string vazia se ausente).
+ * - `{var}` → valor; variável desconhecida é mantida literalmente no texto.
  * - `{#var}...{/var}` → conteúdo só quando `var` não é vazio; se vazio e o bloco
  *   ocupava a linha inteira, a linha é removida.
  */

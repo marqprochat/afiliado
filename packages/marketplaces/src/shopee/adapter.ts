@@ -16,6 +16,9 @@ const SORT_MAP: Record<SearchSort, number> = {
   DISCOUNT_DESC: 6,
 };
 
+// TODO(F1-B): usar o filtro hasExtraCommission da API em vez de heurística local
+const EXTRA_COMMISSION_MIN_PCT = 3;
+
 const PRODUCT_OFFER_QUERY = `
 query ProductOffer($keyword: String, $productCatId: Int, $shopId: Int, $itemId: Int64, $listType: Int,
   $sortType: Int, $page: Int, $limit: Int, $isOfficialShop: Boolean, $isKeySeller: Boolean) {
@@ -45,11 +48,16 @@ export interface ShopeeAdapterOptions {
   fetchImpl?: typeof fetch;
 }
 
-export function createShopeeAdapter(opts: ShopeeAdapterOptions = {}): MarketplaceAdapter<ShopeeCredentials> {
+export function createShopeeAdapter(
+  opts: ShopeeAdapterOptions = {},
+): MarketplaceAdapter<ShopeeCredentials> {
   const mock = opts.mock ?? process.env.SHOPEE_MOCK === '1';
   const client = (creds: ShopeeCredentials) => new ShopeeGraphQLClient(creds, opts.fetchImpl);
 
-  async function searchPage(creds: ShopeeCredentials, vars: Record<string, unknown>): Promise<OfferResponse> {
+  async function searchPage(
+    creds: ShopeeCredentials,
+    vars: Record<string, unknown>,
+  ): Promise<OfferResponse> {
     if (mock) return offersFixture.data as unknown as OfferResponse;
     return client(creds).request<OfferResponse>(PRODUCT_OFFER_QUERY, vars);
   }
@@ -89,7 +97,9 @@ export function createShopeeAdapter(opts: ShopeeAdapterOptions = {}): Marketplac
         if (!res.productOfferV2.pageInfo.hasNextPage || nodes.length === 0 || mock) break;
         page++;
       }
-      const filtered = q.extraCommission ? out.filter((p) => (p.commissionPct ?? 0) > 3) : out;
+      const filtered = q.extraCommission
+        ? out.filter((p) => (p.commissionPct ?? 0) > EXTRA_COMMISSION_MIN_PCT)
+        : out;
       return filtered.slice(0, q.limit);
     },
 
@@ -98,7 +108,11 @@ export function createShopeeAdapter(opts: ShopeeAdapterOptions = {}): Marketplac
       for (const url of urls) {
         const parsed = parseProductUrl(url);
         if (parsed.source !== 'SHOPEE') continue;
-        const res = await searchPage(creds, { itemId: Number(parsed.externalId), limit: 1, page: 1 });
+        const res = await searchPage(creds, {
+          itemId: Number(parsed.externalId),
+          limit: 1,
+          page: 1,
+        });
         const node = res.productOfferV2.nodes.find((n) => String(n.itemId) === parsed.externalId);
         if (node) out.push(mapProductOffer(node));
       }

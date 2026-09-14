@@ -5,7 +5,9 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "generate": "prisma generate",
     "migrate:dev": "prisma migrate dev",
@@ -14,8 +16,13 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
-  "prisma": { "seed": "tsx prisma/seed.ts" },
-  "dependencies": { "@prisma/client": "^5.20.0", "@afilados/shared": "workspace:*" },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.20.0",
+    "@afilados/shared": "workspace:*"
+  },
   "devDependencies": {
     "prisma": "^5.20.0",
     "tsx": "^4.19.1",

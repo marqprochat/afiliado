@@ -6,6 +6,8 @@ export function buildShopeeAuthHeader(
   payload: string,
   timestamp: number,
 ): string {
-  const signature = createHash('sha256').update(`${appId}${timestamp}${payload}${secret}`).digest('hex');
+  const signature = createHash('sha256')
+    .update(`${appId}${timestamp}${payload}${secret}`)
+    .digest('hex');
   return `SHA256 Credential=${appId}, Timestamp=${timestamp}, Signature=${signature}`;
 }

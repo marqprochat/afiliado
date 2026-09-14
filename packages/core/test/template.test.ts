@@ -20,7 +20,11 @@ const ctx = { affiliateLink: 'https://s.shopee.com.br/abc', now: '2026-09-14T12:
 
 describe('renderTemplate', () => {
   it('substitui variáveis básicas', () => {
-    const out = renderTemplate('*{titulo}*\nDe {preco_antigo} por {preco} ({desconto})\n{link}', product, ctx);
+    const out = renderTemplate(
+      '*{titulo}*\nDe {preco_antigo} por {preco} ({desconto})\n{link}',
+      product,
+      ctx,
+    );
     expect(out).toBe(
       '*Processador AMD Ryzen 5*\nDe R$ 1.200,00 por R$ 848,48 (-29% OFF)\nhttps://s.shopee.com.br/abc',
     );
@@ -46,6 +50,14 @@ describe('renderTemplate', () => {
     expect(renderTemplate('{oferta_relampago}', product, ctx)).toBe('');
     const expired = { ...product, flashSaleEndsAt: '2026-09-14T11:00:00.000Z' };
     expect(renderTemplate('{oferta_relampago}', expired, ctx)).toBe('');
+  });
+
+  it('oferta relâmpago com mais de uma hora e data inválida', () => {
+    const p = { ...product, flashSaleEndsAt: '2026-09-14T13:35:00.000Z' };
+    expect(renderTemplate('{oferta_relampago}', p, ctx)).toBe('⚡ Faltam 1h35 para expirar');
+    expect(renderTemplate('{oferta_relampago}', { ...product, flashSaleEndsAt: 'lixo' }, ctx)).toBe(
+      '',
+    );
   });
 
   it('vendas, cupom e cta', () => {

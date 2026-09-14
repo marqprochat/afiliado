@@ -23,7 +23,8 @@ export function mapProductOffer(n: ShopeeProductOfferNode): ProductData {
   const discount = n.priceDiscountRate > 0 ? n.priceDiscountRate : undefined;
   const originalPrice = discount ? Number((price / (1 - discount / 100)).toFixed(2)) : undefined;
   const commissionPct = Number((Number(n.commissionRate) * 100).toFixed(2));
-  const flashSaleEndsAt = n.periodEndTime > 0 ? new Date(n.periodEndTime * 1000).toISOString() : undefined;
+  const flashSaleEndsAt =
+    n.periodEndTime > 0 ? new Date(n.periodEndTime * 1000).toISOString() : undefined;
   const data: Record<string, unknown> = {
     source: 'SHOPEE',
     externalId: String(n.itemId),

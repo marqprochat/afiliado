@@ -18,7 +18,12 @@ export class ShopeeGraphQLClient {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: buildShopeeAuthHeader(this.creds.appId, this.creds.secret, payload, timestamp),
+        Authorization: buildShopeeAuthHeader(
+          this.creds.appId,
+          this.creds.secret,
+          payload,
+          timestamp,
+        ),
       },
       body: payload,
     });

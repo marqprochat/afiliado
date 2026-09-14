@@ -28,13 +28,31 @@ describe('forTenant', () => {
   });
   it('updateMany em registro de outro tenant não afeta nada', async () => {
     const other = await prisma.template.findFirstOrThrow({ where: { tenantId: a } });
-    const res = await forTenant(b).template.updateMany({ where: { id: other.id }, data: { name: 'hack' } });
+    const res = await forTenant(b).template.updateMany({
+      where: { id: other.id },
+      data: { name: 'hack' },
+    });
     expect(res.count).toBe(0);
   });
   it('operatingWindow é escopado por tenant', async () => {
-    await prisma.operatingWindow.upsert({ where: { tenantId: a }, update: {}, create: { tenantId: a } });
-    await prisma.operatingWindow.upsert({ where: { tenantId: b }, update: {}, create: { tenantId: b } });
+    await prisma.operatingWindow.upsert({
+      where: { tenantId: a },
+      update: {},
+      create: { tenantId: a },
+    });
+    await prisma.operatingWindow.upsert({
+      where: { tenantId: b },
+      update: {},
+      create: { tenantId: b },
+    });
     const rows = await forTenant(a).operatingWindow.findMany();
     expect(rows.map((r) => r.tenantId)).toEqual([a]);
+  });
+  it('delete por id em outro tenant é rejeitado', async () => {
+    const other = await prisma.template.findFirstOrThrow({ where: { tenantId: a } });
+    await expect(forTenant(b).template.delete({ where: { id: other.id } })).rejects.toThrow(
+      /não é escopada/,
+    );
+    expect(await prisma.template.findUnique({ where: { id: other.id } })).not.toBeNull();
   });
 });

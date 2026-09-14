@@ -12,7 +12,11 @@ describe('shuffleInterleaved', () => {
     expect(new Set(out)).toEqual(new Set(items));
   });
   it('fonte única mantém todos os itens', () => {
-    const out = shuffleInterleaved([1, 2, 3], () => 'x', () => 0.5);
+    const out = shuffleInterleaved(
+      [1, 2, 3],
+      () => 'x',
+      () => 0.5,
+    );
     expect(out.sort()).toEqual([1, 2, 3]);
   });
 });

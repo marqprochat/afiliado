@@ -44,14 +44,26 @@ describe('ShopeeAdapter (real, fetch falso)', () => {
   it('search envia header assinado e variáveis corretas', async () => {
     const f = fakeFetch([offers]);
     const adapter = createShopeeAdapter({ fetchImpl: f as unknown as typeof fetch });
-    const r = await adapter.search!(creds, { ...baseQuery, sort: 'COMMISSION_DESC', limit: 10, topSellers: true });
+    const r = await adapter.search!(creds, {
+      ...baseQuery,
+      sort: 'COMMISSION_DESC',
+      limit: 10,
+      topSellers: true,
+    });
     expect(r).toHaveLength(2);
     const [url, init] = f.mock.calls[0]!;
     expect(url).toBe('https://open-api.affiliate.shopee.com.br/graphql');
     const headers = init!.headers as Record<string, string>;
-    expect(headers['Authorization']).toMatch(/^SHA256 Credential=app, Timestamp=\d+, Signature=[0-9a-f]{64}$/);
+    expect(headers['Authorization']).toMatch(
+      /^SHA256 Credential=app, Timestamp=\d+, Signature=[0-9a-f]{64}$/,
+    );
     const body = JSON.parse(init!.body as string) as { variables: Record<string, unknown> };
-    expect(body.variables).toMatchObject({ keyword: 'ryzen', sortType: 3, limit: 10, isOfficialShop: true });
+    expect(body.variables).toMatchObject({
+      keyword: 'ryzen',
+      sortType: 3,
+      limit: 10,
+      isOfficialShop: true,
+    });
   });
   it('fetchByUrls resolve itemId da URL', async () => {
     const f = fakeFetch([offers]);
@@ -75,11 +87,15 @@ describe('ShopeeAdapter (real, fetch falso)', () => {
   it('erro GraphQL vira status legível', async () => {
     const f = fakeFetch([{ errors: [{ message: 'invalid signature' }] }]);
     const adapter = createShopeeAdapter({ fetchImpl: f as unknown as typeof fetch });
-    await expect(adapter.checkConnection(creds)).resolves.toEqual({ ok: false, error: 'invalid signature' });
+    await expect(adapter.checkConnection(creds)).resolves.toEqual({
+      ok: false,
+      error: 'invalid signature',
+    });
   });
   it('erro HTTP não-2xx inclui a mensagem GraphQL do corpo', async () => {
-    const f = vi.fn(async () =>
-      new Response(JSON.stringify({ errors: [{ message: 'invalid app id' }] }), { status: 400 }),
+    const f = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ errors: [{ message: 'invalid app id' }] }), { status: 400 }),
     );
     const adapter = createShopeeAdapter({ fetchImpl: f as unknown as typeof fetch });
     await expect(adapter.checkConnection(creds)).resolves.toEqual({

@@ -72,9 +72,11 @@ packages/marketplaces/
 ### Task 1: Scaffold do monorepo
 
 **Files:**
+
 - Create: `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, `vitest.workspace.ts`, `.env.example`, `docker-compose.yml`, `.prettierrc`, `.npmrc`
 
 **Interfaces:**
+
 - Produces: scripts raiz `pnpm build | test | lint | typecheck | db:migrate | db:seed`; `tsconfig.base.json` que todos os pacotes estendem.
 
 - [ ] **Step 1: Criar `package.json` raiz**
@@ -111,19 +113,22 @@ packages/marketplaces/
 - [ ] **Step 2: Criar `pnpm-workspace.yaml`, `.npmrc`, `.prettierrc`**
 
 `pnpm-workspace.yaml`:
+
 ```yaml
 packages:
-  - "apps/*"
-  - "packages/*"
+  - 'apps/*'
+  - 'packages/*'
 ```
 
 `.npmrc`:
+
 ```
 auto-install-peers=true
 strict-peer-dependencies=false
 ```
 
 `.prettierrc`:
+
 ```json
 { "semi": true, "singleQuote": true, "printWidth": 100, "trailingComma": "all" }
 ```
@@ -201,17 +206,17 @@ services:
       POSTGRES_USER: afilados
       POSTGRES_PASSWORD: afilados
       POSTGRES_DB: afilados
-    ports: ["5432:5432"]
-    volumes: ["pgdata:/var/lib/postgresql/data"]
+    ports: ['5432:5432']
+    volumes: ['pgdata:/var/lib/postgresql/data']
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U afilados"]
+      test: ['CMD-SHELL', 'pg_isready -U afilados']
       interval: 5s
       retries: 10
   redis:
     image: redis:7-alpine
-    ports: ["6379:6379"]
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes: ["redisdata:/data"]
+    ports: ['6379:6379']
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes: ['redisdata:/data']
 volumes:
   pgdata:
   redisdata:
@@ -236,11 +241,13 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ### Task 2: `@afilados/shared` — enums, tipos e schemas
 
 **Files:**
+
 - Create: `packages/shared/package.json`, `packages/shared/tsconfig.json`, `packages/shared/vitest.config.ts`
 - Create: `packages/shared/src/{index,enums,product,search,template,events}.ts`
 - Test: `packages/shared/test/search.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `enums.ts`: `MarketplaceKind = 'SHOPEE'|'MERCADOLIVRE'|'AMAZON'|'MAGALU'`, `ProductSource = MarketplaceKind|'MANUAL'`, `Shipping = 'NONE'|'FREE'|'FULL'|'UNKNOWN'`, `MediaMode = 'IMAGE'|'PREVIEW'`, `WaSessionStatus`, `BatchStatus`, `BatchItemStatus`.
   - `product.ts`: `ProductData` (zod `productDataSchema`) — campos: `source, externalId?, title, price, originalPrice?, discountPct?, salesCount?, commissionPct?, images: string[], shipping, flashSaleEndsAt?: string(ISO), couponCode?, couponValue?, originalUrl, shopId?, shopName?, raw: unknown`.
@@ -251,6 +258,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - [ ] **Step 1: `package.json`, `tsconfig.json`, `vitest.config.ts`**
 
 `packages/shared/package.json`:
+
 ```json
 {
   "name": "@afilados/shared",
@@ -267,11 +275,13 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 `packages/shared/tsconfig.json`:
+
 ```json
 { "extends": "../../tsconfig.base.json", "include": ["src", "test"] }
 ```
 
 `packages/shared/vitest.config.ts`:
+
 ```ts
 import { defineConfig } from 'vitest/config';
 export default defineConfig({ test: { include: ['test/**/*.test.ts'] } });
@@ -421,6 +431,7 @@ export type SearchQuery = z.infer<typeof searchQuerySchema>;
 - [ ] **Step 7: Implementar `src/template.ts` e `src/events.ts`**
 
 `src/template.ts`:
+
 ```ts
 export interface TemplateContext {
   /** Link já convertido para a tag de afiliado. */
@@ -433,6 +444,7 @@ export interface TemplateContext {
 ```
 
 `src/events.ts`:
+
 ```ts
 import type { WaSessionStatus, BatchItemStatus } from './enums';
 
@@ -477,11 +489,13 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ### Task 3: `@afilados/core` — dinheiro e renderTemplate
 
 **Files:**
+
 - Create: `packages/core/package.json`, `packages/core/tsconfig.json`, `packages/core/vitest.config.ts`
 - Create: `packages/core/src/{index,money,template}.ts`
 - Test: `packages/core/test/money.test.ts`, `packages/core/test/template.test.ts`
 
 **Interfaces:**
+
 - Consumes: `ProductData`, `TemplateContext` de `@afilados/shared`.
 - Produces:
   - `formatBRL(value: number): string` → `R$ 1.234,56`
@@ -492,6 +506,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - [ ] **Step 1: Arquivos de pacote**
 
 `packages/core/package.json`:
+
 ```json
 {
   "name": "@afilados/core",
@@ -508,11 +523,13 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 `packages/core/tsconfig.json`:
+
 ```json
 { "extends": "../../tsconfig.base.json", "include": ["src", "test"] }
 ```
 
 `packages/core/vitest.config.ts`:
+
 ```ts
 import { defineConfig } from 'vitest/config';
 export default defineConfig({
@@ -596,7 +613,11 @@ const ctx = { affiliateLink: 'https://s.shopee.com.br/abc', now: '2026-09-14T12:
 
 describe('renderTemplate', () => {
   it('substitui variáveis básicas', () => {
-    const out = renderTemplate('*{titulo}*\nDe {preco_antigo} por {preco} ({desconto})\n{link}', product, ctx);
+    const out = renderTemplate(
+      '*{titulo}*\nDe {preco_antigo} por {preco} ({desconto})\n{link}',
+      product,
+      ctx,
+    );
     expect(out).toBe(
       '*Processador AMD Ryzen 5*\nDe R$ 1.200,00 por R$ 848,48 (-29% OFF)\nhttps://s.shopee.com.br/abc',
     );
@@ -725,11 +746,13 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ### Task 4: `core` — janela de operação
 
 **Files:**
+
 - Create: `packages/core/src/window.ts`
 - Modify: `packages/core/src/index.ts`
 - Test: `packages/core/test/window.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `OperatingWindow = { startTime: string /*HH:mm*/; endTime: string; timezone: string; enabled: boolean }`
   - `isWithinOperatingWindow(now: Date, w: OperatingWindow): boolean`
@@ -758,7 +781,9 @@ describe('isWithinOperatingWindow', () => {
   it('no fim é fora', () =>
     expect(isWithinOperatingWindow(sp('2026-09-14T23:30:00'), w)).toBe(false));
   it('desabilitada = sempre dentro', () =>
-    expect(isWithinOperatingWindow(sp('2026-09-14T03:00:00'), { ...w, enabled: false })).toBe(true));
+    expect(isWithinOperatingWindow(sp('2026-09-14T03:00:00'), { ...w, enabled: false })).toBe(
+      true,
+    ));
   it('janela que cruza meia-noite', () => {
     const night = { ...w, startTime: '22:00', endTime: '02:00' };
     expect(isWithinOperatingWindow(sp('2026-09-14T23:00:00'), night)).toBe(true);
@@ -849,11 +874,13 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ### Task 5: `core` — agendamento de lote
 
 **Files:**
+
 - Create: `packages/core/src/schedule.ts`
 - Modify: `packages/core/src/index.ts`
 - Test: `packages/core/test/schedule.test.ts`
 
 **Interfaces:**
+
 - Consumes: `OperatingWindow`, `isWithinOperatingWindow`, `nextWindowOpen` (Task 4).
 - Produces: `scheduleBatch(count: number, intervalMin: number, window: OperatingWindow, startAt: Date): { runAt: Date[]; estimatedEndAt: Date | null }`
 
@@ -864,17 +891,29 @@ import { describe, it, expect } from 'vitest';
 import { scheduleBatch } from '../src/schedule';
 import type { OperatingWindow } from '../src/window';
 
-const w: OperatingWindow = { startTime: '07:30', endTime: '23:30', timezone: 'America/Sao_Paulo', enabled: true };
+const w: OperatingWindow = {
+  startTime: '07:30',
+  endTime: '23:30',
+  timezone: 'America/Sao_Paulo',
+  enabled: true,
+};
 const sp = (s: string) => new Date(`${s}-03:00`);
 
 describe('scheduleBatch', () => {
   it('lote vazio', () => {
-    expect(scheduleBatch(0, 10, w, sp('2026-09-14T12:00:00'))).toEqual({ runAt: [], estimatedEndAt: null });
+    expect(scheduleBatch(0, 10, w, sp('2026-09-14T12:00:00'))).toEqual({
+      runAt: [],
+      estimatedEndAt: null,
+    });
   });
 
   it('espaça pelo intervalo dentro da janela', () => {
     const { runAt, estimatedEndAt } = scheduleBatch(3, 10, w, sp('2026-09-14T12:00:00'));
-    expect(runAt).toEqual([sp('2026-09-14T12:00:00'), sp('2026-09-14T12:10:00'), sp('2026-09-14T12:20:00')]);
+    expect(runAt).toEqual([
+      sp('2026-09-14T12:00:00'),
+      sp('2026-09-14T12:10:00'),
+      sp('2026-09-14T12:20:00'),
+    ]);
     expect(estimatedEndAt).toEqual(sp('2026-09-14T12:20:00'));
   });
 
@@ -943,11 +982,13 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ### Task 6: `core` — shuffle intercalado, parse de URL e SubID
 
 **Files:**
+
 - Create: `packages/core/src/shuffle.ts`, `packages/core/src/urls.ts`, `packages/core/src/subid.ts`
 - Modify: `packages/core/src/index.ts`
 - Test: `packages/core/test/shuffle.test.ts`, `packages/core/test/urls.test.ts`, `packages/core/test/subid.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `shuffleInterleaved<T>(items: T[], keyOf: (t: T) => string, rng?: () => number): T[]`
   - `parseProductUrl(url: string): { source: MarketplaceKind; externalId: string; shopId?: string } | { source: 'UNSUPPORTED'; reason: string }`
@@ -956,6 +997,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - [ ] **Step 1: Testes**
 
 `test/shuffle.test.ts`:
+
 ```ts
 import { describe, it, expect } from 'vitest';
 import { shuffleInterleaved } from '../src/shuffle';
@@ -971,44 +1013,59 @@ describe('shuffleInterleaved', () => {
     expect(new Set(out)).toEqual(new Set(items));
   });
   it('fonte única mantém todos os itens', () => {
-    const out = shuffleInterleaved([1, 2, 3], () => 'x', () => 0.5);
+    const out = shuffleInterleaved(
+      [1, 2, 3],
+      () => 'x',
+      () => 0.5,
+    );
     expect(out.sort()).toEqual([1, 2, 3]);
   });
 });
 ```
 
 `test/urls.test.ts`:
+
 ```ts
 import { describe, it, expect } from 'vitest';
 import { parseProductUrl } from '../src/urls';
 
 describe('parseProductUrl', () => {
   it('shopee formato -i.shop.item', () => {
-    expect(parseProductUrl('https://shopee.com.br/Processador-AMD-i.123456.987654?sp_atk=x')).toEqual({
-      source: 'SHOPEE', shopId: '123456', externalId: '987654',
+    expect(
+      parseProductUrl('https://shopee.com.br/Processador-AMD-i.123456.987654?sp_atk=x'),
+    ).toEqual({
+      source: 'SHOPEE',
+      shopId: '123456',
+      externalId: '987654',
     });
   });
   it('shopee formato /product/shop/item', () => {
     expect(parseProductUrl('https://shopee.com.br/product/123456/987654')).toEqual({
-      source: 'SHOPEE', shopId: '123456', externalId: '987654',
+      source: 'SHOPEE',
+      shopId: '123456',
+      externalId: '987654',
     });
   });
   it('mercado livre MLB', () => {
     expect(parseProductUrl('https://www.mercadolivre.com.br/produto/p/MLB12345678')).toEqual({
-      source: 'MERCADOLIVRE', externalId: 'MLB12345678',
+      source: 'MERCADOLIVRE',
+      externalId: 'MLB12345678',
     });
     expect(parseProductUrl('https://produto.mercadolivre.com.br/MLB-1234567890-nome-_JM')).toEqual({
-      source: 'MERCADOLIVRE', externalId: 'MLB1234567890',
+      source: 'MERCADOLIVRE',
+      externalId: 'MLB1234567890',
     });
   });
   it('amazon ASIN', () => {
     expect(parseProductUrl('https://www.amazon.com.br/Nome/dp/B0ABCDEF12/ref=x')).toEqual({
-      source: 'AMAZON', externalId: 'B0ABCDEF12',
+      source: 'AMAZON',
+      externalId: 'B0ABCDEF12',
     });
   });
   it('magalu', () => {
     expect(parseProductUrl('https://www.magazineluiza.com.br/nome/p/abc123def4/te/ab12/')).toEqual({
-      source: 'MAGALU', externalId: 'abc123def4',
+      source: 'MAGALU',
+      externalId: 'abc123def4',
     });
   });
   it('encurtadores e desconhecidos são UNSUPPORTED', () => {
@@ -1020,6 +1077,7 @@ describe('parseProductUrl', () => {
 ```
 
 `test/subid.test.ts`:
+
 ```ts
 import { describe, it, expect } from 'vitest';
 import { generateSubId } from '../src/subid';
@@ -1045,6 +1103,7 @@ Expected: FAIL nos três arquivos novos.
 - [ ] **Step 3: Implementar**
 
 `src/shuffle.ts`:
+
 ```ts
 function shuffleInPlace<T>(arr: T[], rng: () => number): T[] {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -1069,7 +1128,10 @@ export function shuffleInterleaved<T>(
     if (!buckets.has(k)) buckets.set(k, []);
     buckets.get(k)!.push(it);
   }
-  const queues = shuffleInPlace([...buckets.values()].map((b) => shuffleInPlace(b, rng)), rng);
+  const queues = shuffleInPlace(
+    [...buckets.values()].map((b) => shuffleInPlace(b, rng)),
+    rng,
+  );
   const out: T[] = [];
   while (out.length < items.length) {
     for (const q of queues) {
@@ -1082,6 +1144,7 @@ export function shuffleInterleaved<T>(
 ```
 
 `src/urls.ts`:
+
 ```ts
 import type { MarketplaceKind } from '@afilados/shared';
 
@@ -1122,6 +1185,7 @@ export function parseProductUrl(raw: string): ParsedProductUrl {
 ```
 
 `src/subid.ts`:
+
 ```ts
 import { DateTime } from 'luxon';
 
@@ -1164,17 +1228,20 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ### Task 7: `@afilados/db` — schema Prisma, migration e client
 
 **Files:**
+
 - Create: `packages/db/package.json`, `packages/db/tsconfig.json`, `packages/db/vitest.config.ts`, `packages/db/.env`
 - Create: `packages/db/prisma/schema.prisma`
 - Create: `packages/db/src/index.ts`
 - Test: `packages/db/test/tenant.test.ts` (integração — usa o Postgres do compose)
 
 **Interfaces:**
+
 - Produces: `prisma` (PrismaClient singleton), `forTenant(tenantId: string)` que devolve um client estendido onde leituras/`updateMany`/`deleteMany` das tabelas com `tenantId` recebem o filtro automaticamente e `create` recebe o `tenantId`; tipos gerados `@prisma/client` re-exportados.
 
 - [ ] **Step 1: Arquivos de pacote**
 
 `packages/db/package.json`:
+
 ```json
 {
   "name": "@afilados/db",
@@ -1205,11 +1272,13 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 `packages/db/tsconfig.json`:
+
 ```json
 { "extends": "../../tsconfig.base.json", "include": ["src", "test", "prisma"] }
 ```
 
 `packages/db/vitest.config.ts`:
+
 ```ts
 import { defineConfig } from 'vitest/config';
 export default defineConfig({
@@ -1218,6 +1287,7 @@ export default defineConfig({
 ```
 
 `packages/db/.env` (Prisma lê o `.env` do próprio pacote; já ignorado pelo `.gitignore` raiz):
+
 ```
 DATABASE_URL=postgresql://afilados:afilados@localhost:5432/afilados
 ```
@@ -1649,7 +1719,10 @@ describe('forTenant', () => {
   });
   it('updateMany em registro de outro tenant não afeta nada', async () => {
     const other = await prisma.template.findFirstOrThrow({ where: { tenantId: a } });
-    const res = await forTenant(b).template.updateMany({ where: { id: other.id }, data: { name: 'hack' } });
+    const res = await forTenant(b).template.updateMany({
+      where: { id: other.id },
+      data: { name: 'hack' },
+    });
     expect(res.count).toBe(0);
   });
 });
@@ -1720,7 +1793,8 @@ export function forTenant(tenantId: string) {
             create?: Record<string, unknown>;
           };
           if (FILTERED_OPS.has(operation)) a.where = { ...(a.where ?? {}), tenantId };
-          if (operation === 'create' && a.data && !Array.isArray(a.data)) a.data = { ...a.data, tenantId };
+          if (operation === 'create' && a.data && !Array.isArray(a.data))
+            a.data = { ...a.data, tenantId };
           if (operation === 'createMany' && Array.isArray(a.data)) {
             a.data = a.data.map((d) => ({ ...d, tenantId }));
           }
@@ -1753,11 +1827,13 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ### Task 8: `db` — criptografia de credenciais e seed
 
 **Files:**
+
 - Create: `packages/db/src/crypto.ts`, `packages/db/prisma/seed.ts`
 - Modify: `packages/db/src/index.ts` (export)
 - Test: `packages/db/test/crypto.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `encryptJson(value: unknown, key?: string): Buffer` / `decryptJson<T>(buf: Buffer, key?: string): T` — AES-256-GCM, formato `iv(12) | tag(16) | ciphertext`; `key` default `process.env.APP_ENCRYPTION_KEY` (hex 64 chars).
   - Seed cria: tenant `default`, usuário OWNER (`SEED_USER_EMAIL`/`SEED_USER_PASSWORD`, hash argon2), `OperatingWindow` padrão, `Template` padrão `isDefault`, `Setting`s `queueLimit=500`, `globalRateLimitPerMin=6`, `subIdPattern="{yyyyMMdd}-{batchId}"`.
@@ -1864,7 +1940,13 @@ async function main() {
   await prisma.user.upsert({
     where: { email },
     update: {},
-    create: { tenantId: tenant.id, email, name: 'Admin', role: 'OWNER', passwordHash: await hash(password) },
+    create: {
+      tenantId: tenant.id,
+      email,
+      name: 'Admin',
+      role: 'OWNER',
+      passwordHash: await hash(password),
+    },
   });
 
   await prisma.operatingWindow.upsert({
@@ -1873,7 +1955,9 @@ async function main() {
     create: { tenantId: tenant.id },
   });
 
-  const hasDefault = await prisma.template.findFirst({ where: { tenantId: tenant.id, isDefault: true } });
+  const hasDefault = await prisma.template.findFirst({
+    where: { tenantId: tenant.id, isDefault: true },
+  });
   if (!hasDefault) {
     await prisma.template.create({
       data: { tenantId: tenant.id, name: 'Padrão', body: DEFAULT_TEMPLATE, isDefault: true },
@@ -1922,16 +2006,24 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ### Task 9: `@afilados/marketplaces` — interface e assinatura Shopee
 
 **Files:**
+
 - Create: `packages/marketplaces/package.json`, `packages/marketplaces/tsconfig.json`, `packages/marketplaces/vitest.config.ts`
 - Create: `packages/marketplaces/src/{index,adapter}.ts`, `packages/marketplaces/src/shopee/signature.ts`
 - Test: `packages/marketplaces/test/shopee.signature.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `adapter.ts`:
     ```ts
-    export interface ConnectionStatus { ok: boolean; error?: string }
-    export interface ShopeeCredentials { appId: string; secret: string }
+    export interface ConnectionStatus {
+      ok: boolean;
+      error?: string;
+    }
+    export interface ShopeeCredentials {
+      appId: string;
+      secret: string;
+    }
     export interface MarketplaceAdapter<C = unknown> {
       readonly kind: MarketplaceKind;
       checkConnection(creds: C): Promise<ConnectionStatus>;
@@ -1945,6 +2037,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - [ ] **Step 1: Arquivos de pacote**
 
 `packages/marketplaces/package.json`:
+
 ```json
 {
   "name": "@afilados/marketplaces",
@@ -1961,11 +2054,13 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 `packages/marketplaces/tsconfig.json`:
+
 ```json
 { "extends": "../../tsconfig.base.json", "include": ["src", "test"] }
 ```
 
 `packages/marketplaces/vitest.config.ts`:
+
 ```ts
 import { defineConfig } from 'vitest/config';
 export default defineConfig({ test: { include: ['test/**/*.test.ts'] } });
@@ -1998,6 +2093,7 @@ Expected: FAIL.
 - [ ] **Step 4: Implementar**
 
 `src/adapter.ts`:
+
 ```ts
 import type { MarketplaceKind, ProductData, SearchQuery } from '@afilados/shared';
 
@@ -2022,6 +2118,7 @@ export interface MarketplaceAdapter<C = unknown> {
 ```
 
 `src/shopee/signature.ts`:
+
 ```ts
 import { createHash } from 'node:crypto';
 
@@ -2031,12 +2128,15 @@ export function buildShopeeAuthHeader(
   payload: string,
   timestamp: number,
 ): string {
-  const signature = createHash('sha256').update(`${appId}${timestamp}${payload}${secret}`).digest('hex');
+  const signature = createHash('sha256')
+    .update(`${appId}${timestamp}${payload}${secret}`)
+    .digest('hex');
   return `SHA256 Credential=${appId}, Timestamp=${timestamp}, Signature=${signature}`;
 }
 ```
 
 `src/index.ts`:
+
 ```ts
 export * from './adapter';
 export * from './shopee/signature';
@@ -2059,12 +2159,14 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ### Task 10: Adapter Shopee — client GraphQL, mapper e modo mock
 
 **Files:**
+
 - Create: `packages/marketplaces/src/shopee/{client,mapper,adapter}.ts`
 - Create: `packages/marketplaces/src/shopee/fixtures/productOfferV2.json`, `packages/marketplaces/src/shopee/fixtures/generateShortLink.json`
 - Modify: `packages/marketplaces/src/index.ts`
 - Test: `packages/marketplaces/test/shopee.mapper.test.ts`, `packages/marketplaces/test/shopee.adapter.test.ts`
 
 **Interfaces:**
+
 - Consumes: `buildShopeeAuthHeader` (T9), `parseProductUrl` (core, T6), `productDataSchema` (shared, T2).
 - Produces:
   - `ShopeeGraphQLClient` com `constructor(creds, fetchImpl = fetch)` e `request<T>(query: string, variables: object): Promise<T>`; endpoint `https://open-api.affiliate.shopee.com.br/graphql`; `ShopeeApiError`.
@@ -2076,6 +2178,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - [ ] **Step 1: Fixtures**
 
 `src/shopee/fixtures/productOfferV2.json`:
+
 ```json
 {
   "data": {
@@ -2123,6 +2226,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 `src/shopee/fixtures/generateShortLink.json`:
+
 ```json
 { "data": { "generateShortLink": { "shortLink": "https://s.shopee.com.br/MOCK123" } } }
 ```
@@ -2213,14 +2317,26 @@ describe('ShopeeAdapter (real, fetch falso)', () => {
   it('search envia header assinado e variáveis corretas', async () => {
     const f = fakeFetch([offers]);
     const adapter = createShopeeAdapter({ fetchImpl: f as unknown as typeof fetch });
-    const r = await adapter.search!(creds, { ...baseQuery, sort: 'COMMISSION_DESC', limit: 10, topSellers: true });
+    const r = await adapter.search!(creds, {
+      ...baseQuery,
+      sort: 'COMMISSION_DESC',
+      limit: 10,
+      topSellers: true,
+    });
     expect(r).toHaveLength(2);
     const [url, init] = f.mock.calls[0]!;
     expect(url).toBe('https://open-api.affiliate.shopee.com.br/graphql');
     const headers = init!.headers as Record<string, string>;
-    expect(headers['Authorization']).toMatch(/^SHA256 Credential=app, Timestamp=\d+, Signature=[0-9a-f]{64}$/);
+    expect(headers['Authorization']).toMatch(
+      /^SHA256 Credential=app, Timestamp=\d+, Signature=[0-9a-f]{64}$/,
+    );
     const body = JSON.parse(init!.body as string) as { variables: Record<string, unknown> };
-    expect(body.variables).toMatchObject({ keyword: 'ryzen', sortType: 3, limit: 10, isOfficialShop: true });
+    expect(body.variables).toMatchObject({
+      keyword: 'ryzen',
+      sortType: 3,
+      limit: 10,
+      isOfficialShop: true,
+    });
   });
   it('fetchByUrls resolve itemId da URL', async () => {
     const f = fakeFetch([offers]);
@@ -2238,7 +2354,10 @@ describe('ShopeeAdapter (real, fetch falso)', () => {
   it('erro GraphQL vira status legível', async () => {
     const f = fakeFetch([{ errors: [{ message: 'invalid signature' }] }]);
     const adapter = createShopeeAdapter({ fetchImpl: f as unknown as typeof fetch });
-    await expect(adapter.checkConnection(creds)).resolves.toEqual({ ok: false, error: 'invalid signature' });
+    await expect(adapter.checkConnection(creds)).resolves.toEqual({
+      ok: false,
+      error: 'invalid signature',
+    });
   });
 });
 ```
@@ -2271,7 +2390,12 @@ export class ShopeeGraphQLClient {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: buildShopeeAuthHeader(this.creds.appId, this.creds.secret, payload, timestamp),
+        Authorization: buildShopeeAuthHeader(
+          this.creds.appId,
+          this.creds.secret,
+          payload,
+          timestamp,
+        ),
       },
       body: payload,
     });
@@ -2312,7 +2436,8 @@ export function mapProductOffer(n: ShopeeProductOfferNode): ProductData {
   const discount = n.priceDiscountRate > 0 ? n.priceDiscountRate : undefined;
   const originalPrice = discount ? Number((price / (1 - discount / 100)).toFixed(2)) : undefined;
   const commissionPct = Number((Number(n.commissionRate) * 100).toFixed(2));
-  const flashSaleEndsAt = n.periodEndTime > 0 ? new Date(n.periodEndTime * 1000).toISOString() : undefined;
+  const flashSaleEndsAt =
+    n.periodEndTime > 0 ? new Date(n.periodEndTime * 1000).toISOString() : undefined;
   const data: Record<string, unknown> = {
     source: 'SHOPEE',
     externalId: String(n.itemId),
@@ -2384,11 +2509,16 @@ export interface ShopeeAdapterOptions {
   fetchImpl?: typeof fetch;
 }
 
-export function createShopeeAdapter(opts: ShopeeAdapterOptions = {}): MarketplaceAdapter<ShopeeCredentials> {
+export function createShopeeAdapter(
+  opts: ShopeeAdapterOptions = {},
+): MarketplaceAdapter<ShopeeCredentials> {
   const mock = opts.mock ?? process.env.SHOPEE_MOCK === '1';
   const client = (creds: ShopeeCredentials) => new ShopeeGraphQLClient(creds, opts.fetchImpl);
 
-  async function searchPage(creds: ShopeeCredentials, vars: Record<string, unknown>): Promise<OfferResponse> {
+  async function searchPage(
+    creds: ShopeeCredentials,
+    vars: Record<string, unknown>,
+  ): Promise<OfferResponse> {
     if (mock) return offersFixture.data as unknown as OfferResponse;
     return client(creds).request<OfferResponse>(PRODUCT_OFFER_QUERY, vars);
   }
@@ -2437,7 +2567,11 @@ export function createShopeeAdapter(opts: ShopeeAdapterOptions = {}): Marketplac
       for (const url of urls) {
         const parsed = parseProductUrl(url);
         if (parsed.source !== 'SHOPEE') continue;
-        const res = await searchPage(creds, { itemId: Number(parsed.externalId), limit: 1, page: 1 });
+        const res = await searchPage(creds, {
+          itemId: Number(parsed.externalId),
+          limit: 1,
+          page: 1,
+        });
         const node =
           res.productOfferV2.nodes.find((n) => String(n.itemId) === parsed.externalId) ??
           res.productOfferV2.nodes[0];
@@ -2459,6 +2593,7 @@ export function createShopeeAdapter(opts: ShopeeAdapterOptions = {}): Marketplac
 ```
 
 `src/index.ts` passa a ser:
+
 ```ts
 export * from './adapter';
 export * from './shopee/signature';
@@ -2486,6 +2621,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ### Task 11: Verificação final da F1-A e README
 
 **Files:**
+
 - Create: `README.md`
 
 - [ ] **Step 1: Rodar tudo na raiz**

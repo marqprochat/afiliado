@@ -8,7 +8,7 @@ Automação de ofertas de afiliado para grupos de WhatsApp. Specs e planos em `d
 cp .env.example .env            # preencha APP_ENCRYPTION_KEY e SESSION_SECRET (openssl rand -hex 32)
 echo "DATABASE_URL=postgresql://afilados:afilados@localhost:5434/afilados" > packages/db/.env
 pnpm install
-docker compose up -d
+docker compose up -d --wait
 pnpm db:migrate
 set -a && . ./.env && set +a && pnpm db:seed
 pnpm test

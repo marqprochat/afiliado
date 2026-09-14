@@ -21,7 +21,10 @@ export function shuffleInterleaved<T>(
     if (!buckets.has(k)) buckets.set(k, []);
     buckets.get(k)!.push(it);
   }
-  const queues = shuffleInPlace([...buckets.values()].map((b) => shuffleInPlace(b, rng)), rng);
+  const queues = shuffleInPlace(
+    [...buckets.values()].map((b) => shuffleInPlace(b, rng)),
+    rng,
+  );
   const out: T[] = [];
   while (out.length < items.length) {
     for (const q of queues) {
