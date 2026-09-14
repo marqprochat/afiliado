@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { prisma } from '@afilados/db';
 import { buildApp } from '../src/app';
+import { getShopeeAdapter } from '../src/lib/marketplaces';
 import { createTenantWithUser, cleanupTenant, loginCookie } from './helpers';
 
 process.env.SHOPEE_MOCK = '1';
@@ -96,6 +97,19 @@ describe('products + queue', () => {
     });
     expect(r.statusCode).toBe(200);
     expect(r.json().products).toHaveLength(1);
+  });
+  it('falha do adapter no import → 502 MARKETPLACE_ERROR', async () => {
+    const adapter = getShopeeAdapter();
+    const spy = vi.spyOn(adapter, 'fetchByUrls').mockRejectedValueOnce(new Error('api down'));
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/v1/products/import',
+      headers: { cookie },
+      payload: { urls: ['https://shopee.com.br/x-i.1.2'] },
+    });
+    expect(r.statusCode).toBe(502);
+    expect(r.json().error).toEqual({ code: 'MARKETPLACE_ERROR', message: 'api down' });
+    spy.mockRestore();
   });
   it('fila: adiciona, lista, respeita limite, seleciona, remove', async () => {
     await app.inject({

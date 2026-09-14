@@ -50,7 +50,12 @@ export async function productsRoutes(app: FastifyInstance) {
     let products: ReturnType<typeof toApiProduct>[] = [];
     if (shopeeUrls.length) {
       const { creds } = await loadShopeeCredentials(req.db);
-      const found = await getShopeeAdapter().fetchByUrls(creds, shopeeUrls);
+      let found;
+      try {
+        found = await getShopeeAdapter().fetchByUrls(creds, shopeeUrls);
+      } catch (e) {
+        throw new ApiError('MARKETPLACE_ERROR', e instanceof Error ? e.message : String(e), 502);
+      }
       products = (await upsertProducts(req.db, req.tenantId, found)).map(toApiProduct);
     }
     return { products, unsupported };
