@@ -3,3 +3,6 @@ export * from './product';
 export * from './search';
 export * from './template';
 export * from './events';
+export * from './errors';
+export * from './queues';
+export * from './api';
