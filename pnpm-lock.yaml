@@ -68,6 +68,22 @@ importers:
         specifier: ^2.1.1
         version: 2.1.9(@types/node@22.20.2)
 
+  packages/marketplaces:
+    dependencies:
+      '@afilados/core':
+        specifier: workspace:*
+        version: link:../core
+      '@afilados/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      typescript:
+        specifier: ^5.6.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.1
+        version: 2.1.9(@types/node@22.20.2)
+
   packages/shared:
     dependencies:
       zod:
