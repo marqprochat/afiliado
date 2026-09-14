@@ -14,6 +14,19 @@ set -a && . ./.env && set +a && pnpm db:seed
 pnpm test
 ```
 
+## Rodando API e worker
+
+```bash
+set -a && . ./.env && set +a
+pnpm dev            # api em :3001, worker em :3002 (health em /health)
+```
+
+Testes de integração (precisam do Postgres/Redis do compose e das variáveis do `.env`):
+
+```bash
+set -a && . ./.env && set +a && pnpm test
+```
+
 ## Pacotes
 
 - `packages/shared` — tipos, enums, schemas Zod

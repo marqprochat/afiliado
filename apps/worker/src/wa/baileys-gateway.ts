@@ -1,4 +1,5 @@
-import makeWASocket, {
+import {
+  makeWASocket,
   DisconnectReason,
   fetchLatestBaileysVersion,
   jidNormalizedUser,
