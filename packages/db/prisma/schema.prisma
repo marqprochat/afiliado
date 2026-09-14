@@ -1,0 +1,385 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Conta / multi-tenant ----------
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  users             User[]
+  waSessions        WaSession[]
+  waGroups          WaGroup[]
+  connections       MarketplaceConnection[]
+  products          Product[]
+  queueItems        QueueItem[]
+  templates         Template[]
+  operatingWindow   OperatingWindow?
+  batches           Batch[]
+  sendLogs          SendLog[]
+  settings          Setting[]
+  subscriptions     Subscription[]
+  mirrorRules       MirrorRule[]
+  coupons           Coupon[]
+  scheduledMessages ScheduledMessage[]
+}
+
+enum UserRole {
+  OWNER
+  MEMBER
+}
+
+model User {
+  id           String    @id @default(cuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         UserRole  @default(OWNER)
+  createdAt    DateTime  @default(now())
+  sessions     Session[]
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+}
+
+// Reservado para F7
+model Plan {
+  id            String         @id @default(cuid())
+  name          String
+  priceCents    Int
+  features      Json
+  subscriptions Subscription[]
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+}
+
+model Subscription {
+  id       String             @id @default(cuid())
+  tenantId String
+  tenant   Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planId   String
+  plan     Plan               @relation(fields: [planId], references: [id])
+  status   SubscriptionStatus
+  startsAt DateTime
+  endsAt   DateTime?
+}
+
+// ---------- WhatsApp ----------
+enum WaSessionStatus {
+  DISCONNECTED
+  CONNECTING
+  NEEDS_QR
+  CONNECTED
+  LOGGED_OUT
+}
+
+model WaSession {
+  id         String          @id @default(cuid())
+  tenantId   String
+  tenant     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  label      String
+  phone      String?
+  status     WaSessionStatus @default(DISCONNECTED)
+  authCreds  Json?
+  lastQr     String?
+  pairCode   String?
+  lastSeenAt DateTime?
+  createdAt  DateTime        @default(now())
+  authKeys   WaAuthKey[]
+  groups     WaGroup[]
+  batches    Batch[]
+}
+
+model WaAuthKey {
+  sessionId String
+  session   WaSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type      String
+  keyId     String
+  value     Json
+
+  @@id([sessionId, type, keyId])
+}
+
+enum WaGroupKind {
+  GROUP
+  COMMUNITY
+  CHANNEL
+}
+
+model WaGroup {
+  id          String      @id @default(cuid())
+  tenantId    String
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sessionId   String
+  session     WaSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  jid         String
+  name        String
+  kind        WaGroupKind @default(GROUP)
+  botIsAdmin  Boolean     @default(false)
+  memberCount Int         @default(0)
+  inviteLink  String?
+  syncedAt    DateTime    @default(now())
+
+  @@unique([sessionId, jid])
+  @@index([tenantId])
+}
+
+// ---------- Marketplaces ----------
+enum MarketplaceKind {
+  SHOPEE
+  MERCADOLIVRE
+  AMAZON
+  MAGALU
+}
+
+enum ConnectionStatus {
+  UNCONFIGURED
+  OK
+  ERROR
+}
+
+model MarketplaceConnection {
+  id                   String           @id @default(cuid())
+  tenantId             String
+  tenant               Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  kind                 MarketplaceKind
+  encryptedCredentials Bytes?
+  affiliateTag         String?
+  status               ConnectionStatus @default(UNCONFIGURED)
+  lastCheckedAt        DateTime?
+  lastError            String?
+
+  @@unique([tenantId, kind])
+}
+
+// ---------- Produtos / fila ----------
+enum ProductSource {
+  SHOPEE
+  MERCADOLIVRE
+  AMAZON
+  MAGALU
+  MANUAL
+}
+
+enum Shipping {
+  NONE
+  FREE
+  FULL
+  UNKNOWN
+}
+
+model Product {
+  id              String        @id @default(cuid())
+  tenantId        String
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  source          ProductSource
+  externalId      String?
+  title           String
+  price           Decimal       @db.Decimal(12, 2)
+  originalPrice   Decimal?      @db.Decimal(12, 2)
+  discountPct     Int?
+  salesCount      Int?
+  commissionPct   Decimal?      @db.Decimal(5, 2)
+  images          String[]
+  shipping        Shipping      @default(UNKNOWN)
+  flashSaleEndsAt DateTime?
+  couponCode      String?
+  couponValue     Decimal?      @db.Decimal(12, 2)
+  originalUrl     String
+  shopId          String?
+  shopName        String?
+  raw             Json
+  createdAt       DateTime      @default(now())
+  queueItems      QueueItem[]
+  batchItems      BatchItem[]
+
+  @@unique([tenantId, source, externalId])
+}
+
+enum QueueItemStatus {
+  PENDING
+  SENT
+  ERROR
+}
+
+model QueueItem {
+  id        String          @id @default(cuid())
+  tenantId  String
+  tenant    Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  selected  Boolean         @default(true)
+  status    QueueItemStatus @default(PENDING)
+  addedAt   DateTime        @default(now())
+
+  @@unique([tenantId, productId])
+}
+
+// ---------- Templates / janela / settings ----------
+model Template {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  body      String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  batches   Batch[]
+
+  @@index([tenantId])
+}
+
+model OperatingWindow {
+  tenantId  String  @id
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  startTime String  @default("07:30")
+  endTime   String  @default("23:30")
+  timezone  String  @default("America/Sao_Paulo")
+  enabled   Boolean @default(true)
+}
+
+model Setting {
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  key      String
+  value    Json
+
+  @@id([tenantId, key])
+}
+
+// ---------- Lotes / envio ----------
+enum MediaMode {
+  IMAGE
+  PREVIEW
+}
+
+enum BatchStatus {
+  SCHEDULED
+  RUNNING
+  PAUSED
+  DONE
+  CANCELLED
+}
+
+enum BatchItemStatus {
+  PENDING
+  SENDING
+  SENT
+  ERROR
+}
+
+enum SendStatus {
+  SENT
+  ERROR
+}
+
+model Batch {
+  id             String      @id @default(cuid())
+  tenantId       String
+  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sessionId      String
+  session        WaSession   @relation(fields: [sessionId], references: [id])
+  templateId     String
+  template       Template    @relation(fields: [templateId], references: [id])
+  name           String
+  groupJids      String[]
+  intervalMin    Int
+  mediaMode      MediaMode   @default(IMAGE)
+  shuffled       Boolean     @default(false)
+  status         BatchStatus @default(SCHEDULED)
+  estimatedEndAt DateTime?
+  createdAt      DateTime    @default(now())
+  items          BatchItem[]
+
+  @@index([tenantId, status])
+}
+
+model BatchItem {
+  id        String          @id @default(cuid())
+  batchId   String
+  batch     Batch           @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product         @relation(fields: [productId], references: [id])
+  order     Int
+  runAt     DateTime
+  status    BatchItemStatus @default(PENDING)
+  error     String?
+  sendLogs  SendLog[]
+
+  @@unique([batchId, productId])
+}
+
+model SendLog {
+  id          String     @id @default(cuid())
+  tenantId    String
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  batchItemId String?
+  batchItem   BatchItem? @relation(fields: [batchItemId], references: [id], onDelete: SetNull)
+  groupJid    String
+  waMessageId String?
+  status      SendStatus
+  error       String?
+  sentAt      DateTime   @default(now())
+
+  @@unique([batchItemId, groupJid])
+  @@index([tenantId, sentAt])
+}
+
+// ---------- Reservado para fases futuras (schema mínimo) ----------
+enum MirrorMode {
+  TEMPLATE
+  CLONE
+}
+
+model MirrorRule {
+  id         String     @id @default(cuid())
+  tenantId   String
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sourceJids String[]
+  targetJids String[]
+  mode       MirrorMode @default(CLONE)
+  mediaMode  MediaMode  @default(PREVIEW)
+  enabled    Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+}
+
+model Coupon {
+  id          String          @id @default(cuid())
+  tenantId    String
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  store       MarketplaceKind
+  code        String
+  description String
+  expiresAt   DateTime?
+  sourceUrl   String?
+  fetchedAt   DateTime        @default(now())
+
+  @@unique([tenantId, store, code])
+}
+
+model ScheduledMessage {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  body      String
+  times     String[] // "HH:mm", até 3
+  groupJids String[]
+  enabled   Boolean  @default(true)
+}
