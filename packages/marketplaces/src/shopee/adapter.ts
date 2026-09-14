@@ -54,11 +54,40 @@ export function createShopeeAdapter(
   const mock = opts.mock ?? process.env.SHOPEE_MOCK === '1';
   const client = (creds: ShopeeCredentials) => new ShopeeGraphQLClient(creds, opts.fetchImpl);
 
+  // Item extra só visível via busca dirigida por itemId (fetchByUrls) em modo mock, para
+  // permitir testar a importação de um produto ainda não retornado pela busca genérica sem
+  // alterar o tamanho dos resultados de `search` esperado pelos demais testes/fixtures.
+  const MOCK_EXTRA_NODE: ShopeeProductOfferNode = {
+    itemId: 555555,
+    shopId: 789012,
+    productName: 'SSD NVMe 1TB',
+    priceMin: '399.90',
+    priceMax: '399.90',
+    priceDiscountRate: 10,
+    sales: 3,
+    commissionRate: '0.04',
+    imageUrl: 'https://cf.shopee.com.br/file/ghi',
+    shopName: 'Loja Storage',
+    shopType: [],
+    productLink: 'https://shopee.com.br/product/789012/555555',
+    offerLink: 'https://s.shopee.com.br/rst',
+    periodStartTime: 0,
+    periodEndTime: 0,
+  };
+
   async function searchPage(
     creds: ShopeeCredentials,
     vars: Record<string, unknown>,
   ): Promise<OfferResponse> {
-    if (mock) return offersFixture.data as unknown as OfferResponse;
+    if (mock) {
+      const data = offersFixture.data as unknown as OfferResponse;
+      if (vars.itemId === MOCK_EXTRA_NODE.itemId) {
+        return {
+          productOfferV2: { nodes: [MOCK_EXTRA_NODE], pageInfo: data.productOfferV2.pageInfo },
+        };
+      }
+      return data;
+    }
     return client(creds).request<OfferResponse>(PRODUCT_OFFER_QUERY, vars);
   }
 

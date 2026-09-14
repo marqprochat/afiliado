@@ -9,6 +9,8 @@ import { authRoutes } from './routes/auth';
 import { meRoutes } from './routes/me';
 import { settingsRoutes } from './routes/settings';
 import { marketplacesRoutes } from './routes/marketplaces';
+import { productsRoutes } from './routes/products';
+import { queueRoutes } from './routes/queue';
 import { wsRoutes } from './routes/ws';
 import { waRoutes } from './routes/wa';
 import { EventHub } from './lib/events';
@@ -44,6 +46,8 @@ export async function buildApp(opts: BuildAppOptions = {}) {
       await api.register(meRoutes);
       await api.register(settingsRoutes);
       await api.register(marketplacesRoutes);
+      await api.register(productsRoutes);
+      await api.register(queueRoutes);
       await api.register(wsRoutes);
       await api.register(waRoutes);
     },
