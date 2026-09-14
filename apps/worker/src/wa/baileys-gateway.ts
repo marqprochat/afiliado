@@ -26,6 +26,8 @@ interface Live {
   connected: boolean;
   mode: 'qr' | 'pair';
   phone?: string;
+  /** o pair code já foi pedido para este socket (uma vez por socket) */
+  pairRequested: boolean;
   /** reconexão agendada por este socket (também em `pendingReconnects`) */
   reconnectTimer?: NodeJS.Timeout;
   /** listeners/timers a remover quando o socket morre */
@@ -69,6 +71,8 @@ async function getWaVersion(): Promise<WaVersion> {
 
 export class BaileysGateway implements WhatsAppGateway {
   private live = new Map<string, Live>();
+  /** sessões com um `open()` em voo (antes do `live.set`) — evita socket órfão */
+  private opening = new Set<string>();
   /** reconexões agendadas, mesmo sem socket vivo no mapa `live` */
   private pendingReconnects = new Map<string, NodeJS.Timeout>();
 
@@ -114,7 +118,7 @@ export class BaileysGateway implements WhatsAppGateway {
     session: { id: string; tenantId: string },
     opts: { mode: 'qr' | 'pair'; phone?: string },
   ) {
-    if (this.live.has(session.id)) return;
+    if (this.live.has(session.id) || this.opening.has(session.id)) return;
     // um connect explícito ganha de uma reconexão agendada: cancela e abre agora
     this.cancelReconnect(session.id);
     await this.open(session.id, session.tenantId, opts, 0);
@@ -126,34 +130,48 @@ export class BaileysGateway implements WhatsAppGateway {
     opts: { mode: 'qr' | 'pair'; phone?: string },
     attempt: number,
   ) {
-    const { state, saveCreds, clear } = await usePostgresAuthState(sessionId);
-    const version = await getWaVersion();
-    const sock = makeWASocket({
-      version,
-      auth: state,
-      printQRInTerminal: false,
-      browser: [config.WA_BROWSER_NAME, 'Chrome', '120.0'],
-      logger: log.child({ sessionId }) as never,
-      markOnlineOnConnect: false,
-    });
-    let resolveClosed!: () => void;
-    const closed = new Promise<void>((resolve) => {
-      resolveClosed = resolve;
-    });
-    const entry: Live = {
-      sock,
-      tenantId,
-      attempt,
-      stopping: false,
-      loggingOut: false,
-      connected: false,
-      mode: opts.mode,
-      cleanup: [],
-      closed,
-      resolveClosed,
-    };
-    if (opts.phone) entry.phone = opts.phone;
-    this.live.set(sessionId, entry);
+    // `open()` só entra no mapa `live` depois de dois awaits (auth state + versão);
+    // sem esta marca síncrona dois `open()` concorrentes abririam um socket órfão.
+    if (this.opening.has(sessionId) || this.live.has(sessionId)) return;
+    this.opening.add(sessionId);
+    let state: Awaited<ReturnType<typeof usePostgresAuthState>>['state'];
+    let saveCreds: Awaited<ReturnType<typeof usePostgresAuthState>>['saveCreds'];
+    let clear: Awaited<ReturnType<typeof usePostgresAuthState>>['clear'];
+    let sock: WASocket;
+    let entry: Live;
+    try {
+      ({ state, saveCreds, clear } = await usePostgresAuthState(sessionId));
+      const version = await getWaVersion();
+      sock = makeWASocket({
+        version,
+        auth: state,
+        printQRInTerminal: false,
+        browser: [config.WA_BROWSER_NAME, 'Chrome', '120.0'],
+        logger: log.child({ sessionId }) as never,
+        markOnlineOnConnect: false,
+      });
+      let resolveClosed!: () => void;
+      const closed = new Promise<void>((resolve) => {
+        resolveClosed = resolve;
+      });
+      entry = {
+        sock,
+        tenantId,
+        attempt,
+        stopping: false,
+        loggingOut: false,
+        connected: false,
+        mode: opts.mode,
+        pairRequested: false,
+        cleanup: [],
+        closed,
+        resolveClosed,
+      };
+      if (opts.phone) entry.phone = opts.phone;
+      this.live.set(sessionId, entry);
+    } finally {
+      this.opening.delete(sessionId);
+    }
     await this.setStatus(sessionId, tenantId, 'CONNECTING');
 
     sock.ev.on('creds.update', () => {
@@ -169,13 +187,24 @@ export class BaileysGateway implements WhatsAppGateway {
     sock.ev.on('connection.update', (u) => {
       void (async () => {
         try {
-          if (u.qr && opts.mode === 'qr') {
-            await prisma.waSession.update({
-              where: { id: sessionId },
-              data: { status: 'NEEDS_QR', lastQr: u.qr },
-            });
-            await publishEvent(tenantId, { type: 'wa.qr', sessionId, qr: u.qr });
-            await publishEvent(tenantId, { type: 'wa.status', sessionId, status: 'NEEDS_QR' });
+          if (u.qr !== undefined) {
+            if (opts.mode === 'pair') {
+              // O nó `pair-device` só chega depois do handshake Noise terminar
+              // (`validateConnection` → `noise.finishInit`). Pedir o pair code antes
+              // disso mandaria o IQ em texto puro e ainda setaria `creds.me`, jogando
+              // `validateConnection` no ramo de login. Por isso é aqui, não no `ws.open`.
+              if (opts.phone && !state.creds.registered && !entry.pairRequested) {
+                entry.pairRequested = true;
+                await this.requestPairCode(sessionId, tenantId, entry, opts.phone);
+              }
+            } else if (u.qr) {
+              await prisma.waSession.update({
+                where: { id: sessionId },
+                data: { status: 'NEEDS_QR', lastQr: u.qr },
+              });
+              await publishEvent(tenantId, { type: 'wa.qr', sessionId, qr: u.qr });
+              await publishEvent(tenantId, { type: 'wa.status', sessionId, status: 'NEEDS_QR' });
+            }
           }
           if (u.connection === 'open') {
             entry.attempt = 0;
@@ -217,8 +246,8 @@ export class BaileysGateway implements WhatsAppGateway {
             const timer = setTimeout(() => {
               this.pendingReconnects.delete(sessionId);
               delete entry.reconnectTimer;
-              // outro socket já foi aberto para esta sessão: não abrir um segundo
-              if (this.live.has(sessionId)) return;
+              // outro socket já foi aberto (ou está abrindo) para esta sessão
+              if (this.live.has(sessionId) || this.opening.has(sessionId)) return;
               this.open(sessionId, tenantId, opts, nextAttempt).catch((e: unknown) =>
                 log.error({ err: e, sessionId }, 'falha ao reconectar'),
               );
@@ -231,20 +260,6 @@ export class BaileysGateway implements WhatsAppGateway {
         }
       })();
     });
-
-    if (opts.mode === 'pair' && opts.phone && !state.creds.registered) {
-      const phone = opts.phone;
-      // O pair code só pode ser pedido depois que o WebSocket abriu.
-      const request = () => {
-        void this.requestPairCode(sessionId, tenantId, entry, phone);
-      };
-      if (sock.ws.isOpen) {
-        request();
-      } else {
-        sock.ws.once('open', request);
-        entry.cleanup.push(() => sock.ws.off('open', request));
-      }
-    }
   }
 
   private async requestPairCode(
@@ -309,10 +324,18 @@ export class BaileysGateway implements WhatsAppGateway {
       }
       l.sock.end(undefined);
       // espera o socket realmente fechar antes de escrever o status final
-      await Promise.race([
-        l.closed,
-        new Promise<void>((resolve) => setTimeout(resolve, 10_000).unref?.()),
-      ]);
+      let guard: NodeJS.Timeout | undefined;
+      try {
+        await Promise.race([
+          l.closed,
+          new Promise<void>((resolve) => {
+            guard = setTimeout(resolve, 10_000);
+            guard.unref?.();
+          }),
+        ]);
+      } finally {
+        if (guard) clearTimeout(guard);
+      }
       if (this.live.get(sessionId) === l) this.live.delete(sessionId);
     }
     const { clear } = await usePostgresAuthState(sessionId);

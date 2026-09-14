@@ -43,7 +43,7 @@ describe('ShopeeAdapter (mock)', () => {
 describe('ShopeeAdapter (real, fetch falso)', () => {
   it('search envia header assinado e variáveis corretas', async () => {
     const f = fakeFetch([offers]);
-    const adapter = createShopeeAdapter({ fetchImpl: f as unknown as typeof fetch });
+    const adapter = createShopeeAdapter({ mock: false, fetchImpl: f as unknown as typeof fetch });
     const r = await adapter.search!(creds, {
       ...baseQuery,
       sort: 'COMMISSION_DESC',
@@ -67,26 +67,26 @@ describe('ShopeeAdapter (real, fetch falso)', () => {
   });
   it('fetchByUrls resolve itemId da URL', async () => {
     const f = fakeFetch([offers]);
-    const adapter = createShopeeAdapter({ fetchImpl: f as unknown as typeof fetch });
+    const adapter = createShopeeAdapter({ mock: false, fetchImpl: f as unknown as typeof fetch });
     const r = await adapter.fetchByUrls(creds, ['https://shopee.com.br/x-i.123456.987654']);
     expect(r[0]!.externalId).toBe('987654');
   });
   it('fetchByUrls ignora URL quando a API não devolve o itemId pedido', async () => {
     const f = fakeFetch([offers]); // fixture não contém itemId 424242
-    const adapter = createShopeeAdapter({ fetchImpl: f as unknown as typeof fetch });
+    const adapter = createShopeeAdapter({ mock: false, fetchImpl: f as unknown as typeof fetch });
     const r = await adapter.fetchByUrls(creds, ['https://shopee.com.br/x-i.1.424242']);
     expect(r).toEqual([]);
   });
   it('toAffiliateLink usa generateShortLink', async () => {
     const f = fakeFetch([short]);
-    const adapter = createShopeeAdapter({ fetchImpl: f as unknown as typeof fetch });
+    const adapter = createShopeeAdapter({ mock: false, fetchImpl: f as unknown as typeof fetch });
     expect(await adapter.toAffiliateLink(creds, 'https://shopee.com.br/product/1/2', 's1')).toBe(
       'https://s.shopee.com.br/MOCK123',
     );
   });
   it('erro GraphQL vira status legível', async () => {
     const f = fakeFetch([{ errors: [{ message: 'invalid signature' }] }]);
-    const adapter = createShopeeAdapter({ fetchImpl: f as unknown as typeof fetch });
+    const adapter = createShopeeAdapter({ mock: false, fetchImpl: f as unknown as typeof fetch });
     await expect(adapter.checkConnection(creds)).resolves.toEqual({
       ok: false,
       error: 'invalid signature',
@@ -97,7 +97,7 @@ describe('ShopeeAdapter (real, fetch falso)', () => {
       async () =>
         new Response(JSON.stringify({ errors: [{ message: 'invalid app id' }] }), { status: 400 }),
     );
-    const adapter = createShopeeAdapter({ fetchImpl: f as unknown as typeof fetch });
+    const adapter = createShopeeAdapter({ mock: false, fetchImpl: f as unknown as typeof fetch });
     await expect(adapter.checkConnection(creds)).resolves.toEqual({
       ok: false,
       error: 'HTTP 400: invalid app id',
