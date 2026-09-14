@@ -17,6 +17,9 @@ export async function createTenantWithUser(name = 'T') {
 }
 
 export async function cleanupTenant(tenantId: string) {
+  // BatchItem.productId é ON DELETE RESTRICT, então lotes (e seus itens, via
+  // cascade de Batch) precisam ser removidos antes do Product cascatear do Tenant.
+  await prisma.batch.deleteMany({ where: { tenantId } });
   await prisma.tenant.deleteMany({ where: { id: tenantId } });
 }
 

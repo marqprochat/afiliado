@@ -13,6 +13,9 @@ import { productsRoutes } from './routes/products';
 import { queueRoutes } from './routes/queue';
 import { wsRoutes } from './routes/ws';
 import { waRoutes } from './routes/wa';
+import { templatesRoutes } from './routes/templates';
+import { batchesRoutes } from './routes/batches';
+import { overviewRoutes } from './routes/overview';
 import { EventHub } from './lib/events';
 import { closeRedis } from './lib/redis';
 
@@ -50,6 +53,9 @@ export async function buildApp(opts: BuildAppOptions = {}) {
       await api.register(queueRoutes);
       await api.register(wsRoutes);
       await api.register(waRoutes);
+      await api.register(templatesRoutes);
+      await api.register(batchesRoutes);
+      await api.register(overviewRoutes);
     },
     { prefix: '/api/v1' },
   );
