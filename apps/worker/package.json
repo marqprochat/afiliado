@@ -14,6 +14,7 @@
     "@afilados/db": "workspace:*",
     "@afilados/marketplaces": "workspace:*",
     "@afilados/shared": "workspace:*",
+    "@hapi/boom": "^10.0.1",
     "@whiskeysockets/baileys": "^6.7.9",
     "bullmq": "^5.13.0",
     "ioredis": "^5.4.1",
