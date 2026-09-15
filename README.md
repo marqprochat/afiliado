@@ -47,3 +47,13 @@ set -a && . ./.env && set +a
 pnpm --filter @afilados/web e2e:seed
 pnpm --filter @afilados/web e2e
 ```
+
+## Deploy no VPS
+
+1. Instale Docker + Compose plugin; aponte o DNS de `DOMAIN` para o VPS (portas 80/443 abertas).
+2. `git clone <repo> && cd afilados && cp .env.example .env` — preencha `POSTGRES_PASSWORD`, `DOMAIN`, `APP_ENCRYPTION_KEY`, `SESSION_SECRET`, `SEED_USER_*` e `SHOPEE_MOCK=0`.
+3. `./deploy.sh` (primeira vez e a cada atualização). O Caddy emite o certificado TLS automaticamente.
+4. Primeiro acesso: `docker compose -f docker-compose.prod.yml run --rm api pnpm --filter @afilados/db seed`.
+5. Backups diários em `./backups/` (14 dias). Logs: `docker compose -f docker-compose.prod.yml logs -f worker`.
+
+O compose de produção usa o projeto `afilados-prod` (não conflita com o `docker-compose.yml` de dev).

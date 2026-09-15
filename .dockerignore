@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+.next
+**/.next
+.turbo
+**/.turbo
+coverage
+.superpowers
+.env
+.env.*
+!.env.example
+backups
+apps/web/test-results
+apps/web/playwright-report

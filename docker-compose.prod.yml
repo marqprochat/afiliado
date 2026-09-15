@@ -1,0 +1,82 @@
+name: afilados-prod
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: afilados
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: afilados
+    volumes: ['pgdata:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U afilados']
+      interval: 10s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes: ['redisdata:/data']
+  api:
+    build: { context: ., dockerfile: deploy/Dockerfile.api }
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://afilados:${POSTGRES_PASSWORD}@postgres:5432/afilados
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+      WEB_ORIGIN: https://${DOMAIN}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+  worker:
+    build: { context: ., dockerfile: deploy/Dockerfile.worker }
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://afilados:${POSTGRES_PASSWORD}@postgres:5432/afilados
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.web
+      args: { NEXT_PUBLIC_WS_URL: 'wss://${DOMAIN}/api/v1/ws' }
+    restart: unless-stopped
+    depends_on: [api]
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ['80:80', '443:443']
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on: [web, api]
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes: ['./backups:/backups']
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - |
+        while true; do
+          pg_dump -h postgres -U afilados afilados | gzip > /backups/afilados-$(date +%F).sql.gz
+          find /backups -name '*.sql.gz' -mtime +14 -delete
+          sleep 86400
+        done
+    depends_on:
+      postgres: { condition: service_healthy }
+volumes:
+  pgdata:
+  redisdata:
+  caddydata:
+  caddyconfig:
