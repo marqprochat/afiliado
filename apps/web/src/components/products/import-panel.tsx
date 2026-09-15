@@ -33,7 +33,13 @@ export function ImportPanel({ onImported }: { onImported: (r: ImportResult) => v
         rows={6}
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder={'Cole uma URL por linha\nhttps://shopee.com.br/...'}
+        placeholder={
+          'Cole uma ou mais URLs por linha:\n' +
+          'https://shopee.com.br/...\n' +
+          'https://produto.mercadolivre.com.br/MLB-...\n' +
+          'https://www.amazon.com.br/dp/...\n' +
+          'https://www.magazineluiza.com.br/p/...'
+        }
       />
       <div className="flex items-center gap-3">
         <Button

@@ -17,6 +17,8 @@ import { templatesRoutes } from './routes/templates';
 import { batchesRoutes } from './routes/batches';
 import { mirrorRoutes } from './routes/mirror';
 import { overviewRoutes } from './routes/overview';
+import { apiTokensRoutes } from './routes/api-tokens';
+import { extensionRoutes } from './routes/extension';
 
 import { EventHub } from './lib/events';
 import { closeRedis } from './lib/redis';
@@ -59,6 +61,8 @@ export async function buildApp(opts: BuildAppOptions = {}) {
       await api.register(batchesRoutes);
       await api.register(mirrorRoutes);
       await api.register(overviewRoutes);
+      await api.register(apiTokensRoutes);
+      await api.register(extensionRoutes);
     },
     { prefix: '/api/v1' },
   );

@@ -170,3 +170,12 @@ export interface MirrorStats {
     error: number;
   };
 }
+
+export interface ApiToken {
+  id: string;
+  name: string;
+  tokenHint: string;
+  lastUsedAt: string | null;
+  createdAt: string;
+  token?: string;
+}

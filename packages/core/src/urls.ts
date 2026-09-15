@@ -21,15 +21,18 @@ export function parseProductUrl(raw: string): ParsedProductUrl {
     if (m2) return { source: 'SHOPEE', shopId: m2[1]!, externalId: m2[2]! };
   }
   if (host === 'mercadolivre.com.br' || host.endsWith('.mercadolivre.com.br')) {
-    const m = path.match(/MLB-?(\d+)/);
-    if (m) return { source: 'MERCADOLIVRE', externalId: `MLB${m[1]}` };
+    const m = path.match(/MLB-?(\d+)/i) || path.match(/\/p\/(MLB\d+|[A-Z0-9]+)/i);
+    if (m) {
+      const digits = m[1]!.replace(/^MLB-?/i, '');
+      return { source: 'MERCADOLIVRE', externalId: `MLB${digits}` };
+    }
   }
   if (host === 'amazon.com.br') {
-    const m = path.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/);
-    if (m) return { source: 'AMAZON', externalId: m[1]! };
+    const m = path.match(/\/(?:dp|gp\/product|product)\/([A-Z0-9]{10})/);
+    if (m) return { source: 'AMAZON', externalId: m[1]!.toUpperCase() };
   }
-  if (host === 'magazineluiza.com.br') {
-    const m = path.match(/\/p\/([a-z0-9]+)\//);
+  if (host === 'magazineluiza.com.br' || host === 'magazinevoce.com.br' || host.endsWith('.magazinevoce.com.br')) {
+    const m = path.match(/\/p\/([a-z0-9]+)/i) || path.match(/\/([a-z0-9]{7,12})\//i);
     if (m) return { source: 'MAGALU', externalId: m[1]! };
   }
   return { source: 'UNSUPPORTED', reason: `Domínio ou formato não reconhecido: ${host}${path}` };

@@ -3,10 +3,12 @@ import pino from 'pino';
 import { prisma } from '@afilados/db';
 import {
   QUEUE_MIRROR_MESSAGE,
+  QUEUE_PRODUCT_ENRICH,
   QUEUE_SEND_OFFER,
   QUEUE_WA_COMMANDS,
   REDIS_EVENTS_CHANNEL,
   type MirrorMessageJob,
+  type ProductEnrichJob,
   type SendOfferJob,
   type WaCommandJob,
 } from '@afilados/shared';
@@ -18,6 +20,7 @@ import { WaSessionManager } from './wa/session-manager';
 import { processWaCommand } from './processors/wa-commands';
 import { processSendOffer, finalizeBatchIfComplete } from './processors/send-offer';
 import { processMirrorMessage } from './processors/mirror-message';
+import { createProductEnrichProcessor } from './processors/product-enrich';
 import { MirrorListener } from './mirror/listener';
 import { startHttp } from './http';
 
@@ -40,8 +43,13 @@ const mirrorWorker = new Worker<MirrorMessageJob>(
   processMirrorMessage({ gateway }),
   { connection: getRedis(), concurrency: 2 },
 );
+const enrichWorker = new Worker<ProductEnrichJob>(
+  QUEUE_PRODUCT_ENRICH,
+  createProductEnrichProcessor(),
+  { connection: getRedis(), concurrency: 3 },
+);
 
-for (const w of [waWorker, sendWorker, mirrorWorker]) {
+for (const w of [waWorker, sendWorker, mirrorWorker, enrichWorker]) {
   w.on('failed', (job, err) => log.error({ jobId: job?.id, err: err.message }, 'job falhou'));
 }
 sendWorker.on('failed', (job, err) => {
@@ -87,7 +95,12 @@ async function shutdown() {
   shuttingDown = true;
   log.info('encerrando');
   try {
-    await Promise.all([waWorker.close(), sendWorker.close(), mirrorWorker.close()]);
+    await Promise.all([
+      waWorker.close(),
+      sendWorker.close(),
+      mirrorWorker.close(),
+      enrichWorker.close(),
+    ]);
     await redisSub.unsubscribe();
     redisSub.disconnect();
     await manager.stop();

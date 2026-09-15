@@ -68,8 +68,8 @@ describe('products + queue', () => {
       payload: {
         urls: [
           'https://shopee.com.br/x-i.123456.987654',
-          'https://www.amazon.com.br/dp/B0ABCDEF12',
           'https://meli.la/abc',
+          'https://globo.com/noticia',
         ],
       },
     });

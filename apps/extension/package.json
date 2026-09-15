@@ -1,0 +1,9 @@
+{
+  "name": "@afilados/extension",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Extensão Chrome para ingestão de produtos e conexão no Afilados",
+  "scripts": {
+    "build": "node build.js"
+  }
+}

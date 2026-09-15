@@ -29,6 +29,7 @@ model Tenant {
   mirrorLogs        MirrorLog[]
   coupons           Coupon[]
   scheduledMessages ScheduledMessage[]
+  apiTokens         ApiToken[]
 }
 
 enum UserRole {
@@ -217,6 +218,7 @@ model Product {
 
 enum QueueItemStatus {
   PENDING
+  PENDING_ENRICH
   SENT
   ERROR
 }
@@ -422,4 +424,18 @@ model ScheduledMessage {
   times     String[] // "HH:mm", até 3
   groupJids String[]
   enabled   Boolean  @default(true)
+}
+
+model ApiToken {
+  id         String    @id @default(cuid())
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name       String
+  tokenHash  String    @unique
+  tokenHint  String
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([tenantId])
 }

@@ -25,6 +25,7 @@ const TENANT_MODELS = new Set([
   'MirrorLog',
   'Coupon',
   'ScheduledMessage',
+  'ApiToken',
 ]);
 
 const FILTERED_OPS = new Set([

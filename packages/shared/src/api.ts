@@ -97,6 +97,40 @@ export const batchCreateSchema = z
     productIds: data.productIds ?? undefined,
   }));
 
+export const apiTokenCreateSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+});
+export type ApiTokenCreateBody = z.infer<typeof apiTokenCreateSchema>;
+
+export const extensionCaptureSchema = z.object({
+  url: z.string().url(),
+  marketplaceKind: z.enum(MARKETPLACE_KINDS),
+  title: z.string().min(1).max(500).optional(),
+  price: z.number().positive().optional(),
+  originalPrice: z.number().positive().optional(),
+  images: z.array(z.string().url()).optional(),
+  couponCode: z.string().max(60).optional(),
+  couponValue: z.number().positive().optional(),
+  shipping: z.enum(['NONE', 'FREE', 'FULL', 'UNKNOWN']).optional(),
+  flashSaleEndsAt: z.string().datetime().optional(),
+  affiliateUrl: z.string().url().optional(),
+});
+export type ExtensionCaptureBody = z.infer<typeof extensionCaptureSchema>;
+
+export const extensionSessionSchema = z.object({
+  marketplaceKind: z.enum(MARKETPLACE_KINDS),
+  cookies: z.record(z.string()),
+});
+export type ExtensionSessionBody = z.infer<typeof extensionSessionSchema>;
+
 export type LoginBody = z.infer<typeof loginSchema>;
 export type SettingsUpdateBody = z.infer<typeof settingsUpdateSchema>;
+export type WaSessionCreateBody = z.infer<typeof waSessionCreateSchema>;
+export type WaConnectBody = z.infer<typeof waConnectSchema>;
+export type MarketplaceUpdateBody = z.infer<typeof marketplaceUpdateSchema>;
+export type ProductsImportBody = z.infer<typeof productsImportSchema>;
+export type QueueAddBody = z.infer<typeof queueAddSchema>;
+export type QueueSelectBody = z.infer<typeof queueSelectSchema>;
+export type TemplateBody = z.infer<typeof templateSchema>;
+export type TemplatePreviewBody = z.infer<typeof templatePreviewSchema>;
 export type BatchCreateBody = z.infer<typeof batchCreateSchema>;

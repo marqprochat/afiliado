@@ -16,6 +16,8 @@ export type RealtimeEvent =
       targetJid: string;
     }
   | { type: 'mirror.rules.changed' }
+  | { type: 'product.enriched'; productId: string; status: 'SUCCESS' | 'ERROR'; error?: string }
+  | { type: 'queue.updated' }
   | { type: 'error'; code: string; message: string };
 
 export const REDIS_EVENTS_CHANNEL = 'afilados:events';

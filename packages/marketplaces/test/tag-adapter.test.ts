@@ -15,12 +15,10 @@ describe('tag adapters', () => {
     expect((await a.checkConnection({ mattWord: 'x' })).ok).toBe(false);
     expect((await a.checkConnection({ mattWord: 'x', mattTool: '1' })).ok).toBe(true);
   });
-  it('search/fetchByUrls não suportados', async () => {
+  it('search não suportado em tag adapter, fetchByUrls é suportado', async () => {
     const a = createTagAdapter('MAGALU');
-    await expect(
-      a.fetchByUrls({ tag: 'loja' }, ['https://www.magazineluiza.com.br/x/p/a1/te/ab/']),
-    ).rejects.toBeInstanceOf(UnsupportedError);
     expect(a.search).toBeUndefined();
+    expect(typeof a.fetchByUrls).toBe('function');
   });
   it('registry devolve o adapter certo e cacheia', () => {
     expect(getAdapter('AMAZON').kind).toBe('AMAZON');

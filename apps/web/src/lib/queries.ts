@@ -15,6 +15,7 @@ import type {
   Template,
   WaGroup,
   WaSession,
+  ApiToken,
 } from './types';
 
 export const useMe = () => useQuery({ queryKey: ['me'], queryFn: () => apiFetch<Me>('/me') });
@@ -77,4 +78,13 @@ export const useMirrorStats = () =>
     queryKey: ['mirror', 'stats'],
     queryFn: () => apiFetch<MirrorStats>('/mirror/stats'),
     refetchInterval: 15_000,
+  });
+
+export const useApiTokens = () =>
+  useQuery({
+    queryKey: ['api-tokens'],
+    queryFn: async () => {
+      const res = await apiFetch<{ tokens: ApiToken[] }>('/api-tokens');
+      return res.tokens;
+    },
   });

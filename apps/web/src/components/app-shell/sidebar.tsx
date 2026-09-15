@@ -13,6 +13,7 @@ import {
   Send,
   Settings,
   ShoppingBag,
+  Sparkles,
   Store,
   Tag,
   Ticket,
@@ -39,6 +40,7 @@ const CONFIG = [
   { href: '/config/mercadolivre', label: 'Conexão Mercado Livre', icon: Store },
   { href: '/config/amazon', label: 'Conexão Amazon', icon: Tag },
   { href: '/config/magalu', label: 'Conexão Magalu', icon: Store },
+  { href: '/config/extensao', label: 'Extensão Chrome', icon: Sparkles },
   { href: '/config/conta', label: 'Minha Conta', icon: User },
 ];
 

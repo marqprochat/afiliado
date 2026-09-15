@@ -30,3 +30,6 @@ export type MirrorMode = (typeof MIRROR_MODES)[number];
 
 export const MIRROR_LOG_STATUSES = ['MIRRORED', 'DISCARDED', 'ERROR'] as const;
 export type MirrorLogStatus = (typeof MIRROR_LOG_STATUSES)[number];
+
+export const QUEUE_ITEM_STATUSES = ['PENDING', 'PENDING_ENRICH', 'SENT', 'ERROR'] as const;
+export type QueueItemStatus = (typeof QUEUE_ITEM_STATUSES)[number];

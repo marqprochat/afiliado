@@ -1,6 +1,7 @@
 export const QUEUE_WA_COMMANDS = 'wa-commands';
 export const QUEUE_SEND_OFFER = 'send-offer';
 export const QUEUE_MIRROR_MESSAGE = 'mirror-message';
+export const QUEUE_PRODUCT_ENRICH = 'product-enrich';
 
 export type WaCommand = 'connect' | 'disconnect' | 'logout' | 'sync-groups';
 
@@ -25,4 +26,11 @@ export interface MirrorMessageJob {
   msgId: string;
   /** WAMessage serializado com BufferJSON.replacer */
   message: unknown;
+}
+
+export interface ProductEnrichJob {
+  tenantId: string;
+  productId: string;
+  url: string;
+  marketplaceKind: 'SHOPEE' | 'MERCADOLIVRE' | 'AMAZON' | 'MAGALU';
 }
