@@ -1,125 +1,124 @@
-# Fase 2 — Espelhamento (Mirroring)
+# Fase 2 — Espelhamento de Grupos (Mirroring)
 
 **Data:** 2026-09-15
 **Status:** Aprovado
-**Depende de:** `2026-09-14-afilados-architecture-design.md` (§7), `2026-09-14-f1-nucleo-disparo-design.md`
+**Depende de:** `2026-09-14-afilados-architecture-design.md` (§7), Fase 1 completa em `main`.
 
-## 1. Resultado esperado ao final da F2
+## 1. Resultado esperado
 
-1. O usuário escolhe grupos de origem (grupos/comunidades em que o número dele está) e grupos de destino, define modo **Template** ou **Clone**, mídia **Imagem** ou **Preview**, template e janela de dedup, e ativa a regra.
-2. Toda mensagem com link oficial de loja (Shopee, Mercado Livre, Amazon, Magalu) postada em uma origem é replicada nos destinos em tempo real (respeitando a janela de operação e o rate limit), com os links trocados pelos links de afiliado do usuário.
-3. Links de Shopee são convertidos pela API oficial; ML/Amazon/Magalu por **tag na URL** informada em Configurações → Conexão da loja. Loja sem tag configurada mantém o link original e registra aviso.
-4. O mesmo produto não é reenviado ao mesmo destino dentro de `dedupHours` (padrão 12).
-5. Mensagens sem link de loja, encurtados ou de terceiros são ignoradas com log.
-6. Modo Template com produtos de lojas sem dados estruturados (ML/Amazon/Magalu na F2) cai automaticamente para Clone, com log.
-7. A tela **Espelhamento** mostra as regras configuradas (com ativar/desativar e contadores) e um log em tempo real (espelhadas, descartadas, erros).
+O dono, com o WhatsApp conectado e participando de grupos de ofertas de terceiros, consegue:
 
-Fora da F2: canais (`@newsletter`), selos na imagem (F4), scraping de dados de ML/Amazon/Magalu (F3), espelhar mensagens sem link.
+1. Criar uma regra de espelhamento: grupos de **origem** (onde o número está) → grupos de **destino** (seus grupos), modo **Template** ou **Clone**, mídia **Imagem** ou **Preview**, template, horas de deduplicação.
+2. Ver, em tempo real, cada mensagem de origem sendo espelhada, descartada (sem link / duplicada / loja sem tag) ou com erro, com o motivo.
+3. Ter os links de Shopee (API), Amazon, Mercado Livre e Magalu (por tag de afiliado) trocados pelos seus antes do envio.
+4. Ativar/desativar regras sem perder o histórico.
 
-## 2. Modelo de dados
+**Decisões fechadas no brainstorm:**
+- Conversão de ML/Amazon/Magalu por **tag na URL** (sem cookies) — o usuário informa `affiliateTag` em cada Conexão.
+- Origens: **grupos e comunidades**; canais (`@newsletter`) ficam para a F3.
+- **Dedup**: não repetir o mesmo produto (`productKey`) no mesmo destino dentro de `dedupHours` (padrão 12).
+- Modo Template com link não-Shopee → **fallback para Clone** com log `template->clone`.
+- Mensagens **sem link oficial de loja são ignoradas**.
+
+Fora da F2: canais, selos na imagem (F4), scraping de dados de ML/Amazon/Magalu (F3), espelhar texto puro.
+
+## 2. Dados (Prisma)
 
 ```prisma
-model MirrorRule {                       // já existe; campos novos marcados com +
-  id, tenantId, enabled, createdAt
-  + sessionId   String                   // sessão WA que escuta as origens
-  + name        String
-  sourceJids    String[]
-  targetJids    String[]
-  mode          TEMPLATE | CLONE
-  mediaMode     IMAGE | PREVIEW
-  + templateId  String?                  // null → template padrão do tenant
-  + dedupHours  Int @default(12)
-  @@index([tenantId, enabled])
+model MirrorRule {
+  id, tenantId, sessionId (FK WaSession), name
+  sourceJids String[], targetJids String[]
+  mode MirrorMode (TEMPLATE|CLONE) @default(CLONE)
+  mediaMode MediaMode (IMAGE|PREVIEW) @default(PREVIEW)
+  templateId String? (FK Template)
+  dedupHours Int @default(12)
+  enabled Boolean @default(true)
+  createdAt, updatedAt
+  logs MirrorLog[]
 }
 
-model MirrorLog {                        // novo
+enum MirrorLogStatus { MIRRORED DISCARDED ERROR }
+
+model MirrorLog {
   id, tenantId, ruleId (FK MirrorRule, Cascade)
-  sourceJid, sourceMsgId, targetJid
-  status      MIRRORED | DISCARDED | ERROR
-  reason      String?                    // no-links | duplicate | unsupported-store:<KIND> | template->clone | <erro>
-  productKey  String?                    // "SHOPEE:987654" — 1º produto da mensagem
+  sourceJid, sourceMsgId, targetJid String
+  status MirrorLogStatus
+  reason String?          // no-links | duplicate | unsupported-store:<KINDS> | template->clone | <erro>
+  productKey String?      // "SHOPEE:987654", "AMAZON:B0ABC…"
   waMessageId String?
-  createdAt   DateTime @default(now())
-  @@unique([ruleId, sourceMsgId, targetJid])
+  createdAt
   @@index([tenantId, targetJid, productKey, createdAt])   // dedup
-  @@index([tenantId, createdAt])
+  @@index([ruleId, createdAt])
 }
 ```
 
-`MarketplaceConnection` para ML/Amazon/Magalu passa a ser válida só com `affiliateTag` (status `OK` quando presente; `encryptedCredentials` continua nulo até a F3).
+Migration aditiva: `MirrorRule` já existe (sourceJids, targetJids, mode, mediaMode, enabled) — ganha `sessionId`, `name`, `templateId`, `dedupHours`, `updatedAt`. `MirrorLog` tem `tenantId` e entra em `TENANT_MODELS` do `forTenant` (`MirrorRule` já está).
 
-## 3. `packages/core` — funções puras
+## 3. `packages/core` (puro)
 
-- `extractStoreLinks(text): StoreLink[]` — `{ url, source, externalId, shopId? }` para cada URL oficial reconhecida por `parseProductUrl`; ignora `s.shopee.com.br`, `meli.la`, `amzn.to`, `magalu.link` e qualquer domínio não reconhecido. Sem duplicatas.
-- `buildAffiliateUrl(kind, url, tag): string` — Amazon: adiciona/substitui `tag=<tag>`; Mercado Livre: adiciona `matt_word=<tag>&matt_tool=<tag>`; Magalu: `https://www.magazinevoce.com.br/<tag>/<path-sem-host>`; Shopee: lança (usa API). Preserva os demais parâmetros.
-- `rewriteLinks(text, map: Record<string,string>): string` — substitui cada URL original pela convertida, mantendo o resto do texto intacto.
-- `productKey(link): string` → `${source}:${externalId}`.
-- `messageText(msg)` (no worker, depende do tipo do Baileys): extrai `conversation` | `extendedTextMessage.text` | `imageMessage.caption` | `videoMessage.caption` de um `WAMessage`.
+| Função | Contrato |
+|---|---|
+| `extractStoreLinks(text: string): StoreLink[]` | `StoreLink = { url: string; parsed: ParsedProductUrl }` — só URLs `http(s)` cujo `parseProductUrl` retorna loja conhecida; ignora encurtadores e terceiros; remove duplicatas por URL; preserva ordem. |
+| `buildAffiliateUrl(kind, url, tag): string` | `AMAZON`: seta/substitui `?tag=`; `MERCADOLIVRE`: seta `matt_word=<tag>&matt_tool=<tag>`; `MAGALU`: reescreve para `https://www.magazinevoce.com.br/<tag>/<resto-do-path>`; `SHOPEE`: lança (usa API). Remove parâmetros de rastreio alheios (`utm_*`, `ref`, `sp_atk`, `xptdk`). |
+| `rewriteLinks(text, replacements: Map<string,string>): string` | substitui cada URL original pela convertida (todas as ocorrências), sem tocar no resto do texto. |
+| `productKey(parsed: ParsedProductUrl): string` | `${source}:${externalId}`. |
+| `pickText(message)` | texto útil da mensagem (ordem: `conversation` → `extendedTextMessage.text` → `imageMessage.caption`). |
 
 ## 4. `packages/marketplaces`
 
-Adapters `mercadolivre`, `amazon`, `magalu` com credencial `{ affiliateTag: string }`:
-- `checkConnection` → `{ ok: !!tag }`.
-- `toAffiliateLink(creds, url)` → `buildAffiliateUrl(kind, url, creds.affiliateTag)`.
-- `search`/`fetchByUrls` → lançam `UnsupportedError('disponível na fase 3')`.
-
-`getAdapter(kind)` em `apps/api` e `apps/worker` devolve o adapter certo.
+Adapters `mercadolivre`, `amazon`, `magalu` (`createTagAdapter(kind)`): `checkConnection` → ok se `affiliateTag` presente; `toAffiliateLink` → `buildAffiliateUrl`; `search`/`fetchByUrls` → lançam `UnsupportedError('disponível na fase 3')`. Credenciais desses adapters: `{ affiliateTag: string }`. Registro central `getAdapter(kind)` usado por API e worker.
 
 ## 5. Worker
 
-### 5.1 Listener
-- `BaileysGateway` ganha `onMessage(handler: (sessionId, msg: WAMessage) => void)`; chama para `messages.upsert` com `type === 'notify'`, `key.remoteJid` terminando em `@g.us` e `!key.fromMe`.
-- `MirrorListener`: índice em memória `sessionId → sourceJid → MirrorRule[]` (só `enabled`). Carrega no boot e recarrega ao receber `mirror.rules.changed` no canal Redis de eventos (publicado pela API em qualquer mutação de regra). Para cada mensagem com regra: enfileira `mirror-message` `{ tenantId, ruleId, sessionId, sourceJid, msgId, message: WAMessage serializado (BufferJSON) }`, `jobId = ${ruleId}:${msgId}`, `attempts: 3`, backoff exponencial 30 s.
+### 5.1 Captura
+- `BaileysGateway` ganha `onMessage(handler: (sessionId, msg: WAMessage) => void)`; registra `sock.ev.on('messages.upsert')` e repassa só `type === 'notify'`, `key.remoteJid` termina em `@g.us`, `!key.fromMe`.
+- `MirrorListener` (`src/mirror/listener.ts`): cache `Map<sessionId, Map<sourceJid, MirrorRule[]>>` carregado do banco no boot e recarregado ao receber `mirror.rules.changed` no canal Redis de eventos (publicado pela API em qualquer mutação de regra). Para cada mensagem com regra(s) ativa(s): enfileira `mirror-message` por regra com `jobId = ${ruleId}:${msgId}`, payload `{ tenantId, ruleId, sessionId, sourceJid, msgId, message: BufferJSON }`, `attempts: 3`, backoff 30s.
 
-### 5.2 Processor `mirror-message`
-1. Regra ainda `enabled`? Senão `DISCARDED rule-disabled`.
-2. `text = messageText(msg)`; `links = extractStoreLinks(text)`; vazio → um `MirrorLog DISCARDED no-links` (targetJid = `*`) e fim.
-3. Fora da janela → `moveToDelayed(nextWindowOpen)` + `DelayedError` (padrão do `send-offer`).
-4. Conversão por link: Shopee → `toAffiliateLink` da API com `subId = generateSubId('{yyyyMMdd}-mirror-{ruleId}')`; ML/Amazon/Magalu → adapter por tag; sem conexão/tag → mantém URL original e marca `unsupportedStores.add(kind)`.
-5. `mode` efetivo: `TEMPLATE` só se todos os links forem Shopee e `fetchByUrls` devolver dados; senão `CLONE` (razão `template->clone` no log quando a regra pedia Template).
-6. Conteúdo:
-   - **CLONE**: `rewriteLinks(text, map)`; se a mensagem tem `imageMessage` e `mediaMode = IMAGE`, baixa a imagem (`downloadMediaMessage`) e envia `{ kind:'image', imageBuffer, caption }`; senão `{ kind:'preview', text, url: 1º link convertido, title/description/thumbnail do produto quando Shopee, senão só texto }`.
-   - **TEMPLATE**: `renderTemplate(template.body, product, { affiliateLink, now })` por produto (1 mensagem por produto); imagem do produto quando `IMAGE`.
-7. Por destino: dedup (`MirrorLog MIRRORED` com mesmo `productKey`+`targetJid` em `createdAt > now - dedupHours`) → `DISCARDED duplicate`; senão `waitForToken` + jitter + `gateway.sendMessage`; `MirrorLog MIRRORED` com `waMessageId` (ou `ERROR` com a mensagem, sem abortar os outros destinos).
-8. Publica `mirror.log` `{ ruleId, targetJid, status, reason?, productKey? }` por destino.
+### 5.2 Processor `mirror-message` (`src/processors/mirror-message.ts`)
+Deps injetáveis (mesmo padrão de `send-offer`): `gateway`, `adapters`, `downloadMedia(msg) → Buffer`, `now`, `sleep`, `rng`, `bucketFor`.
 
-`OutgoingImage` ganha `imageBuffer?: Buffer` como alternativa a `imageUrl`.
+1. Carrega regra (`!enabled` → skip), template (regra ou padrão do tenant), conexões de marketplace, janela.
+2. `text = pickText(message)`; `links = extractStoreLinks(text)`; vazio → `MirrorLog DISCARDED no-links` (um por destino) e fim.
+3. Conversão: Shopee → `shopee.toAffiliateLink(creds, url, generateSubId('{yyyyMMdd}-mirror-{ruleId}'))`; outras lojas → `buildAffiliateUrl` com a `affiliateTag` da conexão; sem tag → mantém URL original e marca `unsupportedStores.add(kind)`.
+4. Fora da janela → `moveToDelayed(nextWindowOpen)` + `DelayedError` (nada gravado).
+5. Modo efetivo: `TEMPLATE` se `rule.mode === 'TEMPLATE'` **e** todos os links são Shopee (dados via `shopee.fetchByUrls`); senão `CLONE` (reason `template->clone` quando houve fallback).
+6. Saída: `CLONE` → `rewriteLinks(text, map)`; `TEMPLATE` → `renderTemplate(template, produto, { affiliateLink })`, um envio por produto. Mídia: `IMAGE` e origem tem `imageMessage` → `downloadMedia` e envia `{ kind:'image', imageBuffer, caption }` (gateway passa a aceitar `imageBuffer` além de `imageUrl`); senão `{ kind:'preview' }` com o primeiro link como `url`.
+7. Por destino: dedup (`MirrorLog MIRRORED` com mesmo `productKey`+`targetJid` desde `now - dedupHours`) → `DISCARDED duplicate`; senão `waitForToken` + jitter + `gateway.sendMessage`; grava `MirrorLog MIRRORED` (`waMessageId`, `productKey`, `reason` = `template->clone` ou `unsupported-store:<KINDS>` quando aplicável) ou `ERROR`; publica `mirror.log`.
+8. Falha total (ex.: sessão desconectada) → lança para o BullMQ retentar; no `failed` final grava `ERROR` por destino ainda sem log.
 
-## 6. API
+## 6. API (`/api/v1/mirror`)
 
-Prefixo `/api/v1/mirror`, autenticado, escopado por tenant:
-
-| Rota | Função |
+| Rota | Comportamento |
 |---|---|
-| `GET /rules` | regras com contadores do dia (`mirrored`, `discarded`, `errors`) |
-| `POST /rules` | `mirrorRuleSchema`: `name`, `sessionId`, `sourceJids[≥1]`, `targetJids[≥1]`, `mode`, `mediaMode`, `templateId?`, `dedupHours (1–168)`, `enabled` — valida que todos os jids pertencem a `WaGroup` da sessão e que origem ∩ destino = ∅ |
-| `PUT /rules/:id`, `DELETE /rules/:id`, `POST /rules/:id/toggle` | idem; toda mutação publica `mirror.rules.changed` |
-| `GET /logs?ruleId&status&limit≤200` | últimos logs |
-| `GET /stats` | totais do dia por status |
+| `GET /mirror/rules` | regras do tenant com `counts { mirrored, discarded, error }` das últimas 24h |
+| `POST /mirror/rules` | body `mirrorRuleSchema`: `name`, `sessionId`, `sourceJids[]≥1`, `targetJids[]≥1`, `mode`, `mediaMode`, `templateId?`, `dedupHours 1..168`, `enabled`. Valida: sessão do tenant; todos os jids existem em `WaGroup` da sessão; `sourceJids ∩ targetJids = ∅`. Publica `mirror.rules.changed`. 201 |
+| `PUT /mirror/rules/:id` | mesmas validações; publica evento |
+| `DELETE /mirror/rules/:id` | 204; logs em cascata; publica evento |
+| `POST /mirror/rules/:id/toggle` | inverte `enabled`; publica evento |
+| `GET /mirror/logs?ruleId&status&limit(≤200)` | últimos logs, ordem desc, com nome do grupo destino resolvido |
+| `GET /mirror/stats` | `{ today: { mirrored, discarded, error } }` |
+| `PUT /marketplaces/:kind` | passa a aceitar `affiliateTag` para `MERCADOLIVRE|AMAZON|MAGALU` (status `OK` se tag presente; `appId/secret` continuam só Shopee) |
 
-`PUT /marketplaces/:kind` aceita `affiliateTag` para `MERCADOLIVRE|AMAZON|MAGALU` (status `OK` se tag não vazia); `appId/secret` continuam só Shopee. `POST /marketplaces/:kind/check` para essas lojas verifica a tag.
-
-Eventos novos em `shared`: `mirror.log`, `mirror.rules.changed`.
+Eventos realtime novos em `shared`: `mirror.log { ruleId, logId, status, reason?, targetJid }`; `mirror.rules.changed { }` (consumido pelo worker).
 
 ## 7. Web
 
-- `/espelhamento` (substitui o placeholder): aviso "Somente links oficiais das lojas são espelhados…"; card **Monitorar novos grupos**: sessão, origens (multi-select dos grupos da sessão), destinos (multi-select, excluindo os já escolhidos como origem), Template/Clone, Imagem/Preview, template, dedup (horas), "Adicionar monitoramento"; lista **Espelhamentos configurados** (nome, origens → destinos com contadores, switch ativar, excluir); **Log** em tempo real (últimos 200, filtro por status, invalida em `mirror.log`).
-- `/config/{mercadolivre,amazon,magalu}`: campo "Tag de afiliado" + Salvar + status; nota "importação de cookies/produtos disponível na F3".
-- Topbar: pills dessas lojas ficam verdes com tag salva.
+- `/espelhamento`: aviso fixo "Somente links oficiais das lojas são espelhados…"; formulário "Monitorar novos grupos" (sessão; multi-select origem e destino a partir de `useGroups`; Template/Clone; Imagem/Preview; template; horas de dedup; "Adicionar monitoramento"); lista "Espelhamentos configurados (n)" com nome, origem→destino, contadores 24h, switch ativar, excluir; tabela de logs com filtro por status e atualização via `mirror.log`.
+- `/config/mercadolivre`, `/config/amazon`, `/config/magalu`: saem do placeholder — campo "Tag de afiliado" + instrução curta + "Salvar"; pill de status fica `OK` com tag.
 
 ## 8. Testes
 
-- `core`: `extractStoreLinks` (oficiais, encurtadores, duplicatas, texto sem link), `buildAffiliateUrl` (3 lojas, parâmetros existentes preservados), `rewriteLinks`, `productKey`.
-- `marketplaces`: adapters por tag (ok/sem tag, unsupported).
-- `worker`: `mirror-message` com gateway falso — no-links, duplicate, template→clone, clone com imagem (buffer), preview, loja sem tag, fora da janela, erro em um destino não bloqueia os outros; `MirrorListener` filtra por regra e ignora `fromMe`.
-- `api`: CRUD + validações (jid fora da sessão, origem=destino, tenant isolation), logs/stats, `PUT /marketplaces/AMAZON {affiliateTag}`.
-- `web`: teste do formulário de regra; E2E: criar regra → aparece na lista com switch.
+- `core`: `extractStoreLinks` (mistura de lojas, encurtadores ignorados, duplicatas), `buildAffiliateUrl` (4 lojas, substituição de `tag=` existente, remoção de `utm_*`), `rewriteLinks`, `pickText`.
+- `marketplaces`: adapters por tag (ok/sem tag, unsupported em `search`).
+- `worker`: processor com gateway falso e `downloadMedia` falso — no-links, duplicate, template→clone, imagem clonada, preview, fora da janela, unsupported-store mantém link; listener enfileira só para regras ativas.
+- `api`: CRUD com validações (jid desconhecido, origem=destino, sessão de outro tenant → 404), logs/stats, `PUT /marketplaces/AMAZON {affiliateTag}`.
+- `web`: `MirrorRuleForm` (unit); E2E: criar regra → aparece na lista → toggle.
 
 ## 9. Critérios de aceite
 
-- [ ] Mensagem com link `shopee.com.br/...-i.X.Y` postada numa origem chega ao destino com link `s.shopee.com.br/...` (mock) em < 10 s dentro da janela.
-- [ ] Mesma mensagem repetida na origem dentro de 12 h → log `duplicate`, nenhum reenvio.
-- [ ] Link Amazon com tag configurada sai como `...?tag=<tag>`; sem tag configurada, sai original com log `unsupported-store:AMAZON`.
-- [ ] Regra Template com link Amazon → enviado em Clone com log `template->clone`.
-- [ ] Desativar a regra na UI interrompe o espelhamento sem reiniciar o worker.
-- [ ] `pnpm test` e E2E verdes.
+- [ ] Mensagem com link Shopee em grupo de origem chega ao destino com link `s.shopee.com.br/...` próprio em < 10 s (dentro da janela).
+- [ ] Mensagem com link Amazon chega com `?tag=<minha tag>`; sem tag configurada, chega com link original e log `unsupported-store:AMAZON`.
+- [ ] Mesmo produto postado duas vezes em 12 h → segundo é `DISCARDED duplicate`.
+- [ ] Regra Template + link ML → espelha em Clone com `template->clone`.
+- [ ] Desativar regra interrompe o espelhamento sem reiniciar o worker.
+- [ ] `pnpm test` e E2E verdes; `docker compose up -d --build` sobe tudo.
