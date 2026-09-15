@@ -16,6 +16,55 @@ services:
     ports: ['6379:6379']
     command: ['redis-server', '--appendonly', 'yes']
     volumes: ['redisdata:/data']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      retries: 10
+  api:
+    build: { context: ., dockerfile: deploy/Dockerfile.api }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://afilados:afilados@postgres:5432/afilados
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: development
+      PORT: 3001
+      WEB_ORIGIN: http://localhost:3010
+    command: >
+      sh -c "pnpm --filter @afilados/db exec prisma migrate deploy &&
+             pnpm --filter @afilados/db seed &&
+             pnpm --filter @afilados/api start"
+    ports: ['3011:3001']
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3001/api/v1/health']
+      interval: 5s
+      retries: 20
+      start_period: 30s
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+  worker:
+    build: { context: ., dockerfile: deploy/Dockerfile.worker }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://afilados:afilados@postgres:5432/afilados
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: development
+      WORKER_PORT: 3002
+    ports: ['3012:3002']
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      api: { condition: service_healthy }
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.web
+      args:
+        NEXT_PUBLIC_WS_URL: 'ws://localhost:3011/api/v1/ws'
+        API_INTERNAL_URL: http://api:3001
+    ports: ['3010:3000']
+    depends_on:
+      api: { condition: service_healthy }
 volumes:
   pgdata:
   redisdata:
