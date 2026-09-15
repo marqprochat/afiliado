@@ -14,7 +14,7 @@ O dono, com o WhatsApp conectado e participando de grupos de ofertas de terceiro
 4. Ativar/desativar regras sem perder o histórico.
 
 **Decisões fechadas no brainstorm:**
-- Conversão de ML/Amazon/Magalu por **tag na URL** (sem cookies) — o usuário informa `affiliateTag` em cada Conexão.
+- Conversão de ML/Amazon/Magalu por **parâmetros na URL** (sem cookies). Amazon: `tag`; Magalu: nome da loja; **Mercado Livre: `matt_word` (ID do afiliado) e `matt_tool` (número fixo da conta)** — o usuário copia os dois de um link gerado no painel de afiliados. O link oficial do ML (`meli.la` → `/social/…?ref=<token>`) só pode ser gerado logado; isso fica para a F3 (cookies via Cookie-Editor), que substitui esta conversão por chamada ao gerador oficial.
 - Origens: **grupos e comunidades**; canais (`@newsletter`) ficam para a F3.
 - **Dedup**: não repetir o mesmo produto (`productKey`) no mesmo destino dentro de `dedupHours` (padrão 12).
 - Modo Template com link não-Shopee → **fallback para Clone** com log `template->clone`.
@@ -59,14 +59,14 @@ Migration aditiva: `MirrorRule` já existe (sourceJids, targetJids, mode, mediaM
 | Função | Contrato |
 |---|---|
 | `extractStoreLinks(text: string): StoreLink[]` | `StoreLink = { url: string; parsed: ParsedProductUrl }` — só URLs `http(s)` cujo `parseProductUrl` retorna loja conhecida; ignora encurtadores e terceiros; remove duplicatas por URL; preserva ordem. |
-| `buildAffiliateUrl(kind, url, tag): string` | `AMAZON`: seta/substitui `?tag=`; `MERCADOLIVRE`: seta `matt_word=<tag>&matt_tool=<tag>`; `MAGALU`: reescreve para `https://www.magazinevoce.com.br/<tag>/<resto-do-path>`; `SHOPEE`: lança (usa API). Remove parâmetros de rastreio alheios (`utm_*`, `ref`, `sp_atk`, `xptdk`). |
+| `buildAffiliateUrl(kind, url, creds): string` | `creds: { tag?: string; mattWord?: string; mattTool?: string }`. `AMAZON`: seta/substitui `?tag=<tag>`; `MERCADOLIVRE`: seta `matt_word=<mattWord>&matt_tool=<mattTool>` (ambos obrigatórios); `MAGALU`: reescreve para `https://www.magazinevoce.com.br/<tag>/<resto-do-path>`; `SHOPEE`: lança (usa API). Remove parâmetros de rastreio alheios (`utm_*`, `ref`, `sp_atk`, `xptdk`, `forceInApp`). |
 | `rewriteLinks(text, replacements: Map<string,string>): string` | substitui cada URL original pela convertida (todas as ocorrências), sem tocar no resto do texto. |
 | `productKey(parsed: ParsedProductUrl): string` | `${source}:${externalId}`. |
 | `pickText(message)` | texto útil da mensagem (ordem: `conversation` → `extendedTextMessage.text` → `imageMessage.caption`). |
 
 ## 4. `packages/marketplaces`
 
-Adapters `mercadolivre`, `amazon`, `magalu` (`createTagAdapter(kind)`): `checkConnection` → ok se `affiliateTag` presente; `toAffiliateLink` → `buildAffiliateUrl`; `search`/`fetchByUrls` → lançam `UnsupportedError('disponível na fase 3')`. Credenciais desses adapters: `{ affiliateTag: string }`. Registro central `getAdapter(kind)` usado por API e worker.
+Adapters `mercadolivre`, `amazon`, `magalu` (`createTagAdapter(kind)`): `checkConnection` → ok se as credenciais necessárias estão presentes (`tag` para Amazon/Magalu; `mattWord` **e** `mattTool` para ML); `toAffiliateLink` → `buildAffiliateUrl`; `search`/`fetchByUrls` → lançam `UnsupportedError('disponível na fase 3')`. Credenciais: `TagCredentials = { tag?: string; mattWord?: string; mattTool?: string }`, guardadas em `MarketplaceConnection.encryptedCredentials`; `affiliateTag` (coluna existente) recebe `tag` ou `mattWord` para exibição. Registro central `getAdapter(kind)` usado por API e worker.
 
 ## 5. Worker
 
@@ -97,18 +97,18 @@ Deps injetáveis (mesmo padrão de `send-offer`): `gateway`, `adapters`, `downlo
 | `POST /mirror/rules/:id/toggle` | inverte `enabled`; publica evento |
 | `GET /mirror/logs?ruleId&status&limit(≤200)` | últimos logs, ordem desc, com nome do grupo destino resolvido |
 | `GET /mirror/stats` | `{ today: { mirrored, discarded, error } }` |
-| `PUT /marketplaces/:kind` | passa a aceitar `affiliateTag` para `MERCADOLIVRE|AMAZON|MAGALU` (status `OK` se tag presente; `appId/secret` continuam só Shopee) |
+| `PUT /marketplaces/:kind` | `AMAZON|MAGALU`: aceita `affiliateTag`; `MERCADOLIVRE`: aceita `mattWord` e `mattTool` (ambos obrigatórios juntos). Grava em `encryptedCredentials` e espelha em `affiliateTag`; status `OK` quando completo. `appId/secret` continuam só Shopee. `GET /marketplaces` devolve também `mattWord`/`mattTool` (não são segredos). |
 
 Eventos realtime novos em `shared`: `mirror.log { ruleId, logId, status, reason?, targetJid }`; `mirror.rules.changed { }` (consumido pelo worker).
 
 ## 7. Web
 
 - `/espelhamento`: aviso fixo "Somente links oficiais das lojas são espelhados…"; formulário "Monitorar novos grupos" (sessão; multi-select origem e destino a partir de `useGroups`; Template/Clone; Imagem/Preview; template; horas de dedup; "Adicionar monitoramento"); lista "Espelhamentos configurados (n)" com nome, origem→destino, contadores 24h, switch ativar, excluir; tabela de logs com filtro por status e atualização via `mirror.log`.
-- `/config/mercadolivre`, `/config/amazon`, `/config/magalu`: saem do placeholder — campo "Tag de afiliado" + instrução curta + "Salvar"; pill de status fica `OK` com tag.
+- `/config/amazon` e `/config/magalu`: saem do placeholder — campo "Tag de afiliado" (Amazon: `SEUID-20`; Magalu: nome da sua loja em `magazinevoce.com.br/<loja>`) + "Salvar". `/config/mercadolivre`: campos `matt_word` e `matt_tool` com instrução "No painel de afiliados do Mercado Livre, gere um link de qualquer produto, abra-o e copie os valores de `matt_word` e `matt_tool` da URL final"; nota "Na fase 3, com os cookies, o sistema gera o link oficial (meli.la) automaticamente". Pill de status `OK` quando completo.
 
 ## 8. Testes
 
-- `core`: `extractStoreLinks` (mistura de lojas, encurtadores ignorados, duplicatas), `buildAffiliateUrl` (4 lojas, substituição de `tag=` existente, remoção de `utm_*`), `rewriteLinks`, `pickText`.
+- `core`: `extractStoreLinks` (mistura de lojas, encurtadores ignorados, duplicatas), `buildAffiliateUrl` (4 lojas, substituição de `tag=`/`matt_*` existentes, remoção de `utm_*`/`ref`/`forceInApp`, ML sem `mattTool` lança), `rewriteLinks`, `pickText`. Valores de afiliado nos testes são fictícios.
 - `marketplaces`: adapters por tag (ok/sem tag, unsupported em `search`).
 - `worker`: processor com gateway falso e `downloadMedia` falso — no-links, duplicate, template→clone, imagem clonada, preview, fora da janela, unsupported-store mantém link; listener enfileira só para regras ativas.
 - `api`: CRUD com validações (jid desconhecido, origem=destino, sessão de outro tenant → 404), logs/stats, `PUT /marketplaces/AMAZON {affiliateTag}`.
@@ -117,7 +117,7 @@ Eventos realtime novos em `shared`: `mirror.log { ruleId, logId, status, reason?
 ## 9. Critérios de aceite
 
 - [ ] Mensagem com link Shopee em grupo de origem chega ao destino com link `s.shopee.com.br/...` próprio em < 10 s (dentro da janela).
-- [ ] Mensagem com link Amazon chega com `?tag=<minha tag>`; sem tag configurada, chega com link original e log `unsupported-store:AMAZON`.
+- [ ] Mensagem com link Amazon chega com `?tag=<minha tag>`; link ML chega com `?matt_word=<id>&matt_tool=<n>`; sem credenciais configuradas, chega com link original e log `unsupported-store:<LOJA>`.
 - [ ] Mesmo produto postado duas vezes em 12 h → segundo é `DISCARDED duplicate`.
 - [ ] Regra Template + link ML → espelha em Clone com `template->clone`.
 - [ ] Desativar regra interrompe o espelhamento sem reiniciar o worker.
