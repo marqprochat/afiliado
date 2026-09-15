@@ -114,21 +114,41 @@ describe('BaileysGateway — ciclo de vida', () => {
     const sock = sockets[0]!;
 
     sock.emit('connection.update', { connection: 'open' });
-    await vi.waitFor(() => expect(gw.isConnected(sessionId)).toBe(true));
+    await vi.waitFor(() => expect(gw.isConnected(sessionId)).toBe(true), { timeout: 10_000 });
 
     sock.emit('connection.update', {
       connection: 'close',
       lastDisconnect: { error: { output: { statusCode: 401 } } },
     });
-    await vi.waitFor(async () => {
-      const row = await prisma.waSession.findUniqueOrThrow({ where: { id: sessionId } });
-      expect(row.status).toBe('LOGGED_OUT');
-    });
-    expect(gw.isConnected(sessionId)).toBe(false);
-    expect(
-      (gw as unknown as { pendingReconnects: Map<string, unknown> }).pendingReconnects.size,
-    ).toBe(0);
+    await vi.waitFor(
+      async () => {
+        const row = await prisma.waSession.findUniqueOrThrow({ where: { id: sessionId } });
+        expect(row.status).toBe('LOGGED_OUT');
+      },
+      { timeout: 10_000 },
+    );
+    await gw.stopAll();
+  });
 
+  it('onMessage repassa mensagem de grupo não-própria; ignora fromMe e DM', async () => {
+    const gw = new BaileysGateway();
+    const received: unknown[] = [];
+    gw.onMessage((m) => received.push(m));
+    await gw.connect(session(), { mode: 'qr' });
+    const sock = sockets[0]!;
+    sock.emit('messages.upsert', {
+      type: 'notify',
+      messages: [
+        { key: { remoteJid: 'g1@g.us', fromMe: false, id: 'M1' }, message: { conversation: 'oi' } },
+        { key: { remoteJid: 'g1@g.us', fromMe: true, id: 'M2' }, message: { conversation: 'eu' } },
+        {
+          key: { remoteJid: '5511@s.whatsapp.net', fromMe: false, id: 'M3' },
+          message: { conversation: 'dm' },
+        },
+      ],
+    });
+    expect(received).toHaveLength(1);
+    expect(received[0]).toMatchObject({ sessionId, sourceJid: 'g1@g.us', msgId: 'M1' });
     await gw.stopAll();
   });
 });

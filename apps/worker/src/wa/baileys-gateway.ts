@@ -3,8 +3,10 @@ import {
   DisconnectReason,
   fetchLatestBaileysVersion,
   jidNormalizedUser,
+  downloadMediaMessage,
   type WASocket,
   type WAUrlInfo,
+  type WAMessage,
 } from '@whiskeysockets/baileys';
 import type { Boom } from '@hapi/boom';
 import pino from 'pino';
@@ -12,7 +14,7 @@ import { prisma, type WaSessionStatus } from '@afilados/db';
 import { config } from '../config';
 import { publishEvent } from '../lib/events';
 import { usePostgresAuthState } from './auth-state';
-import type { GroupInfo, OutgoingMessage, WhatsAppGateway } from './gateway';
+import type { GroupInfo, IncomingGroupMessage, OutgoingMessage, WhatsAppGateway } from './gateway';
 
 interface Live {
   sock: WASocket;
@@ -75,6 +77,18 @@ export class BaileysGateway implements WhatsAppGateway {
   private opening = new Set<string>();
   /** reconexões agendadas, mesmo sem socket vivo no mapa `live` */
   private pendingReconnects = new Map<string, NodeJS.Timeout>();
+  private messageHandlers: ((m: IncomingGroupMessage) => void)[] = [];
+
+  onMessage(handler: (m: IncomingGroupMessage) => void) {
+    this.messageHandlers.push(handler);
+  }
+
+  async downloadMedia(sessionId: string, message: unknown): Promise<Buffer> {
+    const l = this.live.get(sessionId);
+    if (!l) throw new Error('WA_NOT_CONNECTED');
+    const buf = await downloadMediaMessage(message as WAMessage, 'buffer', {});
+    return buf as Buffer;
+  }
 
   isConnected(sessionId: string) {
     return this.live.get(sessionId)?.connected === true;
@@ -182,6 +196,21 @@ export class BaileysGateway implements WhatsAppGateway {
           log.error({ err: e, sessionId }, 'falha ao salvar creds');
         }
       })();
+    });
+
+    sock.ev.on('messages.upsert', ({ type, messages }) => {
+      if (type !== 'notify') return;
+      for (const msg of messages) {
+        const remoteJid = msg.key.remoteJid;
+        if (!remoteJid?.endsWith('@g.us') || msg.key.fromMe || !msg.key.id) continue;
+        const incoming: IncomingGroupMessage = {
+          sessionId,
+          sourceJid: remoteJid,
+          msgId: msg.key.id,
+          message: msg,
+        };
+        for (const h of this.messageHandlers) h(incoming);
+      }
     });
 
     sock.ev.on('connection.update', (u) => {
@@ -350,7 +379,10 @@ export class BaileysGateway implements WhatsAppGateway {
     if (!l || !this.isConnected(sessionId)) throw new Error('WA_NOT_CONNECTED');
     const sent =
       msg.kind === 'image'
-        ? await l.sock.sendMessage(jid, { image: { url: msg.imageUrl }, caption: msg.caption })
+        ? await l.sock.sendMessage(jid, {
+            image: msg.imageBuffer ?? { url: msg.imageUrl! },
+            caption: msg.caption,
+          })
         : await (async () => {
             const jpegThumbnail = await fetchThumbnail(msg.thumbnailUrl);
             const linkPreview: WAUrlInfo = {

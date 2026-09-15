@@ -40,9 +40,12 @@ export interface MarketplaceConnection {
   affiliateTag: string | null;
   appId: string | null;
   hasSecret: boolean;
+  mattWord: string | null;
+  mattTool: string | null;
   lastCheckedAt: string | null;
   lastError: string | null;
 }
+
 export interface ApiProduct {
   id: string;
   source: string;
@@ -118,4 +121,52 @@ export interface Overview {
     sent: number;
   }[];
   errors: { id: string; groupJid: string; error: string | null; sentAt: string }[];
+}
+
+export interface MirrorCounts {
+  mirrored: number;
+  discarded: number;
+  error: number;
+}
+
+export interface MirrorRule {
+  id: string;
+  name: string;
+  sessionId: string;
+  sourceJids: string[];
+  targetJids: string[];
+  mode: 'TEMPLATE' | 'CLONE';
+  mediaMode: MediaMode;
+  templateId: string | null;
+  dedupHours: number;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  session?: { id: string; label: string; status: WaSessionStatus };
+  template?: { id: string; name: string } | null;
+  counts?: MirrorCounts;
+}
+
+export interface MirrorLog {
+  id: string;
+  ruleId: string;
+  sourceJid: string;
+  sourceName?: string;
+  sourceMsgId: string;
+  targetJid: string;
+  targetName?: string;
+  status: 'MIRRORED' | 'DISCARDED' | 'ERROR';
+  reason: string | null;
+  productKey: string | null;
+  waMessageId: string | null;
+  createdAt: string;
+  rule?: { id: string; name: string };
+}
+
+export interface MirrorStats {
+  today: {
+    mirrored: number;
+    discarded: number;
+    error: number;
+  };
 }

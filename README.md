@@ -13,13 +13,13 @@ docker compose up -d --wait     # builda as imagens na 1ª vez (alguns minutos)
 
 Portas publicadas no host (diferentes das internas do container para não colidir com outros projetos):
 
-| Serviço | URL |
-|---|---|
-| Painel web | http://localhost:3010 |
-| API | http://localhost:3011/api/v1/health |
-| Worker (health) | http://localhost:3012/health |
-| Postgres | localhost:5434 |
-| Redis | localhost:6379 |
+| Serviço         | URL                                 |
+| --------------- | ----------------------------------- |
+| Painel web      | http://localhost:3010               |
+| API             | http://localhost:3011/api/v1/health |
+| Worker (health) | http://localhost:3012/health        |
+| Postgres        | localhost:5434                      |
+| Redis           | localhost:6379                      |
 
 Login com o usuário do seed (`SEED_USER_EMAIL`/`SEED_USER_PASSWORD` do `.env`). Para reconstruir depois de alterar código: `docker compose up -d --build`.
 

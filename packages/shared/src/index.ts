@@ -6,3 +6,4 @@ export * from './events';
 export * from './errors';
 export * from './queues';
 export * from './api';
+export * from './marketplaces';

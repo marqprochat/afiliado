@@ -8,7 +8,7 @@ import {
   marketplaceUpdateSchema,
 } from '@afilados/shared';
 import { requireAuth } from '../plugins/auth';
-import { getShopeeAdapter, publicConnection } from '../lib/marketplaces';
+import { getAdapter, getShopeeAdapter, publicConnection } from '../lib/marketplaces';
 
 const kindParams = z.object({ kind: marketplaceKindParam });
 
@@ -25,15 +25,32 @@ export async function marketplacesRoutes(app: FastifyInstance) {
   app.put('/marketplaces/:kind', async (req) => {
     const { kind } = kindParams.parse(req.params);
     const body = marketplaceUpdateSchema.parse(req.body);
-    if (kind !== 'SHOPEE') throw ApiError.validation(`${kind} disponível na fase 3`);
     const existing = await req.db.marketplaceConnection.findFirst({ where: { kind } });
     const prev = existing?.encryptedCredentials
-      ? decryptJson<{ appId?: string; secret?: string }>(Buffer.from(existing.encryptedCredentials))
+      ? decryptJson<{
+          appId?: string;
+          secret?: string;
+          tag?: string;
+          mattWord?: string;
+          mattTool?: string;
+        }>(Buffer.from(existing.encryptedCredentials))
       : {};
-    const merged = { appId: body.appId ?? prev.appId, secret: body.secret ?? prev.secret };
+    const merged =
+      kind === 'SHOPEE'
+        ? { appId: body.appId ?? prev.appId, secret: body.secret ?? prev.secret }
+        : kind === 'MERCADOLIVRE'
+          ? {
+              mattWord: body.mattWord ?? prev.mattWord,
+              mattTool: body.mattTool ?? prev.mattTool,
+            }
+          : { tag: body.affiliateTag ?? prev.tag };
+    const hasAny = Object.values(merged).some((v) => v);
     const data = {
-      encryptedCredentials: merged.appId || merged.secret ? encryptJson(merged) : null,
-      affiliateTag: body.affiliateTag ?? existing?.affiliateTag ?? null,
+      encryptedCredentials: hasAny ? encryptJson(merged) : null,
+      affiliateTag:
+        kind === 'MERCADOLIVRE'
+          ? (merged.mattWord ?? null)
+          : (body.affiliateTag ?? existing?.affiliateTag ?? null),
       status: 'UNCONFIGURED' as const,
       lastError: null,
     };
@@ -47,14 +64,17 @@ export async function marketplacesRoutes(app: FastifyInstance) {
 
   app.post('/marketplaces/:kind/check', async (req) => {
     const { kind } = kindParams.parse(req.params);
-    if (kind !== 'SHOPEE') throw ApiError.validation(`${kind} disponível na fase 3`);
     const row = await req.db.marketplaceConnection.findFirst({ where: { kind } });
     if (!row?.encryptedCredentials)
-      throw new ApiError('SHOPEE_UNCONFIGURED', 'Informe App Key e Secret', 400);
-    const creds = decryptJson<{ appId: string; secret: string }>(
-      Buffer.from(row.encryptedCredentials),
-    );
-    const result = await getShopeeAdapter().checkConnection(creds);
+      throw new ApiError('SHOPEE_UNCONFIGURED', 'Configure as credenciais', 400);
+    const result =
+      kind === 'SHOPEE'
+        ? await getShopeeAdapter().checkConnection(
+            decryptJson(Buffer.from(row.encryptedCredentials)),
+          )
+        : await getAdapter(kind).checkConnection(
+            decryptJson(Buffer.from(row.encryptedCredentials)),
+          );
     await req.db.marketplaceConnection.updateMany({
       where: { id: row.id },
       data: {

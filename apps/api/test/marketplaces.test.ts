@@ -73,13 +73,61 @@ describe('marketplaces', () => {
     expect(r.json()).toMatchObject({ status: 'OK', lastError: null });
     expect(r.json().lastCheckedAt).toBeTruthy();
   });
-  it('outras lojas → 400 na F1', async () => {
-    const r = await app.inject({
+  it('amazon: salva tag e testa conexão', async () => {
+    const put = await app.inject({
       method: 'PUT',
       url: '/api/v1/marketplaces/AMAZON',
       headers: { cookie },
-      payload: { affiliateTag: 'x' },
+      payload: { affiliateTag: 'minha-20' },
     });
-    expect(r.statusCode).toBe(400);
+    expect(put.statusCode).toBe(200);
+    expect(put.json()).toMatchObject({ kind: 'AMAZON', affiliateTag: 'minha-20' });
+    const check = await app.inject({
+      method: 'POST',
+      url: '/api/v1/marketplaces/AMAZON/check',
+      headers: { cookie },
+    });
+    expect(check.json()).toMatchObject({ status: 'OK' });
+  });
+  it('mercado livre: exige matt_word e matt_tool juntos', async () => {
+    const put1 = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/marketplaces/MERCADOLIVRE',
+      headers: { cookie },
+      payload: { mattWord: 'minhaid' },
+    });
+    expect(put1.json()).toMatchObject({ status: 'UNCONFIGURED' });
+    const check1 = await app.inject({
+      method: 'POST',
+      url: '/api/v1/marketplaces/MERCADOLIVRE/check',
+      headers: { cookie },
+    });
+    expect(check1.json()).toMatchObject({ status: 'ERROR' });
+
+    const put2 = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/marketplaces/MERCADOLIVRE',
+      headers: { cookie },
+      payload: { mattTool: '12345678' },
+    });
+    expect(put2.json()).toMatchObject({
+      mattWord: 'minhaid',
+      mattTool: '12345678',
+      status: 'UNCONFIGURED',
+    });
+    const check2 = await app.inject({
+      method: 'POST',
+      url: '/api/v1/marketplaces/MERCADOLIVRE/check',
+      headers: { cookie },
+    });
+    expect(check2.json()).toMatchObject({ status: 'OK' });
+  });
+  it('magalu sem tag → check falha com UNCONFIGURED/ERROR', async () => {
+    const check = await app.inject({
+      method: 'POST',
+      url: '/api/v1/marketplaces/MAGALU/check',
+      headers: { cookie },
+    });
+    expect(check.statusCode).toBe(400); // Sem credenciais
   });
 });

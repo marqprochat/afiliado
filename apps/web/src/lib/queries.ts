@@ -6,6 +6,9 @@ import type {
   BatchSummary,
   MarketplaceConnection,
   Me,
+  MirrorLog,
+  MirrorRule,
+  MirrorStats,
   Overview,
   QueueResponse,
   Settings,
@@ -51,4 +54,27 @@ export const useBatch = (id: string | null) =>
     queryKey: ['batches', id],
     enabled: !!id,
     queryFn: () => apiFetch<BatchDetail>(`/batches/${id}`),
+  });
+export const useMirrorRules = () =>
+  useQuery({
+    queryKey: ['mirror', 'rules'],
+    queryFn: () => apiFetch<MirrorRule[]>('/mirror/rules'),
+  });
+export const useMirrorLogs = (params?: { ruleId?: string; status?: string; limit?: number }) => {
+  const qs = new URLSearchParams();
+  if (params?.ruleId) qs.set('ruleId', params.ruleId);
+  if (params?.status) qs.set('status', params.status);
+  if (params?.limit) qs.set('limit', String(params.limit));
+  const queryStr = qs.toString();
+  return useQuery({
+    queryKey: ['mirror', 'logs', params],
+    queryFn: () => apiFetch<MirrorLog[]>(`/mirror/logs${queryStr ? `?${queryStr}` : ''}`),
+    refetchInterval: 10_000,
+  });
+};
+export const useMirrorStats = () =>
+  useQuery({
+    queryKey: ['mirror', 'stats'],
+    queryFn: () => apiFetch<MirrorStats>('/mirror/stats'),
+    refetchInterval: 15_000,
   });

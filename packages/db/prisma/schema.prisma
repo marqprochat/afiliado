@@ -26,6 +26,7 @@ model Tenant {
   settings          Setting[]
   subscriptions     Subscription[]
   mirrorRules       MirrorRule[]
+  mirrorLogs        MirrorLog[]
   coupons           Coupon[]
   scheduledMessages ScheduledMessage[]
 }
@@ -105,6 +106,7 @@ model WaSession {
   authKeys   WaAuthKey[]
   groups     WaGroup[]
   batches    Batch[]
+  mirrorRules MirrorRule[]
 }
 
 model WaAuthKey {
@@ -242,6 +244,7 @@ model Template {
   isDefault Boolean  @default(false)
   createdAt DateTime @default(now())
   batches   Batch[]
+  mirrorRules MirrorRule[]
 
   @@index([tenantId])
 }
@@ -342,23 +345,60 @@ model SendLog {
   @@index([tenantId, sentAt])
 }
 
-// ---------- Reservado para fases futuras (schema mínimo) ----------
+// ---------- Espelhamento (Fase 2) ----------
 enum MirrorMode {
   TEMPLATE
   CLONE
 }
 
 model MirrorRule {
-  id         String     @id @default(cuid())
-  tenantId   String
-  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  sourceJids String[]
-  targetJids String[]
-  mode       MirrorMode @default(CLONE)
-  mediaMode  MediaMode  @default(PREVIEW)
-  enabled    Boolean    @default(true)
-  createdAt  DateTime   @default(now())
+  id          String      @id @default(cuid())
+  tenantId    String
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sessionId   String
+  session     WaSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  name        String      @default("Espelhamento")
+  sourceJids  String[]
+  targetJids  String[]
+  mode        MirrorMode  @default(CLONE)
+  mediaMode   MediaMode   @default(PREVIEW)
+  templateId  String?
+  template    Template?   @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  dedupHours  Int         @default(12)
+  enabled     Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @default(now()) @updatedAt
+  logs        MirrorLog[]
+
+  @@index([tenantId, enabled])
 }
+
+enum MirrorLogStatus {
+  MIRRORED
+  DISCARDED
+  ERROR
+}
+
+model MirrorLog {
+  id          String          @id @default(cuid())
+  tenantId    String
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ruleId      String
+  rule        MirrorRule      @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  sourceJid   String
+  sourceMsgId String
+  targetJid   String
+  status      MirrorLogStatus
+  reason      String?
+  productKey  String?
+  waMessageId String?
+  createdAt   DateTime        @default(now())
+
+  @@index([tenantId, targetJid, productKey, createdAt])
+  @@index([ruleId, createdAt])
+  @@index([tenantId, createdAt])
+}
+
 
 model Coupon {
   id          String          @id @default(cuid())

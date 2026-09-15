@@ -22,6 +22,7 @@ const TENANT_MODELS = new Set([
   'Setting',
   'Subscription',
   'MirrorRule',
+  'MirrorLog',
   'Coupon',
   'ScheduledMessage',
 ]);

@@ -24,3 +24,9 @@ export type BatchStatus = (typeof BATCH_STATUSES)[number];
 
 export const BATCH_ITEM_STATUSES = ['PENDING', 'SENDING', 'SENT', 'ERROR'] as const;
 export type BatchItemStatus = (typeof BATCH_ITEM_STATUSES)[number];
+
+export const MIRROR_MODES = ['TEMPLATE', 'CLONE'] as const;
+export type MirrorMode = (typeof MIRROR_MODES)[number];
+
+export const MIRROR_LOG_STATUSES = ['MIRRORED', 'DISCARDED', 'ERROR'] as const;
+export type MirrorLogStatus = (typeof MIRROR_LOG_STATUSES)[number];

@@ -58,6 +58,9 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         void qc.invalidateQueries({ queryKey: ['queue'] });
         void qc.invalidateQueries({ queryKey: ['overview'] });
       }
+      if (e.type.startsWith('mirror.')) {
+        void qc.invalidateQueries({ queryKey: ['mirror'] });
+      }
       handlers.current.forEach((h) => h(e));
     });
     return () => client.stop();

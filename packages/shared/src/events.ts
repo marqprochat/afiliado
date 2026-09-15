@@ -1,4 +1,4 @@
-import type { WaSessionStatus, BatchItemStatus } from './enums';
+import type { WaSessionStatus, BatchItemStatus, MirrorLogStatus } from './enums';
 
 export type RealtimeEvent =
   | { type: 'wa.qr'; sessionId: string; qr: string }
@@ -7,6 +7,15 @@ export type RealtimeEvent =
   | { type: 'wa.groups.synced'; sessionId: string; count: number }
   | { type: 'batch.progress'; batchId: string; sent: number; total: number; estimatedEndAt: string }
   | { type: 'batch.item'; batchId: string; itemId: string; status: BatchItemStatus; error?: string }
+  | {
+      type: 'mirror.log';
+      ruleId: string;
+      logId: string;
+      status: MirrorLogStatus;
+      reason?: string;
+      targetJid: string;
+    }
+  | { type: 'mirror.rules.changed' }
   | { type: 'error'; code: string; message: string };
 
 export const REDIS_EVENTS_CHANNEL = 'afilados:events';

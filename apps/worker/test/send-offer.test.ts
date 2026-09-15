@@ -20,6 +20,10 @@ class FakeGateway implements WhatsAppGateway {
   async fetchGroups() {
     return [];
   }
+  onMessage() {}
+  async downloadMedia() {
+    return Buffer.from('');
+  }
 }
 
 let tenantId: string;

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MARKETPLACE_KINDS, MEDIA_MODES } from './enums';
+import { MARKETPLACE_KINDS, MEDIA_MODES, MIRROR_LOG_STATUSES, MIRROR_MODES } from './enums';
 
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'formato HH:mm');
 
@@ -35,6 +35,35 @@ export const marketplaceUpdateSchema = z.object({
   appId: z.string().min(1).optional(),
   secret: z.string().min(1).optional(),
   affiliateTag: z.string().max(100).optional(),
+  mattWord: z.string().min(1).max(60).optional(),
+  mattTool: z
+    .string()
+    .regex(/^\d{1,12}$/, 'matt_tool deve ser numérico')
+    .optional(),
+});
+
+export const mirrorRuleSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80),
+    sessionId: z.string().min(1),
+    sourceJids: z.array(z.string().min(1)).min(1),
+    targetJids: z.array(z.string().min(1)).min(1),
+    mode: z.enum(MIRROR_MODES).default('CLONE'),
+    mediaMode: z.enum(MEDIA_MODES).default('PREVIEW'),
+    templateId: z.string().min(1).optional(),
+    dedupHours: z.number().int().min(1).max(168).default(12),
+    enabled: z.boolean().default(true),
+  })
+  .refine((r) => !r.sourceJids.some((j) => r.targetJids.includes(j)), {
+    message: 'um grupo não pode ser origem e destino ao mesmo tempo',
+    path: ['targetJids'],
+  });
+export type MirrorRuleBody = z.infer<typeof mirrorRuleSchema>;
+
+export const mirrorLogsQuerySchema = z.object({
+  ruleId: z.string().min(1).optional(),
+  status: z.enum(MIRROR_LOG_STATUSES).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 
 export const productsImportSchema = z.object({ urls: z.array(z.string().url()).min(1).max(200) });

@@ -56,8 +56,21 @@ async function main() {
       memberCount: 3,
     },
   });
-  // limpa fila/lotes de execuções anteriores
+  await prisma.waGroup.upsert({
+    where: { sessionId_jid: { sessionId: session.id, jid: 'e2e-dest@g.us' } },
+    update: {},
+    create: {
+      tenantId: tenant.id,
+      sessionId: session.id,
+      jid: 'e2e-dest@g.us',
+      name: 'Grupo E2E Destino',
+      botIsAdmin: true,
+      memberCount: 5,
+    },
+  });
+  // limpa fila/lotes/espelhamentos de execuções anteriores
   await prisma.batch.deleteMany({ where: { tenantId: tenant.id } });
   await prisma.queueItem.deleteMany({ where: { tenantId: tenant.id } });
+  await prisma.mirrorRule.deleteMany({ where: { tenantId: tenant.id } });
 }
 main().finally(() => prisma.$disconnect());

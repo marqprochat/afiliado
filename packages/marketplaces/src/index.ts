@@ -3,3 +3,5 @@ export * from './shopee/signature';
 export * from './shopee/client';
 export * from './shopee/mapper';
 export * from './shopee/adapter';
+export * from './tag-adapter';
+export * from './registry';

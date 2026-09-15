@@ -4,4 +4,7 @@ export * from './window';
 export * from './schedule';
 export * from './shuffle';
 export * from './urls';
+export * from './links';
+export * from './wa-message';
+
 export * from './subid';

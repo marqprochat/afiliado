@@ -1,6 +1,7 @@
 export interface OutgoingImage {
   kind: 'image';
-  imageUrl: string;
+  imageUrl?: string;
+  imageBuffer?: Buffer;
   caption: string;
 }
 export interface OutgoingPreview {
@@ -20,8 +21,16 @@ export interface GroupInfo {
   memberCount: number;
   inviteLink?: string;
 }
+export interface IncomingGroupMessage {
+  sessionId: string;
+  sourceJid: string;
+  msgId: string;
+  message: unknown;
+}
 export interface WhatsAppGateway {
   isConnected(sessionId: string): boolean;
   sendMessage(sessionId: string, jid: string, msg: OutgoingMessage): Promise<{ messageId: string }>;
   fetchGroups(sessionId: string): Promise<GroupInfo[]>;
+  onMessage(handler: (msg: IncomingGroupMessage) => void): void;
+  downloadMedia(sessionId: string, message: unknown): Promise<Buffer>;
 }
