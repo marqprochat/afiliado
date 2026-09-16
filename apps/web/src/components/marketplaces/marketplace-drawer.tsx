@@ -1,0 +1,222 @@
+'use client';
+import { useEffect, useState } from 'react';
+import type { MarketplaceKind } from '@afilados/shared';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { StatusPill } from '@/components/app-shell/status-pill';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/components/ui/drawer';
+import { formatDateTime } from '@/lib/format';
+import type { MarketplaceConnection } from '@/lib/types';
+import { MARKETPLACE_CONFIGS, type MarketplaceFieldKey } from './marketplace-config';
+
+export interface MarketplaceSubmitPayload {
+  fields: Partial<Record<MarketplaceFieldKey, string>>;
+  cookie: string;
+}
+
+function initialFieldValue(key: MarketplaceFieldKey, connection?: MarketplaceConnection): string {
+  switch (key) {
+    case 'appId':
+      return connection?.appId ?? '';
+    case 'affiliateTag':
+      return connection?.affiliateTag ?? '';
+    case 'mattWord':
+      return connection?.mattWord ?? '';
+    case 'mattTool':
+      return connection?.mattTool ?? '';
+    case 'secret':
+      return '';
+  }
+}
+
+function sessionStatus(kind: MarketplaceKind, connection?: MarketplaceConnection) {
+  if (!connection) return null;
+  const syncedAt =
+    kind === 'MERCADOLIVRE'
+      ? connection.mlSessionSyncedAt
+      : kind === 'AMAZON'
+        ? connection.amazonSessionSyncedAt
+        : kind === 'MAGALU'
+          ? connection.magaluSessionSyncedAt
+          : null;
+  const source =
+    kind === 'MERCADOLIVRE'
+      ? connection.mlSessionSource
+      : kind === 'AMAZON'
+        ? connection.amazonSessionSource
+        : kind === 'MAGALU'
+          ? connection.magaluSessionSource
+          : null;
+  if (!syncedAt) return null;
+  return { syncedAt, source };
+}
+
+export function MarketplaceDrawer({
+  kind,
+  connection,
+  open,
+  onOpenChange,
+  onSubmit,
+  pending,
+  feedback,
+}: {
+  kind: MarketplaceKind;
+  connection?: MarketplaceConnection;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (payload: MarketplaceSubmitPayload) => Promise<void>;
+  pending: boolean;
+  feedback: string | null;
+}) {
+  const config = MARKETPLACE_CONFIGS[kind];
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [cookie, setCookie] = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    const initial: Record<string, string> = {};
+    for (const field of config.fields) initial[field.key] = initialFieldValue(field.key, connection);
+    setValues(initial);
+    setCookie('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, kind]);
+
+  const session = sessionStatus(kind, connection);
+  const status = connection?.status ?? 'UNCONFIGURED';
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const fields: Partial<Record<MarketplaceFieldKey, string>> = {};
+    for (const field of config.fields) {
+      const value = values[field.key]?.trim();
+      if (value) fields[field.key] = value;
+    }
+    await onSubmit({ fields, cookie: cookie.trim() });
+  }
+
+  return (
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent>
+        <DrawerHeader>
+          <div className="flex items-center justify-between gap-2">
+            <DrawerTitle>{config.label}</DrawerTitle>
+            <StatusPill label={status} status={status} />
+          </div>
+          <DrawerDescription>{config.description}</DrawerDescription>
+          <a
+            href={config.platformUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="w-fit text-xs text-brand underline"
+          >
+            Abrir plataforma
+          </a>
+        </DrawerHeader>
+
+        <form onSubmit={handleSubmit} className="flex flex-1 flex-col gap-4">
+          {config.fields.map((field) => (
+            <div key={field.key}>
+              <Label htmlFor={`mkt-${field.key}`}>
+                {field.label}
+                {field.required && <span className="text-red-400"> *</span>}
+              </Label>
+              <Input
+                id={`mkt-${field.key}`}
+                type={field.type}
+                value={values[field.key] ?? ''}
+                onChange={(e) => setValues((v) => ({ ...v, [field.key]: e.target.value }))}
+                placeholder={
+                  field.key === 'secret'
+                    ? connection?.hasSecret
+                      ? '•••• (já salvo)'
+                      : ''
+                    : field.placeholder
+                }
+                className="mt-1"
+              />
+              {field.helpContent && (
+                <details className="mt-1.5 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer select-none">
+                    {field.helpTitle ?? 'Ajuda'}
+                  </summary>
+                  <p className="mt-1">{field.helpContent}</p>
+                </details>
+              )}
+            </div>
+          ))}
+
+          {config.supportsSession && (
+            <div className="rounded-lg border border-border bg-surface-2 p-3.5">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">Sessão logada (opcional)</p>
+                {session ? (
+                  <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-600">
+                    Sincronizada em {formatDateTime(session.syncedAt)} (
+                    {session.source === 'manual' ? 'manual' : 'extensão'})
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                    Não sincronizada
+                  </span>
+                )}
+              </div>
+              <Label htmlFor="mkt-cookie">
+                Cole aqui o valor do cookie{' '}
+                {config.sessionCookieName ? `"${config.sessionCookieName}"` : ''} ou a string
+                completa...
+              </Label>
+              <Textarea
+                id="mkt-cookie"
+                aria-label="Cookie de sessão"
+                value={cookie}
+                onChange={(e) => setCookie(e.target.value)}
+                placeholder="Ex: nome=valor; outro=valor"
+                className="mt-1"
+              />
+              {config.sessionHelpContent && (
+                <details className="mt-1.5 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer select-none">
+                    {config.sessionHelpTitle ?? 'Como exportar o cookie?'}
+                  </summary>
+                  <p className="mt-1">{config.sessionHelpContent}</p>
+                </details>
+              )}
+              {config.extensionUrl && (
+                <p className="mt-2 text-xs">
+                  Ou instale a{' '}
+                  <a href={config.extensionUrl} className="text-brand underline">
+                    extensão Afilados Connect
+                  </a>{' '}
+                  para sincronizar automaticamente.
+                </p>
+              )}
+            </div>
+          )}
+
+          {feedback && (
+            <p
+              className={`text-xs ${feedback.toLowerCase().includes('sucesso') || feedback.toLowerCase().includes('valid') ? 'text-emerald-500' : 'text-red-400'}`}
+            >
+              {feedback}
+            </p>
+          )}
+
+          <DrawerFooter>
+            <Button type="submit" disabled={pending}>
+              {pending ? 'Testando e salvando...' : 'Testar e Salvar'}
+            </Button>
+          </DrawerFooter>
+        </form>
+      </DrawerContent>
+    </Drawer>
+  );
+}
