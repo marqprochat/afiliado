@@ -37,7 +37,7 @@ export default function OverviewPage() {
         </Card>
         <Card title="Shopee">
           <StatusPill label={data.shopee} status={data.shopee} />{' '}
-          <Link href="/config/shopee" className="ml-2 text-xs text-brand underline">
+          <Link href="/marketplaces?open=SHOPEE" className="ml-2 text-xs text-brand underline">
             configurar
           </Link>
         </Card>
