@@ -130,4 +130,59 @@ describe('marketplaces', () => {
     });
     expect(check.statusCode).toBe(400); // Sem credenciais
   });
+
+  it('rejeita cookie de sessão para SHOPEE', async () => {
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/v1/marketplaces/SHOPEE/session',
+      headers: { cookie },
+      payload: { cookie: 'algumvalor' },
+    });
+    expect(r.statusCode).toBe(400);
+  });
+
+  it('aceita cookie manual para AMAZON, marca status OK e nunca devolve o valor do cookie', async () => {
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/v1/marketplaces/AMAZON/session',
+      headers: { cookie },
+      payload: { cookie: 'session-id=abc; ubid-acbbr=xyz' },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({ kind: 'AMAZON', status: 'OK' });
+    expect(r.json().amazonSessionSyncedAt).toBeTruthy();
+    expect(r.json().amazonSessionSource).toBe('manual');
+    expect(JSON.stringify(r.json())).not.toContain('abc');
+
+    const row = await prisma.marketplaceConnection.findFirstOrThrow({
+      where: { tenantId: t.tenantId, kind: 'AMAZON' },
+    });
+    const creds = decryptJson<{ amazonSession?: { cookies: Record<string, string> } }>(
+      Buffer.from(row.encryptedCredentials!),
+    );
+    expect(creds.amazonSession?.cookies).toEqual({ 'session-id': 'abc', 'ubid-acbbr': 'xyz' });
+  });
+
+  it('cookie manual preserva a tag já salva do mesmo marketplace', async () => {
+    await app.inject({
+      method: 'PUT',
+      url: '/api/v1/marketplaces/MAGALU',
+      headers: { cookie },
+      payload: { affiliateTag: 'minhaloja' },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/marketplaces/MAGALU/session',
+      headers: { cookie },
+      payload: { cookie: 'tokenunico' },
+    });
+    const row = await prisma.marketplaceConnection.findFirstOrThrow({
+      where: { tenantId: t.tenantId, kind: 'MAGALU' },
+    });
+    const creds = decryptJson<{ tag?: string; magaluSession?: { cookies: Record<string, string> } }>(
+      Buffer.from(row.encryptedCredentials!),
+    );
+    expect(creds.tag).toBe('minhaloja');
+    expect(creds.magaluSession?.cookies).toEqual({ magalu_session: 'tokenunico' });
+  });
 });

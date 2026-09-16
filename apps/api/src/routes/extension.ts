@@ -160,7 +160,7 @@ export async function extensionRoutes(app: FastifyInstance) {
       ? decryptJson<TagCredentials>(Buffer.from(existing.encryptedCredentials))
       : {};
     const syncedAt = new Date().toISOString();
-    const merged: TagCredentials = { ...prev, mlSession: { cookies, syncedAt } };
+    const merged: TagCredentials = { ...prev, mlSession: { cookies, syncedAt, source: 'extension' } };
     const data = {
       encryptedCredentials: encryptJson(merged),
       status: 'OK' as const,

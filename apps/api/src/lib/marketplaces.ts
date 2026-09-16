@@ -31,8 +31,13 @@ export function publicConnection(
     hasSecret: Boolean(creds?.secret),
     mattWord: creds?.mattWord ?? null,
     mattTool: creds?.mattTool ?? null,
-    // Sessão do ML sincronizada pela extensão (cookies nunca saem daqui)
+    // Sessões sincronizadas (cookies nunca saem daqui, só metadados)
     mlSessionSyncedAt: creds?.mlSession?.syncedAt ?? null,
+    mlSessionSource: creds?.mlSession?.source ?? null,
+    amazonSessionSyncedAt: creds?.amazonSession?.syncedAt ?? null,
+    amazonSessionSource: creds?.amazonSession?.source ?? null,
+    magaluSessionSyncedAt: creds?.magaluSession?.syncedAt ?? null,
+    magaluSessionSource: creds?.magaluSession?.source ?? null,
     lastCheckedAt: row?.lastCheckedAt ?? null,
     lastError: row?.lastError ?? null,
   };

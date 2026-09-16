@@ -6,7 +6,12 @@ import {
   MARKETPLACE_KINDS,
   marketplaceKindParam,
   marketplaceUpdateSchema,
+  marketplaceSessionSchema,
+  parseCookieString,
+  supportsSessionCookie,
+  SESSION_FIELD_BY_KIND,
   type MlSession,
+  type TagCredentials,
 } from '@afilados/shared';
 import { requireAuth } from '../plugins/auth';
 import { getAdapter, getShopeeAdapter, publicConnection } from '../lib/marketplaces';
@@ -98,5 +103,38 @@ export async function marketplacesRoutes(app: FastifyInstance) {
       await req.db.marketplaceConnection.findFirst({ where: { kind } }),
       kind,
     );
+  });
+
+  app.post('/marketplaces/:kind/session', async (req) => {
+    const { kind } = kindParams.parse(req.params);
+    if (!supportsSessionCookie(kind)) {
+      throw new ApiError('MARKETPLACE_ERROR', `${kind} não aceita cookie de sessão`, 400);
+    }
+    const { cookie } = marketplaceSessionSchema.parse(req.body);
+    const cookies = parseCookieString(cookie, kind);
+    const sessionField = SESSION_FIELD_BY_KIND[kind];
+
+    const existing = await req.db.marketplaceConnection.findFirst({ where: { kind } });
+    const prev = existing?.encryptedCredentials
+      ? decryptJson<TagCredentials>(Buffer.from(existing.encryptedCredentials))
+      : {};
+    const syncedAt = new Date().toISOString();
+    const merged: TagCredentials = {
+      ...prev,
+      [sessionField]: { cookies, syncedAt, source: 'manual' },
+    };
+    const data = {
+      encryptedCredentials: encryptJson(merged),
+      status: 'OK' as const,
+      lastCheckedAt: new Date(),
+      lastError: null,
+    };
+    if (existing) {
+      await req.db.marketplaceConnection.updateMany({ where: { id: existing.id }, data });
+    } else {
+      // @ts-expect-error tenantId é injetado pela extensão forTenant
+      await req.db.marketplaceConnection.create({ data: { kind, ...data } });
+    }
+    return publicConnection(await req.db.marketplaceConnection.findFirst({ where: { kind } }), kind);
   });
 }
