@@ -42,8 +42,15 @@ export interface MarketplaceConnection {
   hasSecret: boolean;
   mattWord: string | null;
   mattTool: string | null;
-  /** Sessão do ML sincronizada pela extensão (gera link oficial meli.la). */
+  /** Sessão do ML sincronizada (extensão ou colagem manual); gera link oficial meli.la. */
   mlSessionSyncedAt: string | null;
+  mlSessionSource: 'extension' | 'manual' | null;
+  /** Sessão da Amazon (SiteStripe) sincronizada; armazenada, sem geração de link nesta fase. */
+  amazonSessionSyncedAt: string | null;
+  amazonSessionSource: 'extension' | 'manual' | null;
+  /** Sessão do Magazine Você sincronizada; armazenada, sem geração de link nesta fase. */
+  magaluSessionSyncedAt: string | null;
+  magaluSessionSource: 'extension' | 'manual' | null;
   lastCheckedAt: string | null;
   lastError: string | null;
 }
