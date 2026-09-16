@@ -5,14 +5,38 @@ export interface TagCredentials {
   tag?: string; // Amazon: "SEUID-20"; Magalu: nome da loja em magazinevoce.com.br/<loja>
   mattWord?: string; // Mercado Livre: ID do afiliado
   mattTool?: string; // Mercado Livre: número fixo da conta
-  /** Sessão logada sincronizada pela extensão (F3); permite gerar o link oficial meli.la. */
-  mlSession?: MlSession;
+  /** Sessão logada do Mercado Livre; permite gerar o link oficial meli.la. */
+  mlSession?: SessionCookies;
+  /** Sessão logada da Amazon (SiteStripe); armazenada nesta fase, sem uso na geração de link ainda. */
+  amazonSession?: SessionCookies;
+  /** Sessão logada do Magazine Você; armazenada nesta fase, sem uso na geração de link ainda. */
+  magaluSession?: SessionCookies;
 }
 
-/** Cookies da sessão do Mercado Livre, sincronizados pela extensão Afilados Connect. */
-export interface MlSession {
+/** Cookies de sessão de um marketplace, sincronizados pela extensão ou colados manualmente. */
+export interface SessionCookies {
   cookies: Record<string, string>;
   syncedAt: string; // ISO
+  source: 'extension' | 'manual';
+}
+
+/** @deprecated use SessionCookies — mantido para não quebrar imports existentes. */
+export type MlSession = SessionCookies;
+
+/** Mapa de qual campo de `TagCredentials` guarda a sessão de cada marketplace. */
+export const SESSION_FIELD_BY_KIND: Record<
+  'MERCADOLIVRE' | 'AMAZON' | 'MAGALU',
+  'mlSession' | 'amazonSession' | 'magaluSession'
+> = {
+  MERCADOLIVRE: 'mlSession',
+  AMAZON: 'amazonSession',
+  MAGALU: 'magaluSession',
+};
+
+export function supportsSessionCookie(
+  kind: MarketplaceKind,
+): kind is 'MERCADOLIVRE' | 'AMAZON' | 'MAGALU' {
+  return kind === 'MERCADOLIVRE' || kind === 'AMAZON' || kind === 'MAGALU';
 }
 
 export function requiredTagFields(kind: MarketplaceKind): (keyof TagCredentials)[] {

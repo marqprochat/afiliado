@@ -128,6 +128,11 @@ export const extensionSessionSchema = z.object({
 });
 export type ExtensionSessionBody = z.infer<typeof extensionSessionSchema>;
 
+export const marketplaceSessionSchema = z.object({
+  cookie: z.string().min(1).max(20000),
+});
+export type MarketplaceSessionBody = z.infer<typeof marketplaceSessionSchema>;
+
 export type LoginBody = z.infer<typeof loginSchema>;
 export type SettingsUpdateBody = z.infer<typeof settingsUpdateSchema>;
 export type WaSessionCreateBody = z.infer<typeof waSessionCreateSchema>;
