@@ -8,6 +8,7 @@ import {
 import type { ConnectionStatus, MarketplaceAdapter } from './adapter';
 import { scrapeAmazon, scrapeMagalu, scrapeMercadoLivre } from './scrapers';
 import { generateOfficialMlLink } from './mercadolivre/official-link';
+import { generateOfficialAmazonLink } from './amazon/official-link';
 
 export class UnsupportedError extends Error {
   constructor(message = 'operação não suportada') {
@@ -21,11 +22,17 @@ export type TagKind = 'AMAZON' | 'MERCADOLIVRE' | 'MAGALU';
 export interface TagAdapterOptions {
   /** Gerador do link oficial meli.la (injetável em testes). */
   mlOfficialLink?: (url: string, cookies: Record<string, string>) => Promise<string>;
-  /** Chamado quando o gerador oficial falha e caímos no fallback matt_word/matt_tool. */
+  /** Gerador do link oficial SiteStripe da Amazon (injetável em testes). */
+  amazonOfficialLink?: (
+    url: string,
+    cookies: Record<string, string>,
+    storeId: string,
+  ) => Promise<string>;
+  /** Chamado quando o gerador oficial falha e caímos no fallback matt_word/matt_tool ou tag. */
   onOfficialLinkError?: (err: unknown, url: string) => void;
 }
 
-/** Cache curto de links oficiais para não bater no painel do ML a cada envio. */
+/** Cache curto de links oficiais para não bater no painel/SiteStripe a cada envio. */
 const officialLinkCache = new Map<string, { link: string; expiresAt: number }>();
 const OFFICIAL_LINK_TTL_MS = 60 * 60 * 1000;
 
@@ -35,9 +42,22 @@ export function createTagAdapter(
 ): MarketplaceAdapter<TagCredentials> {
   const officialLink =
     opts.mlOfficialLink ?? ((url, cookies) => generateOfficialMlLink(url, cookies));
+  const amazonOfficialLink =
+    opts.amazonOfficialLink ??
+    ((url, cookies, storeId) => generateOfficialAmazonLink(url, cookies, storeId));
   return {
     kind,
     async checkConnection(creds): Promise<ConnectionStatus> {
+      if (kind === 'AMAZON' && creds?.amazonSession?.cookies) {
+        const storeId = creds.tag ?? '';
+        try {
+          await amazonOfficialLink('https://www.amazon.com.br/', creds.amazonSession.cookies, storeId);
+          return { ok: true };
+        } catch (err) {
+          if (hasTagCredentials(kind, creds)) return { ok: true };
+          return { ok: false, error: err instanceof Error ? err.message : String(err) };
+        }
+      }
       if (hasTagCredentials(kind, creds)) return { ok: true };
       // ML com sessão sincronizada consegue gerar o link oficial mesmo sem matt_word/matt_tool
       if (kind === 'MERCADOLIVRE' && creds?.mlSession?.cookies) return { ok: true };
@@ -65,11 +85,26 @@ export function createTagAdapter(
     async toAffiliateLink(creds, url) {
       // Mercado Livre: gerador oficial (meli.la) via sessão sincronizada, com fallback para tags
       if (kind === 'MERCADOLIVRE' && creds.mlSession?.cookies) {
-        const cached = officialLinkCache.get(url);
+        const cacheKey = `MERCADOLIVRE:${url}`;
+        const cached = officialLinkCache.get(cacheKey);
         if (cached && cached.expiresAt > Date.now()) return cached.link;
         try {
           const link = await officialLink(url, creds.mlSession.cookies);
-          officialLinkCache.set(url, { link, expiresAt: Date.now() + OFFICIAL_LINK_TTL_MS });
+          officialLinkCache.set(cacheKey, { link, expiresAt: Date.now() + OFFICIAL_LINK_TTL_MS });
+          return link;
+        } catch (err) {
+          opts.onOfficialLinkError?.(err, url);
+          if (!hasTagCredentials(kind, creds)) throw err;
+        }
+      }
+      // Amazon: link curto oficial via SiteStripe (sessão), com fallback para link por tag
+      if (kind === 'AMAZON' && creds.amazonSession?.cookies) {
+        const cacheKey = `AMAZON:${url}`;
+        const cached = officialLinkCache.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) return cached.link;
+        try {
+          const link = await amazonOfficialLink(url, creds.amazonSession.cookies, creds.tag ?? '');
+          officialLinkCache.set(cacheKey, { link, expiresAt: Date.now() + OFFICIAL_LINK_TTL_MS });
           return link;
         } catch (err) {
           opts.onOfficialLinkError?.(err, url);
