@@ -8,8 +8,14 @@ export function registerErrorHandler(app: FastifyInstance) {
     reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Rota não encontrada' } });
   });
   app.setErrorHandler((err, req, reply) => {
-    if (err instanceof ApiError) {
-      return reply.status(err.status).send({ error: { code: err.code, message: err.message } });
+    if (
+      err instanceof ApiError ||
+      (err && typeof err === 'object' && (err as { name?: string }).name === 'ApiError')
+    ) {
+      const apiErr = err as ApiError;
+      return reply
+        .status(apiErr.status ?? 500)
+        .send({ error: { code: apiErr.code ?? 'INTERNAL', message: apiErr.message } });
     }
     if (err instanceof ZodError) {
       const message = err.issues

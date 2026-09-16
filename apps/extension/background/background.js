@@ -5,16 +5,23 @@
 // criptografados e os usa no gerador oficial (com fallback para matt_word/matt_tool).
 
 const ML_DOMAIN = 'mercadolivre.com.br';
-const DEFAULT_API_URL = 'http://localhost:3001';
+const DEFAULT_API_URL = 'http://localhost:3011';
 const SYNC_DEBOUNCE_MS = 5000;
 const SYNC_ALARM = 'afilados-ml-session-sync';
 const SYNC_ALARM_PERIOD_MIN = 6 * 60; // re-sincroniza a cada 6h mesmo sem mudança de cookie
 
 let debounceTimer = null;
 
+function normalizeApiUrl(url) {
+  let clean = (url || '').trim().replace(/\/+$/, '');
+  clean = clean.replace(/\/api\/v1\/?$/, '');
+  clean = clean.replace(/\/api\/?$/, '');
+  return clean || DEFAULT_API_URL;
+}
+
 async function getConfig() {
   const saved = await chrome.storage.local.get(['apiUrl', 'apiToken']);
-  return { apiUrl: saved.apiUrl || DEFAULT_API_URL, apiToken: saved.apiToken || '' };
+  return { apiUrl: normalizeApiUrl(saved.apiUrl), apiToken: saved.apiToken || '' };
 }
 
 async function collectMlCookies() {

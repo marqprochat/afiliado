@@ -14,6 +14,8 @@
   },
   "permissions": ["storage", "activeTab", "scripting", "cookies", "alarms"],
   "host_permissions": [
+    "http://localhost/*",
+    "http://127.0.0.1/*",
     "*://*.mercadolivre.com.br/*",
     "*://*.amazon.com.br/*",
     "*://*.magazineluiza.com.br/*",

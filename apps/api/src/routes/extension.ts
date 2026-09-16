@@ -25,42 +25,50 @@ async function authenticateExtension(
     rawToken = apiKeyHeader.trim();
   }
 
-  if (rawToken && rawToken.startsWith('afil_')) {
-    const tokenHash = hashToken(rawToken);
-    const tokenRow = await prisma.apiToken.findFirst({
-      where: { tokenHash, revokedAt: null },
-      include: { tenant: true },
-    });
-
-    if (tokenRow) {
-      // Atualiza lastUsedAt em background
-      void prisma.apiToken.update({
-        where: { id: tokenRow.id },
-        data: { lastUsedAt: new Date() },
+  if (rawToken) {
+    if (rawToken.startsWith('afil_')) {
+      const tokenHash = hashToken(rawToken);
+      const tokenRow = await prisma.apiToken.findFirst({
+        where: { tokenHash, revokedAt: null },
+        include: { tenant: true },
       });
-      return { tenantId: tokenRow.tenantId, tenantName: tokenRow.tenant.name };
+
+      if (tokenRow) {
+        // Atualiza lastUsedAt em background
+        void prisma.apiToken.update({
+          where: { id: tokenRow.id },
+          data: { lastUsedAt: new Date() },
+        });
+        return { tenantId: tokenRow.tenantId, tenantName: tokenRow.tenant.name };
+      }
     }
+    // Se forneceu um token mas ele não existe ou foi revogado:
+    throw ApiError.unauthorized('Token de API inválido ou revogado');
   }
 
-  // 2. Fallback para sessão de cookie se estiver autenticado no web
+  // 2. Se nenhum token foi passado, permite sessão autenticada por cookie (ex: requisições feitas do painel web)
   if ((req as unknown as { tenantId?: string }).tenantId) {
     const tId = (req as unknown as { tenantId: string }).tenantId;
     const tenant = await prisma.tenant.findUnique({ where: { id: tId } });
     if (tenant) return { tenantId: tId, tenantName: tenant.name };
   }
 
-  throw ApiError.unauthorized('Token de API ou sessão inválida');
+  throw ApiError.unauthorized('Token de API não fornecido');
 }
 
 export async function extensionRoutes(app: FastifyInstance) {
-  // 1. Validar conexão da extensão
-  app.post('/extension/auth', async (req) => {
-    const { tenantId, tenantName } = await authenticateExtension(req);
-    return {
-      ok: true,
-      tenantId,
-      tenantName,
-    };
+  // 1. Validar conexão da extensão (aceita GET e POST)
+  app.route({
+    method: ['GET', 'POST'],
+    url: '/extension/auth',
+    handler: async (req) => {
+      const { tenantId, tenantName } = await authenticateExtension(req);
+      return {
+        ok: true,
+        tenantId,
+        tenantName,
+      };
+    },
   });
 
   // 2. Captura de produto da aba ativa diretamente pela extensão

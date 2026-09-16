@@ -17,13 +17,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   const mlMsg = document.getElementById('ml-session-msg');
   const btnSyncMl = document.getElementById('btn-sync-ml');
 
+  function normalizeApiUrl(url) {
+    let clean = (url || '').trim().replace(/\/+$/, '');
+    clean = clean.replace(/\/api\/v1\/?$/, '');
+    clean = clean.replace(/\/api\/?$/, '');
+    return clean || 'http://localhost:3011';
+  }
+
   let currentProduct = null;
-  let config = { apiUrl: 'http://localhost:3001', apiToken: '' };
+  let config = { apiUrl: 'http://localhost:3011', apiToken: '' };
+
+  // Permite clicar no status para abrir configurações / trocar token
+  connPill.style.cursor = 'pointer';
+  connPill.title = 'Clique para abrir configurações de conexão';
+  connPill.addEventListener('click', () => {
+    configSection.classList.toggle('hidden');
+  });
 
   // Carrega configurações salvas no Chrome Storage
   if (typeof chrome !== 'undefined' && chrome.storage) {
     const saved = await chrome.storage.local.get(['apiUrl', 'apiToken']);
-    if (saved.apiUrl) config.apiUrl = saved.apiUrl;
+    if (saved.apiUrl) config.apiUrl = normalizeApiUrl(saved.apiUrl);
     if (saved.apiToken) config.apiToken = saved.apiToken;
     apiUrlInput.value = config.apiUrl;
     apiTokenInput.value = config.apiToken;
@@ -39,12 +53,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     try {
-      const res = await fetch(`${config.apiUrl}/api/v1/extension/auth`, {
+      const url = `${normalizeApiUrl(config.apiUrl)}/api/v1/extension/auth`;
+      const res = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${config.apiToken}`,
         },
+        body: '{}',
       });
 
       if (res.ok) {
@@ -54,15 +70,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         configSection.classList.add('hidden');
         return true;
       } else {
+        const data = await res.json().catch(() => null);
         connPill.textContent = 'Token Inválido';
         connPill.className = 'pill pill-off';
         configSection.classList.remove('hidden');
+        if (data?.error?.message) {
+          configMsg.textContent = `❌ ${data.error.message}`;
+          configMsg.className = 'msg msg-error';
+        }
         return false;
       }
-    } catch {
+    } catch (e) {
       connPill.textContent = 'Offline';
       connPill.className = 'pill pill-off';
       configSection.classList.remove('hidden');
+      configMsg.textContent = '❌ Falha de rede ao conectar à API. Verifique a URL.';
+      configMsg.className = 'msg msg-error';
       return false;
     }
   }
@@ -118,8 +141,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Salvar configuração
   btnSaveConfig.addEventListener('click', async () => {
-    config.apiUrl = apiUrlInput.value.trim().replace(/\/$/, '');
+    config.apiUrl = normalizeApiUrl(apiUrlInput.value);
     config.apiToken = apiTokenInput.value.trim();
+    apiUrlInput.value = config.apiUrl;
 
     if (typeof chrome !== 'undefined' && chrome.storage) {
       await chrome.storage.local.set({ apiUrl: config.apiUrl, apiToken: config.apiToken });
@@ -138,9 +162,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         .then(renderMlSession)
         .catch(() => {});
       setTimeout(() => inspectCurrentTab(), 500);
-    } else {
-      configMsg.textContent = 'Falha ao conectar. Verifique o token e a URL.';
-      configMsg.className = 'msg msg-error';
     }
   });
 

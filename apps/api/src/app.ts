@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import websocket from '@fastify/websocket';
 import { config } from './config';
@@ -35,6 +36,12 @@ export interface BuildAppOptions {
 
 export async function buildApp(opts: BuildAppOptions = {}) {
   const app = Fastify({ logger: opts.logger ?? true });
+  await app.register(cors, {
+    origin: true,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'X-Requested-With'],
+  });
   await app.register(cookie, { secret: config.SESSION_SECRET });
   registerErrorHandler(app);
   await app.register(authPlugin);
