@@ -118,8 +118,13 @@ export const extensionCaptureSchema = z.object({
 export type ExtensionCaptureBody = z.infer<typeof extensionCaptureSchema>;
 
 export const extensionSessionSchema = z.object({
-  marketplaceKind: z.enum(MARKETPLACE_KINDS),
-  cookies: z.record(z.string()),
+  // Só o Mercado Livre usa sessão logada (gerador oficial meli.la)
+  marketplaceKind: z.literal('MERCADOLIVRE'),
+  cookies: z
+    .record(z.string().min(1).max(64), z.string().max(4096))
+    .refine((c) => Object.keys(c).length > 0 && Object.keys(c).length <= 80, {
+      message: 'Informe entre 1 e 80 cookies',
+    }),
 });
 export type ExtensionSessionBody = z.infer<typeof extensionSessionSchema>;
 

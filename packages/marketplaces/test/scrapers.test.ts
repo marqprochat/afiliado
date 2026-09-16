@@ -80,7 +80,9 @@ describe('Scrapers de Marketplaces (Fase 3)', () => {
     expect(product.shipping).toBe('FREE');
     expect(product.couponCode).toBe('CUPOM AMAZON');
     expect(product.couponValue).toBe(20.0);
-    expect(product.images[0]).toBe('https://m.media-amazon.com/images/I/71C3554ECnL._AC_SL1000_.jpg');
+    expect(product.images[0]).toBe(
+      'https://m.media-amazon.com/images/I/71C3554ECnL._AC_SL1000_.jpg',
+    );
   });
 
   it('Magalu: extrai título, preço, preço original, desconto e imagens', () => {

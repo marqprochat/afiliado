@@ -31,7 +31,11 @@ export function parseProductUrl(raw: string): ParsedProductUrl {
     const m = path.match(/\/(?:dp|gp\/product|product)\/([A-Z0-9]{10})/);
     if (m) return { source: 'AMAZON', externalId: m[1]!.toUpperCase() };
   }
-  if (host === 'magazineluiza.com.br' || host === 'magazinevoce.com.br' || host.endsWith('.magazinevoce.com.br')) {
+  if (
+    host === 'magazineluiza.com.br' ||
+    host === 'magazinevoce.com.br' ||
+    host.endsWith('.magazinevoce.com.br')
+  ) {
     const m = path.match(/\/p\/([a-z0-9]+)/i) || path.match(/\/([a-z0-9]{7,12})\//i);
     if (m) return { source: 'MAGALU', externalId: m[1]! };
   }

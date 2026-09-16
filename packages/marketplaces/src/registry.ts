@@ -7,6 +7,11 @@ export type AnyAdapter = MarketplaceAdapter<ShopeeCredentials> | MarketplaceAdap
 
 const cache = new Map<MarketplaceKind, AnyAdapter>();
 
+/** Adapter tipado para lojas convertidas por tag (Amazon, ML, Magalu). */
+export function getTagAdapter(kind: TagKind): MarketplaceAdapter<TagCredentials> {
+  return getAdapter(kind) as MarketplaceAdapter<TagCredentials>;
+}
+
 export function getAdapter(
   kind: MarketplaceKind,
   opts: { shopee?: MarketplaceAdapter<ShopeeCredentials> } = {},

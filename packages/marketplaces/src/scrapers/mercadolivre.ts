@@ -130,7 +130,10 @@ export function parseMercadoLivreHtml(html: string, originalUrl: string): Produc
     couponCode = couponMatch[1].toUpperCase();
   }
 
-  // 7. External ID
+  // 7. Oferta Relâmpago / Oferta do Dia (com data de término quando disponível)
+  const flashSaleEndsAt = detectFlashSaleEnd($, pageText, html);
+
+  // 8. External ID
   const mlbMatch = originalUrl.match(/(MLB-?\d+)/i) || originalUrl.match(/\/p\/([A-Z0-9]+)/i);
   const externalId = mlbMatch ? mlbMatch[1]!.replace('-', '').toUpperCase() : undefined;
 
@@ -144,6 +147,7 @@ export function parseMercadoLivreHtml(html: string, originalUrl: string): Produc
     images,
     shipping,
     ...(couponCode ? { couponCode } : {}),
+    ...(flashSaleEndsAt ? { flashSaleEndsAt } : {}),
     originalUrl,
     raw: {
       url: originalUrl,
@@ -152,8 +156,61 @@ export function parseMercadoLivreHtml(html: string, originalUrl: string): Produc
       originalPrice,
       discountPct,
       shipping,
+      flashSale: Boolean(flashSaleEndsAt),
     },
   };
+}
+
+const FLASH_SALE_RE = /oferta\s+rel[âa]mpago|oferta\s+do\s+dia|termina\s+em/i;
+
+/**
+ * Detecta Oferta Relâmpago/Oferta do Dia no PDP do ML e devolve a data de término em ISO.
+ * Tenta, nesta ordem: timestamp explícito no HTML/JSON, contagem regressiva "termina em HH:MM:SS",
+ * e por fim o fim do dia em São Paulo quando só há o selo (ofertas do dia expiram à meia-noite).
+ */
+export function detectFlashSaleEnd(
+  $: cheerio.CheerioAPI,
+  pageText: string,
+  html: string,
+  now: Date = new Date(),
+): string | undefined {
+  const pillText = $(
+    '.ui-pdp-promotions-pill-label, .ui-pdp-price__lightning, [class*="lightning"], [class*="deal-of-the-day"]',
+  ).text();
+  const hasFlash = FLASH_SALE_RE.test(pillText) || FLASH_SALE_RE.test(pageText);
+  if (!hasFlash) return undefined;
+
+  // a) Timestamp explícito (atributo data-* ou JSON embutido no HTML)
+  const explicit =
+    html.match(/data-(?:end|expiration)-date=["']([^"']+)["']/i)?.[1] ??
+    html.match(
+      /"(?:end_date|endDate|end_time|expiration_date|expirationDate)"\s*:\s*"([^"]+)"/,
+    )?.[1];
+  if (explicit) {
+    const d = new Date(explicit);
+    if (!isNaN(d.getTime()) && d.getTime() > now.getTime()) return d.toISOString();
+  }
+
+  // b) Contagem regressiva textual ("Termina em 03:12:45")
+  const countdown = pageText.match(/termina\s+em\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/i);
+  if (countdown) {
+    const h = Number(countdown[1]);
+    const m = Number(countdown[2]);
+    const sec = Number(countdown[3] ?? 0);
+    return new Date(now.getTime() + ((h * 60 + m) * 60 + sec) * 1000).toISOString();
+  }
+
+  // c) Só o selo: assume fim do dia em São Paulo (UTC-3)
+  const spNow = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  const endOfDayUtc = Date.UTC(
+    spNow.getUTCFullYear(),
+    spNow.getUTCMonth(),
+    spNow.getUTCDate(),
+    23 + 3,
+    59,
+    59,
+  );
+  return new Date(endOfDayUtc).toISOString();
 }
 
 export async function scrapeMercadoLivre(url: string): Promise<ProductData> {

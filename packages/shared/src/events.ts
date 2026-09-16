@@ -1,4 +1,4 @@
-import type { WaSessionStatus, BatchItemStatus, MirrorLogStatus } from './enums';
+import type { WaSessionStatus, BatchItemStatus, MirrorLogStatus, MarketplaceKind } from './enums';
 
 export type RealtimeEvent =
   | { type: 'wa.qr'; sessionId: string; qr: string }
@@ -18,6 +18,7 @@ export type RealtimeEvent =
   | { type: 'mirror.rules.changed' }
   | { type: 'product.enriched'; productId: string; status: 'SUCCESS' | 'ERROR'; error?: string }
   | { type: 'queue.updated' }
+  | { type: 'marketplace.updated'; kind: MarketplaceKind }
   | { type: 'error'; code: string; message: string };
 
 export const REDIS_EVENTS_CHANNEL = 'afilados:events';

@@ -45,7 +45,9 @@ export function parseMagaluHtml(html: string, originalUrl: string): ProductData 
   }
 
   // Preço original via DOM
-  const origDom = $('[data-testid="price-original"], [data-testid="price-from"], .price-template__from')
+  const origDom = $(
+    '[data-testid="price-original"], [data-testid="price-from"], .price-template__from',
+  )
     .first()
     .text()
     .trim();
@@ -73,14 +75,14 @@ export function parseMagaluHtml(html: string, originalUrl: string): ProductData 
 
   // 4. Imagens
   const images: string[] = [];
-  $('[data-testid="image-selected-thumbnail"], img.image-gallery-image, [data-testid="main-image"]').each(
-    (_, el) => {
-      const src = $(el).attr('src');
-      if (src && src.startsWith('http') && !images.includes(src)) {
-        images.push(src);
-      }
-    },
-  );
+  $(
+    '[data-testid="image-selected-thumbnail"], img.image-gallery-image, [data-testid="main-image"]',
+  ).each((_, el) => {
+    const src = $(el).attr('src');
+    if (src && src.startsWith('http') && !images.includes(src)) {
+      images.push(src);
+    }
+  });
   if (images.length === 0) {
     const ogImage = $('meta[property="og:image"]').attr('content');
     if (ogImage && ogImage.startsWith('http')) {
@@ -100,7 +102,8 @@ export function parseMagaluHtml(html: string, originalUrl: string): ProductData 
   }
 
   // 6. External ID (Código / SKU do produto)
-  const skuMatch = originalUrl.match(/\/p\/([a-z0-9]+)/i) || originalUrl.match(/\/([a-z0-9]{7,12})\//i);
+  const skuMatch =
+    originalUrl.match(/\/p\/([a-z0-9]+)/i) || originalUrl.match(/\/([a-z0-9]{7,12})\//i);
   const externalId = skuMatch ? skuMatch[1]!.toUpperCase() : undefined;
 
   return {

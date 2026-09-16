@@ -29,7 +29,10 @@ export function parseAmazonHtml(html: string, originalUrl: string): ProductData 
   } else {
     // Fallback para whole + fraction
     const whole = $('#corePrice_feature_div .a-price-whole').first().text().replace(/[^\d]/g, '');
-    const fraction = $('#corePrice_feature_div .a-price-fraction').first().text().replace(/[^\d]/g, '');
+    const fraction = $('#corePrice_feature_div .a-price-fraction')
+      .first()
+      .text()
+      .replace(/[^\d]/g, '');
     if (whole) {
       currentPrice = parseMoney(fraction ? `${whole}.${fraction}` : whole);
     }

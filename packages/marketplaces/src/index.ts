@@ -6,3 +6,4 @@ export * from './shopee/adapter';
 export * from './tag-adapter';
 export * from './registry';
 export * from './scrapers';
+export * from './mercadolivre/official-link';
