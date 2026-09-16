@@ -12,12 +12,7 @@
     "default_popup": "popup/popup.html",
     "default_title": "Afilados Connect"
   },
-  "permissions": [
-    "storage",
-    "activeTab",
-    "scripting",
-    "cookies"
-  ],
+  "permissions": ["storage", "activeTab", "scripting", "cookies", "alarms"],
   "host_permissions": [
     "*://*.mercadolivre.com.br/*",
     "*://*.amazon.com.br/*",

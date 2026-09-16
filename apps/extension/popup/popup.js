@@ -12,6 +12,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnCapture = document.getElementById('btn-capture');
   const captureStatus = document.getElementById('capture-status');
   const linkDashboard = document.getElementById('link-dashboard');
+  const mlSection = document.getElementById('ml-session-section');
+  const mlPill = document.getElementById('ml-session-pill');
+  const mlMsg = document.getElementById('ml-session-msg');
+  const btnSyncMl = document.getElementById('btn-sync-ml');
 
   let currentProduct = null;
   let config = { apiUrl: 'http://localhost:3001', apiToken: '' };
@@ -65,6 +69,53 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const isAuthed = await checkAuth();
 
+  // --- Sessão do Mercado Livre (cookies → link oficial meli.la) ---
+  function fmtDate(iso) {
+    try {
+      return new Date(iso).toLocaleString('pt-BR');
+    } catch {
+      return iso;
+    }
+  }
+
+  async function renderMlSession() {
+    if (typeof chrome === 'undefined' || !chrome.storage) return;
+    const { mlSessionSync } = await chrome.storage.local.get(['mlSessionSync']);
+    mlSection.classList.remove('hidden');
+    if (mlSessionSync && mlSessionSync.ok) {
+      mlPill.textContent = `Sincronizada ${fmtDate(mlSessionSync.syncedAt || mlSessionSync.at)}`;
+      mlPill.className = 'pill pill-on';
+    } else {
+      mlPill.textContent = 'Não sincronizada';
+      mlPill.className = 'pill pill-off';
+      if (mlSessionSync && mlSessionSync.error) {
+        mlMsg.textContent = mlSessionSync.error;
+        mlMsg.className = 'msg msg-error';
+      }
+    }
+  }
+
+  btnSyncMl.addEventListener('click', async () => {
+    btnSyncMl.disabled = true;
+    mlMsg.textContent = 'Sincronizando cookies do Mercado Livre...';
+    mlMsg.className = 'msg';
+    try {
+      const result = await chrome.runtime.sendMessage({ action: 'SYNC_ML_SESSION' });
+      if (result && result.ok) {
+        mlMsg.textContent = `✅ ${result.cookieCount} cookies sincronizados`;
+        mlMsg.className = 'msg msg-success';
+      } else {
+        mlMsg.textContent = `❌ ${(result && result.error) || 'Falha ao sincronizar'}`;
+        mlMsg.className = 'msg msg-error';
+      }
+    } catch {
+      mlMsg.textContent = '❌ Falha ao falar com a extensão';
+      mlMsg.className = 'msg msg-error';
+    }
+    btnSyncMl.disabled = false;
+    await renderMlSession();
+  });
+
   // Salvar configuração
   btnSaveConfig.addEventListener('click', async () => {
     config.apiUrl = apiUrlInput.value.trim().replace(/\/$/, '');
@@ -81,6 +132,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (ok) {
       configMsg.textContent = 'Conectado com sucesso!';
       configMsg.className = 'msg msg-success';
+      // primeira sincronização da sessão ML logo após conectar
+      chrome.runtime
+        .sendMessage({ action: 'SYNC_ML_SESSION' })
+        .then(renderMlSession)
+        .catch(() => {});
       setTimeout(() => inspectCurrentTab(), 500);
     } else {
       configMsg.textContent = 'Falha ao conectar. Verifique o token e a URL.';
@@ -100,7 +156,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (url.includes('mercadolivre.com.br')) marketplaceKind = 'MERCADOLIVRE';
     else if (url.includes('amazon.com.br')) marketplaceKind = 'AMAZON';
-    else if (url.includes('magazineluiza.com.br') || url.includes('magazinevoce.com.br')) marketplaceKind = 'MAGALU';
+    else if (url.includes('magazineluiza.com.br') || url.includes('magazinevoce.com.br'))
+      marketplaceKind = 'MAGALU';
     else if (url.includes('shopee.com.br')) marketplaceKind = 'SHOPEE';
 
     if (!marketplaceKind) {
@@ -138,7 +195,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.getElementById('market-badge').textContent = p.marketplaceKind;
     document.getElementById('p-title').textContent = p.title || 'Produto detectado';
-    document.getElementById('p-price').textContent = p.price ? `R$ ${p.price.toFixed(2).replace('.', ',')}` : 'Preço na importação';
+    document.getElementById('p-price').textContent = p.price
+      ? `R$ ${p.price.toFixed(2).replace('.', ',')}`
+      : 'Preço na importação';
 
     const origEl = document.getElementById('p-orig');
     const discEl = document.getElementById('p-disc');
@@ -215,5 +274,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (isAuthed) {
     inspectCurrentTab();
+    renderMlSession();
   }
 });

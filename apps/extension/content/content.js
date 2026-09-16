@@ -17,26 +17,42 @@
       const titleEl = document.querySelector('h1.ui-pdp-title') || document.querySelector('h1');
       if (titleEl) title = titleEl.textContent.trim();
 
-      const priceFraction = document.querySelector('.ui-pdp-price__second-line .andes-money-amount__fraction, .ui-pdp-price--size-large .andes-money-amount__fraction');
-      const priceCents = document.querySelector('.ui-pdp-price__second-line .andes-money-amount__cents, .ui-pdp-price--size-large .andes-money-amount__cents');
+      const priceFraction = document.querySelector(
+        '.ui-pdp-price__second-line .andes-money-amount__fraction, .ui-pdp-price--size-large .andes-money-amount__fraction',
+      );
+      const priceCents = document.querySelector(
+        '.ui-pdp-price__second-line .andes-money-amount__cents, .ui-pdp-price--size-large .andes-money-amount__cents',
+      );
       if (priceFraction) {
-        price = parseFloat(priceFraction.textContent.replace(/\./g, '') + (priceCents ? `.${priceCents.textContent}` : ''));
+        price = parseFloat(
+          priceFraction.textContent.replace(/\./g, '') +
+            (priceCents ? `.${priceCents.textContent}` : ''),
+        );
       }
 
-      const origFraction = document.querySelector('.ui-pdp-price__original-value .andes-money-amount__fraction');
+      const origFraction = document.querySelector(
+        '.ui-pdp-price__original-value .andes-money-amount__fraction',
+      );
       if (origFraction) {
         originalPrice = parseFloat(origFraction.textContent.replace(/\./g, ''));
       }
 
-      const discountEl = document.querySelector('.ui-pdp-price__second-line .ui-pdp-price__discount');
+      const discountEl = document.querySelector(
+        '.ui-pdp-price__second-line .ui-pdp-price__discount',
+      );
       if (discountEl) {
         const m = discountEl.textContent.match(/(\d+)%/);
         if (m) discountPct = parseInt(m[1], 10);
       }
 
-      const imgEl = document.querySelector('img.ui-pdp-image') || document.querySelector('meta[property="og:image"]');
+      const imgEl =
+        document.querySelector('img.ui-pdp-image') ||
+        document.querySelector('meta[property="og:image"]');
       if (imgEl) {
-        const src = imgEl.getAttribute('data-zoom') || imgEl.getAttribute('src') || imgEl.getAttribute('content');
+        const src =
+          imgEl.getAttribute('data-zoom') ||
+          imgEl.getAttribute('src') ||
+          imgEl.getAttribute('content');
         if (src) images.push(src);
       }
 
@@ -49,13 +65,17 @@
       const titleEl = document.querySelector('#productTitle');
       if (titleEl) title = titleEl.textContent.trim();
 
-      const offscreen = document.querySelector('#corePrice_feature_div .a-price .a-offscreen, .a-price.priceToPay .a-offscreen');
+      const offscreen = document.querySelector(
+        '#corePrice_feature_div .a-price .a-offscreen, .a-price.priceToPay .a-offscreen',
+      );
       if (offscreen) {
         const cleaned = offscreen.textContent.replace(/[^\d,]/g, '').replace(',', '.');
         price = parseFloat(cleaned);
       }
 
-      const basisOffscreen = document.querySelector('#basisPrice .a-offscreen, .a-price.a-text-price .a-offscreen');
+      const basisOffscreen = document.querySelector(
+        '#basisPrice .a-offscreen, .a-price.a-text-price .a-offscreen',
+      );
       if (basisOffscreen) {
         const cleaned = basisOffscreen.textContent.replace(/[^\d,]/g, '').replace(',', '.');
         originalPrice = parseFloat(cleaned);
@@ -72,10 +92,14 @@
 
     // Magalu
     else if (url.includes('magazineluiza.com.br') || url.includes('magazinevoce.com.br')) {
-      const titleEl = document.querySelector('[data-testid="heading-product-title"]') || document.querySelector('h1');
+      const titleEl =
+        document.querySelector('[data-testid="heading-product-title"]') ||
+        document.querySelector('h1');
       if (titleEl) title = titleEl.textContent.trim();
 
-      const priceEl = document.querySelector('[data-testid="price-value"], [data-testid="price-default"]');
+      const priceEl = document.querySelector(
+        '[data-testid="price-value"], [data-testid="price-default"]',
+      );
       if (priceEl) {
         const cleaned = priceEl.textContent.replace(/[^\d,]/g, '').replace(',', '.');
         price = parseFloat(cleaned);
@@ -87,7 +111,9 @@
         originalPrice = parseFloat(cleaned);
       }
 
-      const imgEl = document.querySelector('[data-testid="image-selected-thumbnail"], [data-testid="main-image"]');
+      const imgEl = document.querySelector(
+        '[data-testid="image-selected-thumbnail"], [data-testid="main-image"]',
+      );
       if (imgEl) {
         const src = imgEl.getAttribute('src');
         if (src) images.push(src);
@@ -147,7 +173,8 @@
       let marketplaceKind = 'SHOPEE';
       if (url.includes('mercadolivre.com.br')) marketplaceKind = 'MERCADOLIVRE';
       else if (url.includes('amazon.com.br')) marketplaceKind = 'AMAZON';
-      else if (url.includes('magazineluiza.com.br') || url.includes('magazinevoce.com.br')) marketplaceKind = 'MAGALU';
+      else if (url.includes('magazineluiza.com.br') || url.includes('magazinevoce.com.br'))
+        marketplaceKind = 'MAGALU';
 
       try {
         const res = await fetch(`${apiUrl}/api/v1/extension/capture`, {

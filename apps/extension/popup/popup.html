@@ -1,73 +1,94 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <title>Afilados Connect</title>
-  <link rel="stylesheet" href="popup.css">
-</head>
-<body>
-  <header class="header">
-    <div class="logo">
-      <span class="logo-icon">⚡</span>
-      <span class="logo-text">Afilados <strong>Connect</strong></span>
-    </div>
-    <div id="conn-pill" class="pill pill-off">Desconectado</div>
-  </header>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Afilados Connect</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">Afilados <strong>Connect</strong></span>
+      </div>
+      <div id="conn-pill" class="pill pill-off">Desconectado</div>
+    </header>
 
-  <main class="main">
-    <!-- Seção de Configuração / Conexão -->
-    <div id="config-section" class="card">
-      <div class="card-title">Conectar à Conta</div>
-      <label class="label" for="api-url">URL da API</label>
-      <input type="text" id="api-url" class="input" placeholder="http://localhost:3001" value="http://localhost:3001">
-      
-      <label class="label" for="api-token">Token de API</label>
-      <input type="password" id="api-token" class="input" placeholder="afil_...">
-      
-      <button id="btn-save-config" class="btn btn-primary">Salvar e Conectar</button>
-      <div id="config-msg" class="msg"></div>
-    </div>
+    <main class="main">
+      <!-- Seção de Configuração / Conexão -->
+      <div id="config-section" class="card">
+        <div class="card-title">Conectar à Conta</div>
+        <label class="label" for="api-url">URL da API</label>
+        <input
+          type="text"
+          id="api-url"
+          class="input"
+          placeholder="http://localhost:3001"
+          value="http://localhost:3001"
+        />
 
-    <!-- Seção de Produto Detectado -->
-    <div id="product-section" class="card hidden">
-      <div class="card-header-flex">
-        <div class="card-title">Oferta Detectada</div>
-        <span id="market-badge" class="badge">SHOPEE</span>
+        <label class="label" for="api-token">Token de API</label>
+        <input type="password" id="api-token" class="input" placeholder="afil_..." />
+
+        <button id="btn-save-config" class="btn btn-primary">Salvar e Conectar</button>
+        <div id="config-msg" class="msg"></div>
       </div>
 
-      <div class="product-preview">
-        <img id="p-img" class="p-img" src="" alt="Produto">
-        <div class="p-details">
-          <div id="p-title" class="p-title">Carregando título...</div>
-          <div class="p-prices">
-            <span id="p-price" class="p-price">R$ 0,00</span>
-            <span id="p-orig" class="p-orig">R$ 0,00</span>
-            <span id="p-disc" class="p-disc">0% OFF</span>
+      <!-- Seção de Produto Detectado -->
+      <div id="product-section" class="card hidden">
+        <div class="card-header-flex">
+          <div class="card-title">Oferta Detectada</div>
+          <span id="market-badge" class="badge">SHOPEE</span>
+        </div>
+
+        <div class="product-preview">
+          <img id="p-img" class="p-img" src="" alt="Produto" />
+          <div class="p-details">
+            <div id="p-title" class="p-title">Carregando título...</div>
+            <div class="p-prices">
+              <span id="p-price" class="p-price">R$ 0,00</span>
+              <span id="p-orig" class="p-orig">R$ 0,00</span>
+              <span id="p-disc" class="p-disc">0% OFF</span>
+            </div>
+            <div id="p-extra" class="p-extra"></div>
           </div>
-          <div id="p-extra" class="p-extra"></div>
+        </div>
+
+        <button id="btn-capture" class="btn btn-action">⚡ Enviar para Fila de Triagem</button>
+        <div id="capture-status" class="msg"></div>
+      </div>
+
+      <!-- Sessão do Mercado Livre (link oficial meli.la) -->
+      <div id="ml-session-section" class="card hidden">
+        <div class="card-header-flex">
+          <div class="card-title">Sessão Mercado Livre</div>
+          <span id="ml-session-pill" class="pill pill-off">Não sincronizada</span>
+        </div>
+        <div id="ml-session-desc" class="empty-desc">
+          Com a sessão sincronizada o Afilados gera o link oficial (meli.la) automaticamente. Faça
+          login no Mercado Livre neste navegador e clique em sincronizar.
+        </div>
+        <button id="btn-sync-ml" class="btn btn-primary">🔄 Sincronizar sessão</button>
+        <div id="ml-session-msg" class="msg"></div>
+      </div>
+
+      <!-- Seção de Página Não Compatível -->
+      <div id="unsupported-section" class="card hidden">
+        <div class="empty-state">
+          <span class="empty-icon">🔍</span>
+          <div class="empty-title">Nenhum produto detectado nesta aba</div>
+          <div class="empty-desc">
+            Abra uma página de produto no Mercado Livre, Amazon, Magalu ou Shopee para capturar a
+            oferta.
+          </div>
         </div>
       </div>
+    </main>
 
-      <button id="btn-capture" class="btn btn-action">
-        ⚡ Enviar para Fila de Triagem
-      </button>
-      <div id="capture-status" class="msg"></div>
-    </div>
+    <footer class="footer">
+      <a href="#" id="link-dashboard" class="footer-link">Abrir Painel Afilados ↗</a>
+    </footer>
 
-    <!-- Seção de Página Não Compatível -->
-    <div id="unsupported-section" class="card hidden">
-      <div class="empty-state">
-        <span class="empty-icon">🔍</span>
-        <div class="empty-title">Nenhum produto detectado nesta aba</div>
-        <div class="empty-desc">Abra uma página de produto no Mercado Livre, Amazon, Magalu ou Shopee para capturar a oferta.</div>
-      </div>
-    </div>
-  </main>
-
-  <footer class="footer">
-    <a href="#" id="link-dashboard" class="footer-link">Abrir Painel Afilados ↗</a>
-  </footer>
-
-  <script src="popup.js"></script>
-</body>
+    <script src="popup.js"></script>
+  </body>
 </html>
