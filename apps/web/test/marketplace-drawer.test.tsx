@@ -65,6 +65,35 @@ describe('MarketplaceDrawer', () => {
     expect(screen.queryByLabelText(/cookie de sessão/i)).not.toBeInTheDocument();
   });
 
+  it('preenche os campos quando `connection` chega depois da abertura do drawer (deep-link)', () => {
+    const { rerender } = render(
+      <MarketplaceDrawer
+        kind="AMAZON"
+        connection={undefined}
+        open
+        onOpenChange={vi.fn()}
+        onSubmit={vi.fn(async () => {})}
+        pending={false}
+        feedback={null}
+      />,
+    );
+    expect(screen.getByLabelText(/tag de associado amazon/i)).toHaveValue('');
+
+    rerender(
+      <MarketplaceDrawer
+        kind="AMAZON"
+        connection={{ ...baseConnection, affiliateTag: 'ja-salva-20' }}
+        open
+        onOpenChange={vi.fn()}
+        onSubmit={vi.fn(async () => {})}
+        pending={false}
+        feedback={null}
+      />,
+    );
+
+    expect(screen.getByLabelText(/tag de associado amazon/i)).toHaveValue('ja-salva-20');
+  });
+
   it('mostra "já salvo" no placeholder do secret quando hasSecret é true', () => {
     render(
       <MarketplaceDrawer

@@ -1,4 +1,10 @@
-import { decryptJson, type MarketplaceConnection, type TenantClient } from '@afilados/db';
+import {
+  decryptJson,
+  encryptJson,
+  type ConnectionStatus,
+  type MarketplaceConnection,
+  type TenantClient,
+} from '@afilados/db';
 import {
   createShopeeAdapter,
   getAdapter,
@@ -15,6 +21,8 @@ export function getShopeeAdapter() {
 }
 
 type AnyCreds = { appId?: string; secret?: string } & TagCredentials;
+/** Mesmos campos de `AnyCreds`, mas aceitando `undefined` explícito nos merges (`a ?? b`). */
+type LooseCreds = { [K in keyof AnyCreds]?: AnyCreds[K] | undefined };
 
 export function publicConnection(
   row: MarketplaceConnection | null,
@@ -72,6 +80,54 @@ export async function loadTagCredentials(
     );
   }
   return creds;
+}
+
+/**
+ * Decripta as credenciais atuais de um marketplace, aplica `mutate` para produzir as
+ * novas credenciais, criptografa e faz upsert da linha (create se ainda não existir,
+ * updateMany caso contrário — sempre via `TenantClient`, nunca por chave única).
+ *
+ * Centraliza o padrão "decrypt → merge → encrypt → upsert" repetido em
+ * `routes/marketplaces.ts` (PUT e POST /session) e `routes/extension.ts` (sync da
+ * extensão) — um único ponto evita que um campo novo (ex: `amazonSession`) seja
+ * esquecido em uma das cópias, como ocorreu com o PUT antes desta função existir.
+ *
+ * `buildExtra` recebe as credenciais já mescladas (e a linha existente, se houver) e
+ * decide os demais campos de `MarketplaceConnection` a gravar (status, affiliateTag,
+ * lastError, lastCheckedAt) — cada chamador decide o que é relevante para o seu caso.
+ */
+export async function upsertMarketplaceCredentials(
+  db: TenantClient,
+  kind: MarketplaceConnection['kind'],
+  mutate: (prev: LooseCreds) => LooseCreds,
+  buildExtra: (
+    merged: LooseCreds,
+    existing: MarketplaceConnection | null,
+  ) => {
+    status: ConnectionStatus;
+    affiliateTag?: string | null;
+    lastError?: string | null;
+    lastCheckedAt?: Date | null;
+  },
+): Promise<MarketplaceConnection> {
+  const existing = await db.marketplaceConnection.findFirst({ where: { kind } });
+  const prev: LooseCreds = existing?.encryptedCredentials
+    ? decryptJson<AnyCreds>(Buffer.from(existing.encryptedCredentials))
+    : {};
+  const merged = mutate(prev);
+  const hasAny = Object.values(merged).some((v) => v);
+  const extra = buildExtra(merged, existing ?? null);
+  const data = {
+    encryptedCredentials: hasAny ? encryptJson(merged) : null,
+    ...extra,
+  };
+  if (existing) {
+    await db.marketplaceConnection.updateMany({ where: { id: existing.id }, data });
+  } else {
+    // @ts-expect-error tenantId é injetado pela extensão forTenant
+    await db.marketplaceConnection.create({ data: { kind, ...data } });
+  }
+  return (await db.marketplaceConnection.findFirst({ where: { kind } }))!;
 }
 
 export { getAdapter, getTagAdapter };

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { encryptJson, decryptJson } from '@afilados/db';
+import { decryptJson } from '@afilados/db';
 import {
   ApiError,
   MARKETPLACE_KINDS,
@@ -10,11 +10,14 @@ import {
   parseCookieString,
   supportsSessionCookie,
   SESSION_FIELD_BY_KIND,
-  type MlSession,
-  type TagCredentials,
 } from '@afilados/shared';
 import { requireAuth } from '../plugins/auth';
-import { getAdapter, getShopeeAdapter, publicConnection } from '../lib/marketplaces';
+import {
+  getAdapter,
+  getShopeeAdapter,
+  publicConnection,
+  upsertMarketplaceCredentials,
+} from '../lib/marketplaces';
 
 const kindParams = z.object({ kind: marketplaceKindParam });
 
@@ -31,50 +34,34 @@ export async function marketplacesRoutes(app: FastifyInstance) {
   app.put('/marketplaces/:kind', async (req) => {
     const { kind } = kindParams.parse(req.params);
     const body = marketplaceUpdateSchema.parse(req.body);
-    const existing = await req.db.marketplaceConnection.findFirst({ where: { kind } });
-    const prev = existing?.encryptedCredentials
-      ? decryptJson<{
-          appId?: string;
-          secret?: string;
-          tag?: string;
-          mattWord?: string;
-          mattTool?: string;
-          mlSession?: MlSession;
-        }>(Buffer.from(existing.encryptedCredentials))
-      : {};
-    const merged: {
-      appId?: string | undefined;
-      secret?: string | undefined;
-      tag?: string | undefined;
-      mattWord?: string | undefined;
-      mattTool?: string | undefined;
-      mlSession?: MlSession;
-    } =
-      kind === 'SHOPEE'
-        ? { appId: body.appId ?? prev.appId, secret: body.secret ?? prev.secret }
-        : kind === 'MERCADOLIVRE'
-          ? {
-              mattWord: body.mattWord ?? prev.mattWord,
-              mattTool: body.mattTool ?? prev.mattTool,
-              // sessão sincronizada pela extensão não é editável aqui; só preservada
-              ...(prev.mlSession ? { mlSession: prev.mlSession } : {}),
-            }
-          : { tag: body.affiliateTag ?? prev.tag };
-    const hasAny = Object.values(merged).some((v) => v);
-    const data = {
-      encryptedCredentials: hasAny ? encryptJson(merged) : null,
-      affiliateTag:
-        kind === 'MERCADOLIVRE'
-          ? (merged.mattWord ?? null)
-          : (body.affiliateTag ?? existing?.affiliateTag ?? null),
-      status: 'UNCONFIGURED' as const,
-      lastError: null,
-    };
-    if (existing)
-      await req.db.marketplaceConnection.updateMany({ where: { id: existing.id }, data });
-    // @ts-expect-error tenantId é injetado pela extensão forTenant
-    else await req.db.marketplaceConnection.create({ data: { kind, ...data } });
-    const row = await req.db.marketplaceConnection.findFirst({ where: { kind } });
+    const row = await upsertMarketplaceCredentials(
+      req.db,
+      kind,
+      (prev) =>
+        kind === 'SHOPEE'
+          ? { appId: body.appId ?? prev.appId, secret: body.secret ?? prev.secret }
+          : kind === 'MERCADOLIVRE'
+            ? {
+                mattWord: body.mattWord ?? prev.mattWord,
+                mattTool: body.mattTool ?? prev.mattTool,
+                // sessão sincronizada pela extensão/manualmente não é editável aqui; só preservada
+                ...(prev.mlSession ? { mlSession: prev.mlSession } : {}),
+              }
+            : {
+                tag: body.affiliateTag ?? prev.tag,
+                // sessão manual (Amazon/Magalu) não é editável aqui; só preservada
+                ...(prev.amazonSession ? { amazonSession: prev.amazonSession } : {}),
+                ...(prev.magaluSession ? { magaluSession: prev.magaluSession } : {}),
+              },
+      (merged, existing) => ({
+        status: 'UNCONFIGURED',
+        lastError: null,
+        affiliateTag:
+          kind === 'MERCADOLIVRE'
+            ? (merged.mattWord ?? null)
+            : (body.affiliateTag ?? existing?.affiliateTag ?? null),
+      }),
+    );
     return publicConnection(row, kind);
   });
 
@@ -112,29 +99,20 @@ export async function marketplacesRoutes(app: FastifyInstance) {
     }
     const { cookie } = marketplaceSessionSchema.parse(req.body);
     const cookies = parseCookieString(cookie, kind);
-    const sessionField = SESSION_FIELD_BY_KIND[kind];
-
-    const existing = await req.db.marketplaceConnection.findFirst({ where: { kind } });
-    const prev = existing?.encryptedCredentials
-      ? decryptJson<TagCredentials>(Buffer.from(existing.encryptedCredentials))
-      : {};
-    const syncedAt = new Date().toISOString();
-    const merged: TagCredentials = {
-      ...prev,
-      [sessionField]: { cookies, syncedAt, source: 'manual' },
-    };
-    const data = {
-      encryptedCredentials: encryptJson(merged),
-      status: 'OK' as const,
-      lastCheckedAt: new Date(),
-      lastError: null,
-    };
-    if (existing) {
-      await req.db.marketplaceConnection.updateMany({ where: { id: existing.id }, data });
-    } else {
-      // @ts-expect-error tenantId é injetado pela extensão forTenant
-      await req.db.marketplaceConnection.create({ data: { kind, ...data } });
+    if (Object.keys(cookies).length === 0) {
+      throw ApiError.validation('Cookie inválido ou vazio');
     }
-    return publicConnection(await req.db.marketplaceConnection.findFirst({ where: { kind } }), kind);
+    const sessionField = SESSION_FIELD_BY_KIND[kind];
+    const syncedAt = new Date().toISOString();
+    const row = await upsertMarketplaceCredentials(
+      req.db,
+      kind,
+      (prev) => ({
+        ...prev,
+        [sessionField]: { cookies, syncedAt, source: 'manual' },
+      }),
+      () => ({ status: 'OK', lastCheckedAt: new Date(), lastError: null }),
+    );
+    return publicConnection(row, kind);
   });
 }

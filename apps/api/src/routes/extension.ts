@@ -1,15 +1,19 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { prisma, forTenant, encryptJson, decryptJson } from '@afilados/db';
+import { prisma, forTenant } from '@afilados/db';
 import {
   extensionCaptureSchema,
   extensionSessionSchema,
   ApiError,
   type ProductData,
-  type TagCredentials,
 } from '@afilados/shared';
 import { hashToken } from './api-tokens';
 import { toApiProduct, upsertProducts } from '../lib/products';
-import { getShopeeAdapter, getTagAdapter, loadShopeeCredentials } from '../lib/marketplaces';
+import {
+  getShopeeAdapter,
+  getTagAdapter,
+  loadShopeeCredentials,
+  upsertMarketplaceCredentials,
+} from '../lib/marketplaces';
 
 async function authenticateExtension(
   req: FastifyRequest,
@@ -155,24 +159,13 @@ export async function extensionRoutes(app: FastifyInstance) {
     const { marketplaceKind, cookies } = extensionSessionSchema.parse(req.body);
     const db = forTenant(tenantId);
 
-    const existing = await db.marketplaceConnection.findFirst({ where: { kind: marketplaceKind } });
-    const prev = existing?.encryptedCredentials
-      ? decryptJson<TagCredentials>(Buffer.from(existing.encryptedCredentials))
-      : {};
     const syncedAt = new Date().toISOString();
-    const merged: TagCredentials = { ...prev, mlSession: { cookies, syncedAt, source: 'extension' } };
-    const data = {
-      encryptedCredentials: encryptJson(merged),
-      status: 'OK' as const,
-      lastCheckedAt: new Date(),
-      lastError: null,
-    };
-    if (existing) {
-      await db.marketplaceConnection.updateMany({ where: { id: existing.id }, data });
-    } else {
-      // @ts-expect-error tenantId é injetado pela extensão forTenant
-      await db.marketplaceConnection.create({ data: { kind: marketplaceKind, ...data } });
-    }
+    await upsertMarketplaceCredentials(
+      db,
+      marketplaceKind,
+      (prev) => ({ ...prev, mlSession: { cookies, syncedAt, source: 'extension' } }),
+      () => ({ status: 'OK', lastCheckedAt: new Date(), lastError: null }),
+    );
 
     await app.events.publish(tenantId, { type: 'marketplace.updated', kind: marketplaceKind });
 

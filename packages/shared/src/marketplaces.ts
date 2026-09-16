@@ -17,7 +17,7 @@ export interface TagCredentials {
 export interface SessionCookies {
   cookies: Record<string, string>;
   syncedAt: string; // ISO
-  source: 'extension' | 'manual';
+  source?: 'extension' | 'manual';
 }
 
 /** @deprecated use SessionCookies — mantido para não quebrar imports existentes. */

@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { MarketplaceKind } from '@afilados/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,11 @@ import { MARKETPLACE_CONFIGS, type MarketplaceFieldKey } from './marketplace-con
 export interface MarketplaceSubmitPayload {
   fields: Partial<Record<MarketplaceFieldKey, string>>;
   cookie: string;
+}
+
+export interface MarketplaceFeedback {
+  message: string;
+  ok: boolean;
 }
 
 function initialFieldValue(key: MarketplaceFieldKey, connection?: MarketplaceConnection): string {
@@ -75,20 +80,43 @@ export function MarketplaceDrawer({
   onOpenChange: (open: boolean) => void;
   onSubmit: (payload: MarketplaceSubmitPayload) => Promise<void>;
   pending: boolean;
-  feedback: string | null;
+  feedback: MarketplaceFeedback | null;
 }) {
   const config = MARKETPLACE_CONFIGS[kind];
   const [values, setValues] = useState<Record<string, string>>({});
   const [cookie, setCookie] = useState('');
+  // Rastreia para qual `kind` já inicializamos os campos com dados de `connection` nesta
+  // sessão de abertura do drawer. Isso permite reagir a `connection` chegando depois (a
+  // query de marketplaces pode ainda estar carregando quando `?open=<kind>` já abre o
+  // drawer) sem resetar valores que o usuário já digitou em refetches subsequentes em
+  // segundo plano — só inicializamos uma vez por abertura.
+  const initializedKindRef = useRef<MarketplaceKind | null>(null);
 
+  // Reseta cookie e campos imediatamente quando o drawer abre (ou troca de kind), antes de
+  // sabermos se `connection` já está disponível.
   useEffect(() => {
-    if (!open) return;
-    const initial: Record<string, string> = {};
-    for (const field of config.fields) initial[field.key] = initialFieldValue(field.key, connection);
-    setValues(initial);
+    if (!open) {
+      initializedKindRef.current = null;
+      return;
+    }
+    if (initializedKindRef.current === kind) return;
+    setValues({});
     setCookie('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, kind]);
+
+  // Preenche os campos com os dados reais assim que `connection` estiver disponível — pode
+  // chegar em um render posterior ao efeito acima, se a query ainda estava em andamento.
+  useEffect(() => {
+    if (!open) return;
+    if (initializedKindRef.current === kind) return;
+    if (connection === undefined) return;
+    initializedKindRef.current = kind;
+    const initial: Record<string, string> = {};
+    for (const field of config.fields) initial[field.key] = initialFieldValue(field.key, connection);
+    setValues(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, kind, connection]);
 
   const session = sessionStatus(kind, connection);
   const status = connection?.status ?? 'UNCONFIGURED';
@@ -203,10 +231,8 @@ export function MarketplaceDrawer({
           )}
 
           {feedback && (
-            <p
-              className={`text-xs ${feedback.toLowerCase().includes('sucesso') || feedback.toLowerCase().includes('valid') ? 'text-emerald-500' : 'text-red-400'}`}
-            >
-              {feedback}
+            <p className={`text-xs ${feedback.ok ? 'text-emerald-500' : 'text-red-400'}`}>
+              {feedback.message}
             </p>
           )}
 

@@ -141,6 +141,16 @@ describe('marketplaces', () => {
     expect(r.statusCode).toBe(400);
   });
 
+  it('rejeita cookie apenas com espaços em branco para MERCADOLIVRE (400, não persiste sessão vazia)', async () => {
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/v1/marketplaces/MERCADOLIVRE/session',
+      headers: { cookie },
+      payload: { cookie: '   ' },
+    });
+    expect(r.statusCode).toBe(400);
+  });
+
   it('aceita cookie manual para AMAZON, marca status OK e nunca devolve o valor do cookie', async () => {
     const r = await app.inject({
       method: 'POST',
@@ -161,6 +171,31 @@ describe('marketplaces', () => {
       Buffer.from(row.encryptedCredentials!),
     );
     expect(creds.amazonSession?.cookies).toEqual({ 'session-id': 'abc', 'ubid-acbbr': 'xyz' });
+  });
+
+  it('PUT da tag preserva a sessão de cookie já salva (não destrói amazonSession)', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/marketplaces/AMAZON/session',
+      headers: { cookie },
+      payload: { cookie: 'session-id=preserved; ubid-acbbr=xyz' },
+    });
+    const putRes = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/marketplaces/AMAZON',
+      headers: { cookie },
+      payload: { affiliateTag: 'nova-tag-20' },
+    });
+    expect(putRes.statusCode).toBe(200);
+    expect(putRes.json()).toMatchObject({ kind: 'AMAZON', affiliateTag: 'nova-tag-20' });
+    const row = await prisma.marketplaceConnection.findFirstOrThrow({
+      where: { tenantId: t.tenantId, kind: 'AMAZON' },
+    });
+    const creds = decryptJson<{ tag?: string; amazonSession?: { cookies: Record<string, string> } }>(
+      Buffer.from(row.encryptedCredentials!),
+    );
+    expect(creds.tag).toBe('nova-tag-20');
+    expect(creds.amazonSession?.cookies).toEqual({ 'session-id': 'preserved', 'ubid-acbbr': 'xyz' });
   });
 
   it('cookie manual preserva a tag já salva do mesmo marketplace', async () => {
