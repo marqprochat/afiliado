@@ -1,20 +1,19 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { prisma, forTenant } from '@afilados/db';
+import { prisma, forTenant, encryptJson, decryptJson } from '@afilados/db';
 import {
   extensionCaptureSchema,
   extensionSessionSchema,
   ApiError,
   type ProductData,
+  type TagCredentials,
 } from '@afilados/shared';
-import { getAdapter } from '@afilados/marketplaces';
 import { hashToken } from './api-tokens';
 import { toApiProduct, upsertProducts } from '../lib/products';
+import { getShopeeAdapter, getTagAdapter, loadShopeeCredentials } from '../lib/marketplaces';
 
-interface AuthenticatedExtensionRequest extends FastifyRequest {
-  tenantId: string;
-}
-
-async function authenticateExtension(req: FastifyRequest): Promise<{ tenantId: string; tenantName: string }> {
+async function authenticateExtension(
+  req: FastifyRequest,
+): Promise<{ tenantId: string; tenantName: string }> {
   // 1. Tenta API Token no header Authorization ou x-api-key
   const authHeader = req.headers.authorization;
   const apiKeyHeader = req.headers['x-api-key'];
@@ -86,9 +85,14 @@ export async function extensionRoutes(app: FastifyInstance) {
         raw: { source: 'extension-capture', ...body },
       };
     } else {
-      // Faz scraping via adapter
-      const adapter = getAdapter(body.marketplaceKind);
-      const list = await adapter.fetchByUrls({}, [body.url]);
+      // Faz scraping via adapter (Shopee usa a API oficial com as credenciais do tenant)
+      let list: ProductData[];
+      if (body.marketplaceKind === 'SHOPEE') {
+        const { creds } = await loadShopeeCredentials(forTenant(tenantId));
+        list = await getShopeeAdapter().fetchByUrls(creds, [body.url]);
+      } else {
+        list = await getTagAdapter(body.marketplaceKind).fetchByUrls({}, [body.url]);
+      }
       const first = list[0];
       if (!first) {
         throw ApiError.validation('Não foi possível extrair os dados da página');
@@ -99,7 +103,7 @@ export async function extensionRoutes(app: FastifyInstance) {
     const tenantDb = forTenant(tenantId);
     const [savedProduct] = await upsertProducts(tenantDb, tenantId, [productData]);
     if (!savedProduct) {
-      throw new ApiError('DATABASE_ERROR', 'Falha ao salvar produto', 500);
+      throw new ApiError('INTERNAL', 'Falha ao salvar produto', 500);
     }
 
     // Adiciona na Fila de Triagem como selecionado
@@ -135,29 +139,35 @@ export async function extensionRoutes(app: FastifyInstance) {
     };
   });
 
-  // 3. Sincronização de cookies/sessão de afiliados (para Mercado Livre e lojas com login)
+  // 3. Sincronização de cookies/sessão do afiliado (Mercado Livre → link oficial meli.la).
+  // Os cookies ficam criptografados junto às demais credenciais da MarketplaceConnection
+  // e nunca são devolvidos pela API (só o syncedAt, via publicConnection).
   app.post('/extension/session', async (req) => {
     const { tenantId } = await authenticateExtension(req);
     const { marketplaceKind, cookies } = extensionSessionSchema.parse(req.body);
+    const db = forTenant(tenantId);
 
-    // Salva ou atualiza os cookies em Settings ou MarketplaceConnection
-    await prisma.setting.upsert({
-      where: {
-        tenantId_key: {
-          tenantId,
-          key: `cookies:${marketplaceKind.toLowerCase()}`,
-        },
-      },
-      update: {
-        value: cookies as any,
-      },
-      create: {
-        tenantId,
-        key: `cookies:${marketplaceKind.toLowerCase()}`,
-        value: cookies as any,
-      },
-    });
+    const existing = await db.marketplaceConnection.findFirst({ where: { kind: marketplaceKind } });
+    const prev = existing?.encryptedCredentials
+      ? decryptJson<TagCredentials>(Buffer.from(existing.encryptedCredentials))
+      : {};
+    const syncedAt = new Date().toISOString();
+    const merged: TagCredentials = { ...prev, mlSession: { cookies, syncedAt } };
+    const data = {
+      encryptedCredentials: encryptJson(merged),
+      status: 'OK' as const,
+      lastCheckedAt: new Date(),
+      lastError: null,
+    };
+    if (existing) {
+      await db.marketplaceConnection.updateMany({ where: { id: existing.id }, data });
+    } else {
+      // @ts-expect-error tenantId é injetado pela extensão forTenant
+      await db.marketplaceConnection.create({ data: { kind: marketplaceKind, ...data } });
+    }
 
-    return { ok: true, marketplaceKind };
+    await app.events.publish(tenantId, { type: 'marketplace.updated', kind: marketplaceKind });
+
+    return { ok: true, marketplaceKind, syncedAt, cookieCount: Object.keys(cookies).length };
   });
 }

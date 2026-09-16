@@ -2,6 +2,7 @@ import { decryptJson, type MarketplaceConnection, type TenantClient } from '@afi
 import {
   createShopeeAdapter,
   getAdapter,
+  getTagAdapter,
   type MarketplaceAdapter,
   type ShopeeCredentials,
 } from '@afilados/marketplaces';
@@ -30,6 +31,8 @@ export function publicConnection(
     hasSecret: Boolean(creds?.secret),
     mattWord: creds?.mattWord ?? null,
     mattTool: creds?.mattTool ?? null,
+    // Sessão do ML sincronizada pela extensão (cookies nunca saem daqui)
+    mlSessionSyncedAt: creds?.mlSession?.syncedAt ?? null,
     lastCheckedAt: row?.lastCheckedAt ?? null,
     lastError: row?.lastError ?? null,
   };
@@ -54,7 +57,9 @@ export async function loadTagCredentials(
     ? decryptJson<TagCredentials>(Buffer.from(row.encryptedCredentials))
     : {};
   const missing = requiredTagFields(kind).filter((f) => !creds[f]);
-  if (missing.length) {
+  // ML com sessão sincronizada gera o link oficial mesmo sem matt_word/matt_tool
+  const hasMlSession = kind === 'MERCADOLIVRE' && Boolean(creds.mlSession?.cookies);
+  if (missing.length && !hasMlSession) {
     throw new ApiError(
       'MARKETPLACE_ERROR',
       `${kind}: configure ${missing.join(', ')} em Configurações`,
@@ -64,4 +69,4 @@ export async function loadTagCredentials(
   return creds;
 }
 
-export { getAdapter };
+export { getAdapter, getTagAdapter };

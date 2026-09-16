@@ -1,7 +1,8 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app';
-import { prisma } from '@afilados/db';
+import { prisma, decryptJson } from '@afilados/db';
+import type { TagCredentials } from '@afilados/shared';
 import { createTenantWithUser, cleanupTenant, loginCookie } from './helpers';
 
 describe('API Tokens & Extension Routes (Fase 3)', () => {
@@ -114,5 +115,81 @@ describe('API Tokens & Extension Routes (Fase 3)', () => {
       where: { tenantId: t.tenantId },
     });
     expect(queueCount).toBe(1);
+  });
+
+  it('sincroniza a sessão do ML criptografada, sem expor cookies, preservando matt_word/matt_tool', async () => {
+    // Tags já configuradas pela F2
+    await app.inject({
+      method: 'PUT',
+      url: '/api/v1/marketplaces/MERCADOLIVRE',
+      headers: { cookie },
+      payload: { mattWord: 'afil123', mattTool: '99' },
+    });
+
+    const tokenRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/api-tokens',
+      headers: { cookie },
+      payload: { name: 'Token Sessão' },
+    });
+    const { token } = tokenRes.json();
+
+    const cookies = { orguseridp: '123456', ssid: 'sess-abc', _csrf: 'zzz' };
+    const sync = await app.inject({
+      method: 'POST',
+      url: '/api/v1/extension/session',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { marketplaceKind: 'MERCADOLIVRE', cookies },
+    });
+    expect(sync.statusCode).toBe(200);
+    expect(sync.json()).toMatchObject({
+      ok: true,
+      marketplaceKind: 'MERCADOLIVRE',
+      cookieCount: 3,
+    });
+
+    // Persistido criptografado junto das credenciais, com as tags preservadas
+    const row = await prisma.marketplaceConnection.findFirst({
+      where: { tenantId: t.tenantId, kind: 'MERCADOLIVRE' },
+    });
+    expect(row?.encryptedCredentials).toBeTruthy();
+    expect(Buffer.from(row!.encryptedCredentials!).toString('utf8')).not.toContain('sess-abc');
+    const creds = decryptJson<TagCredentials>(Buffer.from(row!.encryptedCredentials!));
+    expect(creds.mlSession?.cookies).toEqual(cookies);
+    expect(creds.mattWord).toBe('afil123');
+    expect(creds.mattTool).toBe('99');
+
+    // A API pública só expõe o syncedAt
+    const list = await app.inject({
+      method: 'GET',
+      url: '/api/v1/marketplaces',
+      headers: { cookie },
+    });
+    const ml = list.json().find((c: { kind: string }) => c.kind === 'MERCADOLIVRE');
+    expect(ml.mlSessionSyncedAt).toBe(sync.json().syncedAt);
+    expect(JSON.stringify(ml)).not.toContain('sess-abc');
+
+    // Editar as tags depois não apaga a sessão
+    await app.inject({
+      method: 'PUT',
+      url: '/api/v1/marketplaces/MERCADOLIVRE',
+      headers: { cookie },
+      payload: { mattWord: 'novo', mattTool: '99' },
+    });
+    const row2 = await prisma.marketplaceConnection.findFirst({
+      where: { tenantId: t.tenantId, kind: 'MERCADOLIVRE' },
+    });
+    const creds2 = decryptJson<TagCredentials>(Buffer.from(row2!.encryptedCredentials!));
+    expect(creds2.mlSession?.cookies).toEqual(cookies);
+    expect(creds2.mattWord).toBe('novo');
+
+    // Só o Mercado Livre aceita sessão
+    const bad = await app.inject({
+      method: 'POST',
+      url: '/api/v1/extension/session',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { marketplaceKind: 'AMAZON', cookies },
+    });
+    expect(bad.statusCode).toBe(400);
   });
 });

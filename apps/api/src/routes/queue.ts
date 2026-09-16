@@ -6,6 +6,12 @@ import { getSettings } from '../lib/settings';
 import { toApiProduct } from '../lib/products';
 
 const idParam = z.object({ id: z.string().min(1) });
+
+function isPendingEnrich(raw: unknown): boolean {
+  return Boolean(
+    raw && typeof raw === 'object' && (raw as { pendingEnrich?: boolean }).pendingEnrich,
+  );
+}
 const statusQuery = z.object({ status: z.enum(['SENT', 'ERROR']).optional() });
 
 export async function queueRoutes(app: FastifyInstance) {
@@ -32,17 +38,25 @@ export async function queueRoutes(app: FastifyInstance) {
         where: { productId: { in: productIds } },
         select: { productId: true },
       }),
-      req.db.product.findMany({ where: { id: { in: productIds } }, select: { id: true } }),
+      req.db.product.findMany({
+        where: { id: { in: productIds } },
+        select: { id: true, raw: true },
+      }),
     ]);
     const have = new Set(existing.map((e) => e.productId));
-    const valid = products.map((p) => p.id).filter((id) => !have.has(id));
+    const validRows = products.filter((p) => !have.has(p.id));
+    const valid = validRows.map((p) => p.id);
     if (count + valid.length > settings.queueLimit) {
       throw new ApiError('QUEUE_FULL', `Fila cheia (${count}/${settings.queueLimit})`, 400);
     }
     if (valid.length) {
       await req.db.queueItem.createMany({
         // @ts-expect-error tenantId é injetado pela extensão forTenant
-        data: valid.map((productId) => ({ productId })),
+        data: validRows.map((p) => ({
+          productId: p.id,
+          // produto ainda sendo enriquecido em background não pode ser enviado
+          status: isPendingEnrich(p.raw) ? 'PENDING_ENRICH' : 'PENDING',
+        })),
       });
     }
     return reply.status(201).send({ added: valid.length, count: count + valid.length });

@@ -6,6 +6,7 @@ import {
   MARKETPLACE_KINDS,
   marketplaceKindParam,
   marketplaceUpdateSchema,
+  type MlSession,
 } from '@afilados/shared';
 import { requireAuth } from '../plugins/auth';
 import { getAdapter, getShopeeAdapter, publicConnection } from '../lib/marketplaces';
@@ -33,15 +34,25 @@ export async function marketplacesRoutes(app: FastifyInstance) {
           tag?: string;
           mattWord?: string;
           mattTool?: string;
+          mlSession?: MlSession;
         }>(Buffer.from(existing.encryptedCredentials))
       : {};
-    const merged =
+    const merged: {
+      appId?: string | undefined;
+      secret?: string | undefined;
+      tag?: string | undefined;
+      mattWord?: string | undefined;
+      mattTool?: string | undefined;
+      mlSession?: MlSession;
+    } =
       kind === 'SHOPEE'
         ? { appId: body.appId ?? prev.appId, secret: body.secret ?? prev.secret }
         : kind === 'MERCADOLIVRE'
           ? {
               mattWord: body.mattWord ?? prev.mattWord,
               mattTool: body.mattTool ?? prev.mattTool,
+              // sessão sincronizada pela extensão não é editável aqui; só preservada
+              ...(prev.mlSession ? { mlSession: prev.mlSession } : {}),
             }
           : { tag: body.affiliateTag ?? prev.tag };
     const hasAny = Object.values(merged).some((v) => v);

@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { prisma } from '@afilados/db';
 import { buildApp } from '../src/app';
+import { QUEUE_PRODUCT_ENRICH, type ProductEnrichJob } from '@afilados/shared';
 import { getShopeeAdapter } from '../src/lib/marketplaces';
+import { getQueue } from '../src/lib/redis';
 import { createTenantWithUser, cleanupTenant, loginCookie } from './helpers';
 
 process.env.SHOPEE_MOCK = '1';
@@ -76,6 +78,58 @@ describe('products + queue', () => {
     expect(r.statusCode).toBe(200);
     expect(r.json().products).toHaveLength(1);
     expect(r.json().unsupported).toHaveLength(2);
+  });
+  it('import em lote de ML/Amazon enfileira enriquecimento em background', async () => {
+    const queue = getQueue<ProductEnrichJob>(QUEUE_PRODUCT_ENRICH);
+    await queue.drain();
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/v1/products/import',
+      headers: { cookie },
+      payload: {
+        urls: [
+          'https://produto.mercadolivre.com.br/MLB-4242424242-produto.html',
+          'https://www.amazon.com.br/dp/B0ZZZZZZZ1',
+        ],
+      },
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    expect(body.queued).toBe(2);
+    expect(body.products).toHaveLength(2);
+    expect(body.products[0].title).toBe('Importando…');
+    expect(body.products[0].raw.pendingEnrich).toBe(true);
+
+    const jobs = await queue.getJobs(['waiting', 'delayed', 'active', 'prioritized']);
+    const mine = jobs.filter((j) => j.data.tenantId === t.tenantId);
+    expect(mine.map((j) => j.data.marketplaceKind).sort()).toEqual(['AMAZON', 'MERCADOLIVRE']);
+    // um worker real pode já ter pegado o job; a remoção é só limpeza
+    for (const j of mine) await j.remove().catch(() => {});
+
+    // GET /products?ids= devolve os esqueletos; ao entrar na fila ficam PENDING_ENRICH
+    const ids = body.products.map((p: { id: string }) => p.id);
+    const get = await app.inject({
+      method: 'GET',
+      url: `/api/v1/products?ids=${ids.join(',')}`,
+      headers: { cookie },
+    });
+    expect(get.json().products).toHaveLength(2);
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/queue',
+      headers: { cookie },
+      payload: { productIds: ids },
+    });
+    const q = await app.inject({ method: 'GET', url: '/api/v1/queue', headers: { cookie } });
+    const statuses = q
+      .json()
+      .items.filter((i: { productId: string }) => ids.includes(i.productId))
+      .map((i: { status: string }) => i.status);
+    expect(statuses).toEqual(['PENDING_ENRICH', 'PENDING_ENRICH']);
+    // limpa a fila para não interferir no teste de limite abaixo
+    for (const i of q.json().items) {
+      await app.inject({ method: 'DELETE', url: `/api/v1/queue/${i.id}`, headers: { cookie } });
+    }
   });
   it('import CSV multipart', async () => {
     const boundary = 'xxBOUNDARYxx';
