@@ -43,10 +43,11 @@ const mirrorWorker = new Worker<MirrorMessageJob>(
   processMirrorMessage({ gateway }),
   { connection: getRedis(), concurrency: 2 },
 );
+// Scraping gentil: no máximo 6 páginas a cada 10s, 2 em paralelo (evita bloqueio dos marketplaces)
 const enrichWorker = new Worker<ProductEnrichJob>(
   QUEUE_PRODUCT_ENRICH,
   createProductEnrichProcessor(),
-  { connection: getRedis(), concurrency: 3 },
+  { connection: getRedis(), concurrency: 2, limiter: { max: 6, duration: 10_000 } },
 );
 
 for (const w of [waWorker, sendWorker, mirrorWorker, enrichWorker]) {

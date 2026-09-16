@@ -52,19 +52,30 @@ describe('Product Enrich Processor', () => {
       raw: { ok: true },
     };
 
-    const res = await enrichProduct(
-      {
-        fetchProduct: vi.fn().mockResolvedValue(mockScraped),
-      },
-      {
-        tenantId,
-        productId: product.id,
-        url: product.originalUrl,
-        marketplaceKind: 'MERCADOLIVRE',
-      },
-    );
+    const store = new Map<string, string>();
+    const cache = {
+      get: vi.fn(async (k: string) => store.get(k) ?? null),
+      set: vi.fn(async (k: string, v: string) => {
+        store.set(k, v);
+      }),
+    };
+    const fetchProduct = vi.fn().mockResolvedValue(mockScraped);
+    const job = {
+      tenantId,
+      productId: product.id,
+      url: product.originalUrl,
+      marketplaceKind: 'MERCADOLIVRE' as const,
+    };
 
+    const res = await enrichProduct({ fetchProduct, cache }, job);
     expect(res.success).toBe(true);
+    expect(fetchProduct).toHaveBeenCalledTimes(1);
+    expect(cache.set).toHaveBeenCalledTimes(1);
+
+    // Segunda vez vem do cache (2h) e não raspa o site de novo
+    const res2 = await enrichProduct({ fetchProduct, cache }, job);
+    expect(res2.success).toBe(true);
+    expect(fetchProduct).toHaveBeenCalledTimes(1);
 
     const updatedProduct = await prisma.product.findUnique({
       where: { id: product.id },

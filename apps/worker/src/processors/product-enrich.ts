@@ -1,14 +1,58 @@
 import type { Job } from 'bullmq';
 import pino from 'pino';
-import { prisma } from '@afilados/db';
-import { getAdapter } from '@afilados/marketplaces';
+import { createHash } from 'node:crypto';
+import { prisma, decryptJson } from '@afilados/db';
+import { createShopeeAdapter, getTagAdapter, type ShopeeCredentials } from '@afilados/marketplaces';
 import type { ProductData, ProductEnrichJob } from '@afilados/shared';
 import { publishEvent } from '../lib/events';
+import { getRedis } from '../lib/redis';
 
 const log = pino({ name: 'product-enrich' });
 
+/** Metadados raspados ficam em cache por 2h: a mesma URL importada de novo não bate no site. */
+export const ENRICH_CACHE_TTL_SEC = 2 * 60 * 60;
+
 export interface ProductEnrichDeps {
-  fetchProduct?: (kind: ProductEnrichJob['marketplaceKind'], url: string) => Promise<ProductData | null>;
+  fetchProduct?: (
+    kind: ProductEnrichJob['marketplaceKind'],
+    url: string,
+  ) => Promise<ProductData | null>;
+  /** Cache injetável (padrão: Redis). */
+  cache?: {
+    get(key: string): Promise<string | null>;
+    set(key: string, value: string, ttlSec: number): Promise<void>;
+  };
+}
+
+function cacheKey(kind: string, url: string) {
+  return `enrich:${kind}:${createHash('sha1').update(url).digest('hex')}`;
+}
+
+function redisCache(): NonNullable<ProductEnrichDeps['cache']> {
+  return {
+    get: (k) => getRedis().get(k),
+    set: async (k, v, ttl) => {
+      await getRedis().set(k, v, 'EX', ttl);
+    },
+  };
+}
+
+async function fetchViaAdapter(
+  tenantId: string,
+  kind: ProductEnrichJob['marketplaceKind'],
+  url: string,
+): Promise<ProductData | null> {
+  if (kind === 'SHOPEE') {
+    const conn = await prisma.marketplaceConnection.findFirst({
+      where: { tenantId, kind: 'SHOPEE' },
+    });
+    if (!conn?.encryptedCredentials) throw new Error('Shopee não configurada para este tenant');
+    const creds = decryptJson<ShopeeCredentials>(Buffer.from(conn.encryptedCredentials));
+    const list = await createShopeeAdapter().fetchByUrls(creds, [url]);
+    return list[0] ?? null;
+  }
+  const list = await getTagAdapter(kind).fetchByUrls({}, [url]);
+  return list[0] ?? null;
 }
 
 export async function enrichProduct(
@@ -27,17 +71,32 @@ export async function enrichProduct(
   }
 
   try {
+    const cache = deps.cache ?? redisCache();
+    const key = cacheKey(marketplaceKind, url);
     let scraped: ProductData | null = null;
-    if (deps.fetchProduct) {
-      scraped = await deps.fetchProduct(marketplaceKind, url);
-    } else {
-      const adapter = getAdapter(marketplaceKind);
-      const list = await adapter.fetchByUrls({}, [url]);
-      scraped = list[0] ?? null;
+    let fromCache = false;
+
+    const cached = await cache.get(key).catch(() => null);
+    if (cached) {
+      try {
+        scraped = JSON.parse(cached) as ProductData;
+        fromCache = true;
+      } catch {}
+    }
+
+    if (!scraped) {
+      scraped = deps.fetchProduct
+        ? await deps.fetchProduct(marketplaceKind, url)
+        : await fetchViaAdapter(tenantId, marketplaceKind, url);
     }
 
     if (!scraped) {
       throw new Error(`Não foi possível extrair dados da URL: ${url}`);
+    }
+    if (!fromCache) {
+      await cache.set(key, JSON.stringify(scraped), ENRICH_CACHE_TTL_SEC).catch((e: unknown) => {
+        log.warn({ err: e }, 'falha ao gravar cache de enriquecimento');
+      });
     }
 
     await prisma.product.updateMany({
@@ -62,7 +121,10 @@ export async function enrichProduct(
       data: { status: 'PENDING' },
     });
 
-    log.info({ productId, title: scraped.title, price: scraped.price }, 'Produto enriquecido com sucesso');
+    log.info(
+      { productId, title: scraped.title, price: scraped.price, fromCache },
+      'Produto enriquecido com sucesso',
+    );
 
     await publishEvent(tenantId, {
       type: 'product.enriched',
