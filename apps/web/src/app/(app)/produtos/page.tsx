@@ -7,6 +7,7 @@ import { ProductCard } from '@/components/products/product-card';
 import { SearchFilters } from '@/components/products/search-filters';
 import { ImportPanel } from '@/components/products/import-panel';
 import { apiFetch } from '@/lib/api';
+import { useRealtime } from '@/lib/realtime';
 import { formatBRL } from '@/lib/format';
 import { useApiMutation } from '@/lib/mutations';
 import { useQueue } from '@/lib/queries';
@@ -31,6 +32,16 @@ export default function ProdutosPage() {
   const [sub, setSub] = useState<SearchMode | 'import'>('keyword');
   const [products, setProducts] = useState<ApiProduct[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Produtos importados em lote chegam como esqueleto e são atualizados quando o worker termina
+  useRealtime((e) => {
+    if (e.type !== 'product.enriched') return;
+    void apiFetch<{ products: ApiProduct[] }>(`/products?ids=${e.productId}`).then((r) => {
+      const fresh = r.products[0];
+      if (!fresh) return;
+      setProducts((prev) => prev.map((p) => (p.id === fresh.id ? fresh : p)));
+    });
+  });
   const { data: queue } = useQueue();
 
   const search = useApiMutation(

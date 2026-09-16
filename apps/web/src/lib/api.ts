@@ -20,6 +20,12 @@ export async function apiFetch<T = unknown>(path: string, init: Init = {}): Prom
   if (json !== undefined) {
     h['content-type'] = 'application/json';
     body = JSON.stringify(json);
+  } else if (
+    typeof body === 'string' &&
+    !h['content-type'] &&
+    (body.trimStart().startsWith('{') || body.trimStart().startsWith('['))
+  ) {
+    h['content-type'] = 'application/json';
   }
   const res = await fetch(`/api/v1${path}`, { ...rest, body, headers: h, credentials: 'include' });
   if (res.status === 204) return undefined as T;

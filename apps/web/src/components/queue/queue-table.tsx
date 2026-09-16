@@ -15,7 +15,12 @@ import { StatusPill } from '@/components/app-shell/status-pill';
 import { formatBRL } from '@/lib/format';
 import type { QueueResponse } from '@/lib/types';
 
-const STATUS_LABEL = { PENDING: 'Pendente', SENT: 'Enviado', ERROR: 'Erro' } as const;
+const STATUS_LABEL = {
+  PENDING: 'Pendente',
+  PENDING_ENRICH: 'Carregando dados',
+  SENT: 'Enviado',
+  ERROR: 'Erro',
+} as const;
 
 export function QueueTable({
   data,

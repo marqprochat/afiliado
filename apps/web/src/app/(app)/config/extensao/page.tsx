@@ -8,13 +8,7 @@ import type { ApiToken } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -53,7 +47,7 @@ export default function ExtensaoConfigPage() {
     try {
       const res = await apiFetch<ApiToken & { token: string }>('/api-tokens', {
         method: 'POST',
-        body: JSON.stringify({ name: tokenName.trim() }),
+        json: { name: tokenName.trim() },
       });
       setNewlyCreatedToken(res.token);
       setTokenName('');
@@ -66,7 +60,8 @@ export default function ExtensaoConfigPage() {
   };
 
   const handleRevokeToken = async (id: string) => {
-    if (!confirm('Deseja realmente revogar este token? A extensão deixará de funcionar com ele.')) return;
+    if (!confirm('Deseja realmente revogar este token? A extensão deixará de funcionar com ele.'))
+      return;
     try {
       await apiFetch(`/api-tokens/${id}`, { method: 'DELETE' });
       await queryClient.invalidateQueries({ queryKey: ['api-tokens'] });
@@ -89,7 +84,8 @@ export default function ExtensaoConfigPage() {
           Extensão Chrome — Afilados Connect
         </h1>
         <p className="text-sm text-slate-400 mt-1">
-          Capture ofertas em 1 clique diretamente nas páginas de produto do Mercado Livre, Amazon, Magalu e Shopee.
+          Capture ofertas em 1 clique diretamente nas páginas de produto do Mercado Livre, Amazon,
+          Magalu e Shopee.
         </p>
       </div>
 
@@ -119,7 +115,8 @@ export default function ExtensaoConfigPage() {
               </Button>
             </div>
             <p className="text-xs text-emerald-400/70">
-              Cole este token no campo &quot;Token de API&quot; no popup da extensão instalada no seu navegador.
+              Cole este token no campo &quot;Token de API&quot; no popup da extensão instalada no
+              seu navegador.
             </p>
           </CardContent>
         </Card>
@@ -184,27 +181,45 @@ export default function ExtensaoConfigPage() {
           </CardHeader>
           <CardContent className="space-y-3 text-xs text-slate-300">
             <div className="flex gap-2.5 items-start">
-              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center font-bold text-[10px]">1</span>
+              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center font-bold text-[10px]">
+                1
+              </span>
               <div>
-                Abra a página de extensões no seu navegador acessando <code className="text-sky-300 bg-slate-950 px-1 py-0.5 rounded">chrome://extensions</code>.
+                Abra a página de extensões no seu navegador acessando{' '}
+                <code className="text-sky-300 bg-slate-950 px-1 py-0.5 rounded">
+                  chrome://extensions
+                </code>
+                .
               </div>
             </div>
             <div className="flex gap-2.5 items-start">
-              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center font-bold text-[10px]">2</span>
+              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center font-bold text-[10px]">
+                2
+              </span>
               <div>
-                Ative a chave <strong>&quot;Modo do desenvolvedor&quot;</strong> no canto superior direito.
+                Ative a chave <strong>&quot;Modo do desenvolvedor&quot;</strong> no canto superior
+                direito.
               </div>
             </div>
             <div className="flex gap-2.5 items-start">
-              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center font-bold text-[10px]">3</span>
+              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center font-bold text-[10px]">
+                3
+              </span>
               <div>
-                Clique em <strong>&quot;Carregar sem compactação&quot;</strong> e selecione a pasta <code className="text-emerald-400 bg-slate-950 px-1 py-0.5 rounded">apps/extension</code> do projeto.
+                Clique em <strong>&quot;Carregar sem compactação&quot;</strong> e selecione a pasta{' '}
+                <code className="text-emerald-400 bg-slate-950 px-1 py-0.5 rounded">
+                  apps/extension
+                </code>{' '}
+                do projeto.
               </div>
             </div>
             <div className="flex gap-2.5 items-start">
-              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center font-bold text-[10px]">4</span>
+              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center font-bold text-[10px]">
+                4
+              </span>
               <div>
-                Abra o popup do <strong>Afilados Connect</strong> e cole a Chave de Acesso gerada ao lado.
+                Abra o popup do <strong>Afilados Connect</strong> e cole a Chave de Acesso gerada ao
+                lado.
               </div>
             </div>
           </CardContent>
@@ -250,7 +265,9 @@ export default function ExtensaoConfigPage() {
                       {new Date(t.createdAt).toLocaleDateString('pt-BR')}
                     </TableCell>
                     <TableCell className="text-slate-400 text-xs">
-                      {t.lastUsedAt ? new Date(t.lastUsedAt).toLocaleDateString('pt-BR') : 'Nunca usado'}
+                      {t.lastUsedAt
+                        ? new Date(t.lastUsedAt).toLocaleDateString('pt-BR')
+                        : 'Nunca usado'}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button

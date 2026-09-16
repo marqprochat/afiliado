@@ -61,6 +61,13 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       if (e.type.startsWith('mirror.')) {
         void qc.invalidateQueries({ queryKey: ['mirror'] });
       }
+      if (e.type === 'product.enriched' || e.type === 'queue.updated') {
+        void qc.invalidateQueries({ queryKey: ['products'] });
+        void qc.invalidateQueries({ queryKey: ['queue'] });
+      }
+      if (e.type === 'marketplace.updated') {
+        void qc.invalidateQueries({ queryKey: ['marketplaces'] });
+      }
       handlers.current.forEach((h) => h(e));
     });
     return () => client.stop();

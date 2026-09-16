@@ -16,13 +16,20 @@ export function ProductCard({
   onToggle: (id: string) => void;
   onCopy: (p: ApiProduct) => void;
 }) {
+  const pending = Boolean(p.raw?.pendingEnrich);
   return (
     <div
       className={cn(
         'relative flex flex-col rounded-lg border border-border bg-surface p-3',
         selected && 'border-brand',
+        pending && 'animate-pulse',
       )}
     >
+      {pending && (
+        <span className="absolute bottom-2 right-2 z-10 rounded bg-amber-500/90 px-1.5 py-0.5 text-[10px] font-bold text-white">
+          Carregando dados…
+        </span>
+      )}
       <div className="absolute left-2 top-2 z-10 flex items-center gap-1.5">
         <NativeCheckbox
           checked={selected}
@@ -65,7 +72,9 @@ export function ProductCard({
       )}
       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
         {p.salesCount !== null && <span>🔥 {p.salesCount} vendidos</span>}
-        {p.commissionPct !== null && <span className="text-brand font-medium">💰 {p.commissionPct}%</span>}
+        {p.commissionPct !== null && (
+          <span className="text-brand font-medium">💰 {p.commissionPct}%</span>
+        )}
         {p.couponCode && <span className="text-amber-300 font-medium">🎟️ {p.couponCode}</span>}
       </div>
       <Button size="sm" variant="secondary" className="mt-2 text-xs" onClick={() => onCopy(p)}>

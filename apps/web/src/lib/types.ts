@@ -42,6 +42,8 @@ export interface MarketplaceConnection {
   hasSecret: boolean;
   mattWord: string | null;
   mattTool: string | null;
+  /** Sessão do ML sincronizada pela extensão (gera link oficial meli.la). */
+  mlSessionSyncedAt: string | null;
   lastCheckedAt: string | null;
   lastError: string | null;
 }
@@ -63,12 +65,14 @@ export interface ApiProduct {
   originalUrl: string;
   shopId: string | null;
   shopName: string | null;
+  /** Metadados brutos; `pendingEnrich: true` enquanto o worker ainda raspa a página. */
+  raw?: { pendingEnrich?: boolean } | null;
 }
 export interface QueueItem {
   id: string;
   productId: string;
   selected: boolean;
-  status: 'PENDING' | 'SENT' | 'ERROR';
+  status: 'PENDING' | 'PENDING_ENRICH' | 'SENT' | 'ERROR';
   addedAt: string;
   product: ApiProduct;
 }

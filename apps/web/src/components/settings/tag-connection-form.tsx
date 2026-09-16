@@ -108,8 +108,8 @@ export function TagConnectionForm({
                 URL final.
               </p>
               <p className="italic text-brand/90 pt-1">
-                Nota: Na Fase 3 (com cookies), o sistema gerará o link oficial curto (meli.la)
-                automaticamente.
+                Com a extensão Afilados Connect e a sessão do Mercado Livre sincronizada, o link
+                oficial curto (meli.la) é gerado automaticamente; estes campos ficam como fallback.
               </p>
             </div>
 
