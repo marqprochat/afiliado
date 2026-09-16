@@ -62,8 +62,8 @@ export async function mirrorRoutes(app: FastifyInstance) {
       throw ApiError.validation(`Grupos não encontrados nesta sessão: ${missing.join(', ')}`);
     }
 
-    // @ts-expect-error tenantId é injetado pelo forTenant
     const rule = await req.db.mirrorRule.create({
+      // @ts-expect-error tenantId é injetado pela extensão forTenant
       data: {
         name: body.name,
         sessionId: body.sessionId,
@@ -81,7 +81,7 @@ export async function mirrorRoutes(app: FastifyInstance) {
       },
     });
 
-    await app.events.publish(req.user.tenantId, { type: 'mirror.rules.changed' });
+    await app.events.publish(req.tenantId, { type: 'mirror.rules.changed' });
     reply.status(201);
     return {
       ...rule,
@@ -130,7 +130,7 @@ export async function mirrorRoutes(app: FastifyInstance) {
       },
     });
 
-    await app.events.publish(req.user.tenantId, { type: 'mirror.rules.changed' });
+    await app.events.publish(req.tenantId, { type: 'mirror.rules.changed' });
 
     const updated = await req.db.mirrorRule.findFirstOrThrow({
       where: { id },
@@ -148,7 +148,7 @@ export async function mirrorRoutes(app: FastifyInstance) {
     if (!existing) throw ApiError.notFound('Regra não encontrada');
 
     await req.db.mirrorRule.deleteMany({ where: { id } });
-    await app.events.publish(req.user.tenantId, { type: 'mirror.rules.changed' });
+    await app.events.publish(req.tenantId, { type: 'mirror.rules.changed' });
     reply.status(204).send();
   });
 
@@ -163,7 +163,7 @@ export async function mirrorRoutes(app: FastifyInstance) {
       data: { enabled: nextEnabled },
     });
 
-    await app.events.publish(req.user.tenantId, { type: 'mirror.rules.changed' });
+    await app.events.publish(req.tenantId, { type: 'mirror.rules.changed' });
     return { id, enabled: nextEnabled };
   });
 
