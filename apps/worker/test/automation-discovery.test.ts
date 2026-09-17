@@ -97,4 +97,32 @@ describe('discoverForRule (Shopee)', () => {
     const items = await prisma.automationQueueItem.findMany({ where: { ruleId: rule.id } });
     expect(items.length).toBe(1);
   });
+
+  it('não propaga exceção quando search falha, e registra AutomationLog de ERROR', async () => {
+    const rule = await prisma.automationRule.create({
+      data: {
+        tenantId,
+        name: 'discovery-rule-3',
+        marketplaces: ['SHOPEE'],
+        keywords: ['fone'],
+        blockedKeywords: [],
+        sessionId: (await prisma.waSession.create({ data: { tenantId, label: 's3' } })).id,
+        groupJids: ['g@g.us'],
+        templateId: (await prisma.template.create({ data: { tenantId, name: 't3', body: 'x' } })).id,
+      },
+    });
+
+    await expect(
+      discoverForRule(rule, {
+        searchShopee: async () => {
+          throw new Error('falha de rede na Shopee');
+        },
+      }),
+    ).resolves.not.toThrow();
+
+    const logs = await prisma.automationLog.findMany({ where: { ruleId: rule.id, action: 'ERROR' } });
+    expect(logs.length).toBe(1);
+    expect(logs[0]!.reason).toBe('falha de rede na Shopee');
+    expect(logs[0]!.marketplace).toBe('SHOPEE');
+  });
 });

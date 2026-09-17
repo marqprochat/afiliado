@@ -21,28 +21,43 @@ function matchesFilters(
 
 export async function discoverForRule(rule: AutomationRule, deps: DiscoveryDeps = {}) {
   if (!rule.marketplaces.includes('SHOPEE')) return;
-  const conn = await prisma.marketplaceConnection.findFirst({
-    where: { tenantId: rule.tenantId, kind: 'SHOPEE' },
-  });
-  if (!conn?.encryptedCredentials) return;
-  const creds = decryptJson<ShopeeCredentials>(Buffer.from(conn.encryptedCredentials));
-  const search =
-    deps.searchShopee ??
-    ((c: ShopeeCredentials, keyword: string) =>
-      createShopeeAdapter().search!(c, {
-        source: 'SHOPEE',
-        mode: 'keyword',
-        query: keyword,
-        sort: 'DISCOUNT_DESC',
-        limit: 20,
-        topSellers: false,
-        extraCommission: false,
-      }));
 
-  const keyword = rule.keywords[Math.floor(Math.random() * rule.keywords.length)];
-  if (!keyword) return;
-  const results = await search(creds, keyword);
-  const eligible = results.filter((p) => matchesFilters(p, rule));
+  let eligible: ProductData[];
+  try {
+    const conn = await prisma.marketplaceConnection.findFirst({
+      where: { tenantId: rule.tenantId, kind: 'SHOPEE' },
+    });
+    if (!conn?.encryptedCredentials) return;
+    const creds = decryptJson<ShopeeCredentials>(Buffer.from(conn.encryptedCredentials));
+    const search =
+      deps.searchShopee ??
+      ((c: ShopeeCredentials, keyword: string) =>
+        createShopeeAdapter().search!(c, {
+          source: 'SHOPEE',
+          mode: 'keyword',
+          query: keyword,
+          sort: 'DISCOUNT_DESC',
+          limit: 20,
+          topSellers: false,
+          extraCommission: false,
+        }));
+
+    const keyword = rule.keywords[Math.floor(Math.random() * rule.keywords.length)];
+    if (!keyword) return;
+    const results = await search(creds, keyword);
+    eligible = results.filter((p) => matchesFilters(p, rule));
+  } catch (e) {
+    await prisma.automationLog.create({
+      data: {
+        tenantId: rule.tenantId,
+        ruleId: rule.id,
+        marketplace: 'SHOPEE',
+        action: 'ERROR',
+        reason: e instanceof Error ? e.message : String(e),
+      },
+    });
+    return;
+  }
 
   for (const p of eligible) {
     const product = await prisma.product.upsert({
@@ -65,7 +80,7 @@ export async function discoverForRule(rule: AutomationRule, deps: DiscoveryDeps 
       create: {
         tenantId: rule.tenantId,
         source: p.source,
-        externalId: p.externalId ?? null,
+        externalId: p.externalId ?? '',
         title: p.title,
         price: p.price,
         originalPrice: p.originalPrice ?? null,
