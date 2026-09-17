@@ -2,6 +2,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from './api';
 import type {
+  AutomationQueueItem,
+  AutomationRule,
   BatchDetail,
   BatchSummary,
   MarketplaceConnection,
@@ -87,4 +89,17 @@ export const useApiTokens = () =>
       const res = await apiFetch<{ tokens: ApiToken[] }>('/api-tokens');
       return res.tokens;
     },
+  });
+
+export const useAutomationRules = () =>
+  useQuery({
+    queryKey: ['automations'],
+    queryFn: () => apiFetch<AutomationRule[]>('/automations'),
+    refetchInterval: 15_000,
+  });
+export const useAutomationQueue = (ruleId: string | null) =>
+  useQuery({
+    queryKey: ['automations', ruleId, 'queue'],
+    enabled: !!ruleId,
+    queryFn: () => apiFetch<AutomationQueueItem[]>(`/automations/${ruleId}/queue`),
   });

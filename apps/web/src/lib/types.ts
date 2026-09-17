@@ -190,3 +190,38 @@ export interface ApiToken {
   createdAt: string;
   token?: string;
 }
+
+export interface AutomationStats {
+  freshCount: number;
+  discoveredToday: number;
+  dispatchedToday: number;
+  lastDispatchedAt: string | null;
+}
+export interface AutomationRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  marketplaces: MarketplaceKind[];
+  keywords: string[];
+  blockedKeywords: string[];
+  minDiscountPct: number | null;
+  minPrice: number | null;
+  maxPrice: number | null;
+  maxOffersPerDay: number;
+  intervalMin: number;
+  sessionId: string;
+  groupJids: string[];
+  templateId: string;
+  mediaMode: MediaMode;
+  createdAt: string;
+  stats: AutomationStats;
+}
+export interface AutomationQueueItem {
+  id: string;
+  kind: 'PRODUCT' | 'COUPON';
+  manual: boolean;
+  status: 'PENDING' | 'DISPATCHED' | 'REMOVED';
+  addedAt: string;
+  product: ApiProduct | null;
+  coupon: { id: string; store: string; code: string; description: string; expiresAt: string | null } | null;
+}

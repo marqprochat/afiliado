@@ -17,6 +17,7 @@ import {
   Ticket,
   User,
   Users,
+  Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiFetch } from '@/lib/api';
@@ -25,6 +26,7 @@ const PRINCIPAL = [
   { href: '/', label: 'Visão Geral', icon: Home },
   { href: '/dashboard', label: 'Dashboard & Métricas', icon: BarChart3 },
   { href: '/produtos', label: 'Buscar Produtos', icon: Search },
+  { href: '/automacoes', label: 'Automações', icon: Zap },
   { href: '/enviar', label: 'Enviar Ofertas', icon: Send },
   { href: '/espelhamento', label: 'Espelhamento', icon: Radio },
   { href: '/trafego', label: 'Gestor de Tráfego IA', icon: Megaphone },
