@@ -66,6 +66,13 @@ describe('discoverForRule (Shopee)', () => {
     });
     expect(items.length).toBe(1);
     expect(items[0]!.product!.title).toBe('Fone Bluetooth Novo');
+
+    const discoveredLogs = await prisma.automationLog.findMany({
+      where: { ruleId: rule.id, action: 'DISCOVERED' },
+    });
+    expect(discoveredLogs.length).toBe(1);
+    expect(discoveredLogs[0]!.productId).toBe(items[0]!.product!.id);
+    expect(discoveredLogs[0]!.marketplace).toBe('SHOPEE');
   });
 
   it('não duplica AutomationQueueItem se o produto já estiver na fila da regra', async () => {

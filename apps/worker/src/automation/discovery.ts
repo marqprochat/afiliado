@@ -104,5 +104,14 @@ export async function discoverForRule(rule: AutomationRule, deps: DiscoveryDeps 
         manual: false,
       },
     });
+    await prisma.automationLog.create({
+      data: {
+        tenantId: rule.tenantId,
+        ruleId: rule.id,
+        marketplace: 'SHOPEE',
+        action: 'DISCOVERED',
+        productId: product.id,
+      },
+    });
   }
 }
