@@ -4,8 +4,10 @@ import pino from 'pino';
 import { prisma, decryptJson } from '@afilados/db';
 import {
   generateSubId,
+  isEligibleCoupon,
   isWithinOperatingWindow,
   nextWindowOpen,
+  renderCouponTemplate,
   renderTemplate,
 } from '@afilados/core';
 import { getTagAdapter, type MarketplaceAdapter, type ShopeeCredentials } from '@afilados/marketplaces';
@@ -50,10 +52,14 @@ export async function sendOffer(
 
   const item = await prisma.batchItem.findUnique({
     where: { id: batchItemId },
-    include: { product: true, batch: { include: { template: true, session: true } } },
+    include: {
+      product: true,
+      coupon: true,
+      batch: { include: { template: true, session: true } },
+    },
   });
   if (!item) return { outcome: 'skipped', reason: 'missing' };
-  const { batch, product } = item;
+  const { batch, product, coupon } = item;
   if (batch.status === 'PAUSED' || batch.status === 'CANCELLED' || batch.status === 'DONE') {
     return { outcome: 'skipped', reason: 'batch-inactive' };
   }
@@ -63,9 +69,9 @@ export async function sendOffer(
   const [windowRow, settingsRows, conn] = await Promise.all([
     prisma.operatingWindow.findUnique({ where: { tenantId } }),
     prisma.setting.findMany({ where: { tenantId } }),
-    product.source === 'MANUAL'
-      ? Promise.resolve(null)
-      : prisma.marketplaceConnection.findFirst({ where: { tenantId, kind: product.source } }),
+    product && product.source !== 'MANUAL'
+      ? prisma.marketplaceConnection.findFirst({ where: { tenantId, kind: product.source } })
+      : Promise.resolve(null),
   ]);
   const settings = Object.fromEntries(settingsRows.map((s) => [s.key, s.value])) as Record<
     string,
@@ -103,6 +109,36 @@ export async function sendOffer(
     await prisma.batch.update({ where: { id: batch.id }, data: { status: 'RUNNING' } });
 
   try {
+    if (item.couponId && coupon) {
+      const elig = isEligibleCoupon({
+        code: coupon.code,
+        expiresAt: coupon.expiresAt?.toISOString() ?? null,
+      });
+      if (!elig.ok) throw new Error(`cupom inelegível: ${elig.reason}`);
+      const text = renderCouponTemplate(
+        batch.template.body,
+        {
+          store: coupon.store,
+          code: coupon.code,
+          description: coupon.description,
+          expiresAt: coupon.expiresAt?.toISOString() ?? null,
+        },
+        { now: t.toISOString() },
+      );
+      const bucket = bucketFor(batch.sessionId, ratePerMin);
+      return sendPlainMessages(
+        deps,
+        { id: item.id, productId: null },
+        batch,
+        tenantId,
+        { kind: 'text', text },
+        now,
+        sleep,
+        rng,
+        bucket,
+      );
+    }
+    if (!product) throw new Error('BatchItem sem produto nem cupom');
     // Link de afiliado (uma vez por item)
     let affiliateLink = product.originalUrl;
     if (product.source === 'SHOPEE' && conn?.encryptedCredentials) {
@@ -161,73 +197,30 @@ export async function sendOffer(
             url: affiliateLink,
           };
 
-    const existing = await prisma.sendLog.findMany({
-      where: { batchItemId: item.id, waMessageId: { not: null } },
-    });
-    const done = new Set(existing.map((l) => l.groupJid));
     const bucket = bucketFor(batch.sessionId, ratePerMin);
-    let sentCount = 0;
-    let first = true;
-    for (const groupJid of batch.groupJids) {
-      if (done.has(groupJid)) continue;
-      if (!first) await sleep(jitter(GROUP_GAP_MS, 0.15, rng));
-      first = false;
-      await waitForToken(bucket, sleep);
-      try {
-        const { messageId } = await deps.gateway.sendMessage(batch.sessionId, groupJid, message);
-        await prisma.sendLog.upsert({
-          where: { batchItemId_groupJid: { batchItemId: item.id, groupJid } },
-          update: { waMessageId: messageId, status: 'SENT', error: null, sentAt: now() },
-          create: {
-            tenantId,
-            batchItemId: item.id,
-            groupJid,
-            waMessageId: messageId,
-            status: 'SENT',
-          },
-        });
-        sentCount++;
-      } catch (e) {
-        const error = e instanceof Error ? e.message : String(e);
-        log.warn({ batchItemId: item.id, groupJid, error }, 'falha ao enviar');
-        await prisma.sendLog.upsert({
-          where: { batchItemId_groupJid: { batchItemId: item.id, groupJid } },
-          update: { status: 'ERROR', error, sentAt: now() },
-          create: { tenantId, batchItemId: item.id, groupJid, status: 'ERROR', error },
-        });
-      }
-    }
-
-    const anySent = sentCount > 0 || done.size > 0;
-    const status = anySent ? 'SENT' : 'ERROR';
-    await prisma.batchItem.update({
-      where: { id: item.id },
-      data: { status, error: anySent ? null : 'nenhum grupo recebeu' },
-    });
-    await prisma.queueItem.updateMany({
-      where: { tenantId, productId: product.id },
-      data: { status },
-    });
-    await publishEvent(tenantId, {
-      type: 'batch.item',
-      batchId: batch.id,
-      itemId: item.id,
-      status,
-    });
-
-    await finalizeBatchIfComplete(batch.id);
-    await publishProgress(batch.id, tenantId);
-    return { outcome: 'sent', groups: sentCount };
+    return sendPlainMessages(
+      deps,
+      { id: item.id, productId: product.id },
+      batch,
+      tenantId,
+      message,
+      now,
+      sleep,
+      rng,
+      bucket,
+    );
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
     await prisma.batchItem.update({
       where: { id: item.id },
       data: { status: 'ERROR', error },
     });
-    await prisma.queueItem.updateMany({
-      where: { tenantId, productId: product.id },
-      data: { status: 'ERROR' },
-    });
+    if (item.productId) {
+      await prisma.queueItem.updateMany({
+        where: { tenantId, productId: item.productId },
+        data: { status: 'ERROR' },
+      });
+    }
     await publishEvent(tenantId, {
       type: 'batch.item',
       batchId: batch.id,
@@ -238,6 +231,77 @@ export async function sendOffer(
     await publishProgress(batch.id, tenantId);
     throw e;
   }
+}
+
+async function sendPlainMessages(
+  deps: SendOfferDeps,
+  item: { id: string; productId: string | null },
+  batch: { id: string; sessionId: string; groupJids: string[] },
+  tenantId: string,
+  message: OutgoingMessage,
+  now: () => Date,
+  sleep: (ms: number) => Promise<void>,
+  rng: () => number,
+  bucket: { take(): Promise<number> },
+): Promise<SendOfferResult> {
+  const existing = await prisma.sendLog.findMany({
+    where: { batchItemId: item.id, waMessageId: { not: null } },
+  });
+  const done = new Set(existing.map((l) => l.groupJid));
+  let sentCount = 0;
+  let first = true;
+  for (const groupJid of batch.groupJids) {
+    if (done.has(groupJid)) continue;
+    if (!first) await sleep(jitter(GROUP_GAP_MS, 0.15, rng));
+    first = false;
+    await waitForToken(bucket, sleep);
+    try {
+      const { messageId } = await deps.gateway.sendMessage(batch.sessionId, groupJid, message);
+      await prisma.sendLog.upsert({
+        where: { batchItemId_groupJid: { batchItemId: item.id, groupJid } },
+        update: { waMessageId: messageId, status: 'SENT', error: null, sentAt: now() },
+        create: {
+          tenantId,
+          batchItemId: item.id,
+          groupJid,
+          waMessageId: messageId,
+          status: 'SENT',
+        },
+      });
+      sentCount++;
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e);
+      log.warn({ batchItemId: item.id, groupJid, error }, 'falha ao enviar');
+      await prisma.sendLog.upsert({
+        where: { batchItemId_groupJid: { batchItemId: item.id, groupJid } },
+        update: { status: 'ERROR', error, sentAt: now() },
+        create: { tenantId, batchItemId: item.id, groupJid, status: 'ERROR', error },
+      });
+    }
+  }
+
+  const anySent = sentCount > 0 || done.size > 0;
+  const status = anySent ? 'SENT' : 'ERROR';
+  await prisma.batchItem.update({
+    where: { id: item.id },
+    data: { status, error: anySent ? null : 'nenhum grupo recebeu' },
+  });
+  if (item.productId) {
+    await prisma.queueItem.updateMany({
+      where: { tenantId, productId: item.productId },
+      data: { status },
+    });
+  }
+  await publishEvent(tenantId, {
+    type: 'batch.item',
+    batchId: batch.id,
+    itemId: item.id,
+    status,
+  });
+
+  await finalizeBatchIfComplete(batch.id);
+  await publishProgress(batch.id, tenantId);
+  return { outcome: 'sent', groups: sentCount };
 }
 
 /**

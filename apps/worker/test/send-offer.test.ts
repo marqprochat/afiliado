@@ -224,4 +224,38 @@ describe('sendOffer', () => {
     expect(updated.error).toBe('shopee down');
     expect((await prisma.batch.findUniqueOrThrow({ where: { id: batch.id } })).status).toBe('DONE');
   });
+
+  it('envia mensagem de cupom sem produto associado', async () => {
+    const couponTemplate = await prisma.template.create({
+      data: { tenantId, name: 'cupom', body: '🎟️ {codigo} na {loja}: {descricao}', kind: 'COUPON' },
+    });
+    const coupon = await prisma.coupon.create({
+      data: { tenantId, store: 'AMAZON', code: 'PROMO10', description: '10% off' },
+    });
+    const batch = await prisma.batch.create({
+      data: {
+        tenantId,
+        sessionId,
+        templateId: couponTemplate.id,
+        name: 'cupom-batch',
+        groupJids: ['g1@g.us'],
+        intervalMin: 60,
+        items: { create: [{ order: 0, runAt: new Date(), couponId: coupon.id }] },
+      },
+      include: { items: true },
+    });
+    const itemId = batch.items[0]!.id;
+
+    const r = await sendOffer(deps, itemId);
+    expect(r).toEqual({ outcome: 'sent', groups: 1 });
+    expect(gateway.sent.map((s) => s.jid)).toEqual(['g1@g.us']);
+    const msg = gateway.sent[0]!.msg;
+    expect(msg.kind).toBe('text');
+    if (msg.kind === 'text') {
+      expect(msg.text).toContain('PROMO10');
+    }
+
+    const updated = await prisma.batchItem.findUniqueOrThrow({ where: { id: itemId } });
+    expect(updated.status).toBe('SENT');
+  });
 });
