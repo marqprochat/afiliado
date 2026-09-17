@@ -153,7 +153,13 @@ export class AutomationScheduler {
       const marketplaceForLog = productMarketplace ?? candidate.coupon?.store ?? rule.marketplaces[0]!;
 
       if (candidate.kind === 'PRODUCT') {
-        if (!candidate.product) return;
+        if (!candidate.product) {
+          await prisma.automationQueueItem.update({
+            where: { id: candidate.id },
+            data: { status: 'REMOVED' },
+          });
+          continue;
+        }
         const elig = isEligibleProduct({
           title: candidate.product.title,
           price: Number(candidate.product.price),
@@ -179,7 +185,13 @@ export class AutomationScheduler {
           continue;
         }
       } else {
-        if (!candidate.coupon) return;
+        if (!candidate.coupon) {
+          await prisma.automationQueueItem.update({
+            where: { id: candidate.id },
+            data: { status: 'REMOVED' },
+          });
+          continue;
+        }
         const elig = isEligibleCoupon({
           code: candidate.coupon.code,
           expiresAt: candidate.coupon.expiresAt?.toISOString() ?? null,
