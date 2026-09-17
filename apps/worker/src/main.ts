@@ -22,12 +22,14 @@ import { processSendOffer, finalizeBatchIfComplete } from './processors/send-off
 import { processMirrorMessage } from './processors/mirror-message';
 import { createProductEnrichProcessor } from './processors/product-enrich';
 import { MirrorListener } from './mirror/listener';
+import { AutomationScheduler } from './automation/scheduler';
 import { startHttp } from './http';
 
 const log = pino({ name: 'worker' });
 const gateway = new BaileysGateway();
 const manager = new WaSessionManager(gateway);
 const mirrorListener = new MirrorListener(gateway);
+const automationScheduler = new AutomationScheduler();
 
 const waWorker = new Worker<WaCommandJob>(QUEUE_WA_COMMANDS, processWaCommand(manager), {
   connection: getRedis(),
@@ -80,6 +82,9 @@ redisSub.on('message', (_channel, raw) => {
     if (ev.event?.type === 'mirror.rules.changed') {
       void mirrorListener.reload();
     }
+    if (ev.event?.type === 'automation.rules.changed') {
+      void automationScheduler.reload();
+    }
   } catch {
     // ignore
   }
@@ -88,6 +93,7 @@ redisSub.on('message', (_channel, raw) => {
 const http = startHttp(config.WORKER_PORT, () => manager.sessionCount());
 await manager.start();
 await mirrorListener.start();
+await automationScheduler.start();
 log.info({ port: config.WORKER_PORT }, 'worker iniciado');
 
 let shuttingDown = false;
@@ -96,6 +102,7 @@ async function shutdown() {
   shuttingDown = true;
   log.info('encerrando');
   try {
+    automationScheduler.stop();
     await Promise.all([
       waWorker.close(),
       sendWorker.close(),

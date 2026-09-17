@@ -3,6 +3,7 @@ import { prisma } from '@afilados/db';
 import type { AutomationRule } from '@afilados/db';
 import { isEligibleProduct, isEligibleCoupon, isWithinOperatingWindow } from '@afilados/core';
 import { enqueueSendOffer } from '../lib/queue-helpers';
+import { discoverForRule } from './discovery';
 
 const log = pino({ name: 'automation-scheduler' });
 
@@ -22,7 +23,7 @@ export class AutomationScheduler {
 
   constructor(deps: AutomationSchedulerDeps = {}) {
     this.enqueue = deps.enqueue ?? ((tenantId, batchItemId) => enqueueSendOffer(tenantId, batchItemId));
-    this.discover = deps.discover ?? (async () => {});
+    this.discover = deps.discover ?? ((rule) => discoverForRule(rule));
     this.now = deps.now ?? (() => new Date());
   }
 
