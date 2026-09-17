@@ -433,8 +433,12 @@ export class BaileysGateway implements WhatsAppGateway {
               image: { url: msg.imageUrl },
               caption: msg.caption,
             });
-          } catch {
+          } catch (err) {
             // Fallback para envio em formato texto caso o download da imagem falhe
+            log.warn(
+              { sessionId, jid, imageUrl: msg.imageUrl, err },
+              'falha ao anexar imagem por URL; enviando em modo texto',
+            );
             return l.sock.sendMessage(jid, { text: msg.caption });
           }
         } else {

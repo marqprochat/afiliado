@@ -152,9 +152,10 @@
         discountPct = Math.round(((originalPrice - price) / originalPrice) * 100);
       }
 
-      // `src` às vezes é uma URL interna de medição/AB-test da Amazon
-      // (.../images/W/BW_MEDIAX_..._MEASUREMENT_.../images/I/...jpg), não a foto do produto —
-      // por isso `data-old-hires`/`data-a-dynamic-image` vêm antes e `src` só é o último recurso.
+      // `data-old-hires`/`data-a-dynamic-image` são preferidos por serem mais estáveis,
+      // mas o `src` puro também é uma imagem válida da Amazon (mesmo quando o caminho
+      // contém "MEASUREMENT" — é só o nome do bucket de teste A/B da Amazon, não indica
+      // formato quebrado) e não deve ser descartado.
       const imgEl = document.querySelector('#landingImage, #imgBlkFront');
       if (imgEl) {
         let src = imgEl.getAttribute('data-old-hires');
@@ -169,7 +170,7 @@
           }
         }
         if (!src) src = imgEl.getAttribute('src');
-        if (src && src.startsWith('http') && !/MEASUREMENT/i.test(src)) images.push(src);
+        if (src && src.startsWith('http')) images.push(src);
       }
       if (images.length === 0) {
         const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content');
@@ -225,7 +226,11 @@
       );
       if (imgEl) {
         const src = imgEl.getAttribute('src');
-        if (src) images.push(src);
+        if (src && src.startsWith('http')) images.push(src);
+      }
+      if (images.length === 0) {
+        const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content');
+        if (ogImage && ogImage.startsWith('http')) images.push(ogImage);
       }
 
       if (/frete grátis|retira rápido|retira grátis/i.test(document.body.innerText)) shipping = 'FREE';
