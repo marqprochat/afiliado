@@ -132,6 +132,23 @@ Novo `AutomationScheduler`, no mesmo padrão do `MirrorListener` já existente (
 
 Reaproveitar o pipeline de `Batch` existente significa que rate-limit, geração de link de afiliado, janela de operação e `SendLog` **não são reimplementados** — a automação só decide *o quê* e *quando* enfileirar.
 
+### 5.1 Portão de validação — nunca disparar produto incompleto ou de descoberta falha
+
+Antes do passo 6 (criar o `Batch`), o produto sorteado passa por uma checagem obrigatória. Se falhar, o item é descartado (loga `SKIPPED` com o motivo) e o scheduler tenta outro produto elegível na mesma rodada — **nunca** cria o lote com dado capenga:
+
+- `raw.pendingEnrich` não pode ser `true` (produto ainda em enriquecimento em background — mesmo estado já usado por `QueueItemStatus.PENDING_ENRICH`).
+- `title` não pode estar vazio nem ser o placeholder `"Importando…"`.
+- `price > 0`.
+- `images.length > 0`.
+- `originalUrl` deve ser uma URL válida do marketplace de origem (reaproveita `parseProductUrl`/checagem de host já usada em `products.ts`); para Awin, deve começar com o domínio de tracking da rede.
+
+Isso vale tanto para produto vindo de descoberta nova (scrape/API na hora) quanto de produto já existente no banco (Awin sincronizado, ou remanescente de fila manual): a automação só considera "elegível" o que passa nessa checagem.
+
+**Falha de descoberta não derruba o disparo de outras regras/marketplaces:**
+- Se o scrape/API de um marketplace falhar (timeout, mudança de layout, erro HTTP) durante o passo 5, o erro é capturado, logado como `ERROR` com o motivo, e **aquele ciclo daquela regra é pulado** — não tenta enviar produto nenhum daquele marketplace nesta rodada. O scheduler segue normalmente para as outras regras/próxima rodada; uma falha nunca propaga para travar o `setInterval` nem para reenviar um produto antigo/errado como fallback.
+- Se o `awin-feed-sync` falhar no meio do parse de um feed (CSV corrompido, token inválido, HTTP erro), a sincronização daquela categoria é abortada **sem** aplicar upserts parciais daquele arquivo — só produtos de linhas já validadas e processadas com sucesso antes do erro permanecem; a conexão Awin é marcada `ConnectionStatus.ERROR` com `lastError`, e o próximo ciclo de sync tenta de novo do zero.
+- Nenhum retry automático de disparo: se um `Batch` de automação falhar no envio (ex: WhatsApp desconectado), ele segue o mesmo tratamento de erro que lotes manuais já têm hoje (`BatchItemStatus.ERROR` via `sendWorker.on('failed', ...)` em `main.ts`) — a automação não reenvia sozinha, só tenta um novo produto no próximo ciclo natural.
+
 ---
 
 ## 6. API
