@@ -60,8 +60,12 @@ export async function automationsRoutes(app: FastifyInstance) {
     const existing = await req.db.automationRule.findFirst({ where: { id } });
     if (!existing) throw ApiError.notFound('Regra não encontrada');
     const body = automationRuleUpdateSchema.parse(req.body);
-    if (body.sessionId && body.groupJids && body.templateId) {
-      await assertRuleTargets(req, body as { sessionId: string; groupJids: string[]; templateId: string });
+    if (body.sessionId || body.groupJids || body.templateId) {
+      await assertRuleTargets(req, {
+        sessionId: body.sessionId ?? existing.sessionId,
+        groupJids: body.groupJids ?? existing.groupJids,
+        templateId: body.templateId ?? existing.templateId,
+      });
     }
     await req.db.automationRule.updateMany({
       where: { id },
@@ -151,6 +155,9 @@ export async function automationsRoutes(app: FastifyInstance) {
     const body = automationQueueCouponSchema.parse(req.body);
     const rule = await req.db.automationRule.findFirst({ where: { id } });
     if (!rule) throw ApiError.notFound('Regra não encontrada');
+
+    const tpl = await req.db.template.findFirst({ where: { id: body.templateId } });
+    if (!tpl) throw ApiError.notFound('Template não encontrado');
 
     let couponId = body.couponId;
     if (couponId) {

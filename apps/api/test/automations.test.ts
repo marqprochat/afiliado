@@ -139,6 +139,53 @@ describe('automations routes', () => {
     expect(items.some((i: { couponId: string | null }) => i.couponId === foreignCoupon.id)).toBe(false);
   });
 
+  it('rejeita templateId de outro tenant no cupom manual (IDOR) → 404', async () => {
+    const ownCoupon = await prisma.coupon.create({
+      data: { tenantId: t.tenantId, store: 'AMAZON', code: 'PROMO20', description: '20% off' },
+    });
+    const foreignTemplate = await prisma.template.create({
+      data: { tenantId: other.tenantId, name: 'tf', body: '{codigo}', kind: 'COUPON' },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/automations/${ruleId}/queue/coupon`,
+      headers: { cookie },
+      payload: { couponId: ownCoupon.id, templateId: foreignTemplate.id },
+    });
+    expect(res.statusCode).toBe(404);
+
+    const listRes = await app.inject({
+      method: 'GET',
+      url: `/api/v1/automations/${ruleId}/queue`,
+      headers: { cookie },
+    });
+    const items = listRes.json();
+    expect(items.some((i: { couponId: string | null }) => i.couponId === ownCoupon.id)).toBe(false);
+  });
+
+  it('rejeita PATCH parcial com groupJids desconhecido mesmo sem sessionId/templateId → 400', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/automations/${ruleId}`,
+      headers: { cookie },
+      payload: { groupJids: ['inexistente@g.us'] },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('rejeita PATCH parcial com templateId de outro tenant → 404', async () => {
+    const foreignTemplate = await prisma.template.create({
+      data: { tenantId: other.tenantId, name: 'tf2', body: 'x' },
+    });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/automations/${ruleId}`,
+      headers: { cookie },
+      payload: { templateId: foreignTemplate.id },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
   it('remove item da fila', async () => {
     const [item] = await prisma.automationQueueItem.findMany({ where: { ruleId } });
     const res = await app.inject({
