@@ -16,6 +16,8 @@ export type RealtimeEvent =
       targetJid: string;
     }
   | { type: 'mirror.rules.changed' }
+  | { type: 'automation.rules.changed' }
+  | { type: 'automation.queue.updated'; ruleId: string }
   | { type: 'product.enriched'; productId: string; status: 'SUCCESS' | 'ERROR'; error?: string }
   | { type: 'queue.updated' }
   | { type: 'marketplace.updated'; kind: MarketplaceKind }

@@ -8,3 +8,4 @@ export * from './queues';
 export * from './api';
 export * from './marketplaces';
 export * from './cookie-parser';
+export * from './automation';

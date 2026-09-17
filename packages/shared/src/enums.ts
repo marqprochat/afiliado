@@ -33,3 +33,15 @@ export type MirrorLogStatus = (typeof MIRROR_LOG_STATUSES)[number];
 
 export const QUEUE_ITEM_STATUSES = ['PENDING', 'PENDING_ENRICH', 'SENT', 'ERROR'] as const;
 export type QueueItemStatus = (typeof QUEUE_ITEM_STATUSES)[number];
+
+export const TEMPLATE_KINDS = ['PRODUCT', 'COUPON'] as const;
+export type TemplateKind = (typeof TEMPLATE_KINDS)[number];
+
+export const AUTOMATION_LOG_ACTIONS = ['DISCOVERED', 'DISPATCHED', 'SKIPPED', 'ERROR'] as const;
+export type AutomationLogAction = (typeof AUTOMATION_LOG_ACTIONS)[number];
+
+export const AUTOMATION_ITEM_KINDS = ['PRODUCT', 'COUPON'] as const;
+export type AutomationItemKind = (typeof AUTOMATION_ITEM_KINDS)[number];
+
+export const AUTOMATION_QUEUE_STATUSES = ['PENDING', 'DISPATCHED', 'REMOVED'] as const;
+export type AutomationQueueStatus = (typeof AUTOMATION_QUEUE_STATUSES)[number];
