@@ -12,7 +12,11 @@ export interface OutgoingPreview {
   thumbnailUrl: string;
   url: string;
 }
-export type OutgoingMessage = OutgoingImage | OutgoingPreview;
+export interface OutgoingText {
+  kind: 'text';
+  text: string;
+}
+export type OutgoingMessage = OutgoingImage | OutgoingPreview | OutgoingText;
 export interface GroupInfo {
   jid: string;
   name: string;

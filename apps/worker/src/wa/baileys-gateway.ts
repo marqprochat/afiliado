@@ -444,7 +444,7 @@ export class BaileysGateway implements WhatsAppGateway {
         } else {
           return l.sock.sendMessage(jid, { text: msg.caption });
         }
-      } else {
+      } else if (msg.kind === 'preview') {
         const jpegThumbnail = await fetchThumbnail(msg.thumbnailUrl);
         const linkPreview: WAUrlInfo = {
           'canonical-url': msg.url,
@@ -454,6 +454,8 @@ export class BaileysGateway implements WhatsAppGateway {
         };
         if (jpegThumbnail) linkPreview.jpegThumbnail = jpegThumbnail;
         return l.sock.sendMessage(jid, { text: msg.text, linkPreview });
+      } else {
+        return l.sock.sendMessage(jid, { text: msg.text });
       }
     };
 
