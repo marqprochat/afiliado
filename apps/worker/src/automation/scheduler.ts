@@ -14,9 +14,13 @@ export interface AutomationSchedulerDeps {
   now?: () => Date;
 }
 
+/** Número máximo de candidatos testados por regra em uma única rodada de despacho. */
+const MAX_DISPATCH_ATTEMPTS = 10;
+
 export class AutomationScheduler {
   private rules: AutomationRule[] = [];
   private timer: NodeJS.Timeout | null = null;
+  private ticking = false;
   private readonly enqueue: (tenantId: string, batchItemId: string) => Promise<void>;
   private readonly discover: (rule: AutomationRule) => Promise<void>;
   private readonly now: () => Date;
@@ -52,11 +56,24 @@ export class AutomationScheduler {
   }
 
   async tick() {
-    for (const rule of this.rules) {
-      await this.tickRule(rule).catch((e) =>
-        log.error({ ruleId: rule.id, err: e }, 'falha ao processar regra de automação'),
-      );
+    if (this.ticking) {
+      log.warn('tick anterior ainda em andamento, pulando esta execução');
+      return;
     }
+    this.ticking = true;
+    try {
+      for (const rule of this.rules) {
+        await this.tickRule(rule).catch((e) =>
+          log.error({ ruleId: rule.id, err: e }, 'falha ao processar regra de automação'),
+        );
+      }
+    } finally {
+      this.ticking = false;
+    }
+  }
+
+  isTicking() {
+    return this.ticking;
   }
 
   private async tickRule(rule: AutomationRule) {
@@ -95,131 +112,151 @@ export class AutomationScheduler {
   }
 
   private async dispatchNext(rule: AutomationRule) {
-    const manual = await prisma.automationQueueItem.findFirst({
-      where: { ruleId: rule.id, manual: true, status: 'PENDING' },
-      orderBy: { addedAt: 'asc' },
-      include: { product: true, coupon: true },
-    });
+    // Descoberta é disparada no máximo uma vez por rodada de despacho: evita bater na
+    // API da Shopee repetidamente enquanto tentamos os próximos candidatos elegíveis.
+    let discovered = false;
 
-    let candidate = manual;
-    if (!candidate) {
-      await this.discover(rule);
-      candidate = await prisma.automationQueueItem.findFirst({
-        where: { ruleId: rule.id, manual: false, status: 'PENDING' },
+    for (let attempt = 0; attempt < MAX_DISPATCH_ATTEMPTS; attempt++) {
+      const manual = await prisma.automationQueueItem.findFirst({
+        where: { ruleId: rule.id, manual: true, status: 'PENDING' },
         orderBy: { addedAt: 'asc' },
         include: { product: true, coupon: true },
       });
+
+      let candidate = manual;
       if (!candidate) {
-        await prisma.automationLog.create({
-          data: {
-            tenantId: rule.tenantId,
-            ruleId: rule.id,
-            marketplace: rule.marketplaces[0] ?? 'SHOPEE',
-            action: 'DISCOVERED',
-            reason: 'nenhum produto elegível encontrado',
-          },
+        if (!discovered) {
+          await this.discover(rule);
+          discovered = true;
+        }
+        candidate = await prisma.automationQueueItem.findFirst({
+          where: { ruleId: rule.id, manual: false, status: 'PENDING' },
+          orderBy: { addedAt: 'asc' },
+          include: { product: true, coupon: true },
         });
-        return;
-      }
-    }
-
-    const productMarketplace =
-      candidate.product && candidate.product.source !== 'MANUAL' ? candidate.product.source : undefined;
-    const marketplaceForLog = productMarketplace ?? candidate.coupon?.store ?? rule.marketplaces[0]!;
-
-    if (candidate.kind === 'PRODUCT') {
-      if (!candidate.product) return;
-      const elig = isEligibleProduct({
-        title: candidate.product.title,
-        price: Number(candidate.product.price),
-        images: candidate.product.images,
-        originalUrl: candidate.product.originalUrl,
-        raw: candidate.product.raw as Record<string, unknown>,
-      });
-      if (!elig.ok) {
-        await prisma.automationLog.create({
-          data: {
-            tenantId: rule.tenantId,
-            ruleId: rule.id,
-            marketplace: marketplaceForLog,
-            action: 'SKIPPED',
-            productId: candidate.productId,
-            reason: elig.reason,
-          },
-        });
-        return;
-      }
-    } else {
-      if (!candidate.coupon) return;
-      const elig = isEligibleCoupon({
-        code: candidate.coupon.code,
-        expiresAt: candidate.coupon.expiresAt?.toISOString() ?? null,
-      });
-      if (!elig.ok) {
-        await prisma.automationLog.create({
-          data: {
-            tenantId: rule.tenantId,
-            ruleId: rule.id,
-            marketplace: marketplaceForLog,
-            action: 'SKIPPED',
-            reason: elig.reason,
-          },
-        });
-        return;
-      }
-    }
-
-    const batchTemplateId = candidate.kind === 'COUPON' ? candidate.templateId ?? rule.templateId : rule.templateId;
-
-    const batch = await prisma.batch.create({
-      data: {
-        tenantId: rule.tenantId,
-        sessionId: rule.sessionId,
-        templateId: batchTemplateId,
-        name: `Automação: ${rule.name}`,
-        groupJids: rule.groupJids,
-        intervalMin: rule.intervalMin,
-        mediaMode: rule.mediaMode,
-        items: {
-          create: [
-            {
-              order: 0,
-              runAt: this.now(),
-              productId: candidate.kind === 'PRODUCT' ? candidate.productId : null,
-              couponId: candidate.kind === 'COUPON' ? candidate.couponId : null,
+        if (!candidate) {
+          await prisma.automationLog.create({
+            data: {
+              tenantId: rule.tenantId,
+              ruleId: rule.id,
+              marketplace: rule.marketplaces[0] ?? 'SHOPEE',
+              action: 'SKIPPED',
+              reason: 'nenhum produto elegível encontrado',
             },
-          ],
-        },
-      },
-      include: { items: true },
-    });
+          });
+          return;
+        }
+      }
 
-    try {
-      await this.enqueue(rule.tenantId, batch.items[0]!.id);
-      await prisma.automationQueueItem.update({
-        where: { id: candidate.id },
-        data: { status: 'DISPATCHED', dispatchedAt: this.now() },
-      });
-      await prisma.automationLog.create({
+      const productMarketplace =
+        candidate.product && candidate.product.source !== 'MANUAL' ? candidate.product.source : undefined;
+      const marketplaceForLog = productMarketplace ?? candidate.coupon?.store ?? rule.marketplaces[0]!;
+
+      if (candidate.kind === 'PRODUCT') {
+        if (!candidate.product) return;
+        const elig = isEligibleProduct({
+          title: candidate.product.title,
+          price: Number(candidate.product.price),
+          images: candidate.product.images,
+          originalUrl: candidate.product.originalUrl,
+          raw: candidate.product.raw as Record<string, unknown>,
+        });
+        if (!elig.ok) {
+          await prisma.automationQueueItem.update({
+            where: { id: candidate.id },
+            data: { status: 'REMOVED' },
+          });
+          await prisma.automationLog.create({
+            data: {
+              tenantId: rule.tenantId,
+              ruleId: rule.id,
+              marketplace: marketplaceForLog,
+              action: 'SKIPPED',
+              productId: candidate.productId,
+              reason: elig.reason,
+            },
+          });
+          continue;
+        }
+      } else {
+        if (!candidate.coupon) return;
+        const elig = isEligibleCoupon({
+          code: candidate.coupon.code,
+          expiresAt: candidate.coupon.expiresAt?.toISOString() ?? null,
+        });
+        if (!elig.ok) {
+          await prisma.automationQueueItem.update({
+            where: { id: candidate.id },
+            data: { status: 'REMOVED' },
+          });
+          await prisma.automationLog.create({
+            data: {
+              tenantId: rule.tenantId,
+              ruleId: rule.id,
+              marketplace: marketplaceForLog,
+              action: 'SKIPPED',
+              reason: elig.reason,
+            },
+          });
+          continue;
+        }
+      }
+
+      const batchTemplateId = candidate.kind === 'COUPON' ? candidate.templateId ?? rule.templateId : rule.templateId;
+
+      const batch = await prisma.batch.create({
         data: {
           tenantId: rule.tenantId,
-          ruleId: rule.id,
-          marketplace: marketplaceForLog,
-          action: 'DISPATCHED',
-          productId: candidate.productId,
+          sessionId: rule.sessionId,
+          templateId: batchTemplateId,
+          name: `Automação: ${rule.name}`,
+          groupJids: rule.groupJids,
+          intervalMin: rule.intervalMin,
+          mediaMode: rule.mediaMode,
+          items: {
+            create: [
+              {
+                order: 0,
+                runAt: this.now(),
+                productId: candidate.kind === 'PRODUCT' ? candidate.productId : null,
+                couponId: candidate.kind === 'COUPON' ? candidate.couponId : null,
+              },
+            ],
+          },
         },
+        include: { items: true },
       });
-    } catch (e) {
-      await prisma.batch.update({ where: { id: batch.id }, data: { status: 'CANCELLED' } });
-      await prisma.automationLog.create({
-        data: {
-          tenantId: rule.tenantId,
-          ruleId: rule.id,
-          marketplace: marketplaceForLog,
-          action: 'ERROR',
-          reason: e instanceof Error ? e.message : String(e),
-        },
-      });
+
+      try {
+        await this.enqueue(rule.tenantId, batch.items[0]!.id);
+        await prisma.automationQueueItem.update({
+          where: { id: candidate.id },
+          data: { status: 'DISPATCHED', dispatchedAt: this.now() },
+        });
+        await prisma.automationLog.create({
+          data: {
+            tenantId: rule.tenantId,
+            ruleId: rule.id,
+            marketplace: marketplaceForLog,
+            action: 'DISPATCHED',
+            productId: candidate.productId,
+          },
+        });
+      } catch (e) {
+        await prisma.batch.update({ where: { id: batch.id }, data: { status: 'CANCELLED' } });
+        await prisma.automationLog.create({
+          data: {
+            tenantId: rule.tenantId,
+            ruleId: rule.id,
+            marketplace: marketplaceForLog,
+            action: 'ERROR',
+            reason: e instanceof Error ? e.message : String(e),
+          },
+        });
+      }
+      return;
     }
+
+    log.warn({ ruleId: rule.id }, 'limite de tentativas de despacho atingido nesta rodada');
   }
 }
