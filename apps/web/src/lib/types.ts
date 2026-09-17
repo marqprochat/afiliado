@@ -223,5 +223,5 @@ export interface AutomationQueueItem {
   status: 'PENDING' | 'DISPATCHED' | 'REMOVED';
   addedAt: string;
   product: ApiProduct | null;
-  coupon: { id: string; store: string; code: string; description: string; expiresAt: string | null } | null;
+  coupon: { id: string; store: string; code: string; description: string; expiresAt: string | null; sourceUrl: string | null } | null;
 }
