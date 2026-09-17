@@ -4,6 +4,7 @@ import {
   fetchLatestBaileysVersion,
   jidNormalizedUser,
   downloadMediaMessage,
+  makeCacheableSignalKeyStore,
   type WASocket,
   type WAUrlInfo,
   type WAMessage,
@@ -78,6 +79,7 @@ export class BaileysGateway implements WhatsAppGateway {
   /** reconexões agendadas, mesmo sem socket vivo no mapa `live` */
   private pendingReconnects = new Map<string, NodeJS.Timeout>();
   private messageHandlers: ((m: IncomingGroupMessage) => void)[] = [];
+  private groupCache = new Map<string, { data: unknown; timestamp: number }>();
 
   onMessage(handler: (m: IncomingGroupMessage) => void) {
     this.messageHandlers.push(handler);
@@ -156,13 +158,25 @@ export class BaileysGateway implements WhatsAppGateway {
     try {
       ({ state, saveCreds, clear } = await usePostgresAuthState(sessionId));
       const version = await getWaVersion();
+      const logger = log.child({ sessionId }) as never;
       sock = makeWASocket({
         version,
-        auth: state,
+        auth: {
+          creds: state.creds,
+          keys: makeCacheableSignalKeyStore(state.keys, logger),
+        },
         printQRInTerminal: false,
         browser: [config.WA_BROWSER_NAME, 'Chrome', '120.0'],
-        logger: log.child({ sessionId }) as never,
+        logger,
         markOnlineOnConnect: false,
+        cachedGroupMetadata: async (jid) => {
+          const cached = this.groupCache.get(jid);
+          if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+            return cached.data as never;
+          }
+          return undefined;
+        },
+        getMessage: async () => undefined,
       });
       let resolveClosed!: () => void;
       const closed = new Promise<void>((resolve) => {
@@ -187,6 +201,16 @@ export class BaileysGateway implements WhatsAppGateway {
       this.opening.delete(sessionId);
     }
     await this.setStatus(sessionId, tenantId, 'CONNECTING');
+
+    sock.ev.on('groups.update', (updates) => {
+      for (const u of updates) {
+        if (u.id) this.groupCache.delete(u.id);
+      }
+    });
+
+    sock.ev.on('group-participants.update', (event) => {
+      if (event.id) this.groupCache.delete(event.id);
+    });
 
     sock.ev.on('creds.update', () => {
       void (async () => {
@@ -377,23 +401,86 @@ export class BaileysGateway implements WhatsAppGateway {
   async sendMessage(sessionId: string, jid: string, msg: OutgoingMessage) {
     const l = this.live.get(sessionId);
     if (!l || !this.isConnected(sessionId)) throw new Error('WA_NOT_CONNECTED');
-    const sent =
-      msg.kind === 'image'
-        ? await l.sock.sendMessage(jid, {
-            image: msg.imageBuffer ?? { url: msg.imageUrl! },
+
+    // Se for grupo, pré-carrega ou garante metadados para estabelecer sessões dos participantes
+    if (jid.endsWith('@g.us')) {
+      try {
+        if (!this.groupCache.has(jid)) {
+          const meta = await l.sock.groupMetadata(jid);
+          this.groupCache.set(jid, { data: meta, timestamp: Date.now() });
+        }
+      } catch (err) {
+        log.warn({ err, sessionId, jid }, 'aviso ao obter metadados do grupo');
+      }
+    }
+
+    // Prepara buffer de imagem com headers adequados para evitar 404 de CDN
+    let imageBuf = msg.kind === 'image' ? msg.imageBuffer : undefined;
+    if (msg.kind === 'image' && !imageBuf && msg.imageUrl) {
+      imageBuf = await fetchMediaBuffer(msg.imageUrl);
+    }
+
+    const doSend = async (asPreviewFallback = false) => {
+      if (msg.kind === 'image') {
+        if (imageBuf && !asPreviewFallback) {
+          return l.sock.sendMessage(jid, {
+            image: imageBuf,
             caption: msg.caption,
-          })
-        : await (async () => {
-            const jpegThumbnail = await fetchThumbnail(msg.thumbnailUrl);
-            const linkPreview: WAUrlInfo = {
-              'canonical-url': msg.url,
-              'matched-text': msg.url,
-              title: msg.title,
-              description: msg.description,
-            };
-            if (jpegThumbnail) linkPreview.jpegThumbnail = jpegThumbnail;
-            return l.sock.sendMessage(jid, { text: msg.text, linkPreview });
-          })();
+          });
+        } else if (!imageBuf && !asPreviewFallback && msg.imageUrl) {
+          try {
+            return await l.sock.sendMessage(jid, {
+              image: { url: msg.imageUrl },
+              caption: msg.caption,
+            });
+          } catch {
+            // Fallback para envio em formato texto caso o download da imagem falhe
+            return l.sock.sendMessage(jid, { text: msg.caption });
+          }
+        } else {
+          return l.sock.sendMessage(jid, { text: msg.caption });
+        }
+      } else {
+        const jpegThumbnail = await fetchThumbnail(msg.thumbnailUrl);
+        const linkPreview: WAUrlInfo = {
+          'canonical-url': msg.url,
+          'matched-text': msg.url,
+          title: msg.title,
+          description: msg.description,
+        };
+        if (jpegThumbnail) linkPreview.jpegThumbnail = jpegThumbnail;
+        return l.sock.sendMessage(jid, { text: msg.text, linkPreview });
+      }
+    };
+
+    let sent;
+    try {
+      sent = await doSend();
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const isSessionError = /No sessions|SessionError|invalid session|PreKey/i.test(errMsg);
+      const is404 = /404|status code 404/i.test(errMsg);
+
+      if (isSessionError && jid.endsWith('@g.us')) {
+        log.warn({ sessionId, jid, errMsg }, 'erro de sessão no grupo; limpando chaves de sender-key e re-obtendo metadados');
+        this.groupCache.delete(jid);
+        try {
+          await prisma.waAuthKey.deleteMany({
+            where: { sessionId, type: { in: ['sender-key', 'sender-key-memory'] } },
+          });
+          const freshMeta = await l.sock.groupMetadata(jid);
+          this.groupCache.set(jid, { data: freshMeta, timestamp: Date.now() });
+        } catch {}
+        await new Promise((r) => setTimeout(r, 1000));
+        sent = await doSend(false).catch(() => doSend(true));
+      } else if (is404 && msg.kind === 'image') {
+        log.warn({ sessionId, jid, errMsg }, 'falha 404 na imagem; tentando envio em modo texto');
+        sent = await doSend(true);
+      } else {
+        throw err;
+      }
+    }
+
     const messageId = sent?.key?.id;
     if (!messageId) throw new Error('Envio sem messageId');
     return { messageId };
@@ -425,11 +512,34 @@ export class BaileysGateway implements WhatsAppGateway {
   }
 }
 
+async function fetchMediaBuffer(url?: string): Promise<Buffer | undefined> {
+  if (!url) return undefined;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      },
+    });
+    if (!res.ok) return undefined;
+    const ab = await res.arrayBuffer();
+    const rawBuf = Buffer.from(ab);
+    try {
+      const sharp = (await import('sharp')).default;
+      return await sharp(rawBuf).jpeg({ quality: 85 }).toBuffer();
+    } catch {
+      return rawBuf;
+    }
+  } catch {
+    return undefined;
+  }
+}
+
 async function fetchThumbnail(url: string): Promise<Buffer | undefined> {
   try {
-    const res = await fetch(url);
-    if (!res.ok) return undefined;
-    const buf = Buffer.from(await res.arrayBuffer());
+    const buf = await fetchMediaBuffer(url);
+    if (!buf) return undefined;
     const sharp = (await import('sharp')).default;
     return await sharp(buf).resize(300, 300, { fit: 'inside' }).jpeg({ quality: 70 }).toBuffer();
   } catch {

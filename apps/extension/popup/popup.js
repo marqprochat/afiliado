@@ -259,14 +259,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     captureStatus.textContent = 'Enviando oferta para o Afilados...';
     captureStatus.className = 'msg';
 
+    const payload = {
+      url: currentProduct.url,
+      marketplaceKind: currentProduct.marketplaceKind,
+      ...(currentProduct.title ? { title: currentProduct.title } : {}),
+      ...(currentProduct.price !== null && currentProduct.price !== undefined ? { price: currentProduct.price } : {}),
+      ...(currentProduct.originalPrice ? { originalPrice: currentProduct.originalPrice } : {}),
+      ...(currentProduct.discountPct ? { discountPct: currentProduct.discountPct } : {}),
+      ...(currentProduct.images && currentProduct.images.length > 0 ? { images: currentProduct.images } : {}),
+      ...(currentProduct.shipping && currentProduct.shipping !== 'UNKNOWN' ? { shipping: currentProduct.shipping } : {}),
+      ...(currentProduct.couponCode ? { couponCode: currentProduct.couponCode } : {}),
+    };
+
     try {
-      const res = await fetch(`${config.apiUrl}/api/v1/extension/capture`, {
+      const targetUrl = `${normalizeApiUrl(config.apiUrl)}/api/v1/extension/capture`;
+      const res = await fetch(targetUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${config.apiToken}`,
         },
-        body: JSON.stringify(currentProduct),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
@@ -274,8 +287,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         captureStatus.className = 'msg msg-success';
         btnCapture.textContent = '✓ Adicionado na Fila';
       } else {
-        const err = await res.json();
-        captureStatus.textContent = `❌ ${err.error?.message || 'Falha ao capturar oferta'}`;
+        const err = await res.json().catch(() => null);
+        captureStatus.textContent = `❌ ${err?.error?.message || 'Falha ao capturar oferta'}`;
         captureStatus.className = 'msg msg-error';
         btnCapture.disabled = false;
       }

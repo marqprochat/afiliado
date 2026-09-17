@@ -117,6 +117,44 @@ describe('API Tokens & Extension Routes (Fase 3)', () => {
     expect(queueCount).toBe(1);
   });
 
+  it('aceita captura da extensão com campos opcionais nulos (nullish)', async () => {
+    const tokenRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/api-tokens',
+      headers: { cookie },
+      payload: { name: 'Token Nullish Test' },
+    });
+    const { token } = tokenRes.json();
+
+    const captureRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/extension/capture',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        url: 'https://www.mercadolivre.com.br/produto-teste/p/MLB123',
+        marketplaceKind: 'MERCADOLIVRE',
+        title: 'Cafeteira Mondial Dolce Crema',
+        price: 521.93,
+        originalPrice: 967.0,
+        discountPct: 46,
+        images: ['https://http2.mlstatic.com/foto1.jpg'],
+        shipping: 'FULL',
+        couponCode: null,
+        couponValue: null,
+        flashSaleEndsAt: null,
+        affiliateUrl: null,
+      },
+    });
+
+    expect(captureRes.statusCode).toBe(200);
+    const body = captureRes.json();
+    expect(body.ok).toBe(true);
+    expect(body.product.title).toBe('Cafeteira Mondial Dolce Crema');
+    expect(body.product.price).toBe(521.93);
+    expect(body.product.originalPrice).toBe(967.0);
+    expect(body.product.couponCode).toBeNull();
+  });
+
   it('sincroniza a sessão do ML criptografada, sem expor cookies, preservando matt_word/matt_tool', async () => {
     // Tags já configuradas pela F2
     await app.inject({

@@ -1,14 +1,10 @@
 import {
   BufferJSON,
   initAuthCreds,
+  WAProto,
   type AuthenticationState,
   type SignalDataTypeMap,
 } from '@whiskeysockets/baileys';
-// `proto` é reexportado do WAProto de um jeito que o cjs-module-lexer do Node não enxerga;
-// importar por namespace evita "does not provide an export named 'proto'" em runtime ESM.
-import * as baileys from '@whiskeysockets/baileys';
-
-const { proto } = baileys;
 import { Prisma, prisma } from '@afilados/db';
 
 const toJson = (v: unknown) => JSON.parse(JSON.stringify(v, BufferJSON.replacer)) as object;
@@ -36,8 +32,8 @@ export async function usePostgresAuthState(sessionId: string) {
         const out: { [id: string]: SignalDataTypeMap[T] } = {};
         for (const r of rows) {
           let value = fromJson<SignalDataTypeMap[T]>(r.value);
-          if (type === 'app-state-sync-key' && value) {
-            value = proto.Message.AppStateSyncKeyData.fromObject(
+          if (type === 'app-state-sync-key' && value && WAProto?.Message?.AppStateSyncKeyData) {
+            value = WAProto.Message.AppStateSyncKeyData.fromObject(
               value as object,
             ) as unknown as SignalDataTypeMap[T];
           }
@@ -62,7 +58,9 @@ export async function usePostgresAuthState(sessionId: string) {
             }
           }
         }
-        await prisma.$transaction(ops);
+        if (ops.length > 0) {
+          await prisma.$transaction(ops);
+        }
       },
     },
   };

@@ -46,6 +46,46 @@ describe('Scrapers de Marketplaces (Fase 3)', () => {
     expect(product.images[0]).toContain('http2.mlstatic.com');
   });
 
+  it('Mercado Livre: extrai corretamente preço promocional e preço original riscado sem misturar centavos', () => {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Cafeteira Espresso Dolce Crema 20 Bar Mondial Preto/Inox 1200W</title>
+        </head>
+        <body>
+          <h1 class="ui-pdp-title">Cafeteira Espresso Dolce Crema 20 Bar Mondial Preto/Inox 1200W C-21-E-CNP</h1>
+          <div class="ui-pdp-price ui-pdp-price--size-large">
+            <s class="andes-money-amount ui-pdp-price__part--medium andes-money-amount--previous">
+              <span class="andes-money-amount__fraction">967</span>
+              <span class="andes-money-amount__cents">00</span>
+            </s>
+            <div class="ui-pdp-price__second-line">
+              <span class="andes-money-amount ui-pdp-price__part ui-pdp-price__part--medium">
+                <span class="andes-money-amount__fraction">521</span>
+                <span class="andes-money-amount__cents">93</span>
+              </span>
+              <span class="ui-pdp-price__discount">46% OFF no Pix</span>
+            </div>
+          </div>
+          <svg class="ui-pdp-icon--full"></svg>
+        </body>
+      </html>
+    `;
+
+    const product = parseMercadoLivreHtml(
+      html,
+      'https://www.mercadolivre.com.br/cafeteira-espresso-dolce-crema-20-bar-mondial/p/MLB65923840',
+    );
+
+    expect(product.source).toBe('MERCADOLIVRE');
+    expect(product.title).toBe('Cafeteira Espresso Dolce Crema 20 Bar Mondial Preto/Inox 1200W C-21-E-CNP');
+    expect(product.price).toBe(521.93);
+    expect(product.originalPrice).toBe(967.0);
+    expect(product.discountPct).toBe(46);
+    expect(product.shipping).toBe('FULL');
+  });
+
   it('Amazon: extrai título, preço, preço original, desconto, imagens e frete Prime', () => {
     const html = `
       <!DOCTYPE html>

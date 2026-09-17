@@ -32,42 +32,41 @@ export function parseMercadoLivreHtml(html: string, originalUrl: string): Produc
     } catch {}
   });
 
-  // Preço atual via DOM (mais atualizado)
-  const currentFraction = $(
-    '.ui-pdp-price__second-line .andes-money-amount__fraction, .ui-pdp-price--size-large .andes-money-amount__fraction',
-  )
-    .first()
-    .text()
-    .trim();
-  const currentCents = $(
-    '.ui-pdp-price__second-line .andes-money-amount__cents, .ui-pdp-price--size-large .andes-money-amount__cents',
-  )
-    .first()
-    .text()
-    .trim();
-  if (currentFraction) {
-    const raw = currentCents ? `${currentFraction}.${currentCents}` : currentFraction;
-    const parsed = parseMoney(raw);
-    if (parsed !== undefined) currentPrice = parsed;
+  // Helper Cheerio para extrair preço de um container de preço
+  function parseAndesMoneyCheerio(el: ReturnType<typeof $>): number | undefined {
+    if (!el || el.length === 0) return undefined;
+    const frac = el.find('.andes-money-amount__fraction').first().text().replace(/\./g, '').trim();
+    if (!frac) return undefined;
+    const cents = el.find('.andes-money-amount__cents').first().text().trim();
+    return parseMoney(cents ? `${frac}.${cents}` : frac);
   }
 
-  // Preço original via DOM
-  const originalFraction = $(
-    '.ui-pdp-price__original-value .andes-money-amount__fraction, s .andes-money-amount__fraction',
-  )
-    .first()
-    .text()
-    .trim();
-  const originalCents = $(
-    '.ui-pdp-price__original-value .andes-money-amount__cents, s .andes-money-amount__cents',
-  )
-    .first()
-    .text()
-    .trim();
-  if (originalFraction) {
-    const raw = originalCents ? `${originalFraction}.${originalCents}` : originalFraction;
-    const parsed = parseMoney(raw);
-    if (parsed !== undefined) originalPrice = parsed;
+  // Preço original via DOM (riscado / "de")
+  const originalEl = $(
+    '.ui-pdp-price__original-value, .andes-money-amount--previous, s .andes-money-amount, del .andes-money-amount, s, del',
+  ).first();
+  const parsedOrig = parseAndesMoneyCheerio(originalEl);
+  if (parsedOrig !== undefined) {
+    originalPrice = parsedOrig;
+  }
+
+  // Preço atual via DOM (linha de preço atual, ignorando originais riscados)
+  let currentEl = $('.ui-pdp-price__second-line').first();
+  if (currentEl.length === 0 || !currentEl.find('.andes-money-amount__fraction').length) {
+    currentEl = $(
+      '.ui-pdp-price__price .andes-money-amount:not(.andes-money-amount--previous), .ui-pdp-price--size-large .andes-money-amount:not(.andes-money-amount--previous), .ui-pdp-price__main-container .andes-money-amount:not(.andes-money-amount--previous)',
+    ).first();
+  }
+  const parsedCurrent = parseAndesMoneyCheerio(currentEl);
+  if (parsedCurrent !== undefined) {
+    currentPrice = parsedCurrent;
+  } else {
+    // Fallback meta tags de preço
+    const metaPrice = $('meta[itemprop="price"], meta[property="product:price:amount"]').first().attr('content');
+    if (metaPrice) {
+      const parsed = Number(metaPrice);
+      if (!isNaN(parsed) && parsed > 0) currentPrice = parsed;
+    }
   }
 
   // Se o preço original for menor ou igual ao atual, descarta
@@ -92,13 +91,24 @@ export function parseMercadoLivreHtml(html: string, originalUrl: string): Produc
   }
 
   // 4. Imagens
-  const images: string[] = [];
+  // A galeria do ML repete a mesma foto em dois elementos: a miniatura da tira lateral
+  // (`src` em baixa resolução) e a imagem grande em exibição (`data-zoom`, alta resolução).
+  // Priorizamos exclusivamente `data-zoom` quando existir pelo menos um, senão a miniatura
+  // de baixa resolução acaba virando images[0].
+  const zoomImages: string[] = [];
+  const srcImages: string[] = [];
   $('img.ui-pdp-image, .ui-pdp-gallery__figure img').each((_, el) => {
-    const src = $(el).attr('data-zoom') || $(el).attr('src');
-    if (src && src.startsWith('http') && !images.includes(src)) {
-      images.push(src);
+    const zoom = $(el).attr('data-zoom');
+    if (zoom && zoom.startsWith('http')) {
+      if (!zoomImages.includes(zoom)) zoomImages.push(zoom);
+      return;
+    }
+    const src = $(el).attr('src');
+    if (src && src.startsWith('http') && !srcImages.includes(src)) {
+      srcImages.push(src);
     }
   });
+  const images: string[] = zoomImages.length > 0 ? zoomImages : srcImages;
   if (images.length === 0) {
     const ogImage = $('meta[property="og:image"]').attr('content');
     if (ogImage && ogImage.startsWith('http')) {

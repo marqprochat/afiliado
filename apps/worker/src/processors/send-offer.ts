@@ -8,8 +8,8 @@ import {
   nextWindowOpen,
   renderTemplate,
 } from '@afilados/core';
-import type { MarketplaceAdapter, ShopeeCredentials } from '@afilados/marketplaces';
-import type { ProductData, SendOfferJob } from '@afilados/shared';
+import { getTagAdapter, type MarketplaceAdapter, type ShopeeCredentials } from '@afilados/marketplaces';
+import type { ProductData, SendOfferJob, TagCredentials } from '@afilados/shared';
 import { publishEvent } from '../lib/events';
 import { getRedis } from '../lib/redis';
 import { TokenBucket, jitter, waitForToken } from '../lib/rate-limit';
@@ -24,6 +24,8 @@ export interface SendOfferDeps {
   sleep?: (ms: number) => Promise<void>;
   rng?: () => number;
   bucketFor?: (sessionId: string, ratePerMin: number) => { take(): Promise<number> };
+  /** Injetável em testes; por padrão resolve o adapter real (Amazon/ML/Magalu) por tag. */
+  getTagAdapter?: typeof getTagAdapter;
 }
 
 export type SendOfferResult =
@@ -44,6 +46,7 @@ export async function sendOffer(
     deps.bucketFor ??
     ((sessionId: string, rate: number) =>
       new TokenBucket(getRedis(), `wa:rate:${sessionId}`, rate));
+  const resolveTagAdapter = deps.getTagAdapter ?? getTagAdapter;
 
   const item = await prisma.batchItem.findUnique({
     where: { id: batchItemId },
@@ -60,7 +63,9 @@ export async function sendOffer(
   const [windowRow, settingsRows, conn] = await Promise.all([
     prisma.operatingWindow.findUnique({ where: { tenantId } }),
     prisma.setting.findMany({ where: { tenantId } }),
-    prisma.marketplaceConnection.findFirst({ where: { tenantId, kind: 'SHOPEE' } }),
+    product.source === 'MANUAL'
+      ? Promise.resolve(null)
+      : prisma.marketplaceConnection.findFirst({ where: { tenantId, kind: product.source } }),
   ]);
   const settings = Object.fromEntries(settingsRows.map((s) => [s.key, s.value])) as Record<
     string,
@@ -108,6 +113,19 @@ export async function sendOffer(
         timezone: window.timezone,
       });
       affiliateLink = await deps.shopee.toAffiliateLink(creds, product.originalUrl, subId);
+    } else if (product.source !== 'SHOPEE' && product.source !== 'MANUAL' && conn?.encryptedCredentials) {
+      const creds = decryptJson<TagCredentials>(Buffer.from(conn.encryptedCredentials));
+      try {
+        affiliateLink = await resolveTagAdapter(product.source).toAffiliateLink(
+          creds,
+          product.originalUrl,
+        );
+      } catch (err) {
+        log.warn(
+          { batchItemId: item.id, source: product.source, err },
+          'falha ao gerar link de afiliado; usando link original',
+        );
+      }
     }
 
     const pd: ProductData = {

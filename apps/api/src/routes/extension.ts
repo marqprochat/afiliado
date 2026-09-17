@@ -81,18 +81,19 @@ export async function extensionRoutes(app: FastifyInstance) {
     const body = extensionCaptureSchema.parse(req.body);
 
     let productData: ProductData;
-    if (body.title && body.price !== undefined) {
+    if (body.title && body.price !== undefined && body.price !== null) {
       // Produto já veio com metadados extraídos pelo content script
       productData = {
         source: body.marketplaceKind,
         title: body.title,
         price: body.price,
-        originalPrice: body.originalPrice,
+        originalPrice: body.originalPrice ?? undefined,
+        discountPct: body.discountPct ?? undefined,
         images: body.images ?? [],
         shipping: body.shipping ?? 'UNKNOWN',
-        couponCode: body.couponCode,
-        couponValue: body.couponValue,
-        flashSaleEndsAt: body.flashSaleEndsAt,
+        couponCode: body.couponCode ?? undefined,
+        couponValue: body.couponValue ?? undefined,
+        flashSaleEndsAt: body.flashSaleEndsAt ?? undefined,
         originalUrl: body.url,
         raw: { source: 'extension-capture', ...body },
       };

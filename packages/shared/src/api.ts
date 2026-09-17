@@ -105,15 +105,16 @@ export type ApiTokenCreateBody = z.infer<typeof apiTokenCreateSchema>;
 export const extensionCaptureSchema = z.object({
   url: z.string().url(),
   marketplaceKind: z.enum(MARKETPLACE_KINDS),
-  title: z.string().min(1).max(500).optional(),
-  price: z.number().positive().optional(),
-  originalPrice: z.number().positive().optional(),
-  images: z.array(z.string().url()).optional(),
-  couponCode: z.string().max(60).optional(),
-  couponValue: z.number().positive().optional(),
-  shipping: z.enum(['NONE', 'FREE', 'FULL', 'UNKNOWN']).optional(),
-  flashSaleEndsAt: z.string().datetime().optional(),
-  affiliateUrl: z.string().url().optional(),
+  title: z.string().min(1).max(500).nullish(),
+  price: z.number().positive().nullish(),
+  originalPrice: z.number().positive().nullish(),
+  discountPct: z.number().int().min(1).max(100).nullish(),
+  images: z.array(z.string().url()).nullish(),
+  couponCode: z.string().max(60).nullish(),
+  couponValue: z.number().positive().nullish(),
+  shipping: z.enum(['NONE', 'FREE', 'FULL', 'UNKNOWN']).nullish(),
+  flashSaleEndsAt: z.string().datetime().nullish(),
+  affiliateUrl: z.string().url().nullish(),
 });
 export type ExtensionCaptureBody = z.infer<typeof extensionCaptureSchema>;
 
