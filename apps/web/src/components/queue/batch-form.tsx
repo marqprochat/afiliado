@@ -46,6 +46,8 @@ export function BatchForm({
   const [mediaMode, setMediaMode] = useState<'IMAGE' | 'PREVIEW'>('IMAGE');
   const [shuffled, setShuffled] = useState(false);
 
+  const adminGroups = useMemo(() => groups.filter((g) => g.botIsAdmin), [groups]);
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const now = useMemo(() => new Date(), [selectedCount, intervalMin]);
   const schedule = useMemo(
@@ -110,12 +112,14 @@ export function BatchForm({
       <div>
         <Label>Grupos ({jids.size})</Label>
         <div className="mt-1 max-h-48 space-y-1 overflow-y-auto rounded-md border border-border p-2">
-          {groups.length === 0 && (
+          {adminGroups.length === 0 && (
             <p className="text-xs text-muted-foreground">
-              Nenhum grupo — sincronize em Configurações → WhatsApp.
+              {groups.length === 0
+                ? 'Nenhum grupo — sincronize em Configurações → WhatsApp.'
+                : 'Nenhum grupo em que este número é administrador.'}
             </p>
           )}
-          {groups.map((g) => (
+          {adminGroups.map((g) => (
             <label key={g.jid} className="flex items-center gap-2 text-sm">
               <NativeCheckbox
                 checked={jids.has(g.jid)}

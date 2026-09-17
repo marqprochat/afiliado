@@ -47,11 +47,19 @@ const groups = [
     botIsAdmin: true,
     memberCount: 0,
   },
+  {
+    id: 'g3',
+    jid: 'g3@g.us',
+    name: 'Grupo Apenas Membro',
+    kind: 'GROUP' as const,
+    botIsAdmin: false,
+    memberCount: 20,
+  },
 ];
 const templates = [{ id: 't1', name: 'Padrão', body: '{link}', isDefault: true }];
 
 describe('BatchForm', () => {
-  it('cria lote com grupos marcados e mostra previsão', () => {
+  it('cria lote com grupos marcados e mostra previsão apenas para grupos com admin', () => {
     const onCreate = vi.fn();
     render(
       <BatchForm
@@ -63,6 +71,9 @@ describe('BatchForm', () => {
         onCreate={onCreate}
       />,
     );
+    expect(screen.getByLabelText(/\[GRUPO\] Ofertas/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/\[GRUPO\] Grupo Apenas Membro/)).not.toBeInTheDocument();
+
     fireEvent.change(screen.getByLabelText(/nome do lote/i), { target: { value: 'Lote 1' } });
     fireEvent.click(screen.getByLabelText(/\[GRUPO\] Ofertas/));
     fireEvent.change(screen.getByLabelText(/intervalo/i), { target: { value: '10' } });
@@ -79,6 +90,30 @@ describe('BatchForm', () => {
         shuffled: false,
       }),
     );
+  });
+  it('mostra mensagem informativa quando nenhum grupo possui permissão de admin', () => {
+    render(
+      <BatchForm
+        sessions={sessions}
+        groups={[
+          {
+            id: 'g3',
+            jid: 'g3@g.us',
+            name: 'Grupo Somente Membro',
+            kind: 'GROUP',
+            botIsAdmin: false,
+            memberCount: 5,
+          },
+        ]}
+        templates={templates}
+        settings={settings}
+        selectedCount={1}
+        onCreate={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText(/Nenhum grupo em que este número é administrador/i),
+    ).toBeInTheDocument();
   });
   it('desabilita criar sem grupos ou sem itens', () => {
     render(
