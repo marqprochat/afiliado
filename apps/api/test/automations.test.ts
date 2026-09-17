@@ -5,12 +5,14 @@ import { createTenantWithUser, cleanupTenant, loginCookie } from './helpers';
 
 const app = await buildApp({ logger: false });
 let t: Awaited<ReturnType<typeof createTenantWithUser>>;
+let other: Awaited<ReturnType<typeof createTenantWithUser>>;
 let cookie: string;
 let sessionId: string;
 let templateId: string;
 
 beforeAll(async () => {
   t = await createTenantWithUser();
+  other = await createTenantWithUser('o');
   cookie = await loginCookie(app, t.email, t.password);
   const s = await prisma.waSession.create({
     data: { tenantId: t.tenantId, label: 'c', status: 'CONNECTED' },
@@ -23,6 +25,7 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await cleanupTenant(t.tenantId);
+  await cleanupTenant(other.tenantId);
   await app.close();
 });
 
@@ -113,6 +116,27 @@ describe('automations routes', () => {
     expect(items.length).toBe(1);
     expect(items[0].kind).toBe('COUPON');
     expect(items[0].manual).toBe(true);
+  });
+
+  it('rejeita couponId de outro tenant (IDOR) → 404', async () => {
+    const foreignCoupon = await prisma.coupon.create({
+      data: { tenantId: other.tenantId, store: 'AMAZON', code: 'FOREIGN10', description: 'de outro tenant' },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/automations/${ruleId}/queue/coupon`,
+      headers: { cookie },
+      payload: { couponId: foreignCoupon.id, templateId },
+    });
+    expect(res.statusCode).toBe(404);
+
+    const listRes = await app.inject({
+      method: 'GET',
+      url: `/api/v1/automations/${ruleId}/queue`,
+      headers: { cookie },
+    });
+    const items = listRes.json();
+    expect(items.some((i: { couponId: string | null }) => i.couponId === foreignCoupon.id)).toBe(false);
   });
 
   it('remove item da fila', async () => {

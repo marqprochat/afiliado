@@ -153,7 +153,10 @@ export async function automationsRoutes(app: FastifyInstance) {
     if (!rule) throw ApiError.notFound('Regra não encontrada');
 
     let couponId = body.couponId;
-    if (!couponId && body.coupon) {
+    if (couponId) {
+      const coupon = await req.db.coupon.findFirst({ where: { id: couponId } });
+      if (!coupon) throw ApiError.notFound('Cupom não encontrado');
+    } else if (body.coupon) {
       const coupon = await req.db.coupon.create({
         // @ts-expect-error tenantId é injetado pela extensão forTenant
         data: {
