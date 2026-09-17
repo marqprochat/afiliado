@@ -6,5 +6,6 @@ export * from './shuffle';
 export * from './urls';
 export * from './links';
 export * from './wa-message';
+export * from './eligibility';
 
 export * from './subid';

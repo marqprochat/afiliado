@@ -54,3 +54,30 @@ export function renderTemplate(body: string, product: ProductData, ctx: Template
     .filter((line, i) => !(line.trim() === '' && /\{#\w+\}/.test(originalLines[i] ?? '')))
     .join('\n');
 }
+
+export interface CouponData {
+  store: string;
+  code: string;
+  description: string;
+  expiresAt: string | null;
+}
+
+function buildCouponVars(c: CouponData): Record<string, string> {
+  return {
+    codigo: c.code,
+    loja: c.store,
+    descricao: c.description,
+    validade: c.expiresAt
+      ? DateTime.fromISO(c.expiresAt).toFormat('dd/MM/yyyy')
+      : 'sem validade definida',
+  };
+}
+
+export function renderCouponTemplate(
+  body: string,
+  coupon: CouponData,
+  _ctx: { now: string },
+): string {
+  const vars = buildCouponVars(coupon);
+  return body.replace(VAR_RE, (m, name: string) => vars[name] ?? m);
+}
