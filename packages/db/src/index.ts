@@ -26,6 +26,9 @@ const TENANT_MODELS = new Set([
   'Coupon',
   'ScheduledMessage',
   'ApiToken',
+  'AutomationRule',
+  'AutomationLog',
+  'AutomationQueueItem',
 ]);
 
 const FILTERED_OPS = new Set([

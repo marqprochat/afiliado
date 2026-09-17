@@ -108,7 +108,10 @@ export async function batchesRoutes(app: FastifyInstance) {
       include: { items: { orderBy: { order: 'asc' }, include: { product: true } } },
     });
     if (!b) throw ApiError.notFound('Lote não encontrado');
-    return { ...b, items: b.items.map((i) => ({ ...i, product: toApiProduct(i.product) })) };
+    return {
+      ...b,
+      items: b.items.map((i) => ({ ...i, product: i.product ? toApiProduct(i.product) : null })),
+    };
   });
 
   app.post('/batches/:id/pause', async (req) => {
