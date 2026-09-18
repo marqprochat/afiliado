@@ -245,6 +245,44 @@ describe('AutomationScheduler', () => {
     expect(enqueued.length).toBe(1); // apenas o primeiro tick despachou; o segundo foi ignorado
   });
 
+  it('sorteia 1 marketplace do pool da regra antes de descobrir', async () => {
+    const rule = await prisma.automationRule.create({
+      data: {
+        tenantId,
+        name: 'r-mix',
+        enabled: true,
+        marketplaces: ['SHOPEE', 'MERCADOLIVRE', 'AMAZON', 'MAGALU'],
+        keywords: ['fone'],
+        blockedKeywords: [],
+        intervalMin: 5,
+        sessionId,
+        groupJids: ['g1@g.us'],
+        templateId,
+      },
+    });
+
+    const discoverCalls: string[] = [];
+    const scheduler = new AutomationScheduler({
+      enqueue: vi.fn(),
+      discover: async (r) => {
+        discoverCalls.push(r.id);
+      },
+    });
+    await scheduler.reload();
+    await scheduler.tick();
+
+    // discover(rule) é chamado; quem decide QUAL marketplace é discoverForRule internamente
+    // (Task 2 move o sorteio para dentro de discoverForRule, não do scheduler) — este teste
+    // só confirma que o scheduler continua chamando discover exatamente 1 vez por rodada
+    // mesmo com 4 marketplaces no pool da regra.
+    // Filtra por esta regra: `reload()` carrega TODAS as regras habilitadas (sem filtro de
+    // tenant), então regras de outros testes deste arquivo que nunca chegaram a um log
+    // DISPATCHED (ex: 'r2', que só loga SKIPPED) continuam elegíveis para novo tick e também
+    // acionam `discover` na mesma rodada — isso é uma característica pré-existente do
+    // scheduler/reload, não relacionada a esta task.
+    expect(discoverCalls.filter((id) => id === rule.id).length).toBe(1);
+  });
+
   it('não recarrega regra desabilitada', async () => {
     await prisma.automationRule.create({
       data: {

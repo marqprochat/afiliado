@@ -133,3 +133,102 @@ describe('discoverForRule (Shopee)', () => {
     expect(logs[0]!.marketplace).toBe('SHOPEE');
   });
 });
+
+describe('discoverForRule (Mercado Livre / Amazon / Magalu)', () => {
+  it('descobre produto do Mercado Livre quando discoverByKeyword é injetado (bypassa o carregamento de sessão)', async () => {
+    const rule = await prisma.automationRule.create({
+      data: {
+        tenantId,
+        name: 'discovery-ml',
+        marketplaces: ['MERCADOLIVRE'],
+        keywords: ['fone'],
+        blockedKeywords: [],
+        sessionId: (await prisma.waSession.create({ data: { tenantId, label: 'sml' } })).id,
+        groupJids: ['g@g.us'],
+        templateId: (await prisma.template.create({ data: { tenantId, name: 'tml', body: 'x' } })).id,
+      },
+    });
+
+    const foundUrl = 'https://produto.mercadolivre.com.br/MLB-9999999999-fone-bluetooth';
+    const enriched = {
+      source: 'MERCADOLIVRE' as const,
+      externalId: 'MLB9999999999',
+      title: 'Fone Bluetooth ML',
+      price: 80,
+      images: ['https://x/ml.png'],
+      shipping: 'FREE' as const,
+      originalUrl: foundUrl,
+      raw: {},
+    };
+
+    await discoverForRule(rule, {
+      pickMarketplace: () => 'MERCADOLIVRE',
+      discoverByKeyword: { MERCADOLIVRE: async () => [foundUrl] },
+      fetchByUrls: { MERCADOLIVRE: async () => [enriched] },
+    });
+
+    const items = await prisma.automationQueueItem.findMany({
+      where: { ruleId: rule.id },
+      include: { product: true },
+    });
+    expect(items.length).toBe(1);
+    expect(items[0]!.product!.source).toBe('MERCADOLIVRE');
+  });
+
+  it('loga ERROR e não derruba a regra quando o scraper falha', async () => {
+    const rule = await prisma.automationRule.create({
+      data: {
+        tenantId,
+        name: 'discovery-amazon-falha',
+        marketplaces: ['AMAZON'],
+        keywords: ['fone'],
+        blockedKeywords: [],
+        sessionId: (await prisma.waSession.create({ data: { tenantId, label: 'sam' } })).id,
+        groupJids: ['g@g.us'],
+        templateId: (await prisma.template.create({ data: { tenantId, name: 'tam', body: 'x' } })).id,
+      },
+    });
+
+    await discoverForRule(rule, {
+      pickMarketplace: () => 'AMAZON',
+      discoverByKeyword: {
+        AMAZON: async () => {
+          throw new Error('timeout ao buscar amazon.com.br');
+        },
+      },
+    });
+
+    const log = await prisma.automationLog.findFirstOrThrow({ where: { ruleId: rule.id } });
+    expect(log.action).toBe('ERROR');
+    expect(log.marketplace).toBe('AMAZON');
+    const items = await prisma.automationQueueItem.findMany({ where: { ruleId: rule.id } });
+    expect(items.length).toBe(0);
+  });
+
+  it('loga ERROR e não tenta anônimo quando ML não tem sessão sincronizada', async () => {
+    const rule = await prisma.automationRule.create({
+      data: {
+        tenantId,
+        name: 'discovery-ml-sem-sessao',
+        marketplaces: ['MERCADOLIVRE'],
+        keywords: ['fone'],
+        blockedKeywords: [],
+        sessionId: (await prisma.waSession.create({ data: { tenantId, label: 'sml2' } })).id,
+        groupJids: ['g@g.us'],
+        templateId: (await prisma.template.create({ data: { tenantId, name: 'tml2', body: 'x' } })).id,
+      },
+    });
+    // Sem MarketplaceConnection nenhuma para MERCADOLIVRE neste tenant — sem sessão sincronizada.
+    // Importante: NÃO injeta `discoverByKeyword` aqui — isso faria discoverScraped usar o
+    // override direto e pular o carregamento de sessão, o que é exatamente o código que este
+    // teste precisa exercitar de verdade (sem mock por cima dele).
+
+    await discoverForRule(rule, { pickMarketplace: () => 'MERCADOLIVRE' });
+
+    const log = await prisma.automationLog.findFirstOrThrow({ where: { ruleId: rule.id } });
+    expect(log.action).toBe('ERROR');
+    expect(log.reason).toContain('sessão');
+    const items = await prisma.automationQueueItem.findMany({ where: { ruleId: rule.id } });
+    expect(items.length).toBe(0);
+  });
+});

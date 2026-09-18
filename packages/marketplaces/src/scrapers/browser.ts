@@ -15,6 +15,8 @@ export interface FetchRenderedHtmlOptions {
   timeoutMs?: number;
   /** Se informado, espera esse seletor aparecer antes de capturar o HTML (mais confiável que timeout fixo). */
   waitForSelector?: string;
+  /** Cookies de sessão a injetar antes de navegar (ex: sessão logada sincronizada pela extensão). */
+  cookies?: { domain: string; values: Record<string, string> };
 }
 
 const REALISTIC_USER_AGENT =
@@ -31,6 +33,16 @@ export async function fetchRenderedHtml(
     locale: 'pt-BR',
   });
   try {
+    if (opts.cookies) {
+      await context.addCookies(
+        Object.entries(opts.cookies.values).map(([name, value]) => ({
+          name,
+          value,
+          domain: opts.cookies!.domain,
+          path: '/',
+        })),
+      );
+    }
     const page = await context.newPage();
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: opts.timeoutMs ?? 15_000 });
     if (opts.waitForSelector) {
