@@ -1,10 +1,13 @@
 'use client';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { apiFetch } from '@/lib/api';
 import { useApiMutation } from '@/lib/mutations';
 import { useSessions, useGroups, useTemplates } from '@/lib/queries';
 import type { AutomationRule } from '@/lib/types';
+import { cn } from '@/lib/utils';
 import type { MarketplaceKind } from '@afilados/shared';
 
 const ALL_MARKETS: { key: MarketplaceKind; label: string }[] = [
@@ -13,6 +16,8 @@ const ALL_MARKETS: { key: MarketplaceKind; label: string }[] = [
   { key: 'AMAZON', label: 'Amazon' },
   { key: 'MAGALU', label: 'Magalu' },
 ];
+
+const selectCls = 'mt-1 h-9 w-full rounded-md border border-input bg-surface-2 px-2 text-sm';
 
 export function RuleForm({ onCreated }: { onCreated: () => void }) {
   const [name, setName] = useState('');
@@ -24,7 +29,7 @@ export function RuleForm({ onCreated }: { onCreated: () => void }) {
   const [intervalMin, setIntervalMin] = useState(60);
   const [maxOffersPerDay, setMaxOffersPerDay] = useState(20);
   const [sessionId, setSessionId] = useState('');
-  const [groupJids, setGroupJids] = useState<string[]>([]);
+  const [groupJids, setGroupJids] = useState<Set<string>>(new Set());
   const [templateId, setTemplateId] = useState('');
 
   function toggleMarketplace(kind: MarketplaceKind) {
@@ -37,12 +42,20 @@ export function RuleForm({ onCreated }: { onCreated: () => void }) {
   const { data: groups } = useGroups(sessionId || null);
   const { data: templates } = useTemplates();
 
+  const canCreate =
+    !!name.trim() &&
+    marketplaces.length > 0 &&
+    !!keywords.trim() &&
+    !!sessionId &&
+    groupJids.size > 0 &&
+    !!templateId;
+
   const create = useApiMutation(
     () =>
       apiFetch<AutomationRule>('/automations', {
         method: 'POST',
         json: {
-          name,
+          name: name.trim(),
           marketplaces,
           keywords: keywords
             .split(',')
@@ -57,7 +70,7 @@ export function RuleForm({ onCreated }: { onCreated: () => void }) {
           intervalMin,
           maxOffersPerDay,
           sessionId,
-          groupJids,
+          groupJids: [...groupJids],
           templateId,
         },
       }),
@@ -66,133 +79,192 @@ export function RuleForm({ onCreated }: { onCreated: () => void }) {
 
   return (
     <form
-      className="space-y-3 rounded-lg border p-4"
+      className="space-y-4 rounded-lg border border-border bg-surface p-4"
       onSubmit={(e) => {
         e.preventDefault();
-        create.mutate();
+        if (canCreate) create.mutate();
       }}
     >
-      <input
-        className="w-full rounded border px-3 py-2"
-        placeholder="Nome da automação (ex: Eletrônicos até R$300)"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        required
-      />
-      <div className="flex gap-2">
-        {ALL_MARKETS.map((m) => (
-          <button
-            key={m.key}
-            type="button"
-            onClick={() => toggleMarketplace(m.key)}
-            className={
-              marketplaces.includes(m.key)
-                ? 'rounded bg-orange-100 px-2 py-1 text-sm'
-                : 'rounded bg-gray-100 px-2 py-1 text-sm text-gray-500'
-            }
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
-      {(marketplaces.includes('MERCADOLIVRE') || marketplaces.includes('MAGALU')) && (
-        <p className="text-xs text-gray-500">
-          Mercado Livre e Magalu requerem sessão sincronizada em Marketplaces (extensão para ML,
-          colagem manual para Magalu) — sem isso, a regra não encontrará produtos nesses
-          marketplaces.
-        </p>
-      )}
-      <input
-        className="w-full rounded border px-3 py-2"
-        placeholder="Keywords obrigatórias (separadas por vírgula)"
-        value={keywords}
-        onChange={(e) => setKeywords(e.target.value)}
-        required
-      />
-      <input
-        className="w-full rounded border px-3 py-2"
-        placeholder="Keywords bloqueadas (opcional)"
-        value={blockedKeywords}
-        onChange={(e) => setBlockedKeywords(e.target.value)}
-      />
-      <div className="grid grid-cols-2 gap-2">
-        <input
-          type="number"
-          className="rounded border px-3 py-2"
-          placeholder="Desconto mín. (%)"
-          value={minDiscountPct}
-          onChange={(e) => setMinDiscountPct(e.target.value)}
-        />
-        <input
-          type="number"
-          className="rounded border px-3 py-2"
-          placeholder="Preço máx. (R$)"
-          value={maxPrice}
-          onChange={(e) => setMaxPrice(e.target.value)}
+      <h2 className="font-semibold">Nova automação</h2>
+
+      <div>
+        <Label htmlFor="rname">Nome da automação</Label>
+        <Input
+          id="rname"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Ex.: Eletrônicos até R$300"
+          required
         />
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <label className="text-sm">
-          Intervalo (min)
-          <input
+
+      <div>
+        <Label>Marketplaces</Label>
+        <div className="mt-1 flex flex-wrap gap-2">
+          {ALL_MARKETS.map((m) => (
+            <button
+              key={m.key}
+              type="button"
+              onClick={() => toggleMarketplace(m.key)}
+              className={cn(
+                'rounded-md border px-2.5 py-1 text-sm transition-colors',
+                marketplaces.includes(m.key)
+                  ? 'border-brand bg-brand text-white'
+                  : 'border-border bg-surface-2 text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        {(marketplaces.includes('MERCADOLIVRE') || marketplaces.includes('MAGALU')) && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Mercado Livre e Magalu requerem sessão sincronizada em Marketplaces (extensão para ML,
+            colagem manual para Magalu) — sem isso, a regra não encontrará produtos nesses
+            marketplaces.
+          </p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="rkeywords">Keywords obrigatórias</Label>
+          <Input
+            id="rkeywords"
+            value={keywords}
+            onChange={(e) => setKeywords(e.target.value)}
+            placeholder="fone, carregador"
+            required
+          />
+        </div>
+        <div>
+          <Label htmlFor="rblocked">Keywords bloqueadas</Label>
+          <Input
+            id="rblocked"
+            value={blockedKeywords}
+            onChange={(e) => setBlockedKeywords(e.target.value)}
+            placeholder="usado, recondicionado"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label htmlFor="rdiscount">Desconto mín. (%)</Label>
+          <Input
+            id="rdiscount"
             type="number"
-            className="w-full rounded border px-3 py-2"
+            value={minDiscountPct}
+            onChange={(e) => setMinDiscountPct(e.target.value)}
+            placeholder="sem mínimo"
+          />
+        </div>
+        <div>
+          <Label htmlFor="rmaxprice">Preço máx. (R$)</Label>
+          <Input
+            id="rmaxprice"
+            type="number"
+            value={maxPrice}
+            onChange={(e) => setMaxPrice(e.target.value)}
+            placeholder="sem máximo"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label htmlFor="rinterval">Intervalo (min)</Label>
+          <Input
+            id="rinterval"
+            type="number"
+            min={5}
             value={intervalMin}
             onChange={(e) => setIntervalMin(Number(e.target.value))}
-            min={5}
           />
-        </label>
-        <label className="text-sm">
-          Limite/dia
-          <input
+        </div>
+        <div>
+          <Label htmlFor="rlimit">Limite/dia</Label>
+          <Input
+            id="rlimit"
             type="number"
-            className="w-full rounded border px-3 py-2"
+            min={1}
             value={maxOffersPerDay}
             onChange={(e) => setMaxOffersPerDay(Number(e.target.value))}
-            min={1}
           />
-        </label>
+        </div>
       </div>
-      <select
-        className="w-full rounded border px-3 py-2"
-        value={sessionId}
-        onChange={(e) => setSessionId(e.target.value)}
-        required
-      >
-        <option value="">Sessão WhatsApp…</option>
-        {sessions?.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.label}
-          </option>
-        ))}
-      </select>
-      <select
-        multiple
-        className="w-full rounded border px-3 py-2"
-        value={groupJids}
-        onChange={(e) => setGroupJids(Array.from(e.target.selectedOptions).map((o) => o.value))}
-        required
-      >
-        {groups?.map((g) => (
-          <option key={g.jid} value={g.jid}>
-            {g.name}
-          </option>
-        ))}
-      </select>
-      <select
-        className="w-full rounded border px-3 py-2"
-        value={templateId}
-        onChange={(e) => setTemplateId(e.target.value)}
-        required
-      >
-        <option value="">Template…</option>
-        {templates?.map((t) => (
-          <option key={t.id} value={t.id}>
-            {t.name}
-          </option>
-        ))}
-      </select>
-      <Button type="submit" disabled={create.isPending || marketplaces.length === 0}>
+
+      <div>
+        <Label htmlFor="rsession">Sessão WhatsApp</Label>
+        <select
+          id="rsession"
+          value={sessionId}
+          onChange={(e) => {
+            setSessionId(e.target.value);
+            setGroupJids(new Set());
+          }}
+          className={selectCls}
+          required
+        >
+          <option value="">Selecione…</option>
+          {sessions?.map((s) => (
+            <option key={s.id} value={s.id} disabled={s.status !== 'CONNECTED'}>
+              {s.label} {s.status !== 'CONNECTED' ? `(${s.status})` : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <Label>Grupos de destino ({groupJids.size})</Label>
+        <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded-md border border-border bg-surface-2 p-2">
+          {!sessionId && (
+            <p className="text-xs text-muted-foreground">Selecione uma sessão WhatsApp primeiro.</p>
+          )}
+          {sessionId && groups?.length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              Nenhum grupo — sincronize em Configurações → WhatsApp.
+            </p>
+          )}
+          {groups?.map((g) => (
+            <label key={g.jid} className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="h-4 w-4 cursor-pointer rounded border-border accent-brand"
+                checked={groupJids.has(g.jid)}
+                onChange={(e) => {
+                  const next = new Set(groupJids);
+                  if (e.target.checked) next.add(g.jid);
+                  else next.delete(g.jid);
+                  setGroupJids(next);
+                }}
+              />
+              {g.name}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <Label htmlFor="rtemplate">Template</Label>
+        <select
+          id="rtemplate"
+          value={templateId}
+          onChange={(e) => setTemplateId(e.target.value)}
+          className={selectCls}
+          required
+        >
+          <option value="">Selecione…</option>
+          {templates?.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+              {t.isDefault ? ' (padrão)' : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <Button type="submit" className="w-full" disabled={!canCreate || create.isPending}>
         Criar automação
       </Button>
     </form>

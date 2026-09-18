@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { apiFetch } from '@/lib/api';
 import { useApiMutation } from '@/lib/mutations';
 import { useAutomationQueue } from '@/lib/queries';
@@ -23,16 +25,20 @@ export function QueuePanel({ ruleId }: { ruleId: string }) {
   );
 
   return (
-    <div className="mt-3 space-y-2 border-t pt-3">
+    <div className="mt-3 space-y-2 border-t border-border pt-3">
       <p className="text-sm font-medium">Programado para disparar</p>
       <ul className="space-y-1">
         {items?.map((it) => (
           <li
             key={it.id}
-            className="flex items-center justify-between rounded border px-2 py-1 text-sm"
+            className="flex items-center justify-between rounded-md border border-border bg-surface-2 px-2 py-1 text-sm"
           >
-            <span>
-              {it.manual && <span className="mr-1 rounded bg-blue-100 px-1 text-xs">manual</span>}
+            <span className="flex items-center gap-1.5">
+              {it.manual && (
+                <Badge variant="secondary" className="text-[10px]">
+                  manual
+                </Badge>
+              )}
               {it.kind === 'PRODUCT' ? it.product?.title : `Cupom ${it.coupon?.code}`}
             </span>
             <Button variant="ghost" size="sm" onClick={() => removeItem.mutate(it.id)}>
@@ -40,7 +46,9 @@ export function QueuePanel({ ruleId }: { ruleId: string }) {
             </Button>
           </li>
         ))}
-        {items?.length === 0 && <li className="text-sm text-gray-400">Nada na fila ainda.</li>}
+        {items?.length === 0 && (
+          <li className="text-sm text-muted-foreground">Nada na fila ainda.</li>
+        )}
       </ul>
       <form
         className="flex gap-2"
@@ -49,8 +57,8 @@ export function QueuePanel({ ruleId }: { ruleId: string }) {
           addLink.mutate();
         }}
       >
-        <input
-          className="flex-1 rounded border px-2 py-1 text-sm"
+        <Input
+          className="flex-1"
           placeholder="Colar link de produto…"
           value={linkUrl}
           onChange={(e) => setLinkUrl(e.target.value)}
