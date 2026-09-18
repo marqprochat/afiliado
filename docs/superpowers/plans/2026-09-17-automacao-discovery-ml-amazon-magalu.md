@@ -24,7 +24,8 @@ Por isso este plano ganhou a **Task 2 (nova)**: um fetcher via navegador headles
 - Falha de scraping em um marketplace não pode travar o scheduler nem afetar outras regras — captura, loga `AutomationLog { action: 'ERROR' }`, segue em frente (mesmo padrão já implementado para Shopee no Plano 1, spec §5.1).
 - Nenhum produto incompleto é enfileirado — o portão de elegibilidade (`isEligibleProduct`, já existe) roda igual para produtos de qualquer marketplace, sem exceção.
 - Cache por keyword+marketplace (TTL curto) para não martelar o site a cada tick de regras com keywords parecidas (spec §8.2) — mesmo padrão de cache já usado em `apps/worker/src/processors/product-enrich.ts`. Isso vale ainda mais para Playwright, que é caro em CPU/memória por chamada.
-- ML/Amazon/Magalu **não exigem `MarketplaceConnection`** para a descoberta (diferente da Shopee): a busca é scraping público e o enriquecimento via `getTagAdapter(kind).fetchByUrls({}, urls)` não depende de credenciais — credenciais só entram depois, na hora de gerar o link de afiliado (`sendOffer`, já implementado).
+- **Amazon** não exige `MarketplaceConnection` para a descoberta: a busca é scraping público simples e o enriquecimento via `getTagAdapter('AMAZON').fetchByUrls({}, urls)` não depende de credenciais.
+- **Mercado Livre e Magalu exigem sessão sincronizada** (`MarketplaceConnection` com `mlSession`/`magaluSession` preenchidos, já sincronizados pela extensão Afilados Connect para geração de link de afiliado) — sem isso, a descoberta desses dois é pulada com log `ERROR`, nunca tenta scraping anônimo (já provado inútil nas Tasks 1 e 2). Credenciais de afiliado (tag/matt_word etc.) continuam só entrando depois, na hora de gerar o link (`sendOffer`, já implementado) — a sessão de cookies é uma coisa separada, usada só para autenticar a busca.
 - O browser Chromium do Playwright é um processo pesado — lançado sob demanda (lazy) na primeira descoberta que precisar dele, mantido vivo entre chamadas (não relançado a cada keyword), e fechado no `shutdown()` do worker.
 
 ---
@@ -488,17 +489,101 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 3: Worker — generalizar `discoverForRule` para múltiplos marketplaces + mix aleatório
+### Task 3: Worker — generalizar `discoverForRule` para múltiplos marketplaces + mix aleatório + sessão logada para ML/Magalu
+
+**Contexto adicional (mudou depois da Task 2):** validação real confirmou que nem `fetchHtml` simples nem Chromium headless anônimo (Playwright) furam o bloqueio anti-bot de Mercado Livre e Magalu — os dois servem a mesma página de verificação/bloqueio mesmo para um navegador real. Por decisão explícita do usuário (ciente do risco de suspensão de conta se o comportamento automatizado for detectado), esta task passa a **reaproveitar os cookies de sessão logada que a extensão Afilados Connect já sincroniza** (hoje usados só para gerar link de afiliado oficial via `TagCredentials.mlSession`/`magaluSession`) para autenticar o navegador headless antes de acessar a busca — sem isso, a descoberta desses dois marketplaces simplesmente não funciona, então a regra sem sessão sincronizada é pulada (log `ERROR`, sem tentar anônimo, já provado inútil). Amazon continua sem precisar de sessão (funciona com `fetchHtml` simples desde a Task 1).
 
 **Files:**
+- Modify: `packages/marketplaces/src/scrapers/browser.ts` (aceita cookies de sessão)
 - Modify: `apps/worker/src/automation/discovery.ts`
 - Modify: `apps/worker/src/automation/scheduler.ts`
+- Test: `packages/marketplaces/test/browser.test.ts` (adicionar caso de cookies)
 - Test: `apps/worker/test/automation-discovery.test.ts` (adicionar casos)
 - Test: `apps/worker/test/automation-scheduler.test.ts` (adicionar caso do sorteio)
 
 **Interfaces:**
-- Consome: `discoverMercadoLivreByKeyword`/`discoverAmazonByKeyword`/`discoverMagaluByKeyword` (Task 1), `getTagAdapter` (`@afilados/marketplaces`, já existe).
-- Produz: `discoverForRule(rule, deps?)` agora aceita e usa `rule.marketplaces` inteiro (não só Shopee); `AutomationScheduler.dispatchNext` sorteia 1 marketplace antes de chamar `discover`.
+- Consome: `discoverMercadoLivreByKeyword`/`discoverAmazonByKeyword`/`discoverMagaluByKeyword` (Task 1), `fetchRenderedHtml` (Task 2, ganha suporte a cookies nesta task), `getTagAdapter` (`@afilados/marketplaces`, já existe), `TagCredentials`/`SESSION_FIELD_BY_KIND` (`@afilados/shared`, já existem — usados hoje pela geração de link oficial).
+- Produz: `discoverForRule(rule, deps?)` agora aceita e usa `rule.marketplaces` inteiro (não só Shopee), autentica a busca de ML/Magalu com a sessão sincronizada do tenant quando existir; `AutomationScheduler.dispatchNext` sorteia 1 marketplace antes de chamar `discover`.
+
+- [ ] **Step 0: Adicionar suporte a cookies em `fetchRenderedHtml`**
+
+Escrever o teste (adicionar a `packages/marketplaces/test/browser.test.ts`):
+
+```typescript
+it('injeta cookies de sessão no contexto antes de navegar', async () => {
+  // data: URL não tem domínio real p/ setar cookie, então este teste sobe um servidor
+  // HTTP local mínimo que ecoa o cookie recebido — mais confiável que tentar validar
+  // contra um domínio real dentro do teste unitário.
+  const http = await import('node:http');
+  const server = http.createServer((req, res) => {
+    res.end(`<html><body>cookie recebido: ${req.headers.cookie ?? 'nenhum'}</body></html>`);
+  });
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const port = (server.address() as { port: number }).port;
+
+  const html = await fetchRenderedHtml(`http://127.0.0.1:${port}/`, {
+    cookies: { domain: '127.0.0.1', values: { sessionid: 'abc123' } },
+  });
+  expect(html).toContain('sessionid=abc123');
+
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+}, 30_000);
+```
+
+Rodar e confirmar falha (`FetchRenderedHtmlOptions` ainda não tem `cookies`):
+
+```bash
+cd packages/marketplaces && npx vitest run test/browser.test.ts
+```
+
+Implementar em `packages/marketplaces/src/scrapers/browser.ts`, adicionando o campo `cookies` a `FetchRenderedHtmlOptions` e aplicando via `context.addCookies` antes de `page.goto`:
+
+```typescript
+export interface FetchRenderedHtmlOptions {
+  timeoutMs?: number;
+  waitForSelector?: string;
+  /** Cookies de sessão a injetar antes de navegar (ex: sessão logada sincronizada pela extensão). */
+  cookies?: { domain: string; values: Record<string, string> };
+}
+```
+
+```typescript
+export async function fetchRenderedHtml(
+  url: string,
+  opts: FetchRenderedHtmlOptions = {},
+): Promise<string> {
+  const browser = await getBrowser();
+  const context = await browser.newContext({
+    userAgent: REALISTIC_USER_AGENT,
+    viewport: { width: 1366, height: 768 },
+    locale: 'pt-BR',
+  });
+  try {
+    if (opts.cookies) {
+      await context.addCookies(
+        Object.entries(opts.cookies.values).map(([name, value]) => ({
+          name,
+          value,
+          domain: opts.cookies!.domain,
+          path: '/',
+        })),
+      );
+    }
+    const page = await context.newPage();
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: opts.timeoutMs ?? 15_000 });
+    if (opts.waitForSelector) {
+      await page.waitForSelector(opts.waitForSelector, { timeout: opts.timeoutMs ?? 15_000 }).catch(() => {});
+    } else {
+      await page.waitForTimeout(1_500);
+    }
+    return await page.content();
+  } finally {
+    await context.close();
+  }
+}
+```
+
+Rodar de novo e confirmar que passa (3 testes no arquivo agora); rodar a suíte completa de `packages/marketplaces` pra garantir que nada quebrou; commit deste passo pode ser junto do commit final da task (Step 8).
 
 - [ ] **Step 1: Escrever os novos testes de descoberta (falha primeiro)**
 
@@ -509,7 +594,7 @@ import { discoverForRule } from '../src/automation/discovery';
 // (imports já existentes no arquivo continuam)
 
 describe('discoverForRule (Mercado Livre / Amazon / Magalu)', () => {
-  it('descobre produto do Mercado Livre sem exigir MarketplaceConnection', async () => {
+  it('descobre produto do Mercado Livre quando discoverByKeyword é injetado (bypassa o carregamento de sessão)', async () => {
     const rule = await prisma.automationRule.create({
       data: {
         tenantId,
@@ -578,6 +663,33 @@ describe('discoverForRule (Mercado Livre / Amazon / Magalu)', () => {
     const items = await prisma.automationQueueItem.findMany({ where: { ruleId: rule.id } });
     expect(items.length).toBe(0);
   });
+
+  it('loga ERROR e não tenta anônimo quando ML não tem sessão sincronizada', async () => {
+    const rule = await prisma.automationRule.create({
+      data: {
+        tenantId,
+        name: 'discovery-ml-sem-sessao',
+        marketplaces: ['MERCADOLIVRE'],
+        keywords: ['fone'],
+        blockedKeywords: [],
+        sessionId: (await prisma.waSession.create({ data: { tenantId, label: 'sml2' } })).id,
+        groupJids: ['g@g.us'],
+        templateId: (await prisma.template.create({ data: { tenantId, name: 'tml2', body: 'x' } })).id,
+      },
+    });
+    // Sem MarketplaceConnection nenhuma para MERCADOLIVRE neste tenant — sem sessão sincronizada.
+    // Importante: NÃO injeta `discoverByKeyword` aqui — isso faria discoverScraped usar o
+    // override direto e pular o carregamento de sessão, o que é exatamente o código que este
+    // teste precisa exercitar de verdade (sem mock por cima dele).
+
+    await discoverForRule(rule, { pickMarketplace: () => 'MERCADOLIVRE' });
+
+    const log = await prisma.automationLog.findFirstOrThrow({ where: { ruleId: rule.id } });
+    expect(log.action).toBe('ERROR');
+    expect(log.reason).toContain('sessão');
+    const items = await prisma.automationQueueItem.findMany({ where: { ruleId: rule.id } });
+    expect(items.length).toBe(0);
+  });
 });
 ```
 
@@ -600,13 +712,20 @@ import {
   discoverMercadoLivreByKeyword,
   discoverAmazonByKeyword,
   discoverMagaluByKeyword,
+  fetchRenderedHtml,
   type ShopeeCredentials,
 } from '@afilados/marketplaces';
-import type { MarketplaceKind, ProductData } from '@afilados/shared';
+import { SESSION_FIELD_BY_KIND, type MarketplaceKind, type ProductData, type TagCredentials } from '@afilados/shared';
 import { getRedis } from '../lib/redis';
 import { createHash } from 'node:crypto';
 
 const KEYWORD_CACHE_TTL_SEC = 15 * 60;
+
+/** Domínio a usar ao injetar os cookies de sessão sincronizados no navegador headless. */
+const SESSION_COOKIE_DOMAIN: Record<'MERCADOLIVRE' | 'MAGALU', string> = {
+  MERCADOLIVRE: '.mercadolivre.com.br',
+  MAGALU: '.magazineluiza.com.br',
+};
 
 export interface DiscoveryDeps {
   searchShopee?: (creds: ShopeeCredentials, keyword: string) => Promise<ProductData[]>;
@@ -727,12 +846,46 @@ const KEYWORD_DISCOVERERS = {
   MAGALU: discoverMagaluByKeyword,
 } as const;
 
+/**
+ * Mercado Livre e Magalu bloqueiam a busca tanto para fetch simples quanto para navegador
+ * headless anônimo (validado nas Tasks 1 e 2) — só funcionam autenticados com a sessão que a
+ * extensão Afilados Connect já sincroniza para gerar link de afiliado oficial. Sem essa sessão,
+ * não adianta tentar: lança para o chamador logar ERROR e pular a rodada.
+ */
+async function loadSessionCookies(
+  tenantId: string,
+  kind: 'MERCADOLIVRE' | 'MAGALU',
+): Promise<Record<string, string>> {
+  const conn = await prisma.marketplaceConnection.findFirst({ where: { tenantId, kind } });
+  const creds = conn?.encryptedCredentials
+    ? decryptJson<TagCredentials>(Buffer.from(conn.encryptedCredentials))
+    : null;
+  const session = creds?.[SESSION_FIELD_BY_KIND[kind]];
+  if (!session?.cookies) {
+    throw new Error(
+      `sessão do ${kind === 'MERCADOLIVRE' ? 'Mercado Livre' : 'Magalu'} não sincronizada — sincronize pela extensão Afilados Connect`,
+    );
+  }
+  return session.cookies;
+}
+
 async function discoverScraped(
   marketplace: 'MERCADOLIVRE' | 'AMAZON' | 'MAGALU',
   keyword: string,
+  rule: AutomationRule,
   deps: DiscoveryDeps,
 ): Promise<ProductData[]> {
-  const discoverFn = deps.discoverByKeyword?.[marketplace] ?? KEYWORD_DISCOVERERS[marketplace];
+  let discoverFn = deps.discoverByKeyword?.[marketplace];
+  if (!discoverFn) {
+    if (marketplace === 'AMAZON') {
+      discoverFn = (k: string) => discoverAmazonByKeyword(k);
+    } else {
+      const cookies = await loadSessionCookies(rule.tenantId, marketplace);
+      const authenticatedFetch = (url: string) =>
+        fetchRenderedHtml(url, { cookies: { domain: SESSION_COOKIE_DOMAIN[marketplace], values: cookies } });
+      discoverFn = (k: string) => KEYWORD_DISCOVERERS[marketplace](k, { fetchHtml: authenticatedFetch });
+    }
+  }
   const urls = await cachedDiscoverUrls(marketplace, keyword, discoverFn);
   if (urls.length === 0) return [];
   const fetchFn = deps.fetchByUrls?.[marketplace] ?? ((u: string[]) => getTagAdapter(marketplace).fetchByUrls({}, u));
@@ -752,7 +905,7 @@ export async function discoverForRule(rule: AutomationRule, deps: DiscoveryDeps 
     results =
       marketplace === 'SHOPEE'
         ? await discoverShopee(rule, keyword, deps)
-        : await discoverScraped(marketplace, keyword, deps);
+        : await discoverScraped(marketplace, keyword, rule, deps);
   } catch (e) {
     await prisma.automationLog.create({
       data: {
@@ -829,10 +982,11 @@ cd apps/worker && npx vitest run test/automation-scheduler.test.ts
 
 Expected: PASS em todos os casos (os do Plano 1 + o novo).
 
-- [ ] **Step 7: Rodar a suíte completa do worker**
+- [ ] **Step 7: Rodar a suíte completa do worker e do pacote de marketplaces**
 
 ```bash
 cd apps/worker && npx vitest run
+cd packages/marketplaces && npx vitest run
 ```
 
 Expected: PASS, exceto as 2 falhas pré-existentes já conhecidas em `mirror-listener.test.ts` (não relacionadas).
@@ -840,11 +994,13 @@ Expected: PASS, exceto as 2 falhas pré-existentes já conhecidas em `mirror-lis
 - [ ] **Step 8: Commit**
 
 ```bash
-git add apps/worker/src/automation apps/worker/test
-git commit -m "feat(worker): discoverForRule sorteia marketplace e cobre Mercado Livre/Amazon/Magalu
+git add packages/marketplaces apps/worker/src/automation apps/worker/test
+git commit -m "feat(worker): discoverForRule sorteia marketplace, cobre Amazon e autentica ML/Magalu com sessão sincronizada
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
+
+**Nota importante — validação real com sessão de verdade não é responsabilidade do implementador desta task.** Ao contrário das Tasks 1 e 2 (que validaram contra os sites sem precisar de nenhuma conta), confirmar que a busca autenticada de ML/Magalu realmente funciona exige uma sessão de verdade sincronizada pela extensão Afilados Connect de uma conta real — algo que só o usuário (dono da conta) pode fornecer/testar, não algo que um agente consiga fabricar em sandbox. Ao terminar esta task, reporte isso explicitamente como um passo de validação pendente, a ser feito manualmente pelo usuário: sincronizar a sessão do Mercado Livre (e/ou Magalu) pela extensão, criar uma automação com aquele marketplace, ligar, e conferir no campo "buscados hoje" se produtos aparecem em vez de erros repetidos no log da regra.
 
 ---
 
@@ -968,9 +1124,11 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ## Riscos específicos deste plano
 
 1. **Seletores de extração dependem só de `parseProductUrl`, não de classes CSS.** Isso é deliberado (mais resistente a mudanças de layout do que raspar classe CSS), mas significa que se um marketplace mudar o **formato da URL** de produto (não só o layout visual), tanto este scraper quanto `parseProductUrl` (usado em várias outras partes do sistema) precisam ser atualizados juntos — não é um ponto de falha isolado desta feature.
-2. **Anti-bot pode continuar bloqueando mesmo com Playwright.** A Task 1 já confirmou contra os sites reais que Mercado Livre (challenge anti-bot) e Magalu (bloqueio Akamai 403) não são simples "faltava JS" — são defesas ativas contra scraping. Um navegador headless com UA realista (Task 2) melhora as chances, mas não garante passar por detecção de `navigator.webdriver`, fingerprint de TLS ou rate-limiting por IP em escala. Este plano **não** inclui rotação de proxy, resolução de CAPTCHA ou outras contramedidas — se o Playwright básico ainda for bloqueado, a Task 2 deve documentar isso como achado (`DONE_WITH_CONCERNS`) e aquele marketplace específico permanece restrito a inserção manual de link (já suportada desde o Plano 1) até uma decisão de produto sobre investir em anti-detecção mais pesada.
-3. **Rate limit / bloqueio por IP**: sem o cache de 15 min (Task 3), múltiplas regras com keywords parecidas martelariam o mesmo marketplace repetidamente. O cache mitiga mas não elimina — se isso virar problema em produção, o próximo passo natural é um rate-limiter por domínio (mesmo padrão já usado no `product-enrich` worker: `limiter: { max: 6, duration: 10_000 }`), fora do escopo deste plano.
-4. **Custo de infraestrutura do Playwright**: a imagem Docker do worker fica maior (Chromium + dependências do sistema) e cada chamada de descoberta para ML/Magalu consome mais CPU/memória e leva mais tempo (segundos, não milissegundos) do que um `fetch` simples — isso é aceitável para o volume de 1 descoberta por regra a cada `intervalMin` minutos, mas não escalaria bem se o número de regras ativas crescesse muito sem paralelismo/fila dedicada (fora do escopo deste plano).
+2. **Playwright anônimo confirmado insuficiente — a Task 2 já validou isso contra os sites reais.** Mercado Livre (challenge anti-bot) e Magalu (bloqueio Akamai 403) bloquearam tanto `fetch` simples quanto Chromium headless anônimo com UA realista. Por isso a Task 3 muda a estratégia para autenticar com a sessão logada sincronizada pelo usuário (cookies via extensão), em vez de insistir em anonimizar melhor o navegador.
+3. **Risco de suspensão de conta (aceito explicitamente pelo usuário).** Usar a sessão logada real do usuário para automatizar buscas é diferente de scraping anônimo: se o Mercado Livre ou o Magalu detectarem o padrão de acesso como automatizado, a conta pessoal vinculada àquela sessão pode ser suspensa/banida, não só um scraper anônimo bloqueado. Isso também tipicamente viola os Termos de Serviço desses sites quando feito de forma repetida. Mitigação parcial: o cache de 15 min (Task 3) e o intervalo mínimo de 5 min entre disparos por regra já limitam a frequência de acesso — mas não eliminam o risco. Se contas começarem a ser suspensas em produção, a resposta correta é desligar a descoberta automática daquele marketplace (a regra volta a funcionar só com inserção manual de link) antes de tentar qualquer contramedida adicional.
+4. **Rate limit / bloqueio por IP**: sem o cache de 15 min (Task 3), múltiplas regras com keywords parecidas martelariam o mesmo marketplace repetidamente. O cache mitiga mas não elimina — se isso virar problema em produção, o próximo passo natural é um rate-limiter por domínio (mesmo padrão já usado no `product-enrich` worker: `limiter: { max: 6, duration: 10_000 }`), fora do escopo deste plano.
+5. **Custo de infraestrutura do Playwright**: a imagem Docker do worker fica maior (Chromium + dependências do sistema) e cada chamada de descoberta para ML/Magalu consome mais CPU/memória e leva mais tempo (segundos, não milissegundos) do que um `fetch` simples — isso é aceitável para o volume de 1 descoberta por regra a cada `intervalMin` minutos, mas não escalaria bem se o número de regras ativas crescesse muito sem paralelismo/fila dedicada (fora do escopo deste plano).
+6. **Descoberta de ML/Magalu fica indisponível para tenants sem sessão sincronizada.** Diferente de Amazon (sempre funciona) e Shopee (exige API key), ML/Magalu na automação agora dependem do usuário já ter conectado a extensão Afilados Connect e sincronizado a sessão pelo menos uma vez — sem isso, a regra loga `ERROR` a cada tentativa até a sessão ser sincronizada ou o marketplace ser removido do pool da regra. Vale considerar, fora deste plano, um aviso na UI quando uma regra tem ML/Magalu selecionado mas a sessão correspondente não está sincronizada.
 
 ## Fora deste plano (Plano 3/3)
 
