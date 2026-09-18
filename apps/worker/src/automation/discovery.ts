@@ -43,16 +43,17 @@ function matchesFilters(
   return true;
 }
 
-function cacheKey(marketplace: string, keyword: string) {
-  return `automation-discover:${marketplace}:${createHash('sha1').update(keyword).digest('hex')}`;
+function cacheKey(tenantId: string, marketplace: string, keyword: string) {
+  return `automation-discover:${tenantId}:${marketplace}:${createHash('sha1').update(keyword).digest('hex')}`;
 }
 
 async function cachedDiscoverUrls(
+  tenantId: string,
   marketplace: 'MERCADOLIVRE' | 'AMAZON' | 'MAGALU',
   keyword: string,
   discover: (keyword: string) => Promise<string[]>,
 ): Promise<string[]> {
-  const key = cacheKey(marketplace, keyword);
+  const key = cacheKey(tenantId, marketplace, keyword);
   const cached = await getRedis().get(key).catch(() => null);
   if (cached) {
     try {
@@ -180,7 +181,7 @@ async function discoverScraped(
       discoverFn = (k: string) => KEYWORD_DISCOVERERS[marketplace](k, { fetchHtml: authenticatedFetch });
     }
   }
-  const urls = await cachedDiscoverUrls(marketplace, keyword, discoverFn);
+  const urls = await cachedDiscoverUrls(rule.tenantId, marketplace, keyword, discoverFn);
   if (urls.length === 0) return [];
   const fetchFn = deps.fetchByUrls?.[marketplace] ?? ((u: string[]) => getTagAdapter(marketplace).fetchByUrls({}, u));
   return fetchFn(urls);
