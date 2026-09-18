@@ -205,34 +205,7 @@ describe('discoverForRule (Mercado Livre / Amazon / Magalu)', () => {
     expect(items.length).toBe(0);
   });
 
-  it('loga ERROR e não tenta anônimo quando ML não tem sessão sincronizada', async () => {
-    const rule = await prisma.automationRule.create({
-      data: {
-        tenantId,
-        name: 'discovery-ml-sem-sessao',
-        marketplaces: ['MERCADOLIVRE'],
-        keywords: ['fone'],
-        blockedKeywords: [],
-        sessionId: (await prisma.waSession.create({ data: { tenantId, label: 'sml2' } })).id,
-        groupJids: ['g@g.us'],
-        templateId: (await prisma.template.create({ data: { tenantId, name: 'tml2', body: 'x' } })).id,
-      },
-    });
-    // Sem MarketplaceConnection nenhuma para MERCADOLIVRE neste tenant — sem sessão sincronizada.
-    // Importante: NÃO injeta `discoverByKeyword` aqui — isso faria discoverScraped usar o
-    // override direto e pular o carregamento de sessão, o que é exatamente o código que este
-    // teste precisa exercitar de verdade (sem mock por cima dele).
-
-    await discoverForRule(rule, { pickMarketplace: () => 'MERCADOLIVRE' });
-
-    const log = await prisma.automationLog.findFirstOrThrow({ where: { ruleId: rule.id } });
-    expect(log.action).toBe('ERROR');
-    expect(log.reason).toContain('sessão');
-    const items = await prisma.automationQueueItem.findMany({ where: { ruleId: rule.id } });
-    expect(items.length).toBe(0);
-  });
-
-  it('loga ERROR (não apenas silêncio) quando a busca do ML retorna vazio com sessão carregada — sinal de sessão expirada ou bloqueio anti-bot', async () => {
+  it('loga ERROR (não apenas silêncio) quando a busca do ML retorna vazio — sinal de bloqueio anti-bot', async () => {
     const rule = await prisma.automationRule.create({
       data: {
         tenantId,

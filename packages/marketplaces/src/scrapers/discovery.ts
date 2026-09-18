@@ -1,7 +1,6 @@
 import * as cheerio from 'cheerio';
 import { parseProductUrl } from '@afilados/core';
 import { fetchHtml as defaultFetchHtml } from './fetcher';
-import { fetchRenderedHtml } from './browser';
 
 const MAX_RESULTS = 20;
 
@@ -43,7 +42,7 @@ export async function discoverMercadoLivreByKeyword(
   keyword: string,
   deps: DiscoverByKeywordDeps = {},
 ): Promise<string[]> {
-  const fetchHtml = deps.fetchHtml ?? ((url: string) => fetchRenderedHtml(url));
+  const fetchHtml = deps.fetchHtml ?? defaultFetchHtml;
   const url = `https://lista.mercadolivre.com.br/${encodeURIComponent(keyword)}`;
   const html = await fetchHtml(url);
   return extractProductUrls(html, url, 'MERCADOLIVRE');
@@ -63,7 +62,7 @@ export async function discoverMagaluByKeyword(
   keyword: string,
   deps: DiscoverByKeywordDeps = {},
 ): Promise<string[]> {
-  const fetchHtml = deps.fetchHtml ?? ((url: string) => fetchRenderedHtml(url));
+  const fetchHtml = deps.fetchHtml ?? defaultFetchHtml;
   const url = `https://www.magazineluiza.com.br/busca/${encodeURIComponent(keyword)}/`;
   const html = await fetchHtml(url);
   return extractProductUrls(html, url, 'MAGALU');

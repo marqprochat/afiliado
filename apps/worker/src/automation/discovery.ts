@@ -6,20 +6,13 @@ import {
   discoverMercadoLivreByKeyword,
   discoverAmazonByKeyword,
   discoverMagaluByKeyword,
-  fetchRenderedHtml,
   type ShopeeCredentials,
 } from '@afilados/marketplaces';
-import { SESSION_FIELD_BY_KIND, type MarketplaceKind, type ProductData, type TagCredentials } from '@afilados/shared';
+import { type MarketplaceKind, type ProductData } from '@afilados/shared';
 import { getRedis } from '../lib/redis';
 import { createHash } from 'node:crypto';
 
 const KEYWORD_CACHE_TTL_SEC = 15 * 60;
-
-/** Domínio a usar ao injetar os cookies de sessão sincronizados no navegador headless. */
-const SESSION_COOKIE_DOMAIN: Record<'MERCADOLIVRE' | 'MAGALU', string> = {
-  MERCADOLIVRE: '.mercadolivre.com.br',
-  MAGALU: '.magazineluiza.com.br',
-};
 
 export interface DiscoveryDeps {
   searchShopee?: (creds: ShopeeCredentials, keyword: string) => Promise<ProductData[]>;
@@ -149,57 +142,25 @@ const KEYWORD_DISCOVERERS = {
 } as const;
 
 /**
- * Mercado Livre e Magalu bloqueiam a busca tanto para fetch simples quanto para navegador
- * headless anônimo (validado nas Tasks 1 e 2) — só funcionam autenticados com a sessão que a
- * extensão Afilados Connect já sincroniza para gerar link de afiliado oficial. Sem essa sessão,
- * não adianta tentar: lança para o chamador logar ERROR e pular a rodada.
+ * Mercado Livre e Magalu bloqueiam a busca automatizada mesmo com sessão autenticada (validado
+ * em testes anteriores com navegador headless) — o caminho funcional para esses dois marketplaces
+ * é a extensão Afilados Connect, que copia produtos direto da página que o usuário já navega
+ * manualmente. Aqui a busca por palavra-chave fica best-effort (fetch anônimo), sem exigir sessão.
  */
-async function loadSessionCookies(
-  tenantId: string,
-  kind: 'MERCADOLIVRE' | 'MAGALU',
-): Promise<Record<string, string>> {
-  const conn = await prisma.marketplaceConnection.findFirst({ where: { tenantId, kind } });
-  const creds = conn?.encryptedCredentials
-    ? decryptJson<TagCredentials>(Buffer.from(conn.encryptedCredentials))
-    : null;
-  const session = creds?.[SESSION_FIELD_BY_KIND[kind]];
-  if (!session?.cookies) {
-    const hint =
-      kind === 'MERCADOLIVRE'
-        ? 'sincronize pela extensão Afilados Connect'
-        : 'sincronize a sessão na tela de Marketplaces';
-    throw new Error(
-      `sessão do ${kind === 'MERCADOLIVRE' ? 'Mercado Livre' : 'Magalu'} não sincronizada — ${hint}`,
-    );
-  }
-  return session.cookies;
-}
-
 async function discoverScraped(
   marketplace: 'MERCADOLIVRE' | 'AMAZON' | 'MAGALU',
   keyword: string,
   rule: AutomationRule,
   deps: DiscoveryDeps,
 ): Promise<ProductData[]> {
-  let discoverFn = deps.discoverByKeyword?.[marketplace];
-  if (!discoverFn) {
-    if (marketplace === 'AMAZON') {
-      discoverFn = (k: string) => discoverAmazonByKeyword(k);
-    } else {
-      const cookies = await loadSessionCookies(rule.tenantId, marketplace);
-      const authenticatedFetch = (url: string) =>
-        fetchRenderedHtml(url, { cookies: { domain: SESSION_COOKIE_DOMAIN[marketplace], values: cookies } });
-      discoverFn = (k: string) => KEYWORD_DISCOVERERS[marketplace](k, { fetchHtml: authenticatedFetch });
-    }
-  }
+  const discoverFn = deps.discoverByKeyword?.[marketplace] ?? ((k: string) => KEYWORD_DISCOVERERS[marketplace](k));
   const urls = await cachedDiscoverUrls(rule.tenantId, marketplace, keyword, discoverFn, {
     cacheEmpty: marketplace === 'AMAZON',
   });
   if (urls.length === 0) {
     // Amazon é busca anônima e vazio ali é só "sem correspondências" — nada a reportar.
-    // Para ML/Magalu, que dependem da sessão autenticada do usuário, um vazio é um sinal
-    // ambíguo demais para ficar silencioso: pode ser sessão expirada ou bloqueio anti-bot
-    // disfarçado de página válida sem produtos reconhecíveis (Critical #2 da revisão final).
+    // ML/Magalu bloqueiam esse tipo de busca automatizada (anti-bot); um vazio aqui é
+    // esperado e é logado para o usuário saber que a fonte real para eles é a extensão.
     if (marketplace !== 'AMAZON') {
       const marketplaceLabel = marketplace === 'MERCADOLIVRE' ? 'Mercado Livre' : 'Magalu';
       await prisma.automationLog.create({
@@ -208,7 +169,7 @@ async function discoverScraped(
           ruleId: rule.id,
           marketplace,
           action: 'ERROR',
-          reason: `busca do ${marketplaceLabel} não retornou nenhum produto — sessão pode estar expirada ou bloqueio anti-bot`,
+          reason: `busca do ${marketplaceLabel} não retornou nenhum produto — bloqueio anti-bot; use a extensão Afilados Connect para importar produtos deste marketplace`,
         },
       });
     }
