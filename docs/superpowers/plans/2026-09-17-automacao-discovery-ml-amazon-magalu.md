@@ -6,15 +6,26 @@
 
 **Architecture:** Cada scraper (`packages/marketplaces/src/scrapers/*`) ganha uma função `discoverByKeyword(keyword)` que busca a página pública de resultados de busca (não o hub de "ofertas do dia" — mais estável, spec §4.1) e extrai as URLs de produto **reaproveitando `parseProductUrl`** (já sabe reconhecer o formato de URL de cada marketplace) para filtrar links de navegação/anúncio/paginação sem precisar adivinhar classes CSS do site. As URLs encontradas alimentam o `fetchByUrls` do `tag-adapter` já existente (mesmo caminho do `product-enrich`), então o worker's `discoverForRule` não muda a forma como enriquece produto — só ganha uma fonte a mais de URLs antes desse passo. `AutomationScheduler.dispatchNext` passa a sortear 1 marketplace do array `rule.marketplaces` antes de chamar `discover`.
 
-**Tech Stack:** `cheerio` (já usado nos scrapers existentes), `fetch` nativo via `fetchHtml` (já existe), Redis para cache por keyword+marketplace (mesmo padrão do `product-enrich`), Vitest.
+**Tech Stack:** `cheerio` (já usado nos scrapers existentes), `fetch` nativo via `fetchHtml` (já existe) para Amazon, **Playwright (Chromium headless)** para Mercado Livre e Magalu (ver nota abaixo), Redis para cache por keyword+marketplace (mesmo padrão do `product-enrich`), Vitest.
+
+## Achado real que mudou o escopo deste plano (Task 1, já implementada)
+
+A Task 1 original assumia que as 3 páginas de busca eram server-rendered e acessíveis via `fetch` simples (`fetchHtml`). A implementação real (commit `ead029d`) validou isso contra os sites de verdade e encontrou:
+
+- **Amazon**: funciona — HTML estático já contém os links `/dp/{ASIN}`. Mantém `fetchHtml` simples.
+- **Mercado Livre**: a busca redireciona para uma página de verificação anti-bot; o HTML final não tem nenhum ID de produto.
+- **Magalu**: bloqueio Akamai retorna HTTP 403 direto na primeira requisição.
+
+Por isso este plano ganhou a **Task 2 (nova)**: um fetcher via navegador headless (Playwright/Chromium) usado só para Mercado Livre e Magalu — Amazon continua no `fetchHtml` simples, que já funciona e é mais barato. Isso exige trocar a imagem Docker do worker de Alpine para uma base Debian (Chromium do Playwright não tem suporte oficial em musl/Alpine) — decisão confirmada com o usuário antes de prosseguir.
 
 ## Global Constraints
 
 - Descoberta usa a página de **busca por palavra-chave**, nunca o hub de "ofertas do dia" (spec §2, §4.1) — hub costuma depender de JS, busca é server-rendered.
 - Falha de scraping em um marketplace não pode travar o scheduler nem afetar outras regras — captura, loga `AutomationLog { action: 'ERROR' }`, segue em frente (mesmo padrão já implementado para Shopee no Plano 1, spec §5.1).
 - Nenhum produto incompleto é enfileirado — o portão de elegibilidade (`isEligibleProduct`, já existe) roda igual para produtos de qualquer marketplace, sem exceção.
-- Cache por keyword+marketplace (TTL curto) para não martelar o site a cada tick de regras com keywords parecidas (spec §8.2) — mesmo padrão de cache já usado em `apps/worker/src/processors/product-enrich.ts`.
+- Cache por keyword+marketplace (TTL curto) para não martelar o site a cada tick de regras com keywords parecidas (spec §8.2) — mesmo padrão de cache já usado em `apps/worker/src/processors/product-enrich.ts`. Isso vale ainda mais para Playwright, que é caro em CPU/memória por chamada.
 - ML/Amazon/Magalu **não exigem `MarketplaceConnection`** para a descoberta (diferente da Shopee): a busca é scraping público e o enriquecimento via `getTagAdapter(kind).fetchByUrls({}, urls)` não depende de credenciais — credenciais só entram depois, na hora de gerar o link de afiliado (`sendOffer`, já implementado).
+- O browser Chromium do Playwright é um processo pesado — lançado sob demanda (lazy) na primeira descoberta que precisar dele, mantido vivo entre chamadas (não relançado a cada keyword), e fechado no `shutdown()` do worker.
 
 ---
 
@@ -224,7 +235,260 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 2: Worker — generalizar `discoverForRule` para múltiplos marketplaces + mix aleatório
+### Task 2: Navegador headless (Playwright) para Mercado Livre e Magalu
+
+**Files:**
+- Modify: `packages/marketplaces/package.json` (adiciona dependência `playwright`)
+- Create: `packages/marketplaces/src/scrapers/browser.ts`
+- Modify: `packages/marketplaces/src/scrapers/discovery.ts` (troca o fetcher padrão de ML/Magalu)
+- Modify: `deploy/Dockerfile.worker` (base Alpine → Debian, instala Chromium)
+- Modify: `apps/worker/src/main.ts` (fecha o browser no shutdown)
+- Test: `packages/marketplaces/test/browser.test.ts`
+
+**Interfaces:**
+- Produz: `fetchRenderedHtml(url: string, opts?: { timeoutMs?: number; waitForSelector?: string }): Promise<string>`, `closeBrowser(): Promise<void>` — usados por `discoverMercadoLivreByKeyword`/`discoverMagaluByKeyword` (que já aceitam `fetchHtml` injetável, criado na Task 1) e pelo `shutdown()` do worker.
+
+- [ ] **Step 1: Adicionar `playwright` como dependência**
+
+```bash
+cd packages/marketplaces && pnpm add playwright@^1.47.0
+```
+
+(Mesma versão já usada em `apps/web/package.json` para os testes e2e, para não ter duas versões do Chromium baixadas no monorepo.)
+
+- [ ] **Step 2: Escrever o teste do fetcher (falha primeiro)**
+
+Criar `packages/marketplaces/test/browser.test.ts`:
+
+```typescript
+import { describe, it, expect, afterAll } from 'vitest';
+import { fetchRenderedHtml, closeBrowser } from '../src/scrapers/browser';
+
+describe('fetchRenderedHtml', () => {
+  afterAll(async () => {
+    await closeBrowser();
+  });
+
+  it('renderiza uma página simples e retorna o HTML final', async () => {
+    const html = await fetchRenderedHtml('data:text/html,<html><body><h1>ok</h1></body></html>');
+    expect(html).toContain('<h1>ok</h1>');
+  }, 30_000);
+
+  it('reaproveita o mesmo browser em chamadas sucessivas (não relança a cada chamada)', async () => {
+    const html1 = await fetchRenderedHtml('data:text/html,<html><body>a</body></html>');
+    const html2 = await fetchRenderedHtml('data:text/html,<html><body>b</body></html>');
+    expect(html1).toContain('a');
+    expect(html2).toContain('b');
+  }, 30_000);
+});
+```
+
+(Usar `data:text/html,...` evita depender de rede no teste — o objetivo aqui é validar que o wrapper do Playwright funciona, não testar contra o site real de novo, isso já foi feito manualmente na Task 1.)
+
+- [ ] **Step 3: Rodar e confirmar falha**
+
+```bash
+cd packages/marketplaces && npx vitest run test/browser.test.ts
+```
+
+Expected: FAIL — módulo `../src/scrapers/browser` não existe.
+
+- [ ] **Step 4: Implementar `packages/marketplaces/src/scrapers/browser.ts`**
+
+```typescript
+import { chromium, type Browser } from 'playwright';
+
+let browserPromise: Promise<Browser> | null = null;
+
+function launchBrowser(): Promise<Browser> {
+  return chromium.launch({ headless: true });
+}
+
+async function getBrowser(): Promise<Browser> {
+  if (!browserPromise) browserPromise = launchBrowser();
+  return browserPromise;
+}
+
+export interface FetchRenderedHtmlOptions {
+  timeoutMs?: number;
+  /** Se informado, espera esse seletor aparecer antes de capturar o HTML (mais confiável que timeout fixo). */
+  waitForSelector?: string;
+}
+
+const REALISTIC_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36';
+
+export async function fetchRenderedHtml(
+  url: string,
+  opts: FetchRenderedHtmlOptions = {},
+): Promise<string> {
+  const browser = await getBrowser();
+  const context = await browser.newContext({
+    userAgent: REALISTIC_USER_AGENT,
+    viewport: { width: 1366, height: 768 },
+    locale: 'pt-BR',
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: opts.timeoutMs ?? 15_000 });
+    if (opts.waitForSelector) {
+      await page.waitForSelector(opts.waitForSelector, { timeout: opts.timeoutMs ?? 15_000 }).catch(() => {});
+    } else {
+      await page.waitForTimeout(1_500);
+    }
+    return await page.content();
+  } finally {
+    await context.close();
+  }
+}
+
+export async function closeBrowser(): Promise<void> {
+  if (!browserPromise) return;
+  const browser = await browserPromise;
+  browserPromise = null;
+  await browser.close();
+}
+```
+
+- [ ] **Step 5: Rodar e confirmar que passa**
+
+```bash
+cd packages/marketplaces && npx vitest run test/browser.test.ts
+```
+
+Expected: PASS (2 testes). Se o Playwright reclamar que o Chromium não está instalado localmente, rodar `npx playwright install chromium` uma vez no ambiente de desenvolvimento antes de repetir.
+
+- [ ] **Step 6: Trocar o fetcher padrão de ML e Magalu em `discovery.ts`**
+
+Em `packages/marketplaces/src/scrapers/discovery.ts`, importar `fetchRenderedHtml` e trocar os defaults de `discoverMercadoLivreByKeyword`/`discoverMagaluByKeyword` (Amazon continua com `defaultFetchHtml`, sem mudança):
+
+```typescript
+import { fetchRenderedHtml } from './browser';
+```
+
+```typescript
+export async function discoverMercadoLivreByKeyword(
+  keyword: string,
+  deps: DiscoverByKeywordDeps = {},
+): Promise<string[]> {
+  const fetchHtml = deps.fetchHtml ?? ((url: string) => fetchRenderedHtml(url));
+  const url = `https://lista.mercadolivre.com.br/${encodeURIComponent(keyword)}`;
+  const html = await fetchHtml(url);
+  return extractProductUrls(html, url, 'MERCADOLIVRE');
+}
+```
+
+```typescript
+export async function discoverMagaluByKeyword(
+  keyword: string,
+  deps: DiscoverByKeywordDeps = {},
+): Promise<string[]> {
+  const fetchHtml = deps.fetchHtml ?? ((url: string) => fetchRenderedHtml(url));
+  const url = `https://www.magazineluiza.com.br/busca/${encodeURIComponent(keyword)}/`;
+  const html = await fetchHtml(url);
+  return extractProductUrls(html, url, 'MAGALU');
+}
+```
+
+`discoverAmazonByKeyword` **não muda** (continua usando `defaultFetchHtml` do `fetcher.ts`).
+
+- [ ] **Step 7: Rodar a suíte de `discovery.test.ts` de novo**
+
+```bash
+cd packages/marketplaces && npx vitest run test/discovery.test.ts
+```
+
+Expected: PASS — os testes injetam `fetchHtml` explicitamente (fixtures sintéticas), então a troca do default não muda o resultado desses testes; eles continuam validando só a extração.
+
+- [ ] **Step 8: Validação manual real contra os sites (a que faltou na Task 1)**
+
+Rodar um script descartável (ou teste temporário deletado depois) chamando `discoverMercadoLivreByKeyword('fone')` e `discoverMagaluByKeyword('fone')` de verdade (sem injetar `fetchHtml`), contra a rede real, e conferir se agora retornam URLs. Reportar o resultado real — se o Playwright básico (sem stealth adicional) ainda for bloqueado por algum dos dois, **não** invente contramedidas adicionais (rotação de proxy, plugins anti-detecção, resolução de CAPTCHA) nesta task — documente como `DONE_WITH_CONCERNS` e deixe para o controlador decidir os próximos passos daquele marketplace especificamente.
+
+- [ ] **Step 9: Trocar a base do Docker do worker (Alpine → Debian)**
+
+Editar `deploy/Dockerfile.worker`. Versão atual (Alpine):
+
+```dockerfile
+FROM node:22-alpine
+RUN apk add --no-cache libc6-compat vips-dev openssl
+RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
+WORKDIR /app
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc turbo.json tsconfig.base.json ./
+COPY apps/worker/package.json apps/worker/
+COPY packages/shared/package.json packages/shared/
+COPY packages/core/package.json packages/core/
+COPY packages/db/package.json packages/db/
+COPY packages/marketplaces/package.json packages/marketplaces/
+RUN pnpm install --frozen-lockfile --filter @afilados/worker... --filter @afilados/db...
+COPY packages ./packages
+COPY apps/worker ./apps/worker
+RUN pnpm --filter @afilados/db generate
+ENV NODE_ENV=production
+EXPOSE 3002
+CMD ["pnpm", "--filter", "@afilados/worker", "start"]
+```
+
+Trocar para:
+
+```dockerfile
+FROM node:22-bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl libvips-dev ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
+WORKDIR /app
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc turbo.json tsconfig.base.json ./
+COPY apps/worker/package.json apps/worker/
+COPY packages/shared/package.json packages/shared/
+COPY packages/core/package.json packages/core/
+COPY packages/db/package.json packages/db/
+COPY packages/marketplaces/package.json packages/marketplaces/
+RUN pnpm install --frozen-lockfile --filter @afilados/worker... --filter @afilados/db...
+RUN npx playwright install --with-deps chromium
+COPY packages ./packages
+COPY apps/worker ./apps/worker
+RUN pnpm --filter @afilados/db generate
+ENV NODE_ENV=production
+EXPOSE 3002
+CMD ["pnpm", "--filter", "@afilados/worker", "start"]
+```
+
+**Nota:** `libc6-compat` era um shim específico do Alpine para compatibilizar libs glibc — não existe equivalente necessário no Debian (glibc já é nativo), por isso foi removido, não substituído. Confirmar durante a implementação se `vips-dev`/`libvips-dev` é realmente necessário no worker (checar se algo usa `sharp`/`vips` — se não for usado, remover também, mas não é o foco desta task decidir isso; manter se já estava lá por algum motivo válido).
+
+- [ ] **Step 10: Rebuildar a imagem e confirmar que sobe**
+
+```bash
+docker compose build worker
+docker compose up -d worker
+docker compose logs worker --tail 50
+```
+
+Expected: build conclui sem erro, container sobe e loga `"worker iniciado"` (mesma mensagem de log já existente em `main.ts`), sem crash.
+
+- [ ] **Step 11: Fechar o browser no shutdown do worker**
+
+Em `apps/worker/src/main.ts`, importar `closeBrowser` de `@afilados/marketplaces` e chamá-lo dentro da função `shutdown()`, junto aos outros `await`s de encerramento (ex: perto de `await gateway.stopAll()`), envolvido em try/catch como o resto do bloco já faz (não deve travar o shutdown se o browser já não estiver rodando).
+
+- [ ] **Step 12: Rodar a suíte completa de `packages/marketplaces`**
+
+```bash
+cd packages/marketplaces && npx vitest run
+```
+
+Expected: PASS, nenhuma regressão.
+
+- [ ] **Step 13: Commit**
+
+```bash
+git add packages/marketplaces deploy/Dockerfile.worker apps/worker/src/main.ts
+git commit -m "feat(marketplaces): navegador headless (Playwright) para descoberta em Mercado Livre e Magalu
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 3: Worker — generalizar `discoverForRule` para múltiplos marketplaces + mix aleatório
 
 **Files:**
 - Modify: `apps/worker/src/automation/discovery.ts`
@@ -584,7 +848,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 3: API + Web — habilitar Mercado Livre/Amazon/Magalu na criação de regra
+### Task 4: API + Web — habilitar Mercado Livre/Amazon/Magalu na criação de regra
 
 **Files:**
 - Modify: `apps/web/src/components/automations/rule-form.tsx`
@@ -616,7 +880,7 @@ Em `apps/web/src/components/automations/rule-form.tsx`, o array `MARKETS` (hoje 
 </div>
 ```
 
-Por (removendo a constante `MARKETS` com `enabled: false`, já que todos os 4 marketplaces agora funcionam):
+Por (removendo a constante `MARKETS` com `enabled: false` — os 4 marketplaces agora têm descoberta implementada; se a Task 2 encontrar que Mercado Livre ou Magalu continuam bloqueados mesmo com Playwright, mantenha esses dois com `enabled: false`/"Em breve" na UI em vez de remover a constante, e documente isso como desvio do plano):
 
 ```tsx
 const ALL_MARKETS: { key: MarketplaceKind; label: string }[] = [
@@ -704,8 +968,9 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ## Riscos específicos deste plano
 
 1. **Seletores de extração dependem só de `parseProductUrl`, não de classes CSS.** Isso é deliberado (mais resistente a mudanças de layout do que raspar classe CSS), mas significa que se um marketplace mudar o **formato da URL** de produto (não só o layout visual), tanto este scraper quanto `parseProductUrl` (usado em várias outras partes do sistema) precisam ser atualizados juntos — não é um ponto de falha isolado desta feature.
-2. **Páginas de busca podem exigir JS para renderizar resultados** (mencionado como risco já na spec §8.1). Task 1 pede explicitamente uma verificação manual contra o site real antes de dar a task por pronta — se qualquer um dos 3 vier vazio na prática, documente e considere abrir uma automation-específica para aquele marketplace ficar temporariamente restrito a inserção manual de link (já suportada desde o Plano 1), sem bloquear a entrega dos outros dois.
-3. **Rate limit / bloqueio por IP**: sem o cache de 15 min (Task 2), múltiplas regras com keywords parecidas martelariam o mesmo marketplace repetidamente. O cache mitiga mas não elimina — se isso virar problema em produção, o próximo passo natural é um rate-limiter por domínio (mesmo padrão já usado no `product-enrich` worker: `limiter: { max: 6, duration: 10_000 }`), fora do escopo deste plano.
+2. **Anti-bot pode continuar bloqueando mesmo com Playwright.** A Task 1 já confirmou contra os sites reais que Mercado Livre (challenge anti-bot) e Magalu (bloqueio Akamai 403) não são simples "faltava JS" — são defesas ativas contra scraping. Um navegador headless com UA realista (Task 2) melhora as chances, mas não garante passar por detecção de `navigator.webdriver`, fingerprint de TLS ou rate-limiting por IP em escala. Este plano **não** inclui rotação de proxy, resolução de CAPTCHA ou outras contramedidas — se o Playwright básico ainda for bloqueado, a Task 2 deve documentar isso como achado (`DONE_WITH_CONCERNS`) e aquele marketplace específico permanece restrito a inserção manual de link (já suportada desde o Plano 1) até uma decisão de produto sobre investir em anti-detecção mais pesada.
+3. **Rate limit / bloqueio por IP**: sem o cache de 15 min (Task 3), múltiplas regras com keywords parecidas martelariam o mesmo marketplace repetidamente. O cache mitiga mas não elimina — se isso virar problema em produção, o próximo passo natural é um rate-limiter por domínio (mesmo padrão já usado no `product-enrich` worker: `limiter: { max: 6, duration: 10_000 }`), fora do escopo deste plano.
+4. **Custo de infraestrutura do Playwright**: a imagem Docker do worker fica maior (Chromium + dependências do sistema) e cada chamada de descoberta para ML/Magalu consome mais CPU/memória e leva mais tempo (segundos, não milissegundos) do que um `fetch` simples — isso é aceitável para o volume de 1 descoberta por regra a cada `intervalMin` minutos, mas não escalaria bem se o número de regras ativas crescesse muito sem paralelismo/fila dedicada (fora do escopo deste plano).
 
 ## Fora deste plano (Plano 3/3)
 
