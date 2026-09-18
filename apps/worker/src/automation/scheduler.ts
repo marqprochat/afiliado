@@ -79,12 +79,17 @@ export class AutomationScheduler {
   private async tickRule(rule: AutomationRule) {
     const now = this.now();
 
-    const lastDispatch = await prisma.automationLog.findFirst({
-      where: { ruleId: rule.id, action: 'DISPATCHED' },
+    // Gate por QUALQUER log da regra (não só DISPATCHED): uma regra que nunca despacha com
+    // sucesso (todo candidato inelegível, ou descoberta sempre vazia) ainda assim precisa
+    // respeitar o intervalMin — senão dispara discoverForRule a cada tick de 30s, o que para
+    // Mercado Livre/Magalu significa até 20 fetches autenticados por rodada contra a sessão
+    // real do usuário (ver Critical #1 da revisão final do Plano 2/3).
+    const lastLog = await prisma.automationLog.findFirst({
+      where: { ruleId: rule.id },
       orderBy: { createdAt: 'desc' },
     });
-    if (lastDispatch) {
-      const elapsedMin = (now.getTime() - lastDispatch.createdAt.getTime()) / 60_000;
+    if (lastLog) {
+      const elapsedMin = (now.getTime() - lastLog.createdAt.getTime()) / 60_000;
       if (elapsedMin < rule.intervalMin) return;
     }
 

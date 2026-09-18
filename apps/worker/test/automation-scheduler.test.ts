@@ -283,6 +283,69 @@ describe('AutomationScheduler', () => {
     expect(discoverCalls.filter((id) => id === rule.id).length).toBe(1);
   });
 
+  it('não retica regra com log SKIPPED recente (menos de intervalMin), mas retica quando o log é mais antigo que intervalMin', async () => {
+    const rule = await prisma.automationRule.create({
+      data: {
+        tenantId,
+        name: 'r-gate-any-log',
+        enabled: true,
+        marketplaces: ['SHOPEE'],
+        keywords: ['fone'],
+        blockedKeywords: [],
+        intervalMin: 5,
+        sessionId,
+        groupJids: ['g1@g.us'],
+        templateId,
+      },
+    });
+
+    const discoverCalls: string[] = [];
+    const scheduler = new AutomationScheduler({
+      enqueue: vi.fn(),
+      discover: async (r) => {
+        discoverCalls.push(r.id);
+      },
+    });
+
+    // Log SKIPPED recente (4min atrás, dentro do intervalMin de 5min): nenhum log DISPATCHED
+    // jamais existiu para esta regra (cenário do Critical #1 — descoberta nunca despacha com
+    // sucesso), mas o gate deve olhar para QUALQUER log, não só DISPATCHED.
+    const recentSkip = new Date(Date.now() - 4 * 60_000);
+    await prisma.automationLog.create({
+      data: {
+        tenantId,
+        ruleId: rule.id,
+        marketplace: 'SHOPEE',
+        action: 'SKIPPED',
+        reason: 'nenhum produto elegível encontrado',
+        createdAt: recentSkip,
+      },
+    });
+
+    await scheduler.reload();
+    await scheduler.tick();
+    expect(discoverCalls.filter((id) => id === rule.id).length).toBe(0);
+
+    // Apaga o log recente e cria um antigo (6min atrás, além do intervalMin de 5min): agora a
+    // regra deve ser reticada normalmente.
+    await prisma.automationLog.deleteMany({ where: { ruleId: rule.id } });
+    const oldSkip = new Date(Date.now() - 6 * 60_000);
+    await prisma.automationLog.create({
+      data: {
+        tenantId,
+        ruleId: rule.id,
+        marketplace: 'SHOPEE',
+        action: 'SKIPPED',
+        reason: 'nenhum produto elegível encontrado',
+        createdAt: oldSkip,
+      },
+    });
+
+    await scheduler.reload();
+    await scheduler.tick();
+    expect(discoverCalls.filter((id) => id === rule.id).length).toBe(1);
+  });
+
   it('não recarrega regra desabilitada', async () => {
     await prisma.automationRule.create({
       data: {
