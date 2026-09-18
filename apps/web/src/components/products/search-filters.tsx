@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import {
   searchQuerySchema,
+  type MarketplaceKind,
   type SearchMode,
   type SearchQuery,
   type SearchSort,
@@ -34,10 +35,12 @@ export const CATEGORIES: { id: string; name: string }[] = [
 const selectCls = 'h-9 rounded-md border border-input bg-surface-2 px-2 text-sm';
 
 export function SearchFilters({
+  source,
   mode,
   onSearch,
   loading,
 }: {
+  source: MarketplaceKind;
   mode: SearchMode;
   onSearch: (q: SearchQuery) => void;
   loading?: boolean;
@@ -49,15 +52,17 @@ export function SearchFilters({
   const [topSellers, setTopSellers] = useState(false);
   const [extraCommission, setExtraCommission] = useState(false);
 
+  const isShopee = source === 'SHOPEE';
+
   function submit(e: React.FormEvent) {
     e.preventDefault();
     const raw: Record<string, unknown> = {
-      source: 'SHOPEE',
+      source,
       mode,
       sort,
       limit: Number(limit),
-      topSellers,
-      extraCommission,
+      topSellers: isShopee && topSellers,
+      extraCommission: isShopee && extraCommission,
     };
     if (mode === 'keyword') raw.query = text;
     if (mode === 'shop') raw.shopId = text;
@@ -104,26 +109,32 @@ export function SearchFilters({
             Itens em alta segundo a API da Shopee.
           </p>
         )}
-        <Button type="submit" className="bg-brand text-white hover:bg-brand/90" disabled={loading}>
+        <Button
+          type="submit"
+          className="bg-brand text-white hover:bg-brand/90"
+          disabled={loading || (!isShopee && mode !== 'keyword')}
+        >
           {loading ? 'Buscando…' : 'Buscar'}
         </Button>
       </div>
       <div className="flex flex-wrap items-end gap-4 text-sm">
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="sort">Ordenar</Label>
-          <select
-            id="sort"
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SearchSort)}
-            className={`${selectCls} w-48`}
-          >
-            {(Object.keys(SORT_LABELS) as SearchSort[]).map((k) => (
-              <option key={k} value={k}>
-                {SORT_LABELS[k]}
-              </option>
-            ))}
-          </select>
-        </div>
+        {isShopee && (
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="sort">Ordenar</Label>
+            <select
+              id="sort"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SearchSort)}
+              className={`${selectCls} w-48`}
+            >
+              {(Object.keys(SORT_LABELS) as SearchSort[]).map((k) => (
+                <option key={k} value={k}>
+                  {SORT_LABELS[k]}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="flex flex-col gap-1">
           <Label htmlFor="limit">Qtd.</Label>
           <select
@@ -139,17 +150,30 @@ export function SearchFilters({
             ))}
           </select>
         </div>
-        <label className="flex items-center gap-2">
-          <NativeCheckbox checked={topSellers} onChange={(e) => setTopSellers(e.target.checked)} />{' '}
-          Top vendedores
-        </label>
-        <label className="flex items-center gap-2">
-          <NativeCheckbox
-            checked={extraCommission}
-            onChange={(e) => setExtraCommission(e.target.checked)}
-          />{' '}
-          Comissão extra
-        </label>
+        {isShopee && (
+          <>
+            <label className="flex items-center gap-2">
+              <NativeCheckbox
+                checked={topSellers}
+                onChange={(e) => setTopSellers(e.target.checked)}
+              />{' '}
+              Top vendedores
+            </label>
+            <label className="flex items-center gap-2">
+              <NativeCheckbox
+                checked={extraCommission}
+                onChange={(e) => setExtraCommission(e.target.checked)}
+              />{' '}
+              Comissão extra
+            </label>
+          </>
+        )}
+        {!isShopee && (mode === 'category' || mode === 'shop' || mode === 'trending') && (
+          <p className="text-xs text-muted-foreground">
+            {source === 'MERCADOLIVRE' ? 'Mercado Livre' : source === 'AMAZON' ? 'Amazon' : 'Magalu'}
+            : só busca por palavra-chave está disponível.
+          </p>
+        )}
       </div>
     </form>
   );

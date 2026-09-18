@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import type { SearchMode, SearchQuery } from '@afilados/shared';
+import type { MarketplaceKind, SearchMode, SearchQuery } from '@afilados/shared';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { ProductCard } from '@/components/products/product-card';
@@ -14,24 +14,33 @@ import { useQueue } from '@/lib/queries';
 import type { ApiProduct } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-const MARKETS = [
-  { key: 'SHOPEE', label: 'Shopee', enabled: true },
-  { key: 'MERCADOLIVRE', label: 'Mercado Livre', enabled: false },
-  { key: 'AMAZON', label: 'Amazon', enabled: false },
-  { key: 'MAGALU', label: 'Magalu', enabled: false },
+const MARKETS: { key: MarketplaceKind; label: string }[] = [
+  { key: 'SHOPEE', label: 'Shopee' },
+  { key: 'MERCADOLIVRE', label: 'Mercado Livre' },
+  { key: 'AMAZON', label: 'Amazon' },
+  { key: 'MAGALU', label: 'Magalu' },
 ];
-const SUBTABS: { key: SearchMode | 'import'; label: string }[] = [
+// Categoria/loja favorita/mais buscados são conceitos da API oficial da Shopee — os demais
+// marketplaces só têm busca por palavra-chave (scraping) e importação por link.
+const ALL_SUBTABS: { key: SearchMode | 'import'; label: string; shopeeOnly?: boolean }[] = [
   { key: 'keyword', label: 'Captura de Produtos' },
-  { key: 'category', label: 'Explorar Categorias' },
-  { key: 'trending', label: 'Mais Buscados' },
-  { key: 'shop', label: 'Lojas Favoritas' },
+  { key: 'category', label: 'Explorar Categorias', shopeeOnly: true },
+  { key: 'trending', label: 'Mais Buscados', shopeeOnly: true },
+  { key: 'shop', label: 'Lojas Favoritas', shopeeOnly: true },
   { key: 'import', label: 'Por Links / CSV' },
 ];
 
 export default function ProdutosPage() {
+  const [source, setSource] = useState<MarketplaceKind>('SHOPEE');
   const [sub, setSub] = useState<SearchMode | 'import'>('keyword');
   const [products, setProducts] = useState<ApiProduct[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const SUBTABS = ALL_SUBTABS.filter((t) => source === 'SHOPEE' || !t.shopeeOnly);
+
+  function selectSource(kind: MarketplaceKind) {
+    setSource(kind);
+    if (kind !== 'SHOPEE' && sub !== 'keyword' && sub !== 'import') setSub('keyword');
+  }
 
   // Produtos importados em lote chegam como esqueleto e são atualizados quando o worker termina
   useRealtime((e) => {
@@ -97,13 +106,13 @@ export default function ProdutosPage() {
         {MARKETS.map((m) => (
           <button
             key={m.key}
-            disabled={!m.enabled}
-            title={m.enabled ? undefined : 'Disponível na fase 3'}
+            type="button"
+            onClick={() => selectSource(m.key)}
             className={cn(
-              'rounded-md border px-3 py-1.5 text-sm',
-              m.enabled
-                ? 'border-brand bg-brand/15 text-brand'
-                : 'border-border text-muted-foreground opacity-60',
+              'rounded-md border px-3 py-1.5 text-sm transition-colors',
+              source === m.key
+                ? 'border-brand bg-brand text-white'
+                : 'border-border bg-surface-2 text-muted-foreground hover:text-foreground',
             )}
           >
             {m.label}
@@ -136,7 +145,8 @@ export default function ProdutosPage() {
         />
       ) : (
         <SearchFilters
-          key={sub}
+          key={`${source}-${sub}`}
+          source={source}
           mode={sub}
           onSearch={(q) => search.mutate(q)}
           loading={search.isPending}

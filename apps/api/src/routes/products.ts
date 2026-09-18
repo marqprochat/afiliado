@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import multipart from '@fastify/multipart';
 import { parse } from 'csv-parse/sync';
 import { z } from 'zod';
@@ -8,16 +8,58 @@ import {
   searchQuerySchema,
   ApiError,
   QUEUE_PRODUCT_ENRICH,
+  SESSION_FIELD_BY_KIND,
   type MarketplaceKind,
   type ProductData,
   type ProductEnrichJob,
 } from '@afilados/shared';
+import {
+  discoverAmazonByKeyword,
+  discoverMercadoLivreByKeyword,
+  discoverMagaluByKeyword,
+  fetchRenderedHtml,
+} from '@afilados/marketplaces';
 import { requireAuth } from '../plugins/auth';
-import { getShopeeAdapter, getTagAdapter, loadShopeeCredentials } from '../lib/marketplaces';
+import {
+  getShopeeAdapter,
+  getTagAdapter,
+  loadShopeeCredentials,
+  loadTagCredentials,
+} from '../lib/marketplaces';
 import { toApiProduct, upsertProducts } from '../lib/products';
 import { getQueue } from '../lib/redis';
 
 const idsQuery = z.object({ ids: z.string().min(1) });
+
+/** Domínio para injetar os cookies de sessão sincronizados no navegador headless. */
+const SESSION_COOKIE_DOMAIN: Record<'MERCADOLIVRE' | 'MAGALU', string> = {
+  MERCADOLIVRE: '.mercadolivre.com.br',
+  MAGALU: '.magazineluiza.com.br',
+};
+
+/** Busca por palavra-chave fora da Shopee: Amazon é anônima; ML/Magalu exigem sessão
+ * sincronizada (mesmo mecanismo já usado pela descoberta automática de automações). */
+async function discoverUrlsForKeyword(
+  req: FastifyRequest,
+  kind: 'MERCADOLIVRE' | 'AMAZON' | 'MAGALU',
+  keyword: string,
+): Promise<string[]> {
+  if (kind === 'AMAZON') return discoverAmazonByKeyword(keyword);
+  const creds = await loadTagCredentials(req.db, kind);
+  const session = creds[SESSION_FIELD_BY_KIND[kind]];
+  if (!session?.cookies) {
+    throw new ApiError(
+      'MARKETPLACE_ERROR',
+      `${kind === 'MERCADOLIVRE' ? 'Mercado Livre' : 'Magalu'}: sincronize a sessão em Marketplaces antes de buscar`,
+      400,
+    );
+  }
+  const fetchHtml = (url: string) =>
+    fetchRenderedHtml(url, { cookies: { domain: SESSION_COOKIE_DOMAIN[kind], values: session.cookies } });
+  return kind === 'MERCADOLIVRE'
+    ? discoverMercadoLivreByKeyword(keyword, { fetchHtml })
+    : discoverMagaluByKeyword(keyword, { fetchHtml });
+}
 
 export async function productsRoutes(app: FastifyInstance) {
   await app.register(multipart, { limits: { fileSize: 2 * 1024 * 1024, files: 1 } });
@@ -32,17 +74,36 @@ export async function productsRoutes(app: FastifyInstance) {
 
   app.post('/products/search', async (req) => {
     const q = searchQuerySchema.parse(req.body);
-    if (q.source !== 'SHOPEE')
+
+    if (q.source === 'SHOPEE') {
+      const { creds } = await loadShopeeCredentials(req.db);
+      let found: ProductData[];
+      try {
+        found = await getShopeeAdapter().search!(creds, q);
+      } catch (e) {
+        throw new ApiError('MARKETPLACE_ERROR', e instanceof Error ? e.message : String(e), 502);
+      }
+      const rows = await upsertProducts(req.db, req.tenantId, found);
+      return { products: rows.map(toApiProduct) };
+    }
+
+    // Mercado Livre, Amazon e Magalu não têm API de catálogo/categoria — só busca por
+    // palavra-chave, reaproveitando os mesmos scrapers/sessão usados pela automação (Plano 2).
+    if (q.mode !== 'keyword') {
       throw ApiError.validation(
-        `${q.source} não possui API de busca por catálogo; use a importação por links ou a extensão`,
+        `${q.source}: só a busca por palavra-chave está disponível fora da Shopee`,
       );
-    const { creds } = await loadShopeeCredentials(req.db);
-    let found;
+    }
+    const kind = q.source as 'MERCADOLIVRE' | 'AMAZON' | 'MAGALU';
+    let urls: string[];
     try {
-      found = await getShopeeAdapter().search!(creds, q);
+      urls = await discoverUrlsForKeyword(req, kind, q.query!);
     } catch (e) {
+      if (e instanceof ApiError) throw e;
       throw new ApiError('MARKETPLACE_ERROR', e instanceof Error ? e.message : String(e), 502);
     }
+    if (urls.length === 0) return { products: [] };
+    const found = await getTagAdapter(kind).fetchByUrls({}, urls.slice(0, q.limit));
     const rows = await upsertProducts(req.db, req.tenantId, found);
     return { products: rows.map(toApiProduct) };
   });
