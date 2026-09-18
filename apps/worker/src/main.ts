@@ -12,7 +12,7 @@ import {
   type SendOfferJob,
   type WaCommandJob,
 } from '@afilados/shared';
-import { createShopeeAdapter } from '@afilados/marketplaces';
+import { createShopeeAdapter, closeBrowser } from '@afilados/marketplaces';
 import { config } from './config';
 import { getRedis, closeRedis } from './lib/redis';
 import { BaileysGateway } from './wa/baileys-gateway';
@@ -113,6 +113,11 @@ async function shutdown() {
     redisSub.disconnect();
     await manager.stop();
     await gateway.stopAll();
+    try {
+      await closeBrowser();
+    } catch (e) {
+      log.error(e, 'falha ao fechar browser headless');
+    }
     http.close();
     await closeRedis();
   } catch (e) {
