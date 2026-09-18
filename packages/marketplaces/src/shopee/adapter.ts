@@ -20,14 +20,26 @@ const SORT_MAP: Record<SearchSort, number> = {
 const EXTRA_COMMISSION_MIN_PCT = 3;
 
 const PRODUCT_OFFER_QUERY = `
-query ProductOffer($keyword: String, $productCatId: Int, $shopId: Int, $itemId: Int64, $listType: Int,
-  $sortType: Int, $page: Int, $limit: Int, $isOfficialShop: Boolean, $isKeySeller: Boolean) {
+query ProductOffer($keyword: String, $productCatId: Int, $shopId: Int64, $itemId: Int64, $listType: Int,
+  $sortType: Int, $page: Int, $limit: Int, $isKeySeller: Boolean) {
   productOfferV2(keyword: $keyword, productCatId: $productCatId, shopId: $shopId, itemId: $itemId,
     listType: $listType, sortType: $sortType, page: $page, limit: $limit,
-    isOfficialShop: $isOfficialShop, isKeySeller: $isKeySeller) {
+    isKeySeller: $isKeySeller) {
     nodes { itemId shopId productName priceMin priceMax priceDiscountRate sales commissionRate
       imageUrl shopName shopType productLink offerLink periodStartTime periodEndTime }
     pageInfo { page limit hasNextPage }
+  }
+}`;
+
+// Query enxuta usada só para validar credenciais (checkConnection). A PRODUCT_OFFER_QUERY
+// completa pede campos (ex: shopType, periodStartTime) que a Shopee retorna null para produtos
+// sem esses dados quando a busca não tem nenhum filtro — o que já disparou "got null for non-null"
+// mesmo com credenciais válidas. Ver documentação: query mínima recomendada é itemId+productName.
+const CHECK_CONNECTION_QUERY = `
+query CheckConnection($limit: Int) {
+  productOfferV2(limit: $limit) {
+    nodes { itemId productName }
+    pageInfo { page }
   }
 }`;
 
@@ -95,8 +107,9 @@ export function createShopeeAdapter(
     kind: 'SHOPEE',
 
     async checkConnection(creds): Promise<ConnectionStatus> {
+      if (mock) return { ok: true };
       try {
-        await searchPage(creds, { limit: 1, page: 1 });
+        await client(creds).request(CHECK_CONNECTION_QUERY, { limit: 1 });
         return { ok: true };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -113,8 +126,9 @@ export function createShopeeAdapter(
       if (q.mode === 'category') vars.productCatId = Number(q.categoryId);
       if (q.mode === 'shop') vars.shopId = Number(q.shopId);
       if (q.mode === 'trending') vars.listType = 2;
+      // A Open Platform removeu o argumento isOfficialShop de productOfferV2; isKeySeller
+      // continua válido e é a aproximação disponível para o filtro de "vendedores top".
       if (q.topSellers) {
-        vars.isOfficialShop = true;
         vars.isKeySeller = true;
       }
       const out: ProductData[] = [];

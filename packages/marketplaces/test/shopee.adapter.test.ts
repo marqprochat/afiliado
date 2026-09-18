@@ -62,8 +62,9 @@ describe('ShopeeAdapter (real, fetch falso)', () => {
       keyword: 'ryzen',
       sortType: 3,
       limit: 10,
-      isOfficialShop: true,
+      isKeySeller: true,
     });
+    expect(body.variables).not.toHaveProperty('isOfficialShop');
   });
   it('fetchByUrls resolve itemId da URL', async () => {
     const f = fakeFetch([offers]);
