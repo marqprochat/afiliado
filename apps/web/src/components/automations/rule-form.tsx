@@ -95,6 +95,13 @@ export function RuleForm({ onCreated }: { onCreated: () => void }) {
           </button>
         ))}
       </div>
+      {(marketplaces.includes('MERCADOLIVRE') || marketplaces.includes('MAGALU')) && (
+        <p className="text-xs text-gray-500">
+          Mercado Livre e Magalu requerem sessão sincronizada em Marketplaces (extensão para ML,
+          colagem manual para Magalu) — sem isso, a regra não encontrará produtos nesses
+          marketplaces.
+        </p>
+      )}
       <input
         className="w-full rounded border px-3 py-2"
         placeholder="Keywords obrigatórias (separadas por vírgula)"
