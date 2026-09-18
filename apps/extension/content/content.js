@@ -275,6 +275,96 @@
     };
   }
 
+  // Reconhece URLs de produto nos 4 marketplaces suportados (mesmos padrões de
+  // packages/core/src/urls.ts#parseProductUrl, duplicados aqui porque a extensão
+  // roda como content script puro, sem acesso ao pacote TS do monorepo).
+  function isProductUrl(raw) {
+    let u;
+    try {
+      u = new URL(raw);
+    } catch {
+      return false;
+    }
+    const host = u.hostname.replace(/^www\./, '');
+    const path = u.pathname;
+    if (host === 'shopee.com.br') {
+      return /-i\.(\d+)\.(\d+)/.test(path) || /^\/product\/(\d+)\/(\d+)/.test(path);
+    }
+    if (host === 'mercadolivre.com.br' || host.endsWith('.mercadolivre.com.br')) {
+      return /MLB-?(\d+)/i.test(path) || /\/p\/(MLB\d+|[A-Z0-9]+)/i.test(path);
+    }
+    if (host === 'amazon.com.br') {
+      return /\/(?:dp|gp\/product|product)\/([A-Z0-9]{10})/.test(path);
+    }
+    if (
+      host === 'magazineluiza.com.br' ||
+      host === 'magazinevoce.com.br' ||
+      host.endsWith('.magazinevoce.com.br')
+    ) {
+      return /\/p\/([a-z0-9]+)/i.test(path) || /\/([a-z0-9]{7,12})\//i.test(path);
+    }
+    return false;
+  }
+
+  // Varre todos os links da página atual e devolve as URLs de produto únicas —
+  // funciona tanto numa página de busca/listagem (dezenas de links) quanto numa
+  // página de produto único (0 ou 1 link), sem precisar detectar o tipo de página.
+  function extractProductLinksFromPage() {
+    const seen = new Set();
+    const urls = [];
+    document.querySelectorAll('a[href]').forEach((a) => {
+      if (urls.length >= 200) return;
+      let absolute;
+      try {
+        absolute = new URL(a.getAttribute('href'), window.location.href).toString();
+      } catch {
+        return;
+      }
+      if (!isProductUrl(absolute) || seen.has(absolute)) return;
+      seen.add(absolute);
+      urls.push(absolute);
+    });
+    return urls;
+  }
+
+  // Botão flutuante para copiar todos os links de produto da página atual (ex: uma
+  // página de busca do Mercado Livre/Amazon/Magalu) para colar em Buscar Produtos →
+  // Por Links/CSV no app — útil quando a busca automática do marketplace não está
+  // disponível (bloqueio anti-bot, API sem acesso etc.).
+  function injectCopyLinksButton() {
+    if (document.getElementById('afilados-copy-links-btn')) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'afilados-copy-links-btn';
+    btn.className = 'afilados-float-btn afilados-float-btn--secondary';
+    btn.innerHTML = '<span>🔗</span> Copiar links';
+    btn.title = 'Copiar todos os links de produto desta página para colar no Afilados';
+
+    btn.addEventListener('click', async () => {
+      const urls = extractProductLinksFromPage();
+      if (urls.length === 0) {
+        btn.innerHTML = '<span>—</span> Nenhum link';
+        setTimeout(() => {
+          btn.innerHTML = '<span>🔗</span> Copiar links';
+        }, 2500);
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(urls.join('\n'));
+        btn.innerHTML = `<span>✓</span> ${urls.length} link(s) copiado(s)!`;
+        btn.classList.add('success');
+      } catch {
+        btn.innerHTML = '<span>❌</span> Falha ao copiar';
+      }
+      setTimeout(() => {
+        btn.innerHTML = '<span>🔗</span> Copiar links';
+        btn.classList.remove('success');
+      }, 3000);
+    });
+
+    document.body.appendChild(btn);
+  }
+
   // Responde a mensagens da extensão
   if (typeof chrome !== 'undefined' && chrome.runtime) {
     chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
@@ -367,9 +457,13 @@
   }
 
   // Injeta após carregar a página
-  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  function injectButtons() {
     injectFloatingButton();
+    injectCopyLinksButton();
+  }
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    injectButtons();
   } else {
-    window.addEventListener('DOMContentLoaded', injectFloatingButton);
+    window.addEventListener('DOMContentLoaded', injectButtons);
   }
 })();

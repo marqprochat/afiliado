@@ -12,7 +12,7 @@
     "default_popup": "popup/popup.html",
     "default_title": "Afilados Connect"
   },
-  "permissions": ["storage", "activeTab", "scripting", "cookies", "alarms"],
+  "permissions": ["storage", "activeTab", "scripting", "cookies", "alarms", "clipboardWrite"],
   "host_permissions": [
     "http://localhost/*",
     "http://127.0.0.1/*",

@@ -34,7 +34,8 @@ export function ImportPanel({ onImported }: { onImported: (r: ImportResult) => v
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder={
-          'Cole uma ou mais URLs por linha:\n' +
+          'Cole uma ou mais URLs (uma por linha, ou use o botão 🔗 Copiar links\n' +
+          'da extensão Afilados Connect numa página de busca do marketplace):\n' +
           'https://shopee.com.br/...\n' +
           'https://produto.mercadolivre.com.br/MLB-...\n' +
           'https://www.amazon.com.br/dp/...\n' +
@@ -45,7 +46,10 @@ export function ImportPanel({ onImported }: { onImported: (r: ImportResult) => v
         <Button
           className="bg-brand text-white hover:bg-brand/90"
           disabled={imp.isPending || !text.trim()}
-          onClick={() => imp.mutate({ urls: text.split(/\s+/).filter(Boolean) })}
+          onClick={() => {
+            const urls = [...new Set(text.match(/https?:\/\/[^\s"'<>]+/g) ?? [])];
+            imp.mutate({ urls });
+          }}
         >
           Importar links
         </Button>

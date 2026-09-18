@@ -32,3 +32,13 @@
 .afilados-float-btn.success {
   background: #047857;
 }
+
+.afilados-float-btn--secondary {
+  bottom: 74px;
+  background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%);
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.35);
+}
+
+.afilados-float-btn--secondary:hover {
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5);
+}
