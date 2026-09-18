@@ -5,16 +5,18 @@ import { apiFetch } from '@/lib/api';
 import { useApiMutation } from '@/lib/mutations';
 import { useSessions, useGroups, useTemplates } from '@/lib/queries';
 import type { AutomationRule } from '@/lib/types';
+import type { MarketplaceKind } from '@afilados/shared';
 
-const MARKETS: { key: string; label: string; enabled: boolean }[] = [
-  { key: 'SHOPEE', label: 'Shopee', enabled: true },
-  { key: 'MERCADOLIVRE', label: 'Mercado Livre', enabled: false },
-  { key: 'AMAZON', label: 'Amazon', enabled: false },
-  { key: 'MAGALU', label: 'Magalu', enabled: false },
+const ALL_MARKETS: { key: MarketplaceKind; label: string }[] = [
+  { key: 'SHOPEE', label: 'Shopee' },
+  { key: 'MERCADOLIVRE', label: 'Mercado Livre' },
+  { key: 'AMAZON', label: 'Amazon' },
+  { key: 'MAGALU', label: 'Magalu' },
 ];
 
 export function RuleForm({ onCreated }: { onCreated: () => void }) {
   const [name, setName] = useState('');
+  const [marketplaces, setMarketplaces] = useState<MarketplaceKind[]>(['SHOPEE']);
   const [keywords, setKeywords] = useState('');
   const [blockedKeywords, setBlockedKeywords] = useState('');
   const [minDiscountPct, setMinDiscountPct] = useState('');
@@ -24,6 +26,12 @@ export function RuleForm({ onCreated }: { onCreated: () => void }) {
   const [sessionId, setSessionId] = useState('');
   const [groupJids, setGroupJids] = useState<string[]>([]);
   const [templateId, setTemplateId] = useState('');
+
+  function toggleMarketplace(kind: MarketplaceKind) {
+    setMarketplaces((prev) =>
+      prev.includes(kind) ? prev.filter((k) => k !== kind) : [...prev, kind],
+    );
+  }
 
   const { data: sessions } = useSessions();
   const { data: groups } = useGroups(sessionId || null);
@@ -35,7 +43,7 @@ export function RuleForm({ onCreated }: { onCreated: () => void }) {
         method: 'POST',
         json: {
           name,
-          marketplaces: ['SHOPEE'],
+          marketplaces,
           keywords: keywords
             .split(',')
             .map((k) => k.trim())
@@ -72,18 +80,19 @@ export function RuleForm({ onCreated }: { onCreated: () => void }) {
         required
       />
       <div className="flex gap-2">
-        {MARKETS.map((m) => (
-          <span
+        {ALL_MARKETS.map((m) => (
+          <button
             key={m.key}
+            type="button"
+            onClick={() => toggleMarketplace(m.key)}
             className={
-              m.enabled
+              marketplaces.includes(m.key)
                 ? 'rounded bg-orange-100 px-2 py-1 text-sm'
-                : 'rounded bg-gray-100 px-2 py-1 text-sm text-gray-400'
+                : 'rounded bg-gray-100 px-2 py-1 text-sm text-gray-500'
             }
-            title={m.enabled ? undefined : 'Em breve'}
           >
             {m.label}
-          </span>
+          </button>
         ))}
       </div>
       <input
@@ -176,7 +185,7 @@ export function RuleForm({ onCreated }: { onCreated: () => void }) {
           </option>
         ))}
       </select>
-      <Button type="submit" disabled={create.isPending}>
+      <Button type="submit" disabled={create.isPending || marketplaces.length === 0}>
         Criar automação
       </Button>
     </form>
