@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MARKETPLACE_KINDS, MEDIA_MODES, MIRROR_LOG_STATUSES, MIRROR_MODES } from './enums';
+import { MARKETPLACE_KINDS, MEDIA_MODES, MIRROR_LOG_STATUSES, MIRROR_MODES, SHIPPINGS } from './enums';
 
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'formato HH:mm');
 
@@ -66,7 +66,29 @@ export const mirrorLogsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 
-export const productsImportSchema = z.object({ urls: z.array(z.string().url()).min(1).max(200) });
+// Metadados opcionais já extraídos pela extensão a partir do DOM de uma página de busca/listagem
+// (mesma técnica usada pelo botão de captura única) — quando presentes, o backend pula o scraping
+// (que para ML/Magalu esbarra em bloqueio anti-bot) e usa os dados diretamente.
+export const productsImportItemSchema = z.object({
+  url: z.string().url(),
+  title: z.string().min(1).max(500).optional(),
+  price: z.number().nonnegative().optional(),
+  originalPrice: z.number().nonnegative().optional(),
+  discountPct: z.number().int().min(0).max(100).optional(),
+  images: z.array(z.string().url()).optional(),
+  shipping: z.enum(SHIPPINGS).optional(),
+  couponCode: z.string().max(60).optional(),
+});
+export type ProductsImportItem = z.infer<typeof productsImportItemSchema>;
+
+export const productsImportSchema = z
+  .object({
+    urls: z.array(z.string().url()).min(1).max(200).optional(),
+    items: z.array(productsImportItemSchema).min(1).max(200).optional(),
+  })
+  .refine((v) => (v.urls && v.urls.length > 0) || (v.items && v.items.length > 0), {
+    message: 'Informe urls ou items',
+  });
 export const queueAddSchema = z.object({ productIds: z.array(z.string().min(1)).min(1) });
 export const queueSelectSchema = z.object({
   ids: z.array(z.string().min(1)),

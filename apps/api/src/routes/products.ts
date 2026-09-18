@@ -12,6 +12,7 @@ import {
   type MarketplaceKind,
   type ProductData,
   type ProductEnrichJob,
+  type ProductsImportItem,
 } from '@afilados/shared';
 import {
   discoverAmazonByKeyword,
@@ -110,6 +111,7 @@ export async function productsRoutes(app: FastifyInstance) {
 
   app.post('/products/import', async (req) => {
     let urls: string[];
+    let itemsWithMeta: ProductsImportItem[] = [];
     if (req.isMultipart()) {
       const file = await req.file();
       if (!file) throw ApiError.validation('Arquivo CSV ausente');
@@ -120,7 +122,13 @@ export async function productsRoutes(app: FastifyInstance) {
       urls = records.map((r) => r.url ?? '').filter(Boolean);
       if (urls.length === 0) throw ApiError.validation('CSV sem coluna url');
     } else {
-      urls = productsImportSchema.parse(req.body).urls;
+      const body = productsImportSchema.parse(req.body);
+      // Itens com título já vieram com metadados extraídos pela extensão direto do DOM da
+      // página (busca/listagem) — pulamos o scraping do backend, que para ML/Magalu esbarra
+      // em bloqueio anti-bot e não retorna dados reais. Itens sem título caem no fluxo normal.
+      const metaItems = body.items ?? [];
+      itemsWithMeta = metaItems.filter((i) => i.title !== undefined);
+      urls = [...(body.urls ?? []), ...metaItems.filter((i) => i.title === undefined).map((i) => i.url)];
     }
 
     const unsupported: { url: string; reason: string }[] = [];
@@ -140,6 +148,27 @@ export async function productsRoutes(app: FastifyInstance) {
     const allFound: ProductData[] = [];
     const queuedUrls: { kind: Exclude<MarketplaceKind, 'SHOPEE'>; url: string }[] = [];
     let lastError: Error | null = null;
+
+    for (const item of itemsWithMeta) {
+      const parsed = parseProductUrl(item.url);
+      if (parsed.source === 'UNSUPPORTED') {
+        unsupported.push({ url: item.url, reason: parsed.reason });
+        continue;
+      }
+      allFound.push({
+        source: parsed.source,
+        externalId: parsed.externalId,
+        title: item.title!,
+        price: item.price ?? 0,
+        originalPrice: item.originalPrice,
+        discountPct: item.discountPct,
+        images: item.images ?? [],
+        shipping: item.shipping ?? 'UNKNOWN',
+        couponCode: item.couponCode,
+        originalUrl: item.url,
+        raw: { source: 'extension-listing-capture', ...item },
+      });
+    }
 
     // Shopee usa a API oficial (rápida) e responde de forma síncrona.
     // ML/Amazon/Magalu exigem scraping: uma URL só é resolvida na hora; lotes vão para a fila

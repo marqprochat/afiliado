@@ -5,17 +5,36 @@ import { Textarea } from '@/components/ui/textarea';
 import { apiFetch } from '@/lib/api';
 import { useApiMutation } from '@/lib/mutations';
 import type { ApiProduct } from '@/lib/types';
+import type { ProductsImportItem } from '@afilados/shared';
 
 export type ImportResult = {
   products: ApiProduct[];
   unsupported: { url: string; reason: string }[];
 };
 
+type ImportBody = { urls: string[] } | { items: ProductsImportItem[] } | FormData;
+
+/** Aceita tanto o JSON estruturado copiado pela extensão (título/preço/imagem já lidos do
+ *  card da página) quanto texto solto com URLs — o que a extensão copia quando consegue ler
+ *  metadados do card vira `items`, evitando depender do backend raspar cada URL depois. */
+function parsePastedText(text: string): { urls: string[] } | { items: ProductsImportItem[] } {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (Array.isArray(parsed) && parsed.every((p) => p && typeof p === 'object' && typeof p.url === 'string')) {
+      return { items: parsed as ProductsImportItem[] };
+    }
+  } catch {
+    // não é JSON — segue para extração de URLs em texto livre
+  }
+  const urls = [...new Set(text.match(/https?:\/\/[^\s"'<>]+/g) ?? [])];
+  return { urls };
+}
+
 export function ImportPanel({ onImported }: { onImported: (r: ImportResult) => void }) {
   const [text, setText] = useState('');
   const [unsupported, setUnsupported] = useState<ImportResult['unsupported']>([]);
   const imp = useApiMutation(
-    (body: { urls: string[] } | FormData) =>
+    (body: ImportBody) =>
       body instanceof FormData
         ? apiFetch<ImportResult>('/products/import', { method: 'POST', body })
         : apiFetch<ImportResult>('/products/import', { method: 'POST', json: body }),
@@ -46,10 +65,7 @@ export function ImportPanel({ onImported }: { onImported: (r: ImportResult) => v
         <Button
           className="bg-brand text-white hover:bg-brand/90"
           disabled={imp.isPending || !text.trim()}
-          onClick={() => {
-            const urls = [...new Set(text.match(/https?:\/\/[^\s"'<>]+/g) ?? [])];
-            imp.mutate({ urls });
-          }}
+          onClick={() => imp.mutate(parsePastedText(text))}
         >
           Importar links
         </Button>
