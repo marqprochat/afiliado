@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,6 +41,7 @@ export function RuleForm({ onCreated }: { onCreated: () => void }) {
   const { data: sessions } = useSessions();
   const { data: groups } = useGroups(sessionId || null);
   const { data: templates } = useTemplates();
+  const adminGroups = useMemo(() => groups?.filter((g) => g.botIsAdmin) ?? [], [groups]);
 
   const canCreate =
     !!name.trim() &&
@@ -226,7 +227,12 @@ export function RuleForm({ onCreated }: { onCreated: () => void }) {
               Nenhum grupo — sincronize em Configurações → WhatsApp.
             </p>
           )}
-          {groups?.map((g) => (
+          {sessionId && (groups?.length ?? 0) > 0 && adminGroups.length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              Nenhum grupo em que este número é administrador.
+            </p>
+          )}
+          {adminGroups.map((g) => (
             <label key={g.jid} className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
