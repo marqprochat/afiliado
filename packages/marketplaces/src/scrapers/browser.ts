@@ -7,7 +7,23 @@ function launchBrowser(): Promise<Browser> {
 }
 
 async function getBrowser(): Promise<Browser> {
-  if (!browserPromise) browserPromise = launchBrowser();
+  if (!browserPromise) {
+    browserPromise = launchBrowser()
+      .then((browser) => {
+        // Se o browser cair depois (crash, OOM, kill externo), não fica preso a essa
+        // instância morta até o processo do worker reiniciar — próxima chamada relança.
+        browser.on('disconnected', () => {
+          browserPromise = null;
+        });
+        return browser;
+      })
+      .catch((e) => {
+        // Um lançamento que falha (ex: OOM na primeira tentativa) não deve deixar todas as
+        // chamadas seguintes rejeitando essa mesma promise memoizada para sempre.
+        browserPromise = null;
+        throw e;
+      });
+  }
   return browserPromise;
 }
 
