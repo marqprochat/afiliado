@@ -157,8 +157,12 @@ async function loadSessionCookies(
     : null;
   const session = creds?.[SESSION_FIELD_BY_KIND[kind]];
   if (!session?.cookies) {
+    const hint =
+      kind === 'MERCADOLIVRE'
+        ? 'sincronize pela extensão Afilados Connect'
+        : 'sincronize a sessão na tela de Marketplaces';
     throw new Error(
-      `sessão do ${kind === 'MERCADOLIVRE' ? 'Mercado Livre' : 'Magalu'} não sincronizada — sincronize pela extensão Afilados Connect`,
+      `sessão do ${kind === 'MERCADOLIVRE' ? 'Mercado Livre' : 'Magalu'} não sincronizada — ${hint}`,
     );
   }
   return session.cookies;
