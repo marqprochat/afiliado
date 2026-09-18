@@ -231,4 +231,33 @@ describe('discoverForRule (Mercado Livre / Amazon / Magalu)', () => {
     const items = await prisma.automationQueueItem.findMany({ where: { ruleId: rule.id } });
     expect(items.length).toBe(0);
   });
+
+  it('loga ERROR (não apenas silêncio) quando a busca do ML retorna vazio com sessão carregada — sinal de sessão expirada ou bloqueio anti-bot', async () => {
+    const rule = await prisma.automationRule.create({
+      data: {
+        tenantId,
+        name: 'discovery-ml-vazio-bloqueado',
+        marketplaces: ['MERCADOLIVRE'],
+        keywords: ['fone-sessao-bloqueada'],
+        blockedKeywords: [],
+        sessionId: (await prisma.waSession.create({ data: { tenantId, label: 'sml3' } })).id,
+        groupJids: ['g@g.us'],
+        templateId: (await prisma.template.create({ data: { tenantId, name: 'tml3', body: 'x' } })).id,
+      },
+    });
+
+    // Simula sessão bloqueada/expirada: o discoverByKeyword injetado (equivalente ao fluxo
+    // autenticado real) retorna [] em vez de lançar — uma página de desafio anti-bot parseia
+    // como HTML válido, só sem links de produto reconhecíveis.
+    await discoverForRule(rule, {
+      pickMarketplace: () => 'MERCADOLIVRE',
+      discoverByKeyword: { MERCADOLIVRE: async () => [] },
+    });
+
+    const log = await prisma.automationLog.findFirstOrThrow({ where: { ruleId: rule.id } });
+    expect(log.action).toBe('ERROR');
+    expect(log.reason).toMatch(/sessão|bloqueio/);
+    const items = await prisma.automationQueueItem.findMany({ where: { ruleId: rule.id } });
+    expect(items.length).toBe(0);
+  });
 });

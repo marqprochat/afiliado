@@ -52,6 +52,7 @@ async function cachedDiscoverUrls(
   marketplace: 'MERCADOLIVRE' | 'AMAZON' | 'MAGALU',
   keyword: string,
   discover: (keyword: string) => Promise<string[]>,
+  opts: { cacheEmpty?: boolean } = {},
 ): Promise<string[]> {
   const key = cacheKey(tenantId, marketplace, keyword);
   const cached = await getRedis().get(key).catch(() => null);
@@ -63,9 +64,15 @@ async function cachedDiscoverUrls(
     }
   }
   const urls = await discover(keyword);
-  await getRedis()
-    .set(key, JSON.stringify(urls), 'EX', KEYWORD_CACHE_TTL_SEC)
-    .catch(() => {});
+  // Para ML/Magalu um resultado vazio pode significar sessão expirada ou bloqueio anti-bot
+  // (não "sem produtos"), então não cacheamos esse vazio — senão, mesmo depois da sessão ser
+  // corrigida, ficaríamos retornando o vazio cacheado por até KEYWORD_CACHE_TTL_SEC. Amazon é
+  // anônima e barata, então um vazio ali é só "sem correspondências" e pode ser cacheado.
+  if (urls.length > 0 || opts.cacheEmpty !== false) {
+    await getRedis()
+      .set(key, JSON.stringify(urls), 'EX', KEYWORD_CACHE_TTL_SEC)
+      .catch(() => {});
+  }
   return urls;
 }
 
@@ -185,8 +192,28 @@ async function discoverScraped(
       discoverFn = (k: string) => KEYWORD_DISCOVERERS[marketplace](k, { fetchHtml: authenticatedFetch });
     }
   }
-  const urls = await cachedDiscoverUrls(rule.tenantId, marketplace, keyword, discoverFn);
-  if (urls.length === 0) return [];
+  const urls = await cachedDiscoverUrls(rule.tenantId, marketplace, keyword, discoverFn, {
+    cacheEmpty: marketplace === 'AMAZON',
+  });
+  if (urls.length === 0) {
+    // Amazon é busca anônima e vazio ali é só "sem correspondências" — nada a reportar.
+    // Para ML/Magalu, que dependem da sessão autenticada do usuário, um vazio é um sinal
+    // ambíguo demais para ficar silencioso: pode ser sessão expirada ou bloqueio anti-bot
+    // disfarçado de página válida sem produtos reconhecíveis (Critical #2 da revisão final).
+    if (marketplace !== 'AMAZON') {
+      const marketplaceLabel = marketplace === 'MERCADOLIVRE' ? 'Mercado Livre' : 'Magalu';
+      await prisma.automationLog.create({
+        data: {
+          tenantId: rule.tenantId,
+          ruleId: rule.id,
+          marketplace,
+          action: 'ERROR',
+          reason: `busca do ${marketplaceLabel} não retornou nenhum produto — sessão pode estar expirada ou bloqueio anti-bot`,
+        },
+      });
+    }
+    return [];
+  }
   const fetchFn = deps.fetchByUrls?.[marketplace] ?? ((u: string[]) => getTagAdapter(marketplace).fetchByUrls({}, u));
   return fetchFn(urls);
 }
