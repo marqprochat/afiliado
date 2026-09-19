@@ -495,6 +495,13 @@ export class BaileysGateway implements WhatsAppGateway {
   async fetchGroups(sessionId: string): Promise<GroupInfo[]> {
     const l = this.live.get(sessionId);
     if (!l || !this.isConnected(sessionId)) throw new Error('WA_NOT_CONNECTED');
+    if (!l.sock.user) throw new Error('WA_NOT_CONNECTED');
+    // o WhatsApp entrega o LID da própria conta um pouco depois da conexão abrir;
+    // hoje os grupos identificam admins só pelo LID, então sincronizar cedo demais
+    // faz a checagem de admin falhar para todos os grupos. Espera um pouco por ele.
+    for (let i = 0; i < 6 && !l.sock.user?.lid; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+    }
     const user = l.sock.user;
     if (!user) throw new Error('WA_NOT_CONNECTED');
     // a conta aparece nos participantes ora com o JID de telefone, ora com o LID
@@ -507,18 +514,13 @@ export class BaileysGateway implements WhatsAppGateway {
         return n === meJid || (meLid !== undefined && n === meLid);
       });
     const groups = await l.sock.groupFetchAllParticipating();
-    log.warn({ sessionId, rawUserId: user.id, rawUserLid: user.lid, meJid, meLid }, 'DEBUG_ADMIN_DETECTION identidade do bot');
-    const out: GroupInfo[] = Object.values(groups).map((g) => {
-      const admins = g.participants.filter((p) => !!p.admin).map((p) => ({ id: p.id, lid: p.lid, admin: p.admin }));
-      log.warn({ sessionId, jid: g.id, name: g.subject, admins }, 'DEBUG_ADMIN_DETECTION admins do grupo');
-      return {
-        jid: g.id,
-        name: g.subject,
-        kind: g.isCommunity ? 'COMMUNITY' : 'GROUP',
-        botIsAdmin: g.participants.some((p) => isMe(p.id, p.lid) && !!p.admin),
-        memberCount: g.participants.length,
-      };
-    });
+    const out: GroupInfo[] = Object.values(groups).map((g) => ({
+      jid: g.id,
+      name: g.subject,
+      kind: g.isCommunity ? 'COMMUNITY' : 'GROUP',
+      botIsAdmin: g.participants.some((p) => isMe(p.id, p.lid) && !!p.admin),
+      memberCount: g.participants.length,
+    }));
     return out;
   }
 }
