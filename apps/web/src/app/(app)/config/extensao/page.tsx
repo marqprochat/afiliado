@@ -26,6 +26,7 @@ import {
   Sparkles,
   ExternalLink,
   AlertTriangle,
+  Download,
 } from 'lucide-react';
 
 export default function ExtensaoConfigPage() {
@@ -180,16 +181,25 @@ export default function ExtensaoConfigPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-xs text-slate-300">
-            <div className="flex gap-2.5 items-start">
+            <a
+              href="/downloads/afilados-connect.zip"
+              download
+              className="flex items-center justify-center gap-2 w-full rounded-md bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium py-2.5 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Baixar Extensão (.zip)
+            </a>
+
+            <div className="flex gap-2.5 items-start pt-1">
               <span className="flex-shrink-0 w-5 h-5 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center font-bold text-[10px]">
                 1
               </span>
               <div>
-                Abra a página de extensões no seu navegador acessando{' '}
-                <code className="text-sky-300 bg-slate-950 px-1 py-0.5 rounded">
-                  chrome://extensions
-                </code>
-                .
+                Clique em <strong>&quot;Baixar Extensão&quot;</strong> acima e extraia o arquivo{' '}
+                <code className="text-emerald-400 bg-slate-950 px-1 py-0.5 rounded">
+                  afilados-connect.zip
+                </code>{' '}
+                em uma pasta no seu computador.
               </div>
             </div>
             <div className="flex gap-2.5 items-start">
@@ -197,7 +207,11 @@ export default function ExtensaoConfigPage() {
                 2
               </span>
               <div>
-                Ative a chave <strong>&quot;Modo do desenvolvedor&quot;</strong> no canto superior
+                Abra a página de extensões no seu navegador acessando{' '}
+                <code className="text-sky-300 bg-slate-950 px-1 py-0.5 rounded">
+                  chrome://extensions
+                </code>{' '}
+                e ative a chave <strong>&quot;Modo do desenvolvedor&quot;</strong> no canto superior
                 direito.
               </div>
             </div>
@@ -208,9 +222,9 @@ export default function ExtensaoConfigPage() {
               <div>
                 Clique em <strong>&quot;Carregar sem compactação&quot;</strong> e selecione a pasta{' '}
                 <code className="text-emerald-400 bg-slate-950 px-1 py-0.5 rounded">
-                  apps/extension
+                  afilados-connect
                 </code>{' '}
-                do projeto.
+                extraída no passo 1.
               </div>
             </div>
             <div className="flex gap-2.5 items-start">
@@ -218,8 +232,8 @@ export default function ExtensaoConfigPage() {
                 4
               </span>
               <div>
-                Abra o popup do <strong>Afilados Connect</strong> e cole a Chave de Acesso gerada ao
-                lado.
+                Abra o popup do <strong>Afilados Connect</strong>, confira a URL da API e cole a
+                Chave de Acesso gerada ao lado.
               </div>
             </div>
           </CardContent>

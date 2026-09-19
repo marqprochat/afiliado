@@ -302,7 +302,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   linkDashboard.addEventListener('click', (e) => {
     e.preventDefault();
     if (typeof chrome !== 'undefined' && chrome.tabs) {
-      chrome.tabs.create({ url: 'http://localhost:3000/produtos' });
+      let dashboardUrl = 'http://localhost:3000/produtos';
+      try {
+        const origin = new URL(config.apiUrl).origin;
+        if (!/^https?:\/\/(localhost|127\.0\.0\.1)/.test(origin)) {
+          dashboardUrl = `${origin}/produtos`;
+        }
+      } catch {
+        // mantém o padrão local se apiUrl for inválida
+      }
+      chrome.tabs.create({ url: dashboardUrl });
     }
   });
 

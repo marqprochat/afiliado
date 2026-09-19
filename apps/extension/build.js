@@ -42,3 +42,11 @@ console.log(
     ? `zip: ${path.relative(root, zipPath)}`
     : 'zip: ferramenta de compactação indisponível (só a pasta foi gerada)',
 );
+
+// Publica o zip em apps/web/public/downloads para servir como link direto de download no site
+if (zipped) {
+  const webDownloadsDir = path.join(root, '..', 'web', 'public', 'downloads');
+  fs.mkdirSync(webDownloadsDir, { recursive: true });
+  fs.copyFileSync(zipPath, path.join(webDownloadsDir, 'afilados-connect.zip'));
+  console.log(`download público: apps/web/public/downloads/afilados-connect.zip`);
+}
