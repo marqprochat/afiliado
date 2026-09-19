@@ -496,14 +496,16 @@ export class BaileysGateway implements WhatsAppGateway {
     const l = this.live.get(sessionId);
     if (!l || !this.isConnected(sessionId)) throw new Error('WA_NOT_CONNECTED');
     if (!l.sock.user) throw new Error('WA_NOT_CONNECTED');
-    // o WhatsApp entrega o LID da própria conta um pouco depois da conexão abrir;
-    // hoje os grupos identificam admins só pelo LID, então sincronizar cedo demais
-    // faz a checagem de admin falhar para todos os grupos. Espera um pouco por ele.
-    for (let i = 0; i < 6 && !l.sock.user?.lid; i++) {
+    // O WhatsApp entrega o LID da própria conta só algum tempo depois da conexão abrir (numa
+    // sessão recém-pareada pode demorar bastante). Como os grupos hoje identificam admins
+    // exclusivamente por LID, sincronizar sem ele marcaria TODOS os grupos como não-admin —
+    // dado errado gravado silenciosamente. Espera, e se não vier, falha em vez de gravar.
+    for (let i = 0; i < 30 && !l.sock.user?.lid; i++) {
       await new Promise((r) => setTimeout(r, 500));
     }
     const user = l.sock.user;
     if (!user) throw new Error('WA_NOT_CONNECTED');
+    if (!user.lid) throw new Error('WA_LID_PENDING');
     // a conta aparece nos participantes ora com o JID de telefone, ora com o LID
     const meJid = jidNormalizedUser(user.id);
     const meLid = user.lid ? jidNormalizedUser(user.lid) : undefined;
