@@ -19,11 +19,13 @@ const SORT_MAP: Record<SearchSort, number> = {
 // TODO(F1-B): usar o filtro hasExtraCommission da API em vez de heurística local
 const EXTRA_COMMISSION_MIN_PCT = 3;
 
-// shopType, periodStartTime, priceMax e offerLink ficam de fora de propósito: o mapper
-// (mapper.ts) nunca os lê, e a Shopee retorna null para eles em muitos produtos mesmo sendo
-// marcados non-null no schema — pedir qualquer um deles já derrubou a busca inteira com
-// "got null for non-null" (erro genérico da API, sem indicar o campo; código extensions=10010).
-// Query pede só o que o mapper de fato usa.
+// shopType, periodStartTime, priceMax, offerLink e periodEndTime ficam de fora de propósito:
+// a Shopee retorna null para eles em muitos produtos mesmo sendo marcados non-null no schema —
+// pedir qualquer um deles já derrubou a busca inteira com "got null for non-null" (erro genérico
+// da API, sem indicar o campo; código extensions=10010). periodEndTime em especial é o par de
+// periodStartTime (dado de campanha/flash sale) e some junto quando o produto não está em
+// promoção relâmpago — mapProductOffer já trata a ausência dele com segurança (flashSaleEndsAt
+// fica undefined). Query pede só o mínimo que sobrevive a qualquer produto.
 const PRODUCT_OFFER_QUERY = `
 query ProductOffer($keyword: String, $productCatId: Int, $shopId: Int64, $itemId: Int64, $listType: Int,
   $sortType: Int, $page: Int, $limit: Int, $isKeySeller: Boolean) {
@@ -31,7 +33,7 @@ query ProductOffer($keyword: String, $productCatId: Int, $shopId: Int64, $itemId
     listType: $listType, sortType: $sortType, page: $page, limit: $limit,
     isKeySeller: $isKeySeller) {
     nodes { itemId shopId productName priceMin priceDiscountRate sales commissionRate
-      imageUrl shopName productLink periodEndTime }
+      imageUrl shopName productLink }
     pageInfo { page limit hasNextPage }
   }
 }`;
