@@ -71,7 +71,7 @@ query CheckConnection($limit: Int) {
 }`;
 
 const SHORT_LINK_MUTATION = `
-mutation ShortLink($originUrl: String!, $subIds: [String]) {
+mutation ShortLink($originUrl: String!, $subIds: [String!]) {
   generateShortLink(input: { originUrl: $originUrl, subIds: $subIds }) { shortLink }
 }`;
 

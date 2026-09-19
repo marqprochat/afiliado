@@ -38,15 +38,7 @@ export class ShopeeGraphQLClient {
       throw new ShopeeApiError(detail ? `HTTP ${res.status}: ${detail}` : `HTTP ${res.status}`);
     }
     const json = (await res.json()) as { data?: T; errors?: { message: string }[] };
-    if (json.errors?.length) {
-      // DEBUG_SHOPEE_ERROR: diagnóstico temporário do "got null for non-null" em produção.
-      // Remover depois de identificar o campo/variável causador.
-      console.error(
-        'DEBUG_SHOPEE_ERROR',
-        JSON.stringify({ errors: json.errors, variables }),
-      );
-      throw new ShopeeApiError(json.errors.map((e) => e.message).join('; '));
-    }
+    if (json.errors?.length) throw new ShopeeApiError(json.errors.map((e) => e.message).join('; '));
     if (!json.data) throw new ShopeeApiError('Resposta sem data');
     return json.data;
   }
