@@ -120,7 +120,7 @@ export function createShopeeAdapter(
   ): Promise<OfferResponse> {
     if (mock) {
       const data = offersFixture.data as unknown as OfferResponse;
-      if (vars.itemId === MOCK_EXTRA_NODE.itemId) {
+      if (String(vars.itemId) === String(MOCK_EXTRA_NODE.itemId)) {
         return {
           productOfferV2: { nodes: [MOCK_EXTRA_NODE], pageInfo: data.productOfferV2.pageInfo },
         };
@@ -151,7 +151,10 @@ export function createShopeeAdapter(
       };
       if (q.mode === 'keyword') vars.keyword = q.query;
       if (q.mode === 'category') vars.productCatId = Number(q.categoryId);
-      if (q.mode === 'shop') vars.shopId = Number(q.shopId);
+      // shopId é Int64 na Open Platform, e esse escalar espera o valor como string no JSON
+      // (evita perda de precisão em inteiros de 64 bits) — mandar Number() quebra com "wrong
+      // type", diferente de campos Int normais como productCatId, que aceitam número.
+      if (q.mode === 'shop') vars.shopId = q.shopId;
       if (q.mode === 'trending') vars.listType = 2;
       // A Open Platform removeu o argumento isOfficialShop de productOfferV2; isKeySeller
       // continua válido e é a aproximação disponível para o filtro de "vendedores top".
@@ -178,8 +181,9 @@ export function createShopeeAdapter(
       for (const url of urls) {
         const parsed = parseProductUrl(url);
         if (parsed.source !== 'SHOPEE') continue;
+        // itemId é Int64 também — mesma regra do shopId acima, precisa ir como string.
         const res = await searchPage(creds, {
-          itemId: Number(parsed.externalId),
+          itemId: parsed.externalId,
           limit: 1,
           page: 1,
         });
