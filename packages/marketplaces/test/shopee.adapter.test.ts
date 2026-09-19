@@ -66,6 +66,19 @@ describe('ShopeeAdapter (real, fetch falso)', () => {
     });
     expect(body.variables).not.toHaveProperty('isOfficialShop');
   });
+  it('query declara só os argumentos enviados (null explícito quebra a API da Shopee)', async () => {
+    const f = fakeFetch([offers]);
+    const adapter = createShopeeAdapter({ mock: false, fetchImpl: f as unknown as typeof fetch });
+    await adapter.search!(creds, { ...baseQuery, limit: 10 });
+    const [, init] = f.mock.calls[0]!;
+    const { query } = JSON.parse(init!.body as string) as { query: string };
+    // só as declarações de variável importam: shopId/itemId também são campos de `nodes`
+    for (const unused of ['shopId', 'itemId', 'productCatId', 'listType', 'isKeySeller']) {
+      expect(query).not.toContain(`$${unused}`);
+    }
+    expect(query).toContain('$keyword: String');
+    expect(query).toContain('keyword: $keyword');
+  });
   it('fetchByUrls resolve itemId da URL', async () => {
     const f = fakeFetch([offers]);
     const adapter = createShopeeAdapter({ mock: false, fetchImpl: f as unknown as typeof fetch });

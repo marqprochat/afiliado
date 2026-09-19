@@ -19,24 +19,44 @@ const SORT_MAP: Record<SearchSort, number> = {
 // TODO(F1-B): usar o filtro hasExtraCommission da API em vez de heurística local
 const EXTRA_COMMISSION_MIN_PCT = 3;
 
-// shopType, periodStartTime, priceMax, offerLink e periodEndTime ficam de fora de propósito:
-// a Shopee retorna null para eles em muitos produtos mesmo sendo marcados non-null no schema —
-// pedir qualquer um deles já derrubou a busca inteira com "got null for non-null" (erro genérico
-// da API, sem indicar o campo; código extensions=10010). periodEndTime em especial é o par de
-// periodStartTime (dado de campanha/flash sale) e some junto quando o produto não está em
-// promoção relâmpago — mapProductOffer já trata a ausência dele com segurança (flashSaleEndsAt
-// fica undefined). Query pede só o mínimo que sobrevive a qualquer produto.
-const PRODUCT_OFFER_QUERY = `
-query ProductOffer($keyword: String, $productCatId: Int, $shopId: Int64, $itemId: Int64, $listType: Int,
-  $sortType: Int, $page: Int, $limit: Int, $isKeySeller: Boolean) {
-  productOfferV2(keyword: $keyword, productCatId: $productCatId, shopId: $shopId, itemId: $itemId,
-    listType: $listType, sortType: $sortType, page: $page, limit: $limit,
-    isKeySeller: $isKeySeller) {
-    nodes { itemId shopId productName priceMin priceDiscountRate sales commissionRate
-      imageUrl shopName productLink }
+const PRODUCT_OFFER_ARG_TYPES: Record<string, string> = {
+  keyword: 'String',
+  productCatId: 'Int',
+  shopId: 'Int64',
+  itemId: 'Int64',
+  listType: 'Int',
+  sortType: 'Int',
+  page: 'Int',
+  limit: 'Int',
+  isKeySeller: 'Boolean',
+};
+
+const PRODUCT_OFFER_NODE_FIELDS =
+  'itemId shopId productName priceMin priceDiscountRate sales commissionRate imageUrl shopName productLink';
+
+/**
+ * Monta a query pedindo SÓ os argumentos realmente usados nesta chamada.
+ *
+ * Declarar um argumento e não enviá-lo faz o GraphQL mandar `null` explícito para ele, e o
+ * backend da Shopee (Go/gqlgen) rejeita a requisição inteira com "graphql: got null for non-null"
+ * (extensions.code=10010) — erro de coerção de input, que não diz qual argumento é. Por isso uma
+ * busca por keyword nunca pode declarar shopId/itemId/productCatId/listType/isKeySeller.
+ * A CHECK_CONNECTION_QUERY sempre funcionou justamente por declarar um argumento só.
+ */
+function buildProductOfferQuery(vars: Record<string, unknown>): string {
+  const names = Object.keys(vars).filter(
+    (k) => vars[k] !== undefined && PRODUCT_OFFER_ARG_TYPES[k] !== undefined,
+  );
+  const decls = names.map((n) => `$${n}: ${PRODUCT_OFFER_ARG_TYPES[n]}`).join(', ');
+  const args = names.map((n) => `${n}: $${n}`).join(', ');
+  return `
+query ProductOffer(${decls}) {
+  productOfferV2(${args}) {
+    nodes { ${PRODUCT_OFFER_NODE_FIELDS} }
     pageInfo { page limit hasNextPage }
   }
 }`;
+}
 
 // Query enxuta usada só para validar credenciais (checkConnection). A PRODUCT_OFFER_QUERY
 // completa pede campos (ex: shopType, periodStartTime) que a Shopee retorna null para produtos
@@ -107,7 +127,7 @@ export function createShopeeAdapter(
       }
       return data;
     }
-    return client(creds).request<OfferResponse>(PRODUCT_OFFER_QUERY, vars);
+    return client(creds).request<OfferResponse>(buildProductOfferQuery(vars), vars);
   }
 
   return {
