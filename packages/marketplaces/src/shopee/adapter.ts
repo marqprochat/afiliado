@@ -19,6 +19,10 @@ const SORT_MAP: Record<SearchSort, number> = {
 // TODO(F1-B): usar o filtro hasExtraCommission da API em vez de heurística local
 const EXTRA_COMMISSION_MIN_PCT = 3;
 
+// shopType e periodStartTime ficam de fora de propósito: o mapper (mapper.ts) nunca os lê, e a
+// Shopee retorna null para eles em muitos produtos mesmo sendo marcados non-null no schema — pedir
+// esses campos já derrubou a busca inteira com "got null for non-null" (ver CHECK_CONNECTION_QUERY
+// abaixo, que teve o mesmo problema e por isso já usa só os campos mínimos).
 const PRODUCT_OFFER_QUERY = `
 query ProductOffer($keyword: String, $productCatId: Int, $shopId: Int64, $itemId: Int64, $listType: Int,
   $sortType: Int, $page: Int, $limit: Int, $isKeySeller: Boolean) {
@@ -26,7 +30,7 @@ query ProductOffer($keyword: String, $productCatId: Int, $shopId: Int64, $itemId
     listType: $listType, sortType: $sortType, page: $page, limit: $limit,
     isKeySeller: $isKeySeller) {
     nodes { itemId shopId productName priceMin priceMax priceDiscountRate sales commissionRate
-      imageUrl shopName shopType productLink offerLink periodStartTime periodEndTime }
+      imageUrl shopName productLink offerLink periodEndTime }
     pageInfo { page limit hasNextPage }
   }
 }`;
