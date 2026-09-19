@@ -15,6 +15,8 @@ import type {
   QueueResponse,
   Settings,
   Template,
+  TelegramBot,
+  TelegramChat,
   WaGroup,
   WaSession,
   ApiToken,
@@ -41,6 +43,22 @@ export const useMarketplaces = () =>
   useQuery({
     queryKey: ['marketplaces'],
     queryFn: () => apiFetch<MarketplaceConnection[]>('/marketplaces'),
+  });
+export const useTelegramBots = () =>
+  useQuery({
+    queryKey: ['telegram', 'bots'],
+    queryFn: () => apiFetch<TelegramBot[]>('/telegram/bots'),
+  });
+export const useTelegramAllChats = () =>
+  useQuery({
+    queryKey: ['telegram', 'chats'],
+    queryFn: () => apiFetch<TelegramChat[]>('/telegram/chats'),
+  });
+export const useTelegramChats = (botId: string | null) =>
+  useQuery({
+    queryKey: ['telegram', 'bots', botId, 'chats'],
+    enabled: !!botId,
+    queryFn: () => apiFetch<TelegramChat[]>(`/telegram/bots/${botId}/chats`),
   });
 export const useQueue = () =>
   useQuery({ queryKey: ['queue'], queryFn: () => apiFetch<QueueResponse>('/queue') });

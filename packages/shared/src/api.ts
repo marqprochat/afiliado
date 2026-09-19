@@ -54,6 +54,14 @@ export const groupSettingsSchema = z
 
 export const groupInviteSchema = z.object({ revoke: z.boolean().default(false) });
 
+export const telegramBotCreateSchema = z.object({
+  label: z.string().trim().min(1).max(60),
+  token: z
+    .string()
+    .trim()
+    .regex(/^\d+:[A-Za-z0-9_-]{30,}$/, 'token do BotFather inválido'),
+});
+
 export const marketplaceKindParam = z.enum(MARKETPLACE_KINDS);
 export const marketplaceUpdateSchema = z.object({
   appId: z.string().min(1).optional(),
@@ -188,6 +196,7 @@ export type GroupCreateBody = z.infer<typeof groupCreateSchema>;
 export type GroupParticipantsBody = z.infer<typeof groupParticipantsSchema>;
 export type GroupSettingsBody = z.infer<typeof groupSettingsSchema>;
 export type GroupInviteBody = z.infer<typeof groupInviteSchema>;
+export type TelegramBotCreateBody = z.infer<typeof telegramBotCreateSchema>;
 export type MarketplaceUpdateBody = z.infer<typeof marketplaceUpdateSchema>;
 export type ProductsImportBody = z.infer<typeof productsImportSchema>;
 export type QueueAddBody = z.infer<typeof queueAddSchema>;

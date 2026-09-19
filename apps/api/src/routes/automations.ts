@@ -20,7 +20,12 @@ const toggleSchema = z.object({ enabled: z.boolean() });
 
 async function assertRuleTargets(
   req: FastifyRequest,
-  body: { sessionId: string; groupJids: string[]; templateId: string },
+  body: {
+    sessionId: string;
+    groupJids: string[];
+    telegramChatIds?: string[];
+    templateId: string;
+  },
 ) {
   const session = await req.db.waSession.findFirst({ where: { id: body.sessionId } });
   if (!session) throw ApiError.notFound('Sessão não encontrada');
@@ -31,6 +36,17 @@ async function assertRuleTargets(
   const known = new Set(groups.map((g) => g.jid));
   const unknown = body.groupJids.filter((j) => !known.has(j));
   if (unknown.length) throw ApiError.validation(`Grupos desconhecidos: ${unknown.join(', ')}`);
+  if (body.telegramChatIds?.length) {
+    const chats = await req.db.telegramChat.findMany({
+      where: { chatId: { in: body.telegramChatIds } },
+      select: { chatId: true },
+    });
+    const knownChats = new Set(chats.map((c) => c.chatId));
+    const unknownChats = body.telegramChatIds.filter((c) => !knownChats.has(c));
+    if (unknownChats.length) {
+      throw ApiError.validation(`Chats do Telegram desconhecidos: ${unknownChats.join(', ')}`);
+    }
+  }
   const template = await req.db.template.findFirst({ where: { id: body.templateId } });
   if (!template) throw ApiError.notFound('Template não encontrado');
 }
@@ -60,10 +76,11 @@ export async function automationsRoutes(app: FastifyInstance) {
     const existing = await req.db.automationRule.findFirst({ where: { id } });
     if (!existing) throw ApiError.notFound('Regra não encontrada');
     const body = automationRuleUpdateSchema.parse(req.body);
-    if (body.sessionId || body.groupJids || body.templateId) {
+    if (body.sessionId || body.groupJids || body.telegramChatIds || body.templateId) {
       await assertRuleTargets(req, {
         sessionId: body.sessionId ?? existing.sessionId,
         groupJids: body.groupJids ?? existing.groupJids,
+        telegramChatIds: body.telegramChatIds ?? existing.telegramChatIds,
         templateId: body.templateId ?? existing.templateId,
       });
     }

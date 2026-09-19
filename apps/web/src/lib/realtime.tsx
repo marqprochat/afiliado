@@ -68,6 +68,9 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       if (e.type === 'marketplace.updated') {
         void qc.invalidateQueries({ queryKey: ['marketplaces'] });
       }
+      if (e.type.startsWith('telegram.')) {
+        void qc.invalidateQueries({ queryKey: ['telegram'] });
+      }
       handlers.current.forEach((h) => h(e));
     });
     return () => client.stop();

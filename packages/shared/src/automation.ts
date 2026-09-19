@@ -13,6 +13,7 @@ export const automationRuleCreateSchema = z.object({
   intervalMin: z.number().int().min(5).max(1440).default(60),
   sessionId: z.string().min(1),
   groupJids: z.array(z.string().min(1)).min(1),
+  telegramChatIds: z.array(z.string().min(1)).default([]),
   templateId: z.string().min(1),
   mediaMode: z.enum(MEDIA_MODES).default('IMAGE'),
 });

@@ -2,13 +2,15 @@ import pino from 'pino';
 import { prisma } from '@afilados/db';
 import type { AutomationRule } from '@afilados/db';
 import { isEligibleProduct, isEligibleCoupon, isWithinOperatingWindow } from '@afilados/core';
-import { enqueueSendOffer } from '../lib/queue-helpers';
+import type { SendTelegramJob } from '@afilados/shared';
+import { enqueueSendOffer, enqueueSendTelegram } from '../lib/queue-helpers';
 import { discoverForRule } from './discovery';
 
 const log = pino({ name: 'automation-scheduler' });
 
 export interface AutomationSchedulerDeps {
   enqueue?: (tenantId: string, batchItemId: string) => Promise<void>;
+  enqueueTelegram?: (job: SendTelegramJob & { jobId: string }) => Promise<void>;
   /** Dispara a descoberta (busca por keyword) e popula AutomationQueueItem para a regra. */
   discover?: (rule: AutomationRule) => Promise<void>;
   now?: () => Date;
@@ -22,11 +24,13 @@ export class AutomationScheduler {
   private timer: NodeJS.Timeout | null = null;
   private ticking = false;
   private readonly enqueue: (tenantId: string, batchItemId: string) => Promise<void>;
+  private readonly enqueueTelegram: (job: SendTelegramJob & { jobId: string }) => Promise<void>;
   private readonly discover: (rule: AutomationRule) => Promise<void>;
   private readonly now: () => Date;
 
   constructor(deps: AutomationSchedulerDeps = {}) {
     this.enqueue = deps.enqueue ?? ((tenantId, batchItemId) => enqueueSendOffer(tenantId, batchItemId));
+    this.enqueueTelegram = deps.enqueueTelegram ?? ((job) => enqueueSendTelegram(job));
     this.discover = deps.discover ?? ((rule) => discoverForRule(rule));
     this.now = deps.now ?? (() => new Date());
   }
@@ -246,6 +250,29 @@ export class AutomationScheduler {
 
       try {
         await this.enqueue(rule.tenantId, batch.items[0]!.id);
+        if (rule.telegramChatIds.length > 0) {
+          for (const chatId of rule.telegramChatIds) {
+            const bot = await prisma.telegramChat
+              .findFirst({ where: { chatId }, select: { botId: true } })
+              .catch(() => null);
+            if (!bot) continue;
+            await this.enqueueTelegram({
+              jobId: `${batch.items[0]!.id}:${chatId}`,
+              tenantId: rule.tenantId,
+              botId: bot.botId,
+              chatId,
+              templateId: batchTemplateId,
+              ...(candidate.kind === 'PRODUCT' && candidate.productId
+                ? { productId: candidate.productId }
+                : {}),
+              ...(candidate.kind === 'COUPON' && candidate.couponId
+                ? { couponId: candidate.couponId }
+                : {}),
+            }).catch((e) =>
+              log.warn({ ruleId: rule.id, chatId, err: e }, 'falha ao enfileirar envio no telegram'),
+            );
+          }
+        }
         await prisma.automationQueueItem.update({
           where: { id: candidate.id },
           data: { status: 'DISPATCHED', dispatchedAt: this.now() },

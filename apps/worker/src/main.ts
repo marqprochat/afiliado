@@ -5,11 +5,13 @@ import {
   QUEUE_MIRROR_MESSAGE,
   QUEUE_PRODUCT_ENRICH,
   QUEUE_SEND_OFFER,
+  QUEUE_SEND_TELEGRAM,
   QUEUE_WA_COMMANDS,
   REDIS_EVENTS_CHANNEL,
   type MirrorMessageJob,
   type ProductEnrichJob,
   type SendOfferJob,
+  type SendTelegramJob,
   type WaCommandJob,
 } from '@afilados/shared';
 import { createShopeeAdapter } from '@afilados/marketplaces';
@@ -19,10 +21,12 @@ import { BaileysGateway } from './wa/baileys-gateway';
 import { WaSessionManager } from './wa/session-manager';
 import { processWaCommand } from './processors/wa-commands';
 import { processSendOffer, finalizeBatchIfComplete } from './processors/send-offer';
+import { processSendTelegram } from './processors/send-telegram';
 import { processMirrorMessage } from './processors/mirror-message';
 import { createProductEnrichProcessor } from './processors/product-enrich';
 import { MirrorListener } from './mirror/listener';
 import { AutomationScheduler } from './automation/scheduler';
+import { TelegramManager } from './telegram/manager';
 import { startHttp } from './http';
 
 const log = pino({ name: 'worker' });
@@ -30,6 +34,7 @@ const gateway = new BaileysGateway();
 const manager = new WaSessionManager(gateway);
 const mirrorListener = new MirrorListener(gateway);
 const automationScheduler = new AutomationScheduler();
+const telegramManager = new TelegramManager();
 
 const waWorker = new Worker<WaCommandJob>(QUEUE_WA_COMMANDS, processWaCommand(manager), {
   connection: getRedis(),
@@ -51,8 +56,13 @@ const enrichWorker = new Worker<ProductEnrichJob>(
   createProductEnrichProcessor(),
   { connection: getRedis(), concurrency: 2, limiter: { max: 6, duration: 10_000 } },
 );
+const telegramWorker = new Worker<SendTelegramJob>(
+  QUEUE_SEND_TELEGRAM,
+  processSendTelegram({ shopee: createShopeeAdapter() }),
+  { connection: getRedis(), concurrency: 2 },
+);
 
-for (const w of [waWorker, sendWorker, mirrorWorker, enrichWorker]) {
+for (const w of [waWorker, sendWorker, mirrorWorker, enrichWorker, telegramWorker]) {
   w.on('failed', (job, err) => log.error({ jobId: job?.id, err: err.message }, 'job falhou'));
 }
 sendWorker.on('failed', (job, err) => {
@@ -85,6 +95,9 @@ redisSub.on('message', (_channel, raw) => {
     if (ev.event?.type === 'automation.rules.changed') {
       void automationScheduler.reload();
     }
+    if (ev.event?.type === 'telegram.bots.changed') {
+      void telegramManager.reload();
+    }
   } catch {
     // ignore
   }
@@ -94,6 +107,7 @@ const http = startHttp(config.WORKER_PORT, () => manager.sessionCount());
 await manager.start();
 await mirrorListener.start();
 await automationScheduler.start();
+await telegramManager.start();
 log.info({ port: config.WORKER_PORT }, 'worker iniciado');
 
 let shuttingDown = false;
@@ -103,11 +117,13 @@ async function shutdown() {
   log.info('encerrando');
   try {
     automationScheduler.stop();
+    telegramManager.stop();
     await Promise.all([
       waWorker.close(),
       sendWorker.close(),
       mirrorWorker.close(),
       enrichWorker.close(),
+      telegramWorker.close(),
     ]);
     await redisSub.unsubscribe();
     redisSub.disconnect();

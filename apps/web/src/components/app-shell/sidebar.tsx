@@ -7,6 +7,7 @@ import {
   Home,
   LogOut,
   Megaphone,
+  MessageCircle,
   MessageSquare,
   Radio,
   Search,
@@ -36,6 +37,7 @@ const PRINCIPAL = [
 ];
 const CONFIG = [
   { href: '/config/whatsapp', label: 'WhatsApp', icon: MessageSquare },
+  { href: '/config/telegram', label: 'Telegram', icon: MessageCircle },
   { href: '/config/templates', label: 'Template das mensagens', icon: Bot },
   { href: '/config/cupons', label: 'Central de Cupons', icon: Ticket },
   { href: '/marketplaces', label: 'Marketplaces', icon: Store },

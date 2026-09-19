@@ -41,6 +41,8 @@ export type RealtimeEvent =
   | { type: 'product.enriched'; productId: string; status: 'SUCCESS' | 'ERROR'; error?: string }
   | { type: 'queue.updated' }
   | { type: 'marketplace.updated'; kind: MarketplaceKind }
+  | { type: 'telegram.bots.changed' }
+  | { type: 'telegram.chats.synced'; botId: string; count: number }
   | { type: 'error'; code: string; message: string };
 
 export const REDIS_EVENTS_CHANNEL = 'afilados:events';

@@ -2,6 +2,7 @@ export const QUEUE_WA_COMMANDS = 'wa-commands';
 export const QUEUE_SEND_OFFER = 'send-offer';
 export const QUEUE_MIRROR_MESSAGE = 'mirror-message';
 export const QUEUE_PRODUCT_ENRICH = 'product-enrich';
+export const QUEUE_SEND_TELEGRAM = 'send-telegram';
 
 export type WaCommand =
   | 'connect'
@@ -57,4 +58,13 @@ export interface ProductEnrichJob {
   productId: string;
   url: string;
   marketplaceKind: 'SHOPEE' | 'MERCADOLIVRE' | 'AMAZON' | 'MAGALU';
+}
+
+export interface SendTelegramJob {
+  tenantId: string;
+  botId: string;
+  chatId: string;
+  templateId: string;
+  productId?: string;
+  couponId?: string;
 }

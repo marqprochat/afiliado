@@ -37,6 +37,23 @@ export interface WaGroup {
   description?: string | null;
   announceOnly?: boolean;
 }
+export interface TelegramBot {
+  id: string;
+  label: string;
+  username: string | null;
+  status: 'UNCONFIGURED' | 'OK' | 'ERROR';
+  lastError: string | null;
+  lastCheckedAt: string | null;
+}
+export interface TelegramChat {
+  id: string;
+  botId: string;
+  chatId: string;
+  title: string;
+  kind: string;
+  botIsAdmin: boolean;
+  syncedAt: string;
+}
 export interface MarketplaceConnection {
   kind: MarketplaceKind;
   status: 'UNCONFIGURED' | 'OK' | 'ERROR';

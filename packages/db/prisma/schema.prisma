@@ -33,6 +33,8 @@ model Tenant {
   automationRules   AutomationRule[]
   automationLogs    AutomationLog[]
   automationQueueItems AutomationQueueItem[]
+  telegramBots      TelegramBot[]
+  telegramChats     TelegramChat[]
 }
 
 enum UserRole {
@@ -176,6 +178,39 @@ model MarketplaceConnection {
   lastError            String?
 
   @@unique([tenantId, kind])
+}
+
+model TelegramBot {
+  id             String           @id @default(cuid())
+  tenantId       String
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  label          String
+  encryptedToken Bytes
+  username       String?
+  status         ConnectionStatus @default(UNCONFIGURED)
+  lastError      String?
+  lastCheckedAt  DateTime?
+  updatesOffset  Int              @default(0)
+  createdAt      DateTime         @default(now())
+  chats          TelegramChat[]
+
+  @@index([tenantId])
+}
+
+model TelegramChat {
+  id         String      @id @default(cuid())
+  tenantId   String
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  botId      String
+  bot        TelegramBot @relation(fields: [botId], references: [id], onDelete: Cascade)
+  chatId     String
+  title      String
+  kind       String
+  botIsAdmin Boolean     @default(false)
+  syncedAt   DateTime    @default(now())
+
+  @@unique([botId, chatId])
+  @@index([tenantId])
 }
 
 // ---------- Produtos / fila ----------
@@ -470,6 +505,7 @@ model AutomationRule {
   sessionId       String
   session         WaSession              @relation(fields: [sessionId], references: [id])
   groupJids       String[]
+  telegramChatIds String[]               @default([])
   templateId      String
   template        Template               @relation("RuleProductTemplate", fields: [templateId], references: [id])
   mediaMode       MediaMode              @default(IMAGE)

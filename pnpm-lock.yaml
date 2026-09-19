@@ -38,6 +38,9 @@ importers:
       '@afilados/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@afilados/telegram':
+        specifier: workspace:*
+        version: link:../../packages/telegram
       '@fastify/cookie':
         specifier: ^11.0.1
         version: 11.1.2
@@ -204,6 +207,9 @@ importers:
       '@afilados/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@afilados/telegram':
+        specifier: workspace:*
+        version: link:../../packages/telegram
       '@hapi/boom':
         specifier: ^10.0.1
         version: 10.0.1
@@ -316,6 +322,19 @@ importers:
       zod:
         specifier: ^3.23.8
         version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.6.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.1
+        version: 2.1.9(@types/node@22.20.2)(jsdom@25.0.1)(lightningcss@1.32.0)
+
+  packages/telegram:
+    dependencies:
+      '@afilados/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       typescript:
         specifier: ^5.6.2

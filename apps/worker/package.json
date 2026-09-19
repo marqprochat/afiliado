@@ -14,6 +14,7 @@
     "@afilados/db": "workspace:*",
     "@afilados/marketplaces": "workspace:*",
     "@afilados/shared": "workspace:*",
+    "@afilados/telegram": "workspace:*",
     "@hapi/boom": "^10.0.1",
     "@whiskeysockets/baileys": "6.7.24",
     "bullmq": "^5.13.0",

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiFetch } from '@/lib/api';
 import { useApiMutation } from '@/lib/mutations';
-import { useSessions, useGroups, useTemplates } from '@/lib/queries';
+import { useSessions, useGroups, useTelegramAllChats, useTemplates } from '@/lib/queries';
 import type { AutomationRule } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import type { MarketplaceKind } from '@afilados/shared';
@@ -30,6 +30,7 @@ export function RuleForm({ onCreated }: { onCreated: () => void }) {
   const [maxOffersPerDay, setMaxOffersPerDay] = useState(20);
   const [sessionId, setSessionId] = useState('');
   const [groupJids, setGroupJids] = useState<Set<string>>(new Set());
+  const [telegramChatIds, setTelegramChatIds] = useState<Set<string>>(new Set());
   const [templateId, setTemplateId] = useState('');
 
   function toggleMarketplace(kind: MarketplaceKind) {
@@ -41,6 +42,7 @@ export function RuleForm({ onCreated }: { onCreated: () => void }) {
   const { data: sessions } = useSessions();
   const { data: groups } = useGroups(sessionId || null);
   const { data: templates } = useTemplates();
+  const { data: telegramChats } = useTelegramAllChats();
   const adminGroups = useMemo(() => groups?.filter((g) => g.botIsAdmin) ?? [], [groups]);
 
   const canCreate =
@@ -72,6 +74,7 @@ export function RuleForm({ onCreated }: { onCreated: () => void }) {
           maxOffersPerDay,
           sessionId,
           groupJids: [...groupJids],
+          telegramChatIds: [...telegramChatIds],
           templateId,
         },
       }),
@@ -250,6 +253,30 @@ export function RuleForm({ onCreated }: { onCreated: () => void }) {
           ))}
         </div>
       </div>
+
+      {(telegramChats?.length ?? 0) > 0 && (
+        <div>
+          <Label>Chats do Telegram (opcional, {telegramChatIds.size} selecionado(s))</Label>
+          <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded-md border border-border bg-surface-2 p-2">
+            {telegramChats?.map((c) => (
+              <label key={c.id} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 cursor-pointer rounded border-border accent-brand"
+                  checked={telegramChatIds.has(c.chatId)}
+                  onChange={(e) => {
+                    const next = new Set(telegramChatIds);
+                    if (e.target.checked) next.add(c.chatId);
+                    else next.delete(c.chatId);
+                    setTelegramChatIds(next);
+                  }}
+                />
+                {c.title}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div>
         <Label htmlFor="rtemplate">Template</Label>

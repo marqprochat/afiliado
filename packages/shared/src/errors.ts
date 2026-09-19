@@ -6,6 +6,7 @@ export const API_ERROR_CODES = [
   'QUEUE_FULL',
   'SHOPEE_UNCONFIGURED',
   'MARKETPLACE_ERROR',
+  'TELEGRAM_ERROR',
   'INTERNAL',
 ] as const;
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
