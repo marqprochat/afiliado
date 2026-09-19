@@ -507,13 +507,18 @@ export class BaileysGateway implements WhatsAppGateway {
         return n === meJid || (meLid !== undefined && n === meLid);
       });
     const groups = await l.sock.groupFetchAllParticipating();
-    const out: GroupInfo[] = Object.values(groups).map((g) => ({
-      jid: g.id,
-      name: g.subject,
-      kind: g.isCommunity ? 'COMMUNITY' : 'GROUP',
-      botIsAdmin: g.participants.some((p) => isMe(p.id, p.lid) && !!p.admin),
-      memberCount: g.participants.length,
-    }));
+    log.warn({ sessionId, rawUserId: user.id, rawUserLid: user.lid, meJid, meLid }, 'DEBUG_ADMIN_DETECTION identidade do bot');
+    const out: GroupInfo[] = Object.values(groups).map((g) => {
+      const admins = g.participants.filter((p) => !!p.admin).map((p) => ({ id: p.id, lid: p.lid, admin: p.admin }));
+      log.warn({ sessionId, jid: g.id, name: g.subject, admins }, 'DEBUG_ADMIN_DETECTION admins do grupo');
+      return {
+        jid: g.id,
+        name: g.subject,
+        kind: g.isCommunity ? 'COMMUNITY' : 'GROUP',
+        botIsAdmin: g.participants.some((p) => isMe(p.id, p.lid) && !!p.admin),
+        memberCount: g.participants.length,
+      };
+    });
     return out;
   }
 }
