@@ -217,15 +217,11 @@ export async function mirrorMessage(
       const imageBuffer = await downloadMedia(jobData.sessionId, jobData.message);
       outgoingMessages.push({ kind: 'image', imageBuffer, caption: newText });
     } else {
-      const firstLink = replacements.get(links[0]!.url) ?? links[0]!.url;
-      outgoingMessages.push({
-        kind: 'preview',
-        text: newText,
-        title: '',
-        description: '',
-        thumbnailUrl: '',
-        url: firstLink,
-      });
+      // Sem dado real de produto pra título/thumbnail aqui (CLONE não busca na API do
+      // marketplace) — mandar 'preview' com campos em branco faz o WhatsApp aceitar esse
+      // linkPreview vazio como definitivo e NÃO gerar a prévia real a partir do link, virando
+      // uma mensagem com o link pelado. Texto simples deixa o WhatsApp buscar a prévia sozinho.
+      outgoingMessages.push({ kind: 'text', text: newText });
     }
   } else if (template) {
     for (const item of templateProducts) {

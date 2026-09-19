@@ -109,7 +109,7 @@ describe('mirrorMessage processor', () => {
       sessionId,
       't1@g.us',
       expect.objectContaining({
-        kind: 'preview',
+        kind: 'text',
         text: 'Olha isso: https://www.amazon.com.br/dp/B0ABCDEF12?tag=minha-20',
       }),
     );
