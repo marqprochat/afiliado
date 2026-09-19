@@ -27,7 +27,16 @@ services:
       REDIS_URL: redis://redis:6379
       NODE_ENV: production
       WEB_ORIGIN: https://${DOMAIN}
+    command: >
+      sh -c "pnpm --filter @afilados/db exec prisma migrate deploy &&
+             pnpm --filter @afilados/db seed &&
+             pnpm --filter @afilados/api start"
     ports: ['${API_PROD_PORT:-8011}:3001']
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3001/api/v1/health']
+      interval: 5s
+      retries: 20
+      start_period: 30s
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_started }
@@ -42,6 +51,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_started }
+      api: { condition: service_healthy }
   web:
     build:
       context: .
