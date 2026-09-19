@@ -37,8 +37,16 @@ export class ShopeeGraphQLClient {
       }
       throw new ShopeeApiError(detail ? `HTTP ${res.status}: ${detail}` : `HTTP ${res.status}`);
     }
-    const json = (await res.json()) as { data?: T; errors?: { message: string }[] };
-    if (json.errors?.length) throw new ShopeeApiError(json.errors.map((e) => e.message).join('; '));
+    const json = (await res.json()) as {
+      data?: T;
+      errors?: { message: string; path?: (string | number)[] }[];
+    };
+    if (json.errors?.length) {
+      const detail = json.errors
+        .map((e) => (e.path ? `${e.message} (path: ${e.path.join('.')})` : e.message))
+        .join('; ');
+      throw new ShopeeApiError(detail);
+    }
     if (!json.data) throw new ShopeeApiError('Resposta sem data');
     return json.data;
   }
