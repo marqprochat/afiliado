@@ -140,6 +140,153 @@ export class WaSessionManager {
       case 'sync-groups':
         await this.syncGroups(sessionId, tenantId);
         return;
+      case 'create-group': {
+        try {
+          const { jid } = await this.gateway.createGroup(
+            sessionId,
+            job.data.groupSubject ?? '',
+            job.data.groupParticipants ?? [],
+          );
+          await this.syncGroups(sessionId, tenantId).catch(() => {});
+          await publishEvent(tenantId, {
+            type: 'wa.group.action',
+            sessionId,
+            action: 'create-group',
+            ok: true,
+            jid,
+          });
+        } catch (e) {
+          await publishEvent(tenantId, {
+            type: 'wa.group.action',
+            sessionId,
+            action: 'create-group',
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+        return;
+      }
+      case 'group-participants': {
+        const jid = job.data.groupJid;
+        try {
+          if (!jid || !job.data.participantAction) throw new Error('dados incompletos');
+          await this.gateway.updateGroupParticipants(
+            sessionId,
+            jid,
+            job.data.participantAction,
+            job.data.groupParticipants ?? [],
+          );
+          await this.syncGroups(sessionId, tenantId).catch(() => {});
+          await publishEvent(tenantId, {
+            type: 'wa.group.action',
+            sessionId,
+            action: 'group-participants',
+            ok: true,
+            jid,
+          });
+        } catch (e) {
+          await publishEvent(tenantId, {
+            type: 'wa.group.action',
+            sessionId,
+            action: 'group-participants',
+            ok: false,
+            ...(jid ? { jid } : {}),
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+        return;
+      }
+      case 'group-settings': {
+        const jid = job.data.groupJid;
+        try {
+          if (!jid) throw new Error('groupJid obrigatório');
+          await this.gateway.updateGroupSettings(sessionId, jid, {
+            ...(job.data.subject !== undefined ? { subject: job.data.subject } : {}),
+            ...(job.data.description !== undefined ? { description: job.data.description } : {}),
+            ...(job.data.announceOnly !== undefined ? { announceOnly: job.data.announceOnly } : {}),
+          });
+          await prisma.waGroup.updateMany({
+            where: { sessionId, jid },
+            data: {
+              ...(job.data.subject !== undefined ? { name: job.data.subject } : {}),
+              ...(job.data.description !== undefined ? { description: job.data.description } : {}),
+              ...(job.data.announceOnly !== undefined ? { announceOnly: job.data.announceOnly } : {}),
+            },
+          });
+          await publishEvent(tenantId, {
+            type: 'wa.group.action',
+            sessionId,
+            action: 'group-settings',
+            ok: true,
+            jid,
+          });
+        } catch (e) {
+          await publishEvent(tenantId, {
+            type: 'wa.group.action',
+            sessionId,
+            action: 'group-settings',
+            ok: false,
+            ...(jid ? { jid } : {}),
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+        return;
+      }
+      case 'group-invite': {
+        const jid = job.data.groupJid;
+        try {
+          if (!jid) throw new Error('groupJid obrigatório');
+          const code = await this.gateway.getInviteCode(sessionId, jid, job.data.revokeInvite);
+          await prisma.waGroup.updateMany({
+            where: { sessionId, jid },
+            data: { inviteLink: `https://chat.whatsapp.com/${code}` },
+          });
+          await publishEvent(tenantId, {
+            type: 'wa.group.action',
+            sessionId,
+            action: 'group-invite',
+            ok: true,
+            jid,
+          });
+        } catch (e) {
+          await publishEvent(tenantId, {
+            type: 'wa.group.action',
+            sessionId,
+            action: 'group-invite',
+            ok: false,
+            ...(jid ? { jid } : {}),
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+        return;
+      }
+      case 'group-details': {
+        const jid = job.data.groupJid;
+        try {
+          if (!jid) throw new Error('groupJid obrigatório');
+          const details = await this.gateway.getGroupDetails(sessionId, jid);
+          await publishEvent(tenantId, {
+            type: 'wa.group.details',
+            sessionId,
+            jid: details.jid,
+            ok: true,
+            subject: details.subject,
+            description: details.description,
+            announceOnly: details.announceOnly,
+            inviteCode: details.inviteCode,
+            participants: details.participants,
+          });
+        } catch (e) {
+          await publishEvent(tenantId, {
+            type: 'wa.group.details',
+            sessionId,
+            jid: jid ?? '',
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+        return;
+      }
     }
   }
 

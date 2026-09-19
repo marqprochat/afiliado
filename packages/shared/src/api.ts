@@ -30,6 +30,30 @@ export const waConnectSchema = z
     path: ['phone'],
   });
 
+const waPhone = z.string().regex(/^\d{10,15}$/, 'telefone deve ter só dígitos (DDI+DDD+número)');
+
+export const groupCreateSchema = z.object({
+  subject: z.string().trim().min(1).max(25),
+  participants: z.array(waPhone).min(1).max(256),
+});
+
+export const groupParticipantsSchema = z.object({
+  action: z.enum(['add', 'remove', 'promote', 'demote']),
+  participants: z.array(waPhone).min(1).max(256),
+});
+
+export const groupSettingsSchema = z
+  .object({
+    subject: z.string().trim().min(1).max(25).optional(),
+    description: z.string().trim().max(2048).optional(),
+    announceOnly: z.boolean().optional(),
+  })
+  .refine((v) => v.subject !== undefined || v.description !== undefined || v.announceOnly !== undefined, {
+    message: 'informe ao menos um campo para atualizar',
+  });
+
+export const groupInviteSchema = z.object({ revoke: z.boolean().default(false) });
+
 export const marketplaceKindParam = z.enum(MARKETPLACE_KINDS);
 export const marketplaceUpdateSchema = z.object({
   appId: z.string().min(1).optional(),
@@ -160,6 +184,10 @@ export type LoginBody = z.infer<typeof loginSchema>;
 export type SettingsUpdateBody = z.infer<typeof settingsUpdateSchema>;
 export type WaSessionCreateBody = z.infer<typeof waSessionCreateSchema>;
 export type WaConnectBody = z.infer<typeof waConnectSchema>;
+export type GroupCreateBody = z.infer<typeof groupCreateSchema>;
+export type GroupParticipantsBody = z.infer<typeof groupParticipantsSchema>;
+export type GroupSettingsBody = z.infer<typeof groupSettingsSchema>;
+export type GroupInviteBody = z.infer<typeof groupInviteSchema>;
 export type MarketplaceUpdateBody = z.infer<typeof marketplaceUpdateSchema>;
 export type ProductsImportBody = z.infer<typeof productsImportSchema>;
 export type QueueAddBody = z.infer<typeof queueAddSchema>;

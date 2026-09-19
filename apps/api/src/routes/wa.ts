@@ -3,6 +3,10 @@ import { z } from 'zod';
 import {
   ApiError,
   QUEUE_WA_COMMANDS,
+  groupCreateSchema,
+  groupInviteSchema,
+  groupParticipantsSchema,
+  groupSettingsSchema,
   waConnectSchema,
   waSessionCreateSchema,
   type WaCommand,
@@ -10,6 +14,8 @@ import {
 } from '@afilados/shared';
 import { requireAuth } from '../plugins/auth';
 import { getQueue } from '../lib/redis';
+
+const jidParam = z.object({ id: z.string().min(1), jid: z.string().min(1) });
 
 const idParam = z.object({ id: z.string().min(1) });
 const PUBLIC_FIELDS = {
@@ -98,5 +104,76 @@ export async function waRoutes(app: FastifyInstance) {
   app.get('/wa/sessions/:id/groups', async (req) => {
     const s = await findSession(req);
     return req.db.waGroup.findMany({ where: { sessionId: s.id }, orderBy: { name: 'asc' } });
+  });
+
+  app.post('/wa/sessions/:id/groups', async (req, reply) => {
+    const s = await findSession(req);
+    const body = groupCreateSchema.parse(req.body);
+    await enqueue({
+      tenantId: req.tenantId,
+      sessionId: s.id,
+      command: 'create-group',
+      groupSubject: body.subject,
+      groupParticipants: body.participants,
+    });
+    return reply.status(202).send({ queued: true });
+  });
+
+  app.post('/wa/sessions/:id/groups/:jid/participants', async (req, reply) => {
+    const s = await findSession(req);
+    const { jid } = jidParam.parse(req.params);
+    const body = groupParticipantsSchema.parse(req.body);
+    await enqueue({
+      tenantId: req.tenantId,
+      sessionId: s.id,
+      command: 'group-participants',
+      groupJid: jid,
+      participantAction: body.action,
+      groupParticipants: body.participants,
+    });
+    return reply.status(202).send({ queued: true });
+  });
+
+  app.patch('/wa/sessions/:id/groups/:jid', async (req, reply) => {
+    const s = await findSession(req);
+    const { jid } = jidParam.parse(req.params);
+    const body = groupSettingsSchema.parse(req.body);
+    const job: WaCommandJob = {
+      tenantId: req.tenantId,
+      sessionId: s.id,
+      command: 'group-settings',
+      groupJid: jid,
+    };
+    if (body.subject !== undefined) job.subject = body.subject;
+    if (body.description !== undefined) job.description = body.description;
+    if (body.announceOnly !== undefined) job.announceOnly = body.announceOnly;
+    await enqueue(job);
+    return reply.status(202).send({ queued: true });
+  });
+
+  app.post('/wa/sessions/:id/groups/:jid/invite', async (req, reply) => {
+    const s = await findSession(req);
+    const { jid } = jidParam.parse(req.params);
+    const body = groupInviteSchema.parse(req.body ?? {});
+    await enqueue({
+      tenantId: req.tenantId,
+      sessionId: s.id,
+      command: 'group-invite',
+      groupJid: jid,
+      revokeInvite: body.revoke,
+    });
+    return reply.status(202).send({ queued: true });
+  });
+
+  app.post('/wa/sessions/:id/groups/:jid/details', async (req, reply) => {
+    const s = await findSession(req);
+    const { jid } = jidParam.parse(req.params);
+    await enqueue({
+      tenantId: req.tenantId,
+      sessionId: s.id,
+      command: 'group-details',
+      groupJid: jid,
+    });
+    return reply.status(202).send({ queued: true });
   });
 }

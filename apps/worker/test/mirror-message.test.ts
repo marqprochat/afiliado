@@ -19,6 +19,18 @@ const fakeGateway = {
   fetchGroups: vi.fn(async () => []),
   onMessage: vi.fn(),
   downloadMedia: vi.fn(async () => Buffer.from('fake-image-bytes')),
+  createGroup: vi.fn(async () => ({ jid: 'new@g.us' })),
+  updateGroupParticipants: vi.fn(async () => {}),
+  updateGroupSettings: vi.fn(async () => {}),
+  getInviteCode: vi.fn(async () => 'ABC123'),
+  getGroupDetails: vi.fn(async () => ({
+    jid: 'g@g.us',
+    subject: 'Grupo',
+    description: null,
+    announceOnly: false,
+    inviteCode: null,
+    participants: [],
+  })),
 } satisfies WhatsAppGateway;
 
 beforeAll(async () => {

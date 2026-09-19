@@ -3,7 +3,18 @@ export const QUEUE_SEND_OFFER = 'send-offer';
 export const QUEUE_MIRROR_MESSAGE = 'mirror-message';
 export const QUEUE_PRODUCT_ENRICH = 'product-enrich';
 
-export type WaCommand = 'connect' | 'disconnect' | 'logout' | 'sync-groups';
+export type WaCommand =
+  | 'connect'
+  | 'disconnect'
+  | 'logout'
+  | 'sync-groups'
+  | 'create-group'
+  | 'group-participants'
+  | 'group-settings'
+  | 'group-invite'
+  | 'group-details';
+
+export type GroupParticipantAction = 'add' | 'remove' | 'promote' | 'demote';
 
 export interface WaCommandJob {
   tenantId: string;
@@ -11,6 +22,19 @@ export interface WaCommandJob {
   command: WaCommand;
   mode?: 'qr' | 'pair';
   phone?: string;
+  /** create-group */
+  groupSubject?: string;
+  groupParticipants?: string[];
+  /** group-participants | group-settings | group-invite | group-details */
+  groupJid?: string;
+  /** group-participants */
+  participantAction?: GroupParticipantAction;
+  /** group-settings */
+  subject?: string;
+  description?: string;
+  announceOnly?: boolean;
+  /** group-invite */
+  revokeInvite?: boolean;
 }
 
 export interface SendOfferJob {

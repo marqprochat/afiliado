@@ -24,6 +24,24 @@ class FakeGateway implements WhatsAppGateway {
   async downloadMedia() {
     return Buffer.from('');
   }
+  async createGroup() {
+    return { jid: 'new@g.us' };
+  }
+  async updateGroupParticipants() {}
+  async updateGroupSettings() {}
+  async getInviteCode() {
+    return 'ABC123';
+  }
+  async getGroupDetails() {
+    return {
+      jid: 'g@g.us',
+      subject: 'Grupo',
+      description: null,
+      announceOnly: false,
+      inviteCode: null,
+      participants: [],
+    };
+  }
 }
 
 let tenantId: string;

@@ -142,6 +142,8 @@ model WaGroup {
   botIsAdmin  Boolean     @default(false)
   memberCount Int         @default(0)
   inviteLink  String?
+  description String?
+  announceOnly Boolean    @default(false)
   syncedAt    DateTime    @default(now())
 
   @@unique([sessionId, jid])

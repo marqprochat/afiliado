@@ -15,7 +15,13 @@ import { prisma, type WaSessionStatus } from '@afilados/db';
 import { config } from '../config';
 import { publishEvent } from '../lib/events';
 import { usePostgresAuthState } from './auth-state';
-import type { GroupInfo, IncomingGroupMessage, OutgoingMessage, WhatsAppGateway } from './gateway';
+import type {
+  GroupDetails,
+  GroupInfo,
+  IncomingGroupMessage,
+  OutgoingMessage,
+  WhatsAppGateway,
+} from './gateway';
 
 interface Live {
   sock: WASocket;
@@ -524,6 +530,79 @@ export class BaileysGateway implements WhatsAppGateway {
       memberCount: g.participants.length,
     }));
     return out;
+  }
+
+  private liveOrThrow(sessionId: string) {
+    const l = this.live.get(sessionId);
+    if (!l || !this.isConnected(sessionId)) throw new Error('WA_NOT_CONNECTED');
+    return l;
+  }
+
+  private toJids(phones: string[]) {
+    return phones.map((p) => `${p.replace(/\D/g, '')}@s.whatsapp.net`);
+  }
+
+  async createGroup(
+    sessionId: string,
+    subject: string,
+    participantPhones: string[],
+  ): Promise<{ jid: string }> {
+    const l = this.liveOrThrow(sessionId);
+    const meta = await l.sock.groupCreate(subject, this.toJids(participantPhones));
+    return { jid: meta.id };
+  }
+
+  async updateGroupParticipants(
+    sessionId: string,
+    jid: string,
+    action: 'add' | 'remove' | 'promote' | 'demote',
+    participantPhones: string[],
+  ): Promise<void> {
+    const l = this.liveOrThrow(sessionId);
+    await l.sock.groupParticipantsUpdate(jid, this.toJids(participantPhones), action);
+    this.groupCache.delete(jid);
+  }
+
+  async updateGroupSettings(
+    sessionId: string,
+    jid: string,
+    settings: { subject?: string; description?: string; announceOnly?: boolean },
+  ): Promise<void> {
+    const l = this.liveOrThrow(sessionId);
+    if (settings.subject !== undefined) await l.sock.groupUpdateSubject(jid, settings.subject);
+    if (settings.description !== undefined) {
+      await l.sock.groupUpdateDescription(jid, settings.description);
+    }
+    if (settings.announceOnly !== undefined) {
+      await l.sock.groupSettingUpdate(jid, settings.announceOnly ? 'announcement' : 'not_announcement');
+    }
+    this.groupCache.delete(jid);
+  }
+
+  async getInviteCode(sessionId: string, jid: string, revoke = false): Promise<string> {
+    const l = this.liveOrThrow(sessionId);
+    const code = revoke ? await l.sock.groupRevokeInvite(jid) : await l.sock.groupInviteCode(jid);
+    if (!code) throw new Error('link de convite indisponível');
+    return code;
+  }
+
+  async getGroupDetails(sessionId: string, jid: string): Promise<GroupDetails> {
+    const l = this.liveOrThrow(sessionId);
+    const meta = await l.sock.groupMetadata(jid);
+    let inviteCode: string | null = null;
+    try {
+      inviteCode = (await l.sock.groupInviteCode(jid)) ?? null;
+    } catch {
+      // sem permissão (ex.: bot não é admin) — segue sem o link
+    }
+    return {
+      jid: meta.id,
+      subject: meta.subject,
+      description: meta.desc ?? null,
+      announceOnly: !!meta.announce,
+      inviteCode,
+      participants: meta.participants.map((p) => ({ jid: p.id, admin: p.admin ?? null })),
+    };
   }
 }
 

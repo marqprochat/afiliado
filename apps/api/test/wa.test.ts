@@ -95,6 +95,84 @@ describe('wa sessions', () => {
     });
     expect(r.json().map((g: { name: string }) => g.name)).toEqual(['Alfa', 'Zeta']);
   });
+  it('cria grupo enfileira create-group com subject e participantes', async () => {
+    const r = await app.inject({
+      method: 'POST',
+      url: `/api/v1/wa/sessions/${id}/groups`,
+      headers: { cookie },
+      payload: { subject: 'Ofertas 1', participants: ['5511999999999'] },
+    });
+    expect(r.statusCode).toBe(202);
+    const jobs = await getQueue<WaCommandJob>(QUEUE_WA_COMMANDS).getJobs(['waiting', 'delayed']);
+    expect(jobs.map((j) => j.data)).toContainEqual({
+      tenantId: t.tenantId,
+      sessionId: id,
+      command: 'create-group',
+      groupSubject: 'Ofertas 1',
+      groupParticipants: ['5511999999999'],
+    });
+  });
+  it('atualiza participante de grupo enfileira group-participants', async () => {
+    const r = await app.inject({
+      method: 'POST',
+      url: `/api/v1/wa/sessions/${id}/groups/1%40g.us/participants`,
+      headers: { cookie },
+      payload: { action: 'promote', participants: ['5511999999999'] },
+    });
+    expect(r.statusCode).toBe(202);
+    const jobs = await getQueue<WaCommandJob>(QUEUE_WA_COMMANDS).getJobs(['waiting', 'delayed']);
+    expect(jobs.map((j) => j.data)).toContainEqual({
+      tenantId: t.tenantId,
+      sessionId: id,
+      command: 'group-participants',
+      groupJid: '1@g.us',
+      participantAction: 'promote',
+      groupParticipants: ['5511999999999'],
+    });
+  });
+  it('PATCH em grupo só com announceOnly enfileira group-settings sem subject/description', async () => {
+    const r = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/wa/sessions/${id}/groups/1%40g.us`,
+      headers: { cookie },
+      payload: { announceOnly: true },
+    });
+    expect(r.statusCode).toBe(202);
+    const jobs = await getQueue<WaCommandJob>(QUEUE_WA_COMMANDS).getJobs(['waiting', 'delayed']);
+    expect(jobs.map((j) => j.data)).toContainEqual({
+      tenantId: t.tenantId,
+      sessionId: id,
+      command: 'group-settings',
+      groupJid: '1@g.us',
+      announceOnly: true,
+    });
+  });
+  it('PATCH em grupo sem nenhum campo → 400', async () => {
+    const r = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/wa/sessions/${id}/groups/1%40g.us`,
+      headers: { cookie },
+      payload: {},
+    });
+    expect(r.statusCode).toBe(400);
+  });
+  it('gera link de convite enfileira group-invite', async () => {
+    const r = await app.inject({
+      method: 'POST',
+      url: `/api/v1/wa/sessions/${id}/groups/1%40g.us/invite`,
+      headers: { cookie },
+      payload: {},
+    });
+    expect(r.statusCode).toBe(202);
+    const jobs = await getQueue<WaCommandJob>(QUEUE_WA_COMMANDS).getJobs(['waiting', 'delayed']);
+    expect(jobs.map((j) => j.data)).toContainEqual({
+      tenantId: t.tenantId,
+      sessionId: id,
+      command: 'group-invite',
+      groupJid: '1@g.us',
+      revokeInvite: false,
+    });
+  });
   it('delete com lote referenciando a sessão → 409; após remover o lote, 204', async () => {
     const template = await prisma.template.findFirstOrThrow({ where: { tenantId: t.tenantId } });
     const batch = await prisma.batch.create({

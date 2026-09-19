@@ -17,6 +17,7 @@ import {
   Ticket,
   User,
   Users,
+  UsersRound,
   Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -29,6 +30,7 @@ const PRINCIPAL = [
   { href: '/automacoes', label: 'Automações', icon: Zap },
   { href: '/enviar', label: 'Enviar Ofertas', icon: Send },
   { href: '/espelhamento', label: 'Espelhamento', icon: Radio },
+  { href: '/grupos', label: 'Grupos', icon: UsersRound },
   { href: '/trafego', label: 'Gestor de Tráfego IA', icon: Megaphone },
   { href: '/afiliados', label: 'Afiliados', icon: Users },
 ];

@@ -33,6 +33,9 @@ export interface WaGroup {
   kind: 'GROUP' | 'COMMUNITY' | 'CHANNEL';
   botIsAdmin: boolean;
   memberCount: number;
+  inviteLink?: string | null;
+  description?: string | null;
+  announceOnly?: boolean;
 }
 export interface MarketplaceConnection {
   kind: MarketplaceKind;
