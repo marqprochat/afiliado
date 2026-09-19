@@ -8,6 +8,7 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/core/package.json packages/core/
 COPY packages/db/package.json packages/db/
 COPY packages/marketplaces/package.json packages/marketplaces/
+COPY packages/telegram/package.json packages/telegram/
 RUN pnpm install --frozen-lockfile --filter @afilados/worker... --filter @afilados/db...
 COPY packages ./packages
 COPY apps/worker ./apps/worker
