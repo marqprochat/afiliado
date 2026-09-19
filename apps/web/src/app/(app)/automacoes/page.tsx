@@ -18,7 +18,7 @@ export default function AutomacoesPage() {
         </Button>
       </div>
       {showForm && <RuleForm onCreated={() => setShowForm(false)} />}
-      <div className="space-y-3">
+      <div className="space-y-2">
         {rules?.map((r) => (
           <RuleCard key={r.id} rule={r} />
         ))}
