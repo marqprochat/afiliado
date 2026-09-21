@@ -150,6 +150,26 @@ describe('getItems', () => {
       getItems(['B09B8V1LZ3'], creds, { fetchImpl, baseUrl: 'https://creatorsapi.amazon' }),
     ).rejects.toMatchObject({ code: 'AMAZON_API_RATE_LIMITED' });
   });
+
+  it('serializa chamadas concorrentes do mesmo clientId: a 2ª só bate na API >= 1s depois da 1ª', async () => {
+    const getItemsCallTimes: number[] = [];
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (String(url).includes('/auth/o2/token')) {
+        return { ok: true, status: 200, json: async () => ({ access_token: 'tok', expires_in: 3600 }) };
+      }
+      getItemsCallTimes.push(Date.now());
+      return { ok: true, status: 200, json: async () => ({ itemResults: { items: [] } }) };
+    }) as unknown as typeof fetch;
+
+    await Promise.all([
+      getItems(['AAAAAAAAAA'], creds, { fetchImpl, baseUrl: 'https://creatorsapi.amazon' }),
+      getItems(['BBBBBBBBBB'], creds, { fetchImpl, baseUrl: 'https://creatorsapi.amazon' }),
+    ]);
+
+    expect(getItemsCallTimes).toHaveLength(2);
+    const gap = getItemsCallTimes[1]! - getItemsCallTimes[0]!;
+    expect(gap).toBeGreaterThanOrEqual(900);
+  }, 10_000);
 });
 
 describe('mapCreatorsApiItem', () => {

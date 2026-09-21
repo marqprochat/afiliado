@@ -134,6 +134,26 @@ describe('MarketplaceDrawer', () => {
     });
   });
 
+  it('bloqueia o submit e mostra validação ao preencher só o Client ID (sem o Secret)', async () => {
+    const onSubmit = vi.fn(async () => {});
+    render(
+      <MarketplaceDrawer
+        kind="AMAZON"
+        connection={baseConnection}
+        open
+        onOpenChange={vi.fn()}
+        onSubmit={onSubmit}
+        pending={false}
+        feedback={null}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText(/client id/i), { target: { value: 'cid-only' } });
+    fireEvent.click(screen.getByRole('button', { name: /testar e salvar/i }));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(await screen.findByText(/client id e client secret/i)).toBeInTheDocument();
+  });
+
   it('mostra "já salvo" no placeholder do Client Secret da Amazon quando hasAmazonApiSecret é true', () => {
     render(
       <MarketplaceDrawer

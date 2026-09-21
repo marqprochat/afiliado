@@ -11,6 +11,11 @@ export async function loadTagCredentials(
   kind: 'MERCADOLIVRE' | 'AMAZON' | 'MAGALU',
 ): Promise<TagCredentials> {
   const row = await prisma.marketplaceConnection.findFirst({ where: { tenantId, kind } });
-  if (!row?.encryptedCredentials) return {};
-  return decryptJson<TagCredentials>(Buffer.from(row.encryptedCredentials));
+  const creds = row?.encryptedCredentials
+    ? decryptJson<TagCredentials>(Buffer.from(row.encryptedCredentials))
+    : {};
+  if (kind === 'AMAZON' && (!creds.amazonApi?.clientId || !creds.amazonApi?.clientSecret)) {
+    throw new Error('AMAZON: configure Client ID/Secret da Creators API');
+  }
+  return creds;
 }

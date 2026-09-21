@@ -8,13 +8,19 @@
 
 import type { ProductData } from '@afilados/shared';
 
-const AMAZON_TOKEN_ENDPOINT_DEFAULT = 'https://api.amazon.com/auth/o2/token';
-const AMAZON_CREATORS_API_BASE_URL_DEFAULT = 'https://creatorsapi.amazon';
+// O host exato da Creators API ainda não foi confirmado pela Amazon (ver spec) — lido do
+// ambiente para poder ser ajustado no deploy sem alterar código; o valor abaixo é só o fallback.
+const AMAZON_TOKEN_ENDPOINT_DEFAULT =
+  process.env.AMAZON_TOKEN_ENDPOINT ?? 'https://api.amazon.com/auth/o2/token';
+const AMAZON_CREATORS_API_BASE_URL_DEFAULT =
+  process.env.AMAZON_CREATORS_API_BASE_URL ?? 'https://creatorsapi.amazon';
 const AMAZON_CREATORS_API_MARKETPLACE_BR = 'www.amazon.com.br';
 /** Cota inicial da Creators API é 1 TPS — mantemos esse teto fixo mesmo quando a conta ganha mais. */
 const MIN_REQUEST_INTERVAL_MS = 1000;
 /** Renova o token um pouco antes de expirar, para não arriscar usar um token vencido em voo. */
 const TOKEN_EXPIRY_MARGIN_MS = 60_000;
+/** Teto fixo de espera por chamada HTTP à Creators API — evita pendurar a request/job chamador. */
+const FETCH_TIMEOUT_MS = 10_000;
 
 export class AmazonApiError extends Error {
   constructor(
@@ -50,11 +56,34 @@ interface CachedToken {
 
 const tokenCache = new Map<string, CachedToken>();
 const lastCallAt = new Map<string, number>();
+/** Fila de serialização por `clientId` para `waitForRateLimitSlot` — ver comentário na função. */
+const rateLimitQueue = new Map<string, Promise<void>>();
 
 /** Limpa os caches em memória — só para uso em testes, evita estado vazando entre `it`s. */
 export function resetAmazonApiState(): void {
   tokenCache.clear();
   lastCallAt.clear();
+  rateLimitQueue.clear();
+}
+
+/**
+ * `fetch` com timeout fixo: uma chamada que trava (endpoint pendurado) não deve pendurar
+ * indefinidamente a request/job que a espera. Um abort vira `AmazonApiError` claro em vez de
+ * um `AbortError` bruto vazando para quem chamou.
+ */
+async function fetchWithTimeout(
+  doFetch: typeof fetch,
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  try {
+    return await doFetch(url, { ...init, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new AmazonApiError(`Chamada à Creators API expirou (timeout de ${FETCH_TIMEOUT_MS}ms)`, 'AMAZON_API_ERROR');
+    }
+    throw err;
+  }
 }
 
 export async function getAccessToken(
@@ -67,7 +96,7 @@ export async function getAccessToken(
   }
   const doFetch = opts.fetchImpl ?? fetch;
   const endpoint = opts.tokenEndpoint ?? AMAZON_TOKEN_ENDPOINT_DEFAULT;
-  const res = await doFetch(endpoint, {
+  const res = await fetchWithTimeout(doFetch, endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -92,14 +121,28 @@ export async function getAccessToken(
   return data.access_token;
 }
 
-/** Espera o mínimo necessário para respeitar 1 req/s por `clientId` antes de uma chamada. */
-export async function waitForRateLimitSlot(clientId: string): Promise<void> {
-  const last = lastCallAt.get(clientId) ?? 0;
-  const elapsed = Date.now() - last;
-  if (elapsed < MIN_REQUEST_INTERVAL_MS) {
-    await new Promise((resolve) => setTimeout(resolve, MIN_REQUEST_INTERVAL_MS - elapsed));
-  }
-  lastCallAt.set(clientId, Date.now());
+/**
+ * Espera o mínimo necessário para respeitar 1 req/s por `clientId` antes de uma chamada.
+ *
+ * Serializa as chamadas concorrentes por `clientId` encadeando em `rateLimitQueue`: cada
+ * chamada só decide "posso ir?" depois que a anterior (na ordem de chamada) já decidiu e
+ * atualizou `lastCallAt` — sem isso, duas chamadas concorrentes poderiam ler o mesmo `last`
+ * antes de qualquer uma escrever, calcular a mesma espera e disparar juntas, furando o teto
+ * de 1 req/s.
+ */
+export function waitForRateLimitSlot(clientId: string): Promise<void> {
+  const prev = rateLimitQueue.get(clientId) ?? Promise.resolve();
+  const next = prev.then(async () => {
+    const last = lastCallAt.get(clientId) ?? 0;
+    const elapsed = Date.now() - last;
+    if (elapsed < MIN_REQUEST_INTERVAL_MS) {
+      await new Promise((resolve) => setTimeout(resolve, MIN_REQUEST_INTERVAL_MS - elapsed));
+    }
+    lastCallAt.set(clientId, Date.now());
+  });
+  // Nunca deixa a fila travada por uma rejeição — próxima chamada segue normalmente.
+  rateLimitQueue.set(clientId, next.catch(() => {}));
+  return next;
 }
 
 export {
@@ -145,7 +188,7 @@ async function getItemsBatch(
   const marketplace = opts.marketplace ?? AMAZON_CREATORS_API_MARKETPLACE_BR;
   await waitForRateLimitSlot(creds.clientId);
   const token = await getAccessToken(creds, opts);
-  const res = await doFetch(`${baseUrl}/catalog/v1/getItems`, {
+  const res = await fetchWithTimeout(doFetch, `${baseUrl}/catalog/v1/getItems`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,

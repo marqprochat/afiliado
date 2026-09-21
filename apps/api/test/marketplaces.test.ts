@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { prisma, decryptJson } from '@afilados/db';
 import { buildApp } from '../src/app';
 import { createTenantWithUser, cleanupTenant, loginCookie } from './helpers';
@@ -112,6 +112,34 @@ describe('marketplaces', () => {
       Buffer.from(row.encryptedCredentials!),
     );
     expect(creds.amazonApi).toEqual({ clientId: 'cid-1', clientSecret: 's3gredo' });
+
+    // check valida via API: mocka o fetch global (getAccessToken + GetItems da Creators API)
+    // para não bater na rede real e confirma que a rota de check chega a chamar a API.
+    const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation((async (url: string) => {
+      if (String(url).includes('/auth/o2/token')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ access_token: 'tok', expires_in: 3600 }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ itemResults: { items: [{ asin: 'B08N5WRWNW' }] } }),
+      };
+    }) as unknown as typeof fetch);
+    try {
+      const check = await app.inject({
+        method: 'POST',
+        url: '/api/v1/marketplaces/AMAZON/check',
+        headers: { cookie },
+      });
+      expect(check.json()).toMatchObject({ status: 'OK' });
+      expect(fetchSpy).toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   it('amazon: PUT parcial sem os dois campos da API preserva amazonApi já salvo', async () => {

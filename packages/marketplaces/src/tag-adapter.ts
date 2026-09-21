@@ -56,7 +56,9 @@ async function fetchAmazonByUrls(
   const partnerTag = creds.tag;
   const clientId = creds.amazonApi?.clientId;
   const clientSecret = creds.amazonApi?.clientSecret;
-  if (!partnerTag || !clientId || !clientSecret) return [];
+  if (!partnerTag || !clientId || !clientSecret) {
+    throw new Error('AMAZON: configure tag e Client ID/Secret da Creators API');
+  }
 
   const urlByAsin = new Map<string, string>();
   for (const url of urls) {

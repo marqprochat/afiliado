@@ -88,6 +88,9 @@ export function MarketplaceDrawer({
   const config = MARKETPLACE_CONFIGS[kind];
   const [values, setValues] = useState<Record<string, string>>({});
   const [cookie, setCookie] = useState('');
+  // Validação local (não depende de round-trip com o servidor) — some assim que o drawer
+  // reabre ou o usuário tenta enviar de novo.
+  const [validationError, setValidationError] = useState<string | null>(null);
   // Rastreia para qual `kind` já inicializamos os campos com dados de `connection` nesta
   // sessão de abertura do drawer. Isso permite reagir a `connection` chegando depois (a
   // query de marketplaces pode ainda estar carregando quando `?open=<kind>` já abre o
@@ -126,13 +129,30 @@ export function MarketplaceDrawer({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setValidationError(null);
     const fields: Partial<Record<MarketplaceFieldKey, string>> = {};
     for (const field of config.fields) {
       const value = values[field.key]?.trim();
       if (value) fields[field.key] = value;
     }
+    // Amazon: Client ID e Client Secret da Creators API são salvos como par — a API só
+    // substitui `amazonApi` quando os dois chegam juntos, senão preserva o que já estava
+    // salvo. Enviar só um dos dois é um no-op silencioso no campo preenchido, então bloqueia
+    // aqui com uma mensagem clara em vez de deixar o usuário achar que salvou.
+    if (kind === 'AMAZON') {
+      const hasClientId = Boolean(fields.amazonClientId);
+      const hasClientSecret = Boolean(fields.amazonClientSecret);
+      if (hasClientId !== hasClientSecret) {
+        setValidationError(
+          'Informe Client ID e Client Secret da Creators API juntos (ou deixe os dois em branco para manter o que já está salvo).',
+        );
+        return;
+      }
+    }
     await onSubmit({ fields, cookie: cookie.trim() });
   }
+
+  const displayedFeedback = validationError ? { message: validationError, ok: false } : feedback;
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -237,9 +257,9 @@ export function MarketplaceDrawer({
             </div>
           )}
 
-          {feedback && (
-            <p className={`text-xs ${feedback.ok ? 'text-emerald-500' : 'text-red-400'}`}>
-              {feedback.message}
+          {displayedFeedback && (
+            <p className={`text-xs ${displayedFeedback.ok ? 'text-emerald-500' : 'text-red-400'}`}>
+              {displayedFeedback.message}
             </p>
           )}
 

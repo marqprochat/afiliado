@@ -35,14 +35,12 @@ describe('tag adapters', () => {
     expect(amazonGetItems).not.toHaveBeenCalled();
   });
 
-  it('amazon: sem amazonApi configurado, fetchByUrls devolve lista vazia (sem chamar a API)', async () => {
+  it('amazon: sem amazonApi configurado, fetchByUrls lança erro claro (sem chamar a API)', async () => {
     const amazonGetItems = vi.fn(async (): Promise<AmazonApiItem[]> => []);
     const a = createTagAdapter('AMAZON', { amazonGetItems });
-    const result = await a.fetchByUrls(
-      { tag: 'minha-20' },
-      ['https://www.amazon.com.br/dp/B09B8V1LZ3'],
-    );
-    expect(result).toEqual([]);
+    await expect(
+      a.fetchByUrls({ tag: 'minha-20' }, ['https://www.amazon.com.br/dp/B09B8V1LZ3']),
+    ).rejects.toThrow(/configure tag e Client ID/);
     expect(amazonGetItems).not.toHaveBeenCalled();
   });
 

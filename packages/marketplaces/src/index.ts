@@ -14,6 +14,8 @@ export {
   getItems,
   extractAsin,
   mapCreatorsApiItem,
+  resetAmazonApiState,
+  waitForRateLimitSlot,
   type AmazonApiCredentials,
   type AmazonApiItem,
   type AmazonApiOptions,
