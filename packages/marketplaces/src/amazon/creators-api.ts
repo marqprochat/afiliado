@@ -6,6 +6,8 @@
  * Spec: docs/superpowers/specs/2026-09-21-amazon-creators-api-design.md
  */
 
+import type { ProductData } from '@afilados/shared';
+
 const AMAZON_TOKEN_ENDPOINT_DEFAULT = 'https://api.amazon.com/auth/o2/token';
 const AMAZON_CREATORS_API_BASE_URL_DEFAULT = 'https://creatorsapi.amazon';
 const AMAZON_CREATORS_API_MARKETPLACE_BR = 'www.amazon.com.br';
@@ -105,3 +107,115 @@ export {
   AMAZON_CREATORS_API_BASE_URL_DEFAULT,
   AMAZON_CREATORS_API_MARKETPLACE_BR,
 };
+
+export interface AmazonApiItem {
+  asin: string;
+  parentASIN?: string;
+  images?: { primary?: { large?: { url?: string } } };
+  itemInfo?: { title?: { displayValue?: string } };
+  offersV2?: {
+    listings?: Array<{
+      price?: {
+        money?: { amount?: number; currency?: string };
+        savings?: { percentage?: number; money?: { amount?: number } };
+      };
+    }>;
+  };
+}
+
+interface AmazonGetItemsResponse {
+  itemResults?: { items?: AmazonApiItem[] };
+  errors?: Array<{ code?: string; message?: string }>;
+}
+
+const GET_ITEMS_RESOURCES = [
+  'itemInfo.title',
+  'images.primary.large',
+  'offersV2.listings.price',
+  'parentASIN',
+];
+
+async function getItemsBatch(
+  asins: string[],
+  creds: AmazonApiCredentials,
+  opts: AmazonApiOptions,
+): Promise<AmazonApiItem[]> {
+  const doFetch = opts.fetchImpl ?? fetch;
+  const baseUrl = opts.baseUrl ?? AMAZON_CREATORS_API_BASE_URL_DEFAULT;
+  const marketplace = opts.marketplace ?? AMAZON_CREATORS_API_MARKETPLACE_BR;
+  await waitForRateLimitSlot(creds.clientId);
+  const token = await getAccessToken(creds, opts);
+  const res = await doFetch(`${baseUrl}/catalog/v1/getItems`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'x-marketplace': marketplace,
+    },
+    body: JSON.stringify({
+      itemIds: asins,
+      itemIdType: 'ASIN',
+      marketplace,
+      partnerTag: creds.partnerTag,
+      resources: GET_ITEMS_RESOURCES,
+    }),
+  });
+  if (res.status === 401 || res.status === 403) {
+    throw new AmazonApiError('Credenciais da Creators API inválidas', 'AMAZON_API_UNAUTHORIZED');
+  }
+  if (res.status === 429) {
+    throw new AmazonApiError('Cota da Creators API excedida (429)', 'AMAZON_API_RATE_LIMITED');
+  }
+  if (!res.ok) {
+    throw new AmazonApiError(`GetItems respondeu HTTP ${res.status}`, 'AMAZON_API_ERROR');
+  }
+  const data = (await res.json()) as AmazonGetItemsResponse;
+  return data.itemResults?.items ?? [];
+}
+
+/** ASINs em lotes de até 10 (limite do GetItems), respeitando o rate limit entre lotes. */
+export async function getItems(
+  asins: string[],
+  creds: AmazonApiCredentials,
+  opts: AmazonApiOptions = {},
+): Promise<AmazonApiItem[]> {
+  const items: AmazonApiItem[] = [];
+  for (let i = 0; i < asins.length; i += 10) {
+    const batch = asins.slice(i, i + 10);
+    items.push(...(await getItemsBatch(batch, creds, opts)));
+  }
+  return items;
+}
+
+export function extractAsin(url: string): string | undefined {
+  const match =
+    url.match(/\/dp\/([A-Z0-9]{10})/i) ||
+    url.match(/\/gp\/product\/([A-Z0-9]{10})/i) ||
+    url.match(/\/product\/([A-Z0-9]{10})/i);
+  return match?.[1]?.toUpperCase();
+}
+
+export function mapCreatorsApiItem(item: AmazonApiItem, originalUrl: string): ProductData {
+  const title = item.itemInfo?.title?.displayValue ?? 'Produto Amazon';
+  const imageUrl = item.images?.primary?.large?.url;
+  const listing = item.offersV2?.listings?.[0];
+  const currentPrice = listing?.price?.money?.amount;
+  const savingsPct = listing?.price?.savings?.percentage;
+  const savingsAmount = listing?.price?.savings?.money?.amount;
+  const originalPrice =
+    currentPrice !== undefined && savingsAmount !== undefined
+      ? Math.round((currentPrice + savingsAmount) * 100) / 100
+      : undefined;
+  return {
+    source: 'AMAZON',
+    externalId: item.asin,
+    title,
+    price: currentPrice ?? 0,
+    ...(originalPrice !== undefined ? { originalPrice } : {}),
+    ...(savingsPct !== undefined ? { discountPct: Math.round(savingsPct) } : {}),
+    images: imageUrl ? [imageUrl] : [],
+    shipping: 'UNKNOWN',
+    originalUrl,
+    raw: item,
+  };
+}
