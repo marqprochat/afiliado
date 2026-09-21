@@ -11,6 +11,8 @@ const baseConnection: MarketplaceConnection = {
   hasSecret: false,
   mattWord: null,
   mattTool: null,
+  amazonClientId: null,
+  hasAmazonApiSecret: false,
   mlSessionSyncedAt: null,
   mlSessionSource: null,
   amazonSessionSyncedAt: null,
@@ -107,5 +109,43 @@ describe('MarketplaceDrawer', () => {
       />,
     );
     expect(screen.getByLabelText(/secret/i)).toHaveAttribute('placeholder', '•••• (já salvo)');
+  });
+
+  it('envia amazonClientId/amazonClientSecret quando preenchidos', async () => {
+    const onSubmit = vi.fn(async () => {});
+    render(
+      <MarketplaceDrawer
+        kind="AMAZON"
+        connection={baseConnection}
+        open
+        onOpenChange={vi.fn()}
+        onSubmit={onSubmit}
+        pending={false}
+        feedback={null}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText(/client id/i), { target: { value: 'cid-1' } });
+    fireEvent.change(screen.getByLabelText(/client secret/i), { target: { value: 'sec-1' } });
+    fireEvent.click(screen.getByRole('button', { name: /testar e salvar/i }));
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      fields: { amazonClientId: 'cid-1', amazonClientSecret: 'sec-1' },
+      cookie: '',
+    });
+  });
+
+  it('mostra "já salvo" no placeholder do Client Secret da Amazon quando hasAmazonApiSecret é true', () => {
+    render(
+      <MarketplaceDrawer
+        kind="AMAZON"
+        connection={{ ...baseConnection, hasAmazonApiSecret: true }}
+        open
+        onOpenChange={vi.fn()}
+        onSubmit={vi.fn(async () => {})}
+        pending={false}
+        feedback={null}
+      />,
+    );
+    expect(screen.getByLabelText(/client secret/i)).toHaveAttribute('placeholder', '•••• (já salvo)');
   });
 });

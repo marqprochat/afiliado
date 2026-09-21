@@ -62,6 +62,8 @@ export interface MarketplaceConnection {
   hasSecret: boolean;
   mattWord: string | null;
   mattTool: string | null;
+  amazonClientId: string | null;
+  hasAmazonApiSecret: boolean;
   /** Sessão do ML sincronizada (extensão ou colagem manual); gera link oficial meli.la. */
   mlSessionSyncedAt: string | null;
   mlSessionSource: 'extension' | 'manual' | null;

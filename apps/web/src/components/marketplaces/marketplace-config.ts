@@ -1,6 +1,13 @@
 import type { MarketplaceKind } from '@afilados/shared';
 
-export type MarketplaceFieldKey = 'appId' | 'secret' | 'affiliateTag' | 'mattWord' | 'mattTool';
+export type MarketplaceFieldKey =
+  | 'appId'
+  | 'secret'
+  | 'affiliateTag'
+  | 'mattWord'
+  | 'mattTool'
+  | 'amazonClientId'
+  | 'amazonClientSecret';
 
 export interface MarketplaceFieldDef {
   key: MarketplaceFieldKey;
@@ -74,7 +81,7 @@ export const MARKETPLACE_CONFIGS: Record<MarketplaceKind, MarketplaceConfig> = {
   AMAZON: {
     kind: 'AMAZON',
     label: 'Amazon BR',
-    description: 'Tag de afiliado da Amazon — usada para reescrever links espelhados.',
+    description: 'Tag de afiliado e credenciais da Creators API (dados de produto).',
     platformUrl: 'https://afiliados.amazon.com.br/',
     fields: [
       {
@@ -85,6 +92,24 @@ export const MARKETPLACE_CONFIGS: Record<MarketplaceKind, MarketplaceConfig> = {
         placeholder: 'Ex: seunome-20',
         helpTitle: 'Onde encontrar minha tag?',
         helpContent: 'É a sua Store ID / Tracking ID no Programa de Associados Amazon.',
+      },
+      {
+        key: 'amazonClientId',
+        label: 'Client ID (Creators API)',
+        type: 'text',
+        required: false,
+        placeholder: 'Ex: amzn1.application-oa2-client....',
+        helpTitle: 'Onde consigo o Client ID?',
+        helpContent:
+          'Em Associates Central → Ferramentas → Creators API → Register for Creators API. Exige pelo menos 10 vendas qualificadas nos últimos 30 dias.',
+      },
+      {
+        key: 'amazonClientSecret',
+        label: 'Client Secret (Creators API)',
+        type: 'password',
+        required: false,
+        helpTitle: 'Onde consigo o Client Secret?',
+        helpContent: 'Gerado junto com o Client ID no mesmo cadastro da Creators API.',
       },
     ],
     supportsSession: true,

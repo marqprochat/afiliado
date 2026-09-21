@@ -38,7 +38,10 @@ function initialFieldValue(key: MarketplaceFieldKey, connection?: MarketplaceCon
       return connection?.mattWord ?? '';
     case 'mattTool':
       return connection?.mattTool ?? '';
+    case 'amazonClientId':
+      return connection?.amazonClientId ?? '';
     case 'secret':
+    case 'amazonClientSecret':
       return '';
   }
 }
@@ -167,7 +170,11 @@ export function MarketplaceDrawer({
                     ? connection?.hasSecret
                       ? '•••• (já salvo)'
                       : ''
-                    : field.placeholder
+                    : field.key === 'amazonClientSecret'
+                      ? connection?.hasAmazonApiSecret
+                        ? '•••• (já salvo)'
+                        : ''
+                      : field.placeholder
                 }
                 className="mt-1"
               />
