@@ -19,7 +19,7 @@ import {
   discoverMagaluByKeyword,
 } from '@afilados/marketplaces';
 import { requireAuth } from '../plugins/auth';
-import { getShopeeAdapter, getTagAdapter, loadShopeeCredentials } from '../lib/marketplaces';
+import { getShopeeAdapter, getTagAdapter, loadShopeeCredentials, loadTagCredentials } from '../lib/marketplaces';
 import { toApiProduct, upsertProducts } from '../lib/products';
 import { getQueue } from '../lib/redis';
 
@@ -80,7 +80,8 @@ export async function productsRoutes(app: FastifyInstance) {
       throw new ApiError('MARKETPLACE_ERROR', e instanceof Error ? e.message : String(e), 502);
     }
     if (urls.length === 0) return { products: [] };
-    const found = await getTagAdapter(kind).fetchByUrls({}, urls.slice(0, q.limit));
+    const amazonCreds = kind === 'AMAZON' ? await loadTagCredentials(req.db, kind) : {};
+    const found = await getTagAdapter(kind).fetchByUrls(amazonCreds, urls.slice(0, q.limit));
     const rows = await upsertProducts(req.db, req.tenantId, found);
     return { products: rows.map(toApiProduct) };
   });
@@ -158,7 +159,8 @@ export async function productsRoutes(app: FastifyInstance) {
           const found = await getShopeeAdapter().fetchByUrls(creds, kindUrls);
           allFound.push(...found);
         } else if (scrapeInline) {
-          const found = await getTagAdapter(kind).fetchByUrls({}, kindUrls);
+          const amazonCreds = kind === 'AMAZON' ? await loadTagCredentials(req.db, kind) : {};
+          const found = await getTagAdapter(kind).fetchByUrls(amazonCreds, kindUrls);
           allFound.push(...found);
         } else {
           for (const url of kindUrls) queuedUrls.push({ kind, url });

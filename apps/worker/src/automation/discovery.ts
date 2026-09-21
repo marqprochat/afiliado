@@ -11,6 +11,7 @@ import {
 import { type MarketplaceKind, type ProductData } from '@afilados/shared';
 import { getRedis } from '../lib/redis';
 import { createHash } from 'node:crypto';
+import { loadTagCredentials } from '../lib/marketplace-credentials';
 
 const KEYWORD_CACHE_TTL_SEC = 15 * 60;
 
@@ -175,7 +176,12 @@ async function discoverScraped(
     }
     return [];
   }
-  const fetchFn = deps.fetchByUrls?.[marketplace] ?? ((u: string[]) => getTagAdapter(marketplace).fetchByUrls({}, u));
+  const fetchFn =
+    deps.fetchByUrls?.[marketplace] ??
+    (async (u: string[]) => {
+      const creds = marketplace === 'AMAZON' ? await loadTagCredentials(rule.tenantId, marketplace) : {};
+      return getTagAdapter(marketplace).fetchByUrls(creds, u);
+    });
   return fetchFn(urls);
 }
 

@@ -12,6 +12,7 @@ import {
   getShopeeAdapter,
   getTagAdapter,
   loadShopeeCredentials,
+  loadTagCredentials,
   upsertMarketplaceCredentials,
 } from '../lib/marketplaces';
 
@@ -104,7 +105,11 @@ export async function extensionRoutes(app: FastifyInstance) {
         const { creds } = await loadShopeeCredentials(forTenant(tenantId));
         list = await getShopeeAdapter().fetchByUrls(creds, [body.url]);
       } else {
-        list = await getTagAdapter(body.marketplaceKind).fetchByUrls({}, [body.url]);
+        const amazonCreds =
+          body.marketplaceKind === 'AMAZON'
+            ? await loadTagCredentials(forTenant(tenantId), body.marketplaceKind)
+            : {};
+        list = await getTagAdapter(body.marketplaceKind).fetchByUrls(amazonCreds, [body.url]);
       }
       const first = list[0];
       if (!first) {
