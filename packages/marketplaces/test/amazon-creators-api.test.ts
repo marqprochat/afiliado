@@ -65,6 +65,15 @@ describe('getAccessToken', () => {
       getAccessToken({ clientId: 'x', clientSecret: 'y' }, { fetchImpl }),
     ).rejects.toMatchObject({ code: 'AMAZON_API_ERROR' });
   });
+
+  it('lança AmazonApiError(AMAZON_API_ERROR) em timeout (DOMException TimeoutError, como o AbortSignal.timeout real produz)', async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+    }) as unknown as typeof fetch;
+    await expect(
+      getAccessToken({ clientId: 'x', clientSecret: 'y' }, { fetchImpl }),
+    ).rejects.toMatchObject({ code: 'AMAZON_API_ERROR' });
+  });
 });
 
 import { extractAsin, getItems, mapCreatorsApiItem, type AmazonApiItem } from '../src/amazon/creators-api';

@@ -79,7 +79,7 @@ async function fetchWithTimeout(
   try {
     return await doFetch(url, { ...init, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
+    if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
       throw new AmazonApiError(`Chamada à Creators API expirou (timeout de ${FETCH_TIMEOUT_MS}ms)`, 'AMAZON_API_ERROR');
     }
     throw err;

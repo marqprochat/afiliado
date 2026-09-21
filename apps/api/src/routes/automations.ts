@@ -11,7 +11,7 @@ import { parseProductUrl } from '@afilados/core';
 import { getTagAdapter } from '@afilados/marketplaces';
 import { requireAuth } from '../plugins/auth';
 import { getAutomationStats } from '../lib/automations';
-import { getShopeeAdapter, loadShopeeCredentials } from '../lib/marketplaces';
+import { getShopeeAdapter, loadShopeeCredentials, loadTagCredentials } from '../lib/marketplaces';
 import { toApiProduct, upsertProducts } from '../lib/products';
 
 const idParam = z.object({ id: z.string().min(1) });
@@ -154,7 +154,8 @@ export async function automationsRoutes(app: FastifyInstance) {
       const { creds } = await loadShopeeCredentials(req.db);
       [found] = await getShopeeAdapter().fetchByUrls(creds, [url]);
     } else {
-      [found] = await getTagAdapter(parsed.source).fetchByUrls({}, [url]);
+      const creds = parsed.source === 'AMAZON' ? await loadTagCredentials(req.db, parsed.source) : {};
+      [found] = await getTagAdapter(parsed.source).fetchByUrls(creds, [url]);
     }
     if (!found) throw new ApiError('MARKETPLACE_ERROR', 'Não foi possível resolver a URL', 502);
     const [product] = await upsertProducts(req.db, req.tenantId, [found]);

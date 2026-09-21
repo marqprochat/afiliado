@@ -186,6 +186,17 @@ describe('automations routes', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it('rejeita link Amazon sem credenciais da Creators API configuradas → 400 (não 500)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/automations/${ruleId}/queue/link`,
+      headers: { cookie },
+      payload: { url: 'https://www.amazon.com.br/dp/B08N5WRWNW' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('MARKETPLACE_ERROR');
+  });
+
   it('remove item da fila', async () => {
     const [item] = await prisma.automationQueueItem.findMany({ where: { ruleId } });
     const res = await app.inject({
