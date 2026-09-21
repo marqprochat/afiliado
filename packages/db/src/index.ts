@@ -29,6 +29,8 @@ const TENANT_MODELS = new Set([
   'AutomationRule',
   'AutomationLog',
   'AutomationQueueItem',
+  'TelegramBot',
+  'TelegramChat',
 ]);
 
 const FILTERED_OPS = new Set([
