@@ -56,6 +56,29 @@ describe('tag adapters', () => {
     expect(result).toEqual([]);
   });
 
+  it('amazon: checkConnection com amazonApi válido chama GetItems e devolve ok', async () => {
+    const amazonGetItems = vi.fn(async (): Promise<AmazonApiItem[]> => [{ asin: 'B08N5WRWNW' }]);
+    const a = createTagAdapter('AMAZON', { amazonGetItems });
+    const creds = { tag: 'minha-20', amazonApi: { clientId: 'cid', clientSecret: 'csecret' } };
+    expect(await a.checkConnection(creds)).toEqual({ ok: true });
+    expect(amazonGetItems).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.any(String)]),
+      { clientId: 'cid', clientSecret: 'csecret', partnerTag: 'minha-20' },
+    );
+  });
+
+  it('amazon: checkConnection com amazonApi inválido devolve ok:false com a mensagem do erro', async () => {
+    const amazonGetItems = vi.fn(async (): Promise<AmazonApiItem[]> => {
+      throw new Error('Credenciais da Creators API inválidas');
+    });
+    const a = createTagAdapter('AMAZON', { amazonGetItems });
+    const creds = { tag: 'minha-20', amazonApi: { clientId: 'bad', clientSecret: 'bad' } };
+    expect(await a.checkConnection(creds)).toEqual({
+      ok: false,
+      error: 'Credenciais da Creators API inválidas',
+    });
+  });
+
   it('amazon: checkConnection só com tag continua ok (comportamento local-only preservado)', async () => {
     const a = createTagAdapter('AMAZON');
     expect(await a.checkConnection({ tag: 'minha-20' })).toEqual({ ok: true });

@@ -24,6 +24,9 @@ export class UnsupportedError extends Error {
   }
 }
 
+/** ASIN estável só para o teste mínimo de credenciais em checkConnection; o conteúdo não importa. */
+const AMAZON_CHECK_CONNECTION_ASIN = 'B08N5WRWNW';
+
 export type TagKind = 'AMAZON' | 'MERCADOLIVRE' | 'MAGALU';
 
 export interface TagAdapterOptions {
@@ -93,6 +96,18 @@ export function createTagAdapter(
   return {
     kind,
     async checkConnection(creds): Promise<ConnectionStatus> {
+      if (kind === 'AMAZON' && creds?.amazonApi?.clientId && creds?.amazonApi?.clientSecret) {
+        try {
+          await amazonGetItems([AMAZON_CHECK_CONNECTION_ASIN], {
+            clientId: creds.amazonApi.clientId,
+            clientSecret: creds.amazonApi.clientSecret,
+            partnerTag: creds.tag ?? '',
+          });
+          return { ok: true };
+        } catch (err) {
+          return { ok: false, error: err instanceof Error ? err.message : String(err) };
+        }
+      }
       if (kind === 'AMAZON' && creds?.amazonSession?.cookies) {
         const storeId = creds.tag ?? '';
         try {
