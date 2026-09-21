@@ -78,10 +78,12 @@ export async function telegramRoutes(app: FastifyInstance) {
       status = 'ERROR';
       lastError = e instanceof Error ? e.message : 'falha desconhecida';
     }
-    const row = await req.db.telegramBot.update({
+    await req.db.telegramBot.updateMany({
       where: { id },
       data: { status, lastError, username, lastCheckedAt: new Date() },
     });
+    const row = await req.db.telegramBot.findFirst({ where: { id } });
+    if (!row) throw ApiError.notFound('Bot não encontrado');
     return publicBot(row);
   });
 

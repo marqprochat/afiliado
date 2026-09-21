@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { prisma } from '@afilados/db';
+import { prisma, encryptJson } from '@afilados/db';
 import { buildApp } from '../src/app';
 import { createTenantWithUser, cleanupTenant, loginCookie } from './helpers';
 
@@ -80,5 +80,23 @@ describe('telegram bots', () => {
     });
     expect(r.statusCode).toBe(200);
     expect(r.json()).toMatchObject([{ chatId: '-100123', title: 'Ofertas VIP', botIsAdmin: true }]);
+  });
+
+  it('checar bot com token inválido → 200 com status ERROR (não 500)', async () => {
+    const bot = await prisma.telegramBot.create({
+      data: {
+        tenantId: t.tenantId,
+        label: 'Bot Check',
+        encryptedToken: encryptJson({ token: '000000:token-invalido-para-teste' }),
+        status: 'UNCONFIGURED',
+      },
+    });
+    const r = await app.inject({
+      method: 'POST',
+      url: `/api/v1/telegram/bots/${bot.id}/check`,
+      headers: { cookie },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({ id: bot.id, status: 'ERROR' });
   });
 });
