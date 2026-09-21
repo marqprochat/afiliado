@@ -11,6 +11,8 @@ export interface TagCredentials {
   amazonSession?: SessionCookies;
   /** Sessão logada do Magazine Você; armazenada nesta fase, sem uso na geração de link ainda. */
   magaluSession?: SessionCookies;
+  /** Credenciais da Creators API (Client ID/Secret) — usadas para buscar dados de produto via GetItems. */
+  amazonApi?: { clientId: string; clientSecret: string };
 }
 
 /** Cookies de sessão de um marketplace, sincronizados pela extensão ou colados manualmente. */

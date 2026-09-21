@@ -6,9 +6,16 @@ import {
   type TagCredentials,
 } from '@afilados/shared';
 import type { ConnectionStatus, MarketplaceAdapter } from './adapter';
-import { scrapeAmazon, scrapeMagalu, scrapeMercadoLivre } from './scrapers';
+import { scrapeMagalu, scrapeMercadoLivre } from './scrapers';
 import { generateOfficialMlLink } from './mercadolivre/official-link';
 import { generateOfficialAmazonLink } from './amazon/official-link';
+import {
+  extractAsin,
+  getItems,
+  mapCreatorsApiItem,
+  type AmazonApiCredentials,
+  type AmazonApiItem,
+} from './amazon/creators-api';
 
 export class UnsupportedError extends Error {
   constructor(message = 'operação não suportada') {
@@ -30,11 +37,48 @@ export interface TagAdapterOptions {
   ) => Promise<string>;
   /** Chamado quando o gerador oficial falha e caímos no fallback matt_word/matt_tool ou tag. */
   onOfficialLinkError?: (err: unknown, url: string) => void;
+  /** Chamador do GetItems da Creators API (injetável em testes). */
+  amazonGetItems?: (asins: string[], creds: AmazonApiCredentials) => Promise<AmazonApiItem[]>;
 }
 
 /** Cache curto de links oficiais para não bater no painel/SiteStripe a cada envio. */
 const officialLinkCache = new Map<string, { link: string; expiresAt: number }>();
 const OFFICIAL_LINK_TTL_MS = 60 * 60 * 1000;
+
+async function fetchAmazonByUrls(
+  creds: TagCredentials,
+  urls: string[],
+  amazonGetItems: (asins: string[], creds: AmazonApiCredentials) => Promise<AmazonApiItem[]>,
+): Promise<ProductData[]> {
+  const partnerTag = creds.tag;
+  const clientId = creds.amazonApi?.clientId;
+  const clientSecret = creds.amazonApi?.clientSecret;
+  if (!partnerTag || !clientId || !clientSecret) return [];
+
+  const urlByAsin = new Map<string, string>();
+  for (const url of urls) {
+    const asin = extractAsin(url);
+    if (asin) urlByAsin.set(asin, url);
+  }
+  const asins = [...urlByAsin.keys()];
+  if (asins.length === 0) return [];
+
+  let items: AmazonApiItem[];
+  try {
+    items = await amazonGetItems(asins, { clientId, clientSecret, partnerTag });
+  } catch {
+    // Sem fallback para scraping (decisão de design): a chamada falhou, nenhum produto Amazon
+    // deste lote é retornado — quem chamou trata a lista vazia como "nada encontrado".
+    return [];
+  }
+
+  const results: ProductData[] = [];
+  for (const item of items) {
+    const url = urlByAsin.get(item.asin);
+    if (url) results.push(mapCreatorsApiItem(item, url));
+  }
+  return results;
+}
 
 export function createTagAdapter(
   kind: TagKind,
@@ -45,6 +89,7 @@ export function createTagAdapter(
   const amazonOfficialLink =
     opts.amazonOfficialLink ??
     ((url, cookies, storeId) => generateOfficialAmazonLink(url, cookies, storeId));
+  const amazonGetItems = opts.amazonGetItems ?? getItems;
   return {
     kind,
     async checkConnection(creds): Promise<ConnectionStatus> {
@@ -64,17 +109,14 @@ export function createTagAdapter(
       return { ok: false, error: `Informe: ${requiredTagFields(kind).join(', ')}` };
     },
     async fetchByUrls(creds, urls: string[]): Promise<ProductData[]> {
+      if (kind === 'AMAZON') {
+        return fetchAmazonByUrls(creds, urls, amazonGetItems);
+      }
       const results: ProductData[] = [];
       for (const url of urls) {
         try {
-          let product: ProductData;
-          if (kind === 'MERCADOLIVRE') {
-            product = await scrapeMercadoLivre(url);
-          } else if (kind === 'AMAZON') {
-            product = await scrapeAmazon(url);
-          } else {
-            product = await scrapeMagalu(url);
-          }
+          const product =
+            kind === 'MERCADOLIVRE' ? await scrapeMercadoLivre(url) : await scrapeMagalu(url);
           results.push(product);
         } catch {
           // Se falhar em uma URL, continua para as próximas

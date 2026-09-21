@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseAmazonHtml, parseMagaluHtml, parseMercadoLivreHtml } from '../src';
+import { parseMagaluHtml, parseMercadoLivreHtml } from '../src';
 
 describe('Scrapers de Marketplaces (Fase 3)', () => {
   it('Mercado Livre: extrai título, preços, desconto, imagem e selo Full', () => {
@@ -84,45 +84,6 @@ describe('Scrapers de Marketplaces (Fase 3)', () => {
     expect(product.originalPrice).toBe(967.0);
     expect(product.discountPct).toBe(46);
     expect(product.shipping).toBe('FULL');
-  });
-
-  it('Amazon: extrai título, preço, preço original, desconto, imagens e frete Prime', () => {
-    const html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Echo Dot 5ª Geração | Smart speaker com Alexa | Cor Preta</title>
-        </head>
-        <body>
-          <span id="productTitle">Echo Dot 5ª Geração | Smart speaker com Alexa | Cor Preta</span>
-          <div id="basisPrice">
-            <span class="a-offscreen">R$ 429,00</span>
-          </div>
-          <div id="corePrice_feature_div">
-            <span class="a-price"><span class="a-offscreen">R$ 299,00</span></span>
-            <span class="savingPriceOverride">30% de desconto</span>
-          </div>
-          <img id="landingImage" data-old-hires="https://m.media-amazon.com/images/I/71C3554ECnL._AC_SL1000_.jpg" />
-          <i class="a-icon-prime"></i>
-          <span id="couponText">Economize R$ 20,00 com cupom</span>
-        </body>
-      </html>
-    `;
-
-    const product = parseAmazonHtml(html, 'https://www.amazon.com.br/dp/B09B8V1LZ3');
-
-    expect(product.source).toBe('AMAZON');
-    expect(product.externalId).toBe('B09B8V1LZ3');
-    expect(product.title).toBe('Echo Dot 5ª Geração | Smart speaker com Alexa | Cor Preta');
-    expect(product.price).toBe(299.0);
-    expect(product.originalPrice).toBe(429.0);
-    expect(product.discountPct).toBe(30);
-    expect(product.shipping).toBe('FREE');
-    expect(product.couponCode).toBe('CUPOM AMAZON');
-    expect(product.couponValue).toBe(20.0);
-    expect(product.images[0]).toBe(
-      'https://m.media-amazon.com/images/I/71C3554ECnL._AC_SL1000_.jpg',
-    );
   });
 
   it('Magalu: extrai título, preço, preço original, desconto e imagens', () => {
