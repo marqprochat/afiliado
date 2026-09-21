@@ -348,9 +348,10 @@ model Batch {
   session        WaSession   @relation(fields: [sessionId], references: [id])
   templateId     String
   template       Template    @relation(fields: [templateId], references: [id])
-  name           String
-  groupJids      String[]
-  intervalMin    Int
+  name            String
+  groupJids       String[]
+  telegramChatIds String[]   @default([])
+  intervalMin     Int
   mediaMode      MediaMode   @default(IMAGE)
   shuffled       Boolean     @default(false)
   status         BatchStatus @default(SCHEDULED)

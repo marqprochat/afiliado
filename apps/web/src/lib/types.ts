@@ -122,6 +122,7 @@ export interface BatchSummary {
   mediaMode: MediaMode;
   shuffled: boolean;
   groupJids: string[];
+  telegramChatIds: string[];
   estimatedEndAt: string | null;
   createdAt: string;
   total: number;

@@ -140,6 +140,7 @@ export const batchCreateSchema = z
     sessionId: z.string().min(1),
     templateId: z.string().min(1),
     groupJids: z.array(z.string().min(1)).min(1),
+    telegramChatIds: z.array(z.string().min(1)).default([]),
     intervalMin: z.number().int().min(1).max(1440),
     mediaMode: z.enum(MEDIA_MODES).default('IMAGE'),
     shuffled: z.boolean().default(false),

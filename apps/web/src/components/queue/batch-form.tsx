@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { NativeCheckbox } from '@/components/ui/native-checkbox';
 import { Switch } from '@/components/ui/switch';
 import { formatDateTime } from '@/lib/format';
+import { useTelegramAllChats } from '@/lib/queries';
 import type { Settings, Template, WaGroup, WaSession } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -42,10 +43,12 @@ export function BatchForm({
     templates.find((t) => t.isDefault)?.id ?? templates[0]?.id ?? '',
   );
   const [jids, setJids] = useState<Set<string>>(new Set());
+  const [telegramChatIds, setTelegramChatIds] = useState<Set<string>>(new Set());
   const [intervalMin, setIntervalMin] = useState(10);
   const [mediaMode, setMediaMode] = useState<'IMAGE' | 'PREVIEW'>('IMAGE');
   const [shuffled, setShuffled] = useState(false);
 
+  const { data: telegramChats } = useTelegramAllChats();
   const adminGroups = useMemo(() => groups.filter((g) => g.botIsAdmin), [groups]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -74,6 +77,7 @@ export function BatchForm({
             sessionId,
             templateId,
             groupJids: [...jids],
+            telegramChatIds: [...telegramChatIds],
             intervalMin,
             mediaMode,
             shuffled,
@@ -136,6 +140,28 @@ export function BatchForm({
           ))}
         </div>
       </div>
+      {(telegramChats?.length ?? 0) > 0 && (
+        <div>
+          <Label>Chats do Telegram (opcional, {telegramChatIds.size} selecionado(s))</Label>
+          <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded-md border border-border p-2">
+            {telegramChats?.map((c) => (
+              <label key={c.id} className="flex items-center gap-2 text-sm">
+                <NativeCheckbox
+                  checked={telegramChatIds.has(c.chatId)}
+                  onChange={(e) => {
+                    const s = new Set(telegramChatIds);
+                    if (e.target.checked) s.add(c.chatId);
+                    else s.delete(c.chatId);
+                    setTelegramChatIds(s);
+                  }}
+                  aria-label={c.title}
+                />
+                {c.title}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label htmlFor="binterval">Intervalo (minutos entre envios)</Label>

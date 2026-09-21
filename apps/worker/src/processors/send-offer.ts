@@ -11,8 +11,9 @@ import {
   renderTemplate,
 } from '@afilados/core';
 import { getTagAdapter, type MarketplaceAdapter, type ShopeeCredentials } from '@afilados/marketplaces';
-import type { ProductData, SendOfferJob, TagCredentials } from '@afilados/shared';
+import type { ProductData, SendOfferJob, SendTelegramJob, TagCredentials } from '@afilados/shared';
 import { publishEvent } from '../lib/events';
+import { enqueueSendTelegram } from '../lib/queue-helpers';
 import { getRedis } from '../lib/redis';
 import { TokenBucket, jitter, waitForToken } from '../lib/rate-limit';
 import type { OutgoingMessage, WhatsAppGateway } from '../wa/gateway';
@@ -28,6 +29,7 @@ export interface SendOfferDeps {
   bucketFor?: (sessionId: string, ratePerMin: number) => { take(): Promise<number> };
   /** Injetável em testes; por padrão resolve o adapter real (Amazon/ML/Magalu) por tag. */
   getTagAdapter?: typeof getTagAdapter;
+  enqueueTelegram?: (job: SendTelegramJob & { jobId: string }) => Promise<void>;
 }
 
 export type SendOfferResult =
@@ -49,6 +51,7 @@ export async function sendOffer(
     ((sessionId: string, rate: number) =>
       new TokenBucket(getRedis(), `wa:rate:${sessionId}`, rate));
   const resolveTagAdapter = deps.getTagAdapter ?? getTagAdapter;
+  const enqueueTelegram = deps.enqueueTelegram ?? ((job) => enqueueSendTelegram(job));
 
   const item = await prisma.batchItem.findUnique({
     where: { id: batchItemId },
@@ -128,7 +131,7 @@ export async function sendOffer(
       const bucket = bucketFor(batch.sessionId, ratePerMin);
       return sendPlainMessages(
         deps,
-        { id: item.id, productId: null },
+        { id: item.id, productId: null, couponId: item.couponId },
         batch,
         tenantId,
         { kind: 'text', text },
@@ -136,6 +139,7 @@ export async function sendOffer(
         sleep,
         rng,
         bucket,
+        enqueueTelegram,
       );
     }
     if (!product) throw new Error('BatchItem sem produto nem cupom');
@@ -200,7 +204,7 @@ export async function sendOffer(
     const bucket = bucketFor(batch.sessionId, ratePerMin);
     return sendPlainMessages(
       deps,
-      { id: item.id, productId: product.id },
+      { id: item.id, productId: product.id, couponId: null },
       batch,
       tenantId,
       message,
@@ -208,6 +212,7 @@ export async function sendOffer(
       sleep,
       rng,
       bucket,
+      enqueueTelegram,
     );
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
@@ -235,15 +240,38 @@ export async function sendOffer(
 
 async function sendPlainMessages(
   deps: SendOfferDeps,
-  item: { id: string; productId: string | null },
-  batch: { id: string; sessionId: string; groupJids: string[] },
+  item: { id: string; productId: string | null; couponId: string | null },
+  batch: {
+    id: string;
+    sessionId: string;
+    groupJids: string[];
+    telegramChatIds: string[];
+    templateId: string;
+  },
   tenantId: string,
   message: OutgoingMessage,
   now: () => Date,
   sleep: (ms: number) => Promise<void>,
   rng: () => number,
   bucket: { take(): Promise<number> },
+  enqueueTelegram: (job: SendTelegramJob & { jobId: string }) => Promise<void>,
 ): Promise<SendOfferResult> {
+  for (const chatId of batch.telegramChatIds) {
+    const chat = await prisma.telegramChat
+      .findFirst({ where: { chatId }, select: { botId: true } })
+      .catch(() => null);
+    if (!chat) continue;
+    await enqueueTelegram({
+      jobId: `${item.id}:${chatId}`,
+      tenantId,
+      botId: chat.botId,
+      chatId,
+      templateId: batch.templateId,
+      ...(item.productId ? { productId: item.productId } : {}),
+      ...(item.couponId ? { couponId: item.couponId } : {}),
+    }).catch((e) => log.warn({ batchId: batch.id, chatId, err: e }, 'falha ao enfileirar envio no telegram'));
+  }
+
   const existing = await prisma.sendLog.findMany({
     where: { batchItemId: item.id, waMessageId: { not: null } },
   });

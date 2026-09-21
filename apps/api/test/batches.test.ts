@@ -156,6 +156,53 @@ describe('batches', () => {
     expect(b.status).toBe('CANCELLED');
     expect(b.items.every((i) => i.status === 'ERROR')).toBe(true);
   });
+  it('chat do telegram desconhecido → VALIDATION', async () => {
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/v1/batches',
+      headers: { cookie },
+      payload: {
+        name: 'x',
+        sessionId,
+        templateId,
+        groupJids: ['g1@g.us'],
+        telegramChatIds: ['-100999'],
+        intervalMin: 1,
+      },
+    });
+    expect(r.statusCode).toBe(400);
+    expect(r.json().error.code).toBe('VALIDATION');
+  });
+  it('cria lote com chats do telegram válidos', async () => {
+    const bot = await prisma.telegramBot.create({
+      data: { tenantId: t.tenantId, label: 'Bot', encryptedToken: Buffer.from('x'), status: 'OK' },
+    });
+    await prisma.telegramChat.create({
+      data: {
+        tenantId: t.tenantId,
+        botId: bot.id,
+        chatId: '-100999',
+        title: 'Ofertas VIP',
+        kind: 'supergroup',
+        botIsAdmin: true,
+      },
+    });
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/v1/batches',
+      headers: { cookie },
+      payload: {
+        name: 'Lote Telegram',
+        sessionId,
+        templateId,
+        groupJids: ['g1@g.us'],
+        telegramChatIds: ['-100999'],
+        intervalMin: 1,
+      },
+    });
+    expect(r.statusCode).toBe(201);
+    expect(r.json().batch.telegramChatIds).toEqual(['-100999']);
+  });
   it('overview agrega estado', async () => {
     const r = await app.inject({ method: 'GET', url: '/api/v1/overview', headers: { cookie } });
     expect(r.json()).toMatchObject({ shopee: 'UNCONFIGURED', queue: { count: 2, limit: 500 } });

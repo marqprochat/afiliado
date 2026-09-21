@@ -35,6 +35,17 @@ export async function batchesRoutes(app: FastifyInstance) {
     const known = new Set(groups.map((g) => g.jid));
     const unknown = body.groupJids.filter((j) => !known.has(j));
     if (unknown.length) throw ApiError.validation(`Grupos desconhecidos: ${unknown.join(', ')}`);
+    if (body.telegramChatIds.length) {
+      const chats = await req.db.telegramChat.findMany({
+        where: { chatId: { in: body.telegramChatIds } },
+        select: { chatId: true },
+      });
+      const knownChats = new Set(chats.map((c) => c.chatId));
+      const unknownChats = body.telegramChatIds.filter((c) => !knownChats.has(c));
+      if (unknownChats.length) {
+        throw ApiError.validation(`Chats do Telegram desconhecidos: ${unknownChats.join(', ')}`);
+      }
+    }
     const template = await req.db.template.findFirst({ where: { id: body.templateId } });
     if (!template) throw ApiError.notFound('Template não encontrado');
 
@@ -63,6 +74,7 @@ export async function batchesRoutes(app: FastifyInstance) {
         templateId: template.id,
         name: body.name,
         groupJids: body.groupJids,
+        telegramChatIds: body.telegramChatIds,
         intervalMin: body.intervalMin,
         mediaMode: body.mediaMode,
         shuffled: body.shuffled,

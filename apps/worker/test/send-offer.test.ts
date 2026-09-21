@@ -63,6 +63,7 @@ async function makeBatch(
     mediaMode?: 'IMAGE' | 'PREVIEW';
     status?: 'SCHEDULED' | 'PAUSED';
     groups?: string[];
+    telegramChatIds?: string[];
   } = {},
 ) {
   const batch = await prisma.batch.create({
@@ -72,6 +73,7 @@ async function makeBatch(
       templateId,
       name: 'b',
       groupJids: overrides.groups ?? ['g1@g.us', 'g2@g.us'],
+      telegramChatIds: overrides.telegramChatIds ?? [],
       intervalMin: 1,
       mediaMode: overrides.mediaMode ?? 'IMAGE',
       status: overrides.status ?? 'SCHEDULED',
@@ -176,6 +178,38 @@ describe('sendOffer', () => {
       expect(m.title).toBe('Fone');
       expect(m.thumbnailUrl).toBe('https://img/x.jpg');
     }
+  });
+
+  it('lote com telegramChatIds enfileira envio no telegram por chat válido', async () => {
+    const bot = await prisma.telegramBot.create({
+      data: { tenantId, label: 'Bot', encryptedToken: encryptJson({ token: 'x' }), status: 'OK' },
+    });
+    await prisma.telegramChat.create({
+      data: {
+        tenantId,
+        botId: bot.id,
+        chatId: '-100999',
+        title: 'VIP',
+        kind: 'supergroup',
+        botIsAdmin: true,
+      },
+    });
+    const enqueued: unknown[] = [];
+    const { item } = await makeBatch({ telegramChatIds: ['-100999', '-desconhecido'] });
+    await sendOffer(
+      { ...deps, enqueueTelegram: async (job) => void enqueued.push(job) },
+      item.id,
+    );
+    expect(enqueued).toEqual([
+      {
+        jobId: `${item.id}:-100999`,
+        tenantId,
+        botId: bot.id,
+        chatId: '-100999',
+        templateId,
+        productId,
+      },
+    ]);
   });
 
   it('lote pausado → skipped sem enviar', async () => {
