@@ -39,6 +39,8 @@ export function publicConnection(
     hasSecret: Boolean(creds?.secret),
     mattWord: creds?.mattWord ?? null,
     mattTool: creds?.mattTool ?? null,
+    amazonClientId: creds?.amazonApi?.clientId ?? null,
+    hasAmazonApiSecret: Boolean(creds?.amazonApi?.clientSecret),
     // Sessões sincronizadas (cookies nunca saem daqui, só metadados)
     mlSessionSyncedAt: creds?.mlSession?.syncedAt ?? null,
     mlSessionSource: creds?.mlSession?.source ?? null,
@@ -76,6 +78,13 @@ export async function loadTagCredentials(
     throw new ApiError(
       'MARKETPLACE_ERROR',
       `${kind}: configure ${missing.join(', ')} em Configurações`,
+      400,
+    );
+  }
+  if (kind === 'AMAZON' && (!creds.amazonApi?.clientId || !creds.amazonApi?.clientSecret)) {
+    throw new ApiError(
+      'MARKETPLACE_ERROR',
+      'AMAZON: configure Client ID/Secret da Creators API em Configurações',
       400,
     );
   }

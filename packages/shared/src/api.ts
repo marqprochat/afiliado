@@ -72,6 +72,8 @@ export const marketplaceUpdateSchema = z.object({
     .string()
     .regex(/^\d{1,12}$/, 'matt_tool deve ser numérico')
     .optional(),
+  amazonClientId: z.string().min(1).optional(),
+  amazonClientSecret: z.string().min(1).optional(),
 });
 
 export const mirrorRuleSchema = z

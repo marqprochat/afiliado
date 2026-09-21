@@ -52,6 +52,16 @@ export async function marketplacesRoutes(app: FastifyInstance) {
                 // sessão manual (Amazon/Magalu) não é editável aqui; só preservada
                 ...(prev.amazonSession ? { amazonSession: prev.amazonSession } : {}),
                 ...(prev.magaluSession ? { magaluSession: prev.magaluSession } : {}),
+                // Client ID/Secret da Creators API só são substituídos quando os dois vêm
+                // juntos no body; caso contrário preserva o que já estava salvo (ou undefined).
+                ...(kind === 'AMAZON'
+                  ? {
+                      amazonApi:
+                        body.amazonClientId && body.amazonClientSecret
+                          ? { clientId: body.amazonClientId, clientSecret: body.amazonClientSecret }
+                          : prev.amazonApi,
+                    }
+                  : {}),
               },
       (merged, existing) => ({
         status: 'UNCONFIGURED',

@@ -89,6 +89,53 @@ describe('marketplaces', () => {
     });
     expect(check.json()).toMatchObject({ status: 'OK' });
   });
+  it('amazon: salva Client ID/Secret da Creators API, nunca devolve o secret, e check valida via API', async () => {
+    const put = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/marketplaces/AMAZON',
+      headers: { cookie },
+      payload: { affiliateTag: 'api-20', amazonClientId: 'cid-1', amazonClientSecret: 's3gredo' },
+    });
+    expect(put.statusCode).toBe(200);
+    expect(put.json()).toMatchObject({
+      kind: 'AMAZON',
+      affiliateTag: 'api-20',
+      amazonClientId: 'cid-1',
+      hasAmazonApiSecret: true,
+    });
+    expect(JSON.stringify(put.json())).not.toContain('s3gredo');
+
+    const row = await prisma.marketplaceConnection.findFirstOrThrow({
+      where: { tenantId: t.tenantId, kind: 'AMAZON' },
+    });
+    const creds = decryptJson<{ amazonApi?: { clientId: string; clientSecret: string } }>(
+      Buffer.from(row.encryptedCredentials!),
+    );
+    expect(creds.amazonApi).toEqual({ clientId: 'cid-1', clientSecret: 's3gredo' });
+  });
+
+  it('amazon: PUT parcial sem os dois campos da API preserva amazonApi já salvo', async () => {
+    await app.inject({
+      method: 'PUT',
+      url: '/api/v1/marketplaces/AMAZON',
+      headers: { cookie },
+      payload: { amazonClientId: 'cid-2', amazonClientSecret: 's3gredo2' },
+    });
+    const put = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/marketplaces/AMAZON',
+      headers: { cookie },
+      payload: { affiliateTag: 'outra-tag-20' },
+    });
+    expect(put.json()).toMatchObject({ hasAmazonApiSecret: true, amazonClientId: 'cid-2' });
+    const row = await prisma.marketplaceConnection.findFirstOrThrow({
+      where: { tenantId: t.tenantId, kind: 'AMAZON' },
+    });
+    const creds = decryptJson<{ amazonApi?: { clientId: string; clientSecret: string } }>(
+      Buffer.from(row.encryptedCredentials!),
+    );
+    expect(creds.amazonApi).toEqual({ clientId: 'cid-2', clientSecret: 's3gredo2' });
+  });
   it('mercado livre: exige matt_word e matt_tool juntos', async () => {
     const put1 = await app.inject({
       method: 'PUT',
