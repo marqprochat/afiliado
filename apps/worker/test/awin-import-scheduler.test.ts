@@ -7,7 +7,7 @@ let tenantId: string;
 beforeAll(async () => {
   tenantId = (await prisma.tenant.create({ data: { name: 'awin-scheduler-test' } })).id;
   await prisma.marketplaceConnection.create({
-    data: { tenantId, kind: 'AWIN', status: 'OK', encryptedCredentials: encryptJson({ publisherId: 'p', datafeedApiKey: 'k', feedIds: ['f1'] }) },
+    data: { tenantId, kind: 'AWIN', status: 'OK', encryptedCredentials: encryptJson({ feedListUrl: 'https://ui.awin.com/feedList/secret', feedIds: ['f1'] }) },
   });
 });
 afterAll(async () => {

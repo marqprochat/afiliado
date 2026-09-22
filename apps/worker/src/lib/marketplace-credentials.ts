@@ -26,10 +26,10 @@ export async function loadAwinCredentials(tenantId: string): Promise<AwinCredent
   const creds = row?.encryptedCredentials
     ? decryptJson<AwinCredentials>(Buffer.from(row.encryptedCredentials))
     : ({} as Partial<AwinCredentials>);
-  if (!creds.publisherId || !creds.datafeedApiKey || !creds.feedIds?.length) {
-    throw new Error('AWIN: configure Publisher ID, Datafeed API Key e ao menos um Feed ID');
+  if (!creds.feedListUrl) {
+    throw new Error('AWIN: configure o link da lista de feeds');
   }
-  return creds as AwinCredentials;
+  return { feedListUrl: creds.feedListUrl, feedIds: creds.feedIds ?? [] };
 }
 
 export async function loadAliexpressCredentials(tenantId: string): Promise<AliexpressCredentials> {
