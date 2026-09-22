@@ -221,6 +221,7 @@ enum ProductSource {
   MERCADOLIVRE
   AMAZON
   MAGALU
+  AWIN
   MANUAL
 }
 
