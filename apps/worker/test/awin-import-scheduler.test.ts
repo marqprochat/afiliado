@@ -23,3 +23,26 @@ describe('AwinImportScheduler.tick', () => {
     expect(enqueued).toContain(tenantId);
   });
 });
+
+describe('AwinImportScheduler.start', () => {
+  it('dispara um tick imediato ao iniciar, sem esperar o intervalo', async () => {
+    const enqueued: string[] = [];
+    let resolveEnqueue!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      resolveEnqueue = resolve;
+    });
+    const scheduler = new AwinImportScheduler({
+      enqueue: async (t) => {
+        enqueued.push(t);
+        resolveEnqueue();
+      },
+    });
+    scheduler.start();
+    try {
+      await gate;
+      expect(enqueued).toContain(tenantId);
+    } finally {
+      scheduler.stop();
+    }
+  });
+});

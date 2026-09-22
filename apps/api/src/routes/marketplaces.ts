@@ -17,6 +17,7 @@ import { requireAuth } from '../plugins/auth';
 import {
   getAdapter,
   getShopeeAdapter,
+  loadAwinCredentials,
   publicConnection,
   upsertMarketplaceCredentials,
 } from '../lib/marketplaces';
@@ -136,6 +137,9 @@ export async function marketplacesRoutes(app: FastifyInstance) {
   });
 
   app.post('/marketplaces/awin/import', async (req) => {
+    // Valida as credenciais antes de enfileirar — sem isso, um tenant sem AWIN configurada
+    // recebe { queued: true } mas o job roda e não faz nada (importAwinCatalog retorna []).
+    await loadAwinCredentials(req.db);
     const q = getQueue<AwinImportJob>(QUEUE_AWIN_IMPORT);
     await q.add(
       'awin-import',

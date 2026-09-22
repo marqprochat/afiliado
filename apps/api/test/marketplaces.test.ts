@@ -319,4 +319,17 @@ describe('marketplaces', () => {
     expect(r.statusCode).toBe(200);
     expect(r.json()).toEqual({ queued: true });
   });
+
+  it('POST /marketplaces/awin/import sem credenciais configuradas responde com erro, não enfileira', async () => {
+    const other = await createTenantWithUser();
+    const otherCookie = await loginCookie(app, other.email, other.password);
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/v1/marketplaces/awin/import',
+      headers: { cookie: otherCookie },
+    });
+    expect(r.statusCode).toBe(400);
+    expect(r.json()).toMatchObject({ error: { code: 'MARKETPLACE_ERROR' } });
+    await cleanupTenant(other.tenantId);
+  });
 });

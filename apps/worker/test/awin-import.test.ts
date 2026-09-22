@@ -82,4 +82,43 @@ describe('importAwinCatalog', () => {
     expect(results).toEqual([]);
     await prisma.tenant.deleteMany({ where: { id: other } });
   });
+
+  it('não poda o catálogo existente quando o feed retorna 0 produtos válidos', async () => {
+    const tenant2 = (await prisma.tenant.create({ data: { name: 'awin-import-empty-feed' } })).id;
+    await prisma.marketplaceConnection.create({
+      data: {
+        tenantId: tenant2,
+        kind: 'AWIN',
+        status: 'OK',
+        encryptedCredentials: encryptJson({ publisherId: 'pub2', datafeedApiKey: 'key2', feedIds: ['f1'] }),
+      },
+    });
+    await prisma.awinCatalogProduct.create({
+      data: {
+        tenantId: tenant2,
+        feedId: 'f1',
+        externalId: 'existing-1',
+        title: 'Produto Existente',
+        price: 10,
+        deepLink: 'https://www.awin1.com/cread.php?x=existing',
+        raw: {},
+        lastImportedAt: new Date('2020-01-01'),
+      },
+    });
+
+    const deps = {
+      listDatafeeds: async () => [
+        { advertiserId: '1', advertiserName: 'Loja 1', feedId: 'f1', feedName: 'Feed 1', url: 'https://x/f1' },
+      ],
+      downloadFeed: async () => [],
+    };
+
+    const results = await importAwinCatalog(deps, tenant2);
+    expect(results).toEqual([{ feedId: 'f1', ok: true, imported: 0, removed: 0 }]);
+
+    const rows = await prisma.awinCatalogProduct.findMany({ where: { tenantId: tenant2 } });
+    expect(rows.map((r) => r.externalId)).toEqual(['existing-1']);
+
+    await prisma.tenant.deleteMany({ where: { id: tenant2 } });
+  });
 });

@@ -72,6 +72,6 @@ export function rewriteLinks(text: string, replacements: Map<string, string>): s
   return out;
 }
 
-export function productKey(parsed: { source: string; externalId: string }): string {
-  return `${parsed.source}:${parsed.externalId}`;
+export function productKey(parsed: { source: string; externalId?: string }): string {
+  return `${parsed.source}:${parsed.externalId ?? ''}`;
 }

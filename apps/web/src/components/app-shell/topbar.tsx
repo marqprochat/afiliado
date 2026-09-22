@@ -7,6 +7,7 @@ const LABEL: Record<string, string> = {
   MERCADOLIVRE: 'Mercado Livre',
   AMAZON: 'Amazon',
   MAGALU: 'Magalu',
+  AWIN: 'Awin',
 };
 
 export function Topbar() {

@@ -4,6 +4,7 @@ import { mapAwinCatalogRowToProductData } from '../src/awin';
 describe('mapAwinCatalogRowToProductData', () => {
   it('mapeia uma linha do cache para ProductData com source AWIN', () => {
     const result = mapAwinCatalogRowToProductData({
+      feedId: 'f1',
       externalId: 'p1',
       title: 'Fone Bluetooth',
       price: 99.9,
@@ -14,7 +15,7 @@ describe('mapAwinCatalogRowToProductData', () => {
     });
     expect(result).toEqual({
       source: 'AWIN',
-      externalId: 'p1',
+      externalId: 'f1:p1',
       title: 'Fone Bluetooth',
       price: 99.9,
       originalPrice: 129.9,
@@ -27,6 +28,7 @@ describe('mapAwinCatalogRowToProductData', () => {
 
   it('omite originalPrice e images quando ausentes', () => {
     const result = mapAwinCatalogRowToProductData({
+      feedId: 'f1',
       externalId: 'p2',
       title: 'Caneca',
       price: 20,

@@ -56,7 +56,7 @@ describe('fetchAwinCatalogByUrls', () => {
     const db = forTenant(tenantId);
     const found = await fetchAwinCatalogByUrls(db, ['https://www.awin1.com/cread.php?x=1', 'https://naoexiste']);
     expect(found).toHaveLength(1);
-    expect(found[0]!.externalId).toBe('p1');
+    expect(found[0]!.externalId).toBe('f1:p1');
   });
 
   it('retorna vazio para lista de urls vazia', async () => {

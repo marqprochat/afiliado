@@ -2,6 +2,7 @@ import type { TenantClient } from '@afilados/db';
 import { mapAwinCatalogRowToProductData, type ProductData } from '@afilados/shared';
 
 function toRow(r: {
+  feedId: string;
   externalId: string;
   title: string;
   price: unknown;
@@ -11,6 +12,7 @@ function toRow(r: {
   raw: unknown;
 }) {
   return {
+    feedId: r.feedId,
     externalId: r.externalId,
     title: r.title,
     price: Number(r.price),

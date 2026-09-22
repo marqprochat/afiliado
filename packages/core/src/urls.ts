@@ -1,7 +1,7 @@
 import type { MarketplaceKind } from '@afilados/shared';
 
 export type ParsedProductUrl =
-  | { source: MarketplaceKind; externalId: string; shopId?: string }
+  | { source: MarketplaceKind; externalId?: string; shopId?: string }
   | { source: 'UNSUPPORTED'; reason: string };
 
 export function parseProductUrl(raw: string): ParsedProductUrl {
@@ -40,8 +40,10 @@ export function parseProductUrl(raw: string): ParsedProductUrl {
     if (m) return { source: 'MAGALU', externalId: m[1]! };
   }
   if (host === 'awin1.com') {
-    const awinmid = u.searchParams.get('awinmid');
-    return { source: 'AWIN', externalId: awinmid ?? 'unknown' };
+    // O deep link da Awin não expõe um id de produto recuperável — awinmid é o id do
+    // anunciante, não do produto. Sem externalId, upsertProducts cai no fallback de
+    // sha1(originalUrl) para deduplicar.
+    return { source: 'AWIN' };
   }
   return { source: 'UNSUPPORTED', reason: `Domínio ou formato não reconhecido: ${host}${path}` };
 }

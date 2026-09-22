@@ -83,6 +83,16 @@ export async function importAwinCatalog(
         });
         imported++;
       }
+      if (imported === 0) {
+        // Download vazio ou todas as linhas falharam mapAwinRow (coluna renomeada, arquivo
+        // truncado etc.) — pular a poda evita zerar um catálogo que já existia e estava bom.
+        log.warn(
+          { tenantId, feedId },
+          'feed retornou 0 produtos válidos — pulando poda para não zerar o catálogo',
+        );
+        results.push({ feedId, ok: true, imported: 0, removed: 0 });
+        continue;
+      }
       const pruned = await prisma.awinCatalogProduct.deleteMany({
         where: { tenantId, feedId, lastImportedAt: { lt: runStartedAt } },
       });

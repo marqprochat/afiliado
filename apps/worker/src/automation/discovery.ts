@@ -143,6 +143,7 @@ async function discoverAwin(rule: AutomationRule, keyword: string): Promise<Prod
   });
   return rows.map((r) =>
     mapAwinCatalogRowToProductData({
+      feedId: r.feedId,
       externalId: r.externalId,
       title: r.title,
       price: Number(r.price),

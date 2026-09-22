@@ -19,6 +19,9 @@ const baseConnection: MarketplaceConnection = {
   amazonSessionSource: null,
   magaluSessionSyncedAt: null,
   magaluSessionSource: null,
+  awinPublisherId: null,
+  hasAwinDatafeedApiKey: false,
+  awinFeedIds: [],
   lastCheckedAt: null,
   lastError: null,
 };
