@@ -47,7 +47,7 @@ const waWorker = new Worker<WaCommandJob>(QUEUE_WA_COMMANDS, processWaCommand(ma
 });
 const sendWorker = new Worker<SendOfferJob>(
   QUEUE_SEND_OFFER,
-  processSendOffer({ gateway, shopee: createShopeeAdapter() }),
+  processSendOffer({ gateway, shopee: createShopeeAdapter(), awin: createAwinAdapter() }),
   { connection: getRedis(), concurrency: 1 },
 );
 const mirrorWorker = new Worker<MirrorMessageJob>(
@@ -63,7 +63,7 @@ const enrichWorker = new Worker<ProductEnrichJob>(
 );
 const telegramWorker = new Worker<SendTelegramJob>(
   QUEUE_SEND_TELEGRAM,
-  processSendTelegram({ shopee: createShopeeAdapter() }),
+  processSendTelegram({ shopee: createShopeeAdapter(), awin: createAwinAdapter() }),
   { connection: getRedis(), concurrency: 2 },
 );
 const awinImportWorker = new Worker<AwinImportJob>(QUEUE_AWIN_IMPORT, createAwinImportProcessor(), {

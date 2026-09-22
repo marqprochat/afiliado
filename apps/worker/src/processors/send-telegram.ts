@@ -2,7 +2,7 @@ import type { Job } from 'bullmq';
 import pino from 'pino';
 import { prisma, decryptJson } from '@afilados/db';
 import { generateSubId, isEligibleCoupon, renderCouponTemplate, renderTemplate } from '@afilados/core';
-import { getTagAdapter, type MarketplaceAdapter, type ShopeeCredentials } from '@afilados/marketplaces';
+import { getTagAdapter, type AwinCredentials, type MarketplaceAdapter, type ShopeeCredentials } from '@afilados/marketplaces';
 import { TelegramClient } from '@afilados/telegram';
 import type { ProductData, SendTelegramJob, TagCredentials } from '@afilados/shared';
 
@@ -10,6 +10,7 @@ const log = pino({ name: 'send-telegram' });
 
 export interface SendTelegramDeps {
   shopee: MarketplaceAdapter<ShopeeCredentials>;
+  awin: MarketplaceAdapter<AwinCredentials>;
   now?: () => Date;
   getTagAdapter?: typeof getTagAdapter;
   makeClient?: (token: string) => TelegramClient;
@@ -71,7 +72,20 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
         const creds = decryptJson<ShopeeCredentials>(Buffer.from(conn.encryptedCredentials));
         const subId = generateSubId(subIdPattern, { now: t, batchId: job.botId });
         affiliateLink = await deps.shopee.toAffiliateLink(creds, product.originalUrl, subId);
-      } else if (product.source !== 'SHOPEE' && product.source !== 'MANUAL' && conn?.encryptedCredentials) {
+      } else if (product.source === 'AWIN' && conn?.encryptedCredentials) {
+        const creds = decryptJson<AwinCredentials>(Buffer.from(conn.encryptedCredentials));
+        const subId = generateSubId(subIdPattern, { now: t, batchId: job.botId });
+        try {
+          affiliateLink = await deps.awin.toAffiliateLink(creds, product.originalUrl, subId);
+        } catch (err) {
+          log.warn({ botId: job.botId, err }, 'falha ao gerar link de afiliado da Awin; usando link original');
+        }
+      } else if (
+        product.source !== 'SHOPEE' &&
+        product.source !== 'AWIN' &&
+        product.source !== 'MANUAL' &&
+        conn?.encryptedCredentials
+      ) {
         const creds = decryptJson<TagCredentials>(Buffer.from(conn.encryptedCredentials));
         try {
           affiliateLink = await resolveTagAdapter(product.source).toAffiliateLink(
