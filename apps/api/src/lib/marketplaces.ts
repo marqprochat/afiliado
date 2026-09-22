@@ -8,7 +8,9 @@ import {
 import {
   createShopeeAdapter,
   getAdapter,
+  getAwinAdapter,
   getTagAdapter,
+  type AwinCredentials,
   type MarketplaceAdapter,
   type ShopeeCredentials,
 } from '@afilados/marketplaces';
@@ -20,7 +22,13 @@ export function getShopeeAdapter() {
   return shopee;
 }
 
-type AnyCreds = { appId?: string; secret?: string } & TagCredentials;
+type AnyCreds = {
+  appId?: string;
+  secret?: string;
+  publisherId?: string;
+  datafeedApiKey?: string;
+  feedIds?: string[];
+} & TagCredentials;
 /** Mesmos campos de `AnyCreds`, mas aceitando `undefined` explícito nos merges (`a ?? b`). */
 type LooseCreds = { [K in keyof AnyCreds]?: AnyCreds[K] | undefined };
 
@@ -41,6 +49,9 @@ export function publicConnection(
     mattTool: creds?.mattTool ?? null,
     amazonClientId: creds?.amazonApi?.clientId ?? null,
     hasAmazonApiSecret: Boolean(creds?.amazonApi?.clientSecret),
+    awinPublisherId: creds?.publisherId ?? null,
+    hasAwinDatafeedApiKey: Boolean(creds?.datafeedApiKey),
+    awinFeedIds: creds?.feedIds ?? [],
     // Sessões sincronizadas (cookies nunca saem daqui, só metadados)
     mlSessionSyncedAt: creds?.mlSession?.syncedAt ?? null,
     mlSessionSource: creds?.mlSession?.source ?? null,
@@ -91,6 +102,21 @@ export async function loadTagCredentials(
   return creds;
 }
 
+export async function loadAwinCredentials(db: TenantClient): Promise<AwinCredentials> {
+  const row = await db.marketplaceConnection.findFirst({ where: { kind: 'AWIN' } });
+  const creds = row?.encryptedCredentials
+    ? decryptJson<AwinCredentials>(Buffer.from(row.encryptedCredentials))
+    : ({} as Partial<AwinCredentials>);
+  if (!creds.publisherId || !creds.datafeedApiKey || !creds.feedIds?.length) {
+    throw new ApiError(
+      'MARKETPLACE_ERROR',
+      'AWIN: configure Publisher ID, Datafeed API Key e ao menos um Feed ID em Configurações',
+      400,
+    );
+  }
+  return creds as AwinCredentials;
+}
+
 /**
  * Decripta as credenciais atuais de um marketplace, aplica `mutate` para produzir as
  * novas credenciais, criptografa e faz upsert da linha (create se ainda não existir,
@@ -139,4 +165,4 @@ export async function upsertMarketplaceCredentials(
   return (await db.marketplaceConnection.findFirst({ where: { kind } }))!;
 }
 
-export { getAdapter, getTagAdapter };
+export { getAdapter, getAwinAdapter, getTagAdapter };
