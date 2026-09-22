@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+﻿import { PrismaClient } from '@prisma/client';
 
 export * from '@prisma/client';
 export * from './crypto';
@@ -31,6 +31,7 @@ const TENANT_MODELS = new Set([
   'AutomationQueueItem',
   'TelegramBot',
   'TelegramChat',
+  'AwinCatalogProduct',
 ]);
 
 const FILTERED_OPS = new Set([
@@ -44,22 +45,22 @@ const FILTERED_OPS = new Set([
   'groupBy',
 ]);
 
-/** Operações por chave única que não podem ser escopadas por tenant via `where` — são rejeitadas. */
+/** OperaÃ§Ãµes por chave Ãºnica que nÃ£o podem ser escopadas por tenant via `where` â€” sÃ£o rejeitadas. */
 const UNSAFE_OPS = new Set(['findUnique', 'findUniqueOrThrow', 'update', 'delete']);
 
 /**
  * Client escopado por tenant: injeta `tenantId` em `where` de leituras/updateMany/deleteMany
  * e em `data` de create/createMany/upsert. Modelos sem tenantId (Session, BatchItem, WaAuthKey)
- * passam direto — são alcançados via relações já escopadas.
+ * passam direto â€” sÃ£o alcanÃ§ados via relaÃ§Ãµes jÃ¡ escopadas.
  *
- * Atenção: `findUnique`/`findUniqueOrThrow`/`update`/`delete` por chave única agora lançam erro
- * em vez de passar direto (o Prisma não aceita campos extras no where único, então não dá para
- * escopá-los por tenant). Sempre localize com `findFirst` escopado antes de mutar, e use
- * `updateMany`/`deleteMany` para a mutação.
+ * AtenÃ§Ã£o: `findUnique`/`findUniqueOrThrow`/`update`/`delete` por chave Ãºnica agora lanÃ§am erro
+ * em vez de passar direto (o Prisma nÃ£o aceita campos extras no where Ãºnico, entÃ£o nÃ£o dÃ¡ para
+ * escopÃ¡-los por tenant). Sempre localize com `findFirst` escopado antes de mutar, e use
+ * `updateMany`/`deleteMany` para a mutaÃ§Ã£o.
  *
- * Limitação de tipos conhecida: o `$extends` do Prisma não estreita o tipo de entrada de
- * `create()`/`createMany()`/`upsert()` — o TypeScript ainda exige `tenantId`/`tenant` mesmo que
- * a extensão os injete em runtime. Até isso ser melhorado, quem chamar `create` (etc.) no client
+ * LimitaÃ§Ã£o de tipos conhecida: o `$extends` do Prisma nÃ£o estreita o tipo de entrada de
+ * `create()`/`createMany()`/`upsert()` â€” o TypeScript ainda exige `tenantId`/`tenant` mesmo que
+ * a extensÃ£o os injete em runtime. AtÃ© isso ser melhorado, quem chamar `create` (etc.) no client
  * escopado deve usar `// @ts-expect-error` no site da chamada ou passar `tenantId` explicitamente.
  */
 export function forTenant(tenantId: string) {
@@ -70,7 +71,7 @@ export function forTenant(tenantId: string) {
           if (!TENANT_MODELS.has(model)) return query(args);
           if (UNSAFE_OPS.has(operation)) {
             throw new Error(
-              `forTenant: operação ${operation} em ${model} não é escopada por tenant; use findFirst/updateMany/deleteMany`,
+              `forTenant: operaÃ§Ã£o ${operation} em ${model} nÃ£o Ã© escopada por tenant; use findFirst/updateMany/deleteMany`,
             );
           }
           const a = args as {
@@ -92,3 +93,4 @@ export function forTenant(tenantId: string) {
   });
 }
 export type TenantClient = ReturnType<typeof forTenant>;
+

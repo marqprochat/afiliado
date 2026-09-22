@@ -1,4 +1,4 @@
-export * from './enums';
+﻿export * from './enums';
 export * from './product';
 export * from './search';
 export * from './template';
@@ -9,3 +9,5 @@ export * from './api';
 export * from './marketplaces';
 export * from './cookie-parser';
 export * from './automation';
+export * from './awin';
+

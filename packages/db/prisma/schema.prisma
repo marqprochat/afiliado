@@ -1,4 +1,4 @@
-generator client {
+﻿generator client {
   provider = "prisma-client-js"
 }
 
@@ -35,6 +35,7 @@ model Tenant {
   automationQueueItems AutomationQueueItem[]
   telegramBots      TelegramBot[]
   telegramChats     TelegramChat[]
+  awinCatalogProducts AwinCatalogProduct[]
 }
 
 enum UserRole {
@@ -158,6 +159,7 @@ enum MarketplaceKind {
   MERCADOLIVRE
   AMAZON
   MAGALU
+  AWIN
 }
 
 enum ConnectionStatus {
@@ -256,6 +258,26 @@ model Product {
   automationQueueItems AutomationQueueItem[]
 
   @@unique([tenantId, source, externalId])
+}
+
+model AwinCatalogProduct {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  feedId         String
+  advertiserId   String?
+  advertiserName String?
+  externalId     String
+  title          String
+  price          Decimal  @db.Decimal(12, 2)
+  originalPrice  Decimal? @db.Decimal(12, 2)
+  imageUrl       String?
+  deepLink       String
+  raw            Json
+  lastImportedAt DateTime @default(now())
+
+  @@unique([tenantId, feedId, externalId])
+  @@index([tenantId, title])
 }
 
 enum QueueItemStatus {
@@ -544,7 +566,7 @@ model AutomationQueueItem {
   product      Product?               @relation(fields: [productId], references: [id], onDelete: Cascade)
   couponId     String?
   coupon       Coupon?                @relation(fields: [couponId], references: [id], onDelete: Cascade)
-  // Só usado quando kind = COUPON: o template de cupom escolhido na inserção manual
+  // SÃ³ usado quando kind = COUPON: o template de cupom escolhido na inserÃ§Ã£o manual
   templateId   String?
   template     Template?              @relation("QueueItemCouponTemplate", fields: [templateId], references: [id])
   manual       Boolean                @default(false)
@@ -560,7 +582,7 @@ model ScheduledMessage {
   tenantId  String
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   body      String
-  times     String[] // "HH:mm", até 3
+  times     String[] // "HH:mm", atÃ© 3
   groupJids String[]
   enabled   Boolean  @default(true)
 }
@@ -578,3 +600,4 @@ model ApiToken {
 
   @@index([tenantId])
 }
+

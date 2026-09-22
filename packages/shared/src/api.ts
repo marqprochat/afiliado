@@ -1,4 +1,4 @@
-import { z } from 'zod';
+﻿import { z } from 'zod';
 import { MARKETPLACE_KINDS, MEDIA_MODES, MIRROR_LOG_STATUSES, MIRROR_MODES, SHIPPINGS } from './enums';
 
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'formato HH:mm');
@@ -26,11 +26,11 @@ export const waConnectSchema = z
       .optional(),
   })
   .refine((v) => v.mode !== 'pair' || !!v.phone, {
-    message: 'phone obrigatório no modo pair',
+    message: 'phone obrigatÃ³rio no modo pair',
     path: ['phone'],
   });
 
-const waPhone = z.string().regex(/^\d{10,15}$/, 'telefone deve ter só dígitos (DDI+DDD+número)');
+const waPhone = z.string().regex(/^\d{10,15}$/, 'telefone deve ter sÃ³ dÃ­gitos (DDI+DDD+nÃºmero)');
 
 export const groupCreateSchema = z.object({
   subject: z.string().trim().min(1).max(25),
@@ -59,7 +59,7 @@ export const telegramBotCreateSchema = z.object({
   token: z
     .string()
     .trim()
-    .regex(/^\d+:[A-Za-z0-9_-]{30,}$/, 'token do BotFather inválido'),
+    .regex(/^\d+:[A-Za-z0-9_-]{30,}$/, 'token do BotFather invÃ¡lido'),
 });
 
 export const marketplaceKindParam = z.enum(MARKETPLACE_KINDS);
@@ -70,7 +70,7 @@ export const marketplaceUpdateSchema = z.object({
   mattWord: z.string().min(1).max(60).optional(),
   mattTool: z
     .string()
-    .regex(/^\d{1,12}$/, 'matt_tool deve ser numérico')
+    .regex(/^\d{1,12}$/, 'matt_tool deve ser numÃ©rico')
     .optional(),
   amazonClientId: z.string().min(1).optional(),
   amazonClientSecret: z.string().min(1).optional(),
@@ -89,7 +89,7 @@ export const mirrorRuleSchema = z
     enabled: z.boolean().default(true),
   })
   .refine((r) => !r.sourceJids.some((j) => r.targetJids.includes(j)), {
-    message: 'um grupo não pode ser origem e destino ao mesmo tempo',
+    message: 'um grupo nÃ£o pode ser origem e destino ao mesmo tempo',
     path: ['targetJids'],
   });
 export type MirrorRuleBody = z.infer<typeof mirrorRuleSchema>;
@@ -100,8 +100,8 @@ export const mirrorLogsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 
-// Metadados opcionais já extraídos pela extensão a partir do DOM de uma página de busca/listagem
-// (mesma técnica usada pelo botão de captura única) — quando presentes, o backend pula o scraping
+// Metadados opcionais jÃ¡ extraÃ­dos pela extensÃ£o a partir do DOM de uma pÃ¡gina de busca/listagem
+// (mesma tÃ©cnica usada pelo botÃ£o de captura Ãºnica) â€” quando presentes, o backend pula o scraping
 // (que para ML/Magalu esbarra em bloqueio anti-bot) e usa os dados diretamente.
 export const productsImportItemSchema = z.object({
   url: z.string().url(),
@@ -176,7 +176,7 @@ export const extensionCaptureSchema = z.object({
 export type ExtensionCaptureBody = z.infer<typeof extensionCaptureSchema>;
 
 export const extensionSessionSchema = z.object({
-  // Só o Mercado Livre usa sessão logada (gerador oficial meli.la)
+  // SÃ³ o Mercado Livre usa sessÃ£o logada (gerador oficial meli.la)
   marketplaceKind: z.literal('MERCADOLIVRE'),
   cookies: z
     .record(z.string().min(1).max(64), z.string().max(4096))
@@ -207,3 +207,4 @@ export type QueueSelectBody = z.infer<typeof queueSelectSchema>;
 export type TemplateBody = z.infer<typeof templateSchema>;
 export type TemplatePreviewBody = z.infer<typeof templatePreviewSchema>;
 export type BatchCreateBody = z.infer<typeof batchCreateSchema>;
+
