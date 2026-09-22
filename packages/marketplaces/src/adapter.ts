@@ -10,6 +10,12 @@ export interface ShopeeCredentials {
   secret: string;
 }
 
+export interface AwinCredentials {
+  publisherId: string;
+  datafeedApiKey: string;
+  feedIds: string[];
+}
+
 export interface MarketplaceAdapter<C = unknown> {
   readonly kind: MarketplaceKind;
   checkConnection(creds: C): Promise<ConnectionStatus>;
