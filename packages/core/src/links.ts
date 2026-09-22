@@ -61,6 +61,8 @@ export function buildAffiliateUrl(
     }
     case 'SHOPEE':
       throw new Error('Shopee usa a API (generateShortLink)');
+    case 'AWIN':
+      throw new Error('Awin usa o adapter dedicado (toAffiliateLink)');
   }
 }
 
