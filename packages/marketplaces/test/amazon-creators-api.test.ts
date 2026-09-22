@@ -6,6 +6,7 @@ function fetchReturning(status: number, body: unknown): typeof fetch {
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,
+    text: async () => JSON.stringify(body),
   })) as unknown as typeof fetch;
 }
 

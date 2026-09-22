@@ -71,6 +71,24 @@ export function resetAmazonApiState(): void {
  * indefinidamente a request/job que a espera. Um abort vira `AmazonApiError` claro em vez de
  * um `AbortError` bruto vazando para quem chamou.
  */
+/**
+ * Erros da Creators API vêm como JSON `{ message, reason, type }` (ex.: reason
+ * "AssociateNotEligible" quando a conta de Associados não atende ao requisito de vendas dos
+ * últimos 30 dias). Usamos isso na mensagem de erro em vez de um texto fixo genérico, já que
+ * "credenciais inválidas" seria enganoso para esse caso (a credencial está certa; a conta é que
+ * ainda não tem acesso liberado).
+ */
+function describeAmazonErrorBody(bodyText: string): string {
+  try {
+    const parsed = JSON.parse(bodyText) as { message?: string; reason?: string };
+    if (parsed.reason && parsed.message) return `${parsed.reason}: ${parsed.message}`;
+    if (parsed.message) return parsed.message;
+  } catch {
+    // corpo não é JSON — usa o texto bruto mesmo
+  }
+  return bodyText || '<sem corpo>';
+}
+
 async function fetchWithTimeout(
   doFetch: typeof fetch,
   url: string,
@@ -107,7 +125,11 @@ export async function getAccessToken(
     }),
   });
   if (res.status === 401 || res.status === 403) {
-    throw new AmazonApiError('Credenciais da Creators API inválidas', 'AMAZON_API_UNAUTHORIZED');
+    const bodyText = await res.text().catch(() => '');
+    throw new AmazonApiError(
+      `Credenciais da Creators API inválidas (${describeAmazonErrorBody(bodyText)})`,
+      'AMAZON_API_UNAUTHORIZED',
+    );
   }
   if (!res.ok) {
     throw new AmazonApiError(`Token da Creators API respondeu HTTP ${res.status}`, 'AMAZON_API_ERROR');
@@ -204,7 +226,11 @@ async function getItemsBatch(
     }),
   });
   if (res.status === 401 || res.status === 403) {
-    throw new AmazonApiError('Credenciais da Creators API inválidas', 'AMAZON_API_UNAUTHORIZED');
+    const bodyText = await res.text().catch(() => '');
+    throw new AmazonApiError(
+      `Credenciais da Creators API inválidas (${describeAmazonErrorBody(bodyText)})`,
+      'AMAZON_API_UNAUTHORIZED',
+    );
   }
   if (res.status === 429) {
     throw new AmazonApiError('Cota da Creators API excedida (429)', 'AMAZON_API_RATE_LIMITED');
