@@ -67,6 +67,9 @@ export interface MarketplaceConnection {
   awinPublisherId: string | null;
   hasAwinDatafeedApiKey: boolean;
   awinFeedIds: string[];
+  aliexpressAppKey: string | null;
+  hasAliexpressAppSecret: boolean;
+  aliexpressTrackingId: string | null;
   /** Sessão do ML sincronizada (extensão ou colagem manual); gera link oficial meli.la. */
   mlSessionSyncedAt: string | null;
   mlSessionSource: 'extension' | 'manual' | null;

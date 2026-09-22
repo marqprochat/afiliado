@@ -2,7 +2,14 @@ import type { Job } from 'bullmq';
 import pino from 'pino';
 import { prisma, decryptJson } from '@afilados/db';
 import { generateSubId, isEligibleCoupon, renderCouponTemplate, renderTemplate } from '@afilados/core';
-import { getTagAdapter, type AwinCredentials, type MarketplaceAdapter, type ShopeeCredentials } from '@afilados/marketplaces';
+import {
+  getAliexpressAdapter,
+  getTagAdapter,
+  type AliexpressCredentials,
+  type AwinCredentials,
+  type MarketplaceAdapter,
+  type ShopeeCredentials,
+} from '@afilados/marketplaces';
 import { TelegramClient } from '@afilados/telegram';
 import type { ProductData, SendTelegramJob, TagCredentials } from '@afilados/shared';
 
@@ -11,6 +18,7 @@ const log = pino({ name: 'send-telegram' });
 export interface SendTelegramDeps {
   shopee: MarketplaceAdapter<ShopeeCredentials>;
   awin: MarketplaceAdapter<AwinCredentials>;
+  aliexpress?: MarketplaceAdapter<AliexpressCredentials>;
   now?: () => Date;
   getTagAdapter?: typeof getTagAdapter;
   makeClient?: (token: string) => TelegramClient;
@@ -80,9 +88,19 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
         } catch (err) {
           log.warn({ botId: job.botId, err }, 'falha ao gerar link de afiliado da Awin; usando link original');
         }
+      } else if (product.source === 'ALIEXPRESS' && conn?.encryptedCredentials) {
+        const creds = decryptJson<AliexpressCredentials>(Buffer.from(conn.encryptedCredentials));
+        const subId = generateSubId(subIdPattern, { now: t, batchId: job.botId });
+        try {
+          const adapter = deps.aliexpress ?? getAliexpressAdapter();
+          affiliateLink = await adapter.toAffiliateLink(creds, product.originalUrl, subId);
+        } catch (err) {
+          log.warn({ botId: job.botId, err }, 'falha ao gerar link de afiliado do AliExpress; usando link original');
+        }
       } else if (
         product.source !== 'SHOPEE' &&
         product.source !== 'AWIN' &&
+        product.source !== 'ALIEXPRESS' &&
         product.source !== 'MANUAL' &&
         conn?.encryptedCredentials
       ) {

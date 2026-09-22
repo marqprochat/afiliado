@@ -8,8 +8,10 @@ import {
 import {
   createShopeeAdapter,
   getAdapter,
+  getAliexpressAdapter,
   getAwinAdapter,
   getTagAdapter,
+  type AliexpressCredentials,
   type AwinCredentials,
   type MarketplaceAdapter,
   type ShopeeCredentials,
@@ -28,6 +30,9 @@ type AnyCreds = {
   publisherId?: string;
   datafeedApiKey?: string;
   feedIds?: string[];
+  appKey?: string;
+  appSecret?: string;
+  trackingId?: string;
 } & TagCredentials;
 /** Mesmos campos de `AnyCreds`, mas aceitando `undefined` explícito nos merges (`a ?? b`). */
 type LooseCreds = { [K in keyof AnyCreds]?: AnyCreds[K] | undefined };
@@ -52,6 +57,9 @@ export function publicConnection(
     awinPublisherId: creds?.publisherId ?? null,
     hasAwinDatafeedApiKey: Boolean(creds?.datafeedApiKey),
     awinFeedIds: creds?.feedIds ?? [],
+    aliexpressAppKey: creds?.appKey ?? null,
+    hasAliexpressAppSecret: Boolean(creds?.appSecret),
+    aliexpressTrackingId: creds?.trackingId ?? null,
     // Sessões sincronizadas (cookies nunca saem daqui, só metadados)
     mlSessionSyncedAt: creds?.mlSession?.syncedAt ?? null,
     mlSessionSource: creds?.mlSession?.source ?? null,
@@ -117,6 +125,22 @@ export async function loadAwinCredentials(db: TenantClient): Promise<AwinCredent
   return creds as AwinCredentials;
 }
 
+export async function loadAliexpressCredentials(db: TenantClient): Promise<AliexpressCredentials> {
+  const row = await db.marketplaceConnection.findFirst({ where: { kind: 'ALIEXPRESS' } });
+  const creds = row?.encryptedCredentials
+    ? decryptJson<AliexpressCredentials>(Buffer.from(row.encryptedCredentials))
+    : ({} as Partial<AliexpressCredentials>);
+  if (!creds.appKey || !creds.appSecret || !creds.trackingId) {
+    throw new ApiError(
+      'MARKETPLACE_ERROR',
+      'ALIEXPRESS: configure App Key, App Secret e Tracking ID em Configurações',
+      400,
+    );
+  }
+  return creds as AliexpressCredentials;
+}
+
+
 /**
  * Decripta as credenciais atuais de um marketplace, aplica `mutate` para produzir as
  * novas credenciais, criptografa e faz upsert da linha (create se ainda não existir,
@@ -165,4 +189,4 @@ export async function upsertMarketplaceCredentials(
   return (await db.marketplaceConnection.findFirst({ where: { kind } }))!;
 }
 
-export { getAdapter, getAwinAdapter, getTagAdapter };
+export { getAdapter, getAwinAdapter, getTagAdapter, getAliexpressAdapter };

@@ -15,6 +15,7 @@ import {
 } from '@afilados/core';
 import {
   getAdapter,
+  type AliexpressCredentials,
   type AnyAdapter,
   type MarketplaceAdapter,
   type ShopeeCredentials,
@@ -147,6 +148,21 @@ export async function mirrorMessage(
         } else {
           replacements.set(storeLink.url, storeLink.url);
           unsupportedStores.add('SHOPEE');
+        }
+      } else if (kind === 'ALIEXPRESS') {
+        if (conn?.encryptedCredentials) {
+          const creds = decryptJson<AliexpressCredentials>(Buffer.from(conn.encryptedCredentials));
+          const subId = generateSubId('{yyyyMMdd}-mirror-' + rule.id, {
+            now: t,
+            batchId: rule.id,
+            timezone: window.timezone,
+          });
+          const adapter = adapterGetter('ALIEXPRESS') as MarketplaceAdapter<AliexpressCredentials>;
+          const affLink = await adapter.toAffiliateLink(creds, storeLink.url, subId);
+          replacements.set(storeLink.url, affLink);
+        } else {
+          replacements.set(storeLink.url, storeLink.url);
+          unsupportedStores.add('ALIEXPRESS');
         }
       } else {
         if (conn?.encryptedCredentials) {

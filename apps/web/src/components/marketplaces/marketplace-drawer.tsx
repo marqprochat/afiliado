@@ -44,9 +44,14 @@ function initialFieldValue(key: MarketplaceFieldKey, connection?: MarketplaceCon
       return connection?.awinPublisherId ?? '';
     case 'feedIds':
       return connection?.awinFeedIds?.join(', ') ?? '';
+    case 'appKey':
+      return connection?.aliexpressAppKey ?? '';
+    case 'trackingId':
+      return connection?.aliexpressTrackingId ?? '';
     case 'secret':
     case 'amazonClientSecret':
     case 'datafeedApiKey':
+    case 'appSecret':
       return '';
   }
 }
@@ -204,7 +209,15 @@ export function MarketplaceDrawer({
                       ? connection?.hasAmazonApiSecret
                         ? '•••• (já salvo)'
                         : ''
-                      : field.placeholder
+                      : field.key === 'datafeedApiKey'
+                        ? connection?.hasAwinDatafeedApiKey
+                          ? '•••• (já salvo)'
+                          : ''
+                        : field.key === 'appSecret'
+                          ? connection?.hasAliexpressAppSecret
+                            ? '•••• (já salvo)'
+                            : ''
+                          : field.placeholder
                 }
                 className="mt-1"
               />

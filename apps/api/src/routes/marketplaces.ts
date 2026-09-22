@@ -44,6 +44,12 @@ export async function marketplacesRoutes(app: FastifyInstance) {
       (prev) =>
         kind === 'SHOPEE'
           ? { appId: body.appId ?? prev.appId, secret: body.secret ?? prev.secret }
+          : kind === 'ALIEXPRESS'
+            ? {
+                appKey: body.appKey ?? prev.appKey,
+                appSecret: body.appSecret ?? prev.appSecret,
+                trackingId: body.trackingId ?? body.affiliateTag ?? prev.trackingId,
+              }
           : kind === 'AWIN'
             ? {
                 publisherId: body.publisherId ?? prev.publisherId,
@@ -79,7 +85,9 @@ export async function marketplacesRoutes(app: FastifyInstance) {
         affiliateTag:
           kind === 'MERCADOLIVRE'
             ? (merged.mattWord ?? null)
-            : (body.affiliateTag ?? existing?.affiliateTag ?? null),
+            : kind === 'ALIEXPRESS'
+              ? (merged.trackingId ?? null)
+              : (body.affiliateTag ?? existing?.affiliateTag ?? null),
       }),
     );
     return publicConnection(row, kind);

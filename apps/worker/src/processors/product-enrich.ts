@@ -2,7 +2,13 @@ import type { Job } from 'bullmq';
 import pino from 'pino';
 import { createHash } from 'node:crypto';
 import { prisma, decryptJson } from '@afilados/db';
-import { createShopeeAdapter, getTagAdapter, type ShopeeCredentials } from '@afilados/marketplaces';
+import {
+  createShopeeAdapter,
+  getAliexpressAdapter,
+  getTagAdapter,
+  type AliexpressCredentials,
+  type ShopeeCredentials,
+} from '@afilados/marketplaces';
 import type { ProductData, ProductEnrichJob } from '@afilados/shared';
 import { publishEvent } from '../lib/events';
 import { getRedis } from '../lib/redis';
@@ -50,6 +56,15 @@ async function fetchViaAdapter(
     if (!conn?.encryptedCredentials) throw new Error('Shopee não configurada para este tenant');
     const creds = decryptJson<ShopeeCredentials>(Buffer.from(conn.encryptedCredentials));
     const list = await createShopeeAdapter().fetchByUrls(creds, [url]);
+    return list[0] ?? null;
+  }
+  if (kind === 'ALIEXPRESS') {
+    const conn = await prisma.marketplaceConnection.findFirst({
+      where: { tenantId, kind: 'ALIEXPRESS' },
+    });
+    if (!conn?.encryptedCredentials) throw new Error('AliExpress não configurado para este tenant');
+    const creds = decryptJson<AliexpressCredentials>(Buffer.from(conn.encryptedCredentials));
+    const list = await getAliexpressAdapter().fetchByUrls(creds, [url]);
     return list[0] ?? null;
   }
   const creds = kind === 'AMAZON' ? await loadTagCredentials(tenantId, kind) : {};

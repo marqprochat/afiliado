@@ -10,7 +10,10 @@ export type MarketplaceFieldKey =
   | 'amazonClientSecret'
   | 'publisherId'
   | 'datafeedApiKey'
-  | 'feedIds';
+  | 'feedIds'
+  | 'appKey'
+  | 'appSecret'
+  | 'trackingId';
 
 export interface MarketplaceFieldDef {
   key: MarketplaceFieldKey;
@@ -175,6 +178,43 @@ export const MARKETPLACE_CONFIGS: Record<MarketplaceKind, MarketplaceConfig> = {
         placeholder: 'Ex: 111111, 222222',
         helpTitle: 'Onde encontro o Feed ID de um programa?',
         helpContent: 'Painel Awin → Toolbox → Create-a-Feed → coluna "Feed ID" do programa que você quer importar.',
+      },
+    ],
+    supportsSession: false,
+  },
+  ALIEXPRESS: {
+    kind: 'ALIEXPRESS',
+    label: 'AliExpress',
+    description: 'Credenciais do AliExpress Open Platform (TOP/IOP) e Portals de Afiliados.',
+    platformUrl: 'https://portals.aliexpress.com/',
+    fields: [
+      {
+        key: 'appKey',
+        label: 'App Key',
+        type: 'text',
+        required: true,
+        placeholder: 'Ex: 12345678',
+        helpTitle: 'Onde encontrar a App Key?',
+        helpContent:
+          'No console do AliExpress Open Platform (openservice.aliexpress.com) → App Management → seu App de Afiliado.',
+      },
+      {
+        key: 'appSecret',
+        label: 'App Secret',
+        type: 'password',
+        required: true,
+        helpTitle: 'Onde encontrar o App Secret?',
+        helpContent: 'No mesmo painel da App Key no AliExpress Open Platform.',
+      },
+      {
+        key: 'trackingId',
+        label: 'Tracking ID',
+        type: 'text',
+        required: true,
+        placeholder: 'Ex: meutrackingid',
+        helpTitle: 'Onde encontrar o Tracking ID?',
+        helpContent:
+          'No painel de afiliados do AliExpress Portals (portals.aliexpress.com) → Tracking ID Management.',
       },
     ],
     supportsSession: false,

@@ -63,3 +63,28 @@ describe('parseProductUrl — Awin', () => {
     expect('externalId' in result).toBe(false);
   });
 });
+
+describe('parseProductUrl — AliExpress', () => {
+  it('reconhece URL de item com .html', () => {
+    const result = parseProductUrl('https://pt.aliexpress.com/item/1005006240212345.html?spm=a2g0o.productlist');
+    expect(result).toEqual({
+      source: 'ALIEXPRESS',
+      externalId: '1005006240212345',
+    });
+  });
+
+  it('reconhece URL de item sem .html', () => {
+    const result = parseProductUrl('https://www.aliexpress.com/item/32812345678');
+    expect(result).toEqual({
+      source: 'ALIEXPRESS',
+      externalId: '32812345678',
+    });
+  });
+
+  it('reconhece URL curta / de afiliado do AliExpress sem externalId', () => {
+    const result = parseProductUrl('https://s.click.aliexpress.com/e/_d7example');
+    expect(result).toEqual({ source: 'ALIEXPRESS' });
+    expect('externalId' in result).toBe(false);
+  });
+});
+

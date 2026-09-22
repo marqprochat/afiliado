@@ -20,6 +20,7 @@ const MARKETS: { key: MarketplaceKind; label: string }[] = [
   { key: 'AMAZON', label: 'Amazon' },
   { key: 'MAGALU', label: 'Magalu' },
   { key: 'AWIN', label: 'Awin' },
+  { key: 'ALIEXPRESS', label: 'AliExpress' },
 ];
 // Categoria/loja favorita/mais buscados são conceitos da API oficial da Shopee — os demais
 // marketplaces só têm busca por palavra-chave (scraping) e importação por link.

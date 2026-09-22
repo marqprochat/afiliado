@@ -1,6 +1,6 @@
 import { prisma, decryptJson } from '@afilados/db';
 import type { TagCredentials } from '@afilados/shared';
-import type { AwinCredentials } from '@afilados/marketplaces';
+import type { AliexpressCredentials, AwinCredentials } from '@afilados/marketplaces';
 
 /**
  * Carrega e decripta as credenciais de um marketplace por tag (ML/Amazon/Magalu) do tenant.
@@ -30,4 +30,15 @@ export async function loadAwinCredentials(tenantId: string): Promise<AwinCredent
     throw new Error('AWIN: configure Publisher ID, Datafeed API Key e ao menos um Feed ID');
   }
   return creds as AwinCredentials;
+}
+
+export async function loadAliexpressCredentials(tenantId: string): Promise<AliexpressCredentials> {
+  const row = await prisma.marketplaceConnection.findFirst({ where: { tenantId, kind: 'ALIEXPRESS' } });
+  const creds = row?.encryptedCredentials
+    ? decryptJson<AliexpressCredentials>(Buffer.from(row.encryptedCredentials))
+    : ({} as Partial<AliexpressCredentials>);
+  if (!creds.appKey || !creds.appSecret || !creds.trackingId) {
+    throw new Error('ALIEXPRESS: configure App Key, App Secret e Tracking ID');
+  }
+  return creds as AliexpressCredentials;
 }

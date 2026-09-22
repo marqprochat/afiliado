@@ -45,5 +45,10 @@ export function parseProductUrl(raw: string): ParsedProductUrl {
     // sha1(originalUrl) para deduplicar.
     return { source: 'AWIN' };
   }
+  if (host === 'aliexpress.com' || host.endsWith('.aliexpress.com')) {
+    const m = path.match(/\/item\/(\d+)/i) || path.match(/_p(\d+)/i);
+    if (m) return { source: 'ALIEXPRESS', externalId: m[1]! };
+    return { source: 'ALIEXPRESS' };
+  }
   return { source: 'UNSUPPORTED', reason: `Domínio ou formato não reconhecido: ${host}${path}` };
 }

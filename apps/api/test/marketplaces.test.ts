@@ -17,7 +17,7 @@ afterAll(async () => {
 });
 
 describe('marketplaces', () => {
-  it('lista as 5 lojas como UNCONFIGURED', async () => {
+  it('lista as 6 lojas como UNCONFIGURED', async () => {
     const r = await app.inject({ method: 'GET', url: '/api/v1/marketplaces', headers: { cookie } });
     expect(r.json().map((c: { kind: string; status: string }) => [c.kind, c.status])).toEqual([
       ['SHOPEE', 'UNCONFIGURED'],
@@ -25,6 +25,7 @@ describe('marketplaces', () => {
       ['AMAZON', 'UNCONFIGURED'],
       ['MAGALU', 'UNCONFIGURED'],
       ['AWIN', 'UNCONFIGURED'],
+      ['ALIEXPRESS', 'UNCONFIGURED'],
     ]);
   });
   it('PUT shopee criptografa e nunca devolve o secret', async () => {
@@ -312,6 +313,31 @@ describe('marketplaces', () => {
       awinFeedIds: ['111', '222'],
     });
     expect(JSON.stringify(r.json())).not.toContain('key1');
+  });
+
+  it('PUT ALIEXPRESS salva appKey/appSecret/trackingId sem expor o secret', async () => {
+    const r = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/marketplaces/ALIEXPRESS',
+      headers: { cookie },
+      payload: { appKey: 'key_123', appSecret: 'sec_456', trackingId: 'track_789' },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({
+      kind: 'ALIEXPRESS',
+      aliexpressAppKey: 'key_123',
+      hasAliexpressAppSecret: true,
+      aliexpressTrackingId: 'track_789',
+    });
+    expect(JSON.stringify(r.json())).not.toContain('sec_456');
+    const row = await prisma.marketplaceConnection.findFirstOrThrow({
+      where: { tenantId: t.tenantId, kind: 'ALIEXPRESS' },
+    });
+    expect(decryptJson(Buffer.from(row.encryptedCredentials!))).toEqual({
+      appKey: 'key_123',
+      appSecret: 'sec_456',
+      trackingId: 'track_789',
+    });
   });
 
   it('POST /marketplaces/awin/import enfileira o job', async () => {

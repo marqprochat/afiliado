@@ -1,4 +1,4 @@
-export const MARKETPLACE_KINDS = ['SHOPEE', 'MERCADOLIVRE', 'AMAZON', 'MAGALU', 'AWIN'] as const;
+export const MARKETPLACE_KINDS = ['SHOPEE', 'MERCADOLIVRE', 'AMAZON', 'MAGALU', 'AWIN', 'ALIEXPRESS'] as const;
 export type MarketplaceKind = (typeof MARKETPLACE_KINDS)[number];
 
 export const PRODUCT_SOURCES = [...MARKETPLACE_KINDS, 'MANUAL'] as const;

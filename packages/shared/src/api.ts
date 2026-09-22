@@ -77,6 +77,9 @@ export const marketplaceUpdateSchema = z.object({
   publisherId: z.string().min(1).max(40).optional(),
   datafeedApiKey: z.string().min(1).max(200).optional(),
   feedIds: z.array(z.string().min(1).max(40)).max(50).optional(),
+  appKey: z.string().min(1).optional(),
+  appSecret: z.string().min(1).optional(),
+  trackingId: z.string().min(1).max(100).optional(),
 });
 
 export const mirrorRuleSchema = z

@@ -10,6 +10,7 @@ export * from './mercadolivre/official-link';
 export * from './awin/datafeed';
 export * from './awin/mapper';
 export * from './awin/adapter';
+export * from './aliexpress';
 export { AmazonSessionError, generateOfficialAmazonLink, findFirstUrl } from './amazon/official-link';
 export {
   AmazonApiError,

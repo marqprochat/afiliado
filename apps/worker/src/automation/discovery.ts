@@ -2,10 +2,12 @@ import { prisma, decryptJson } from '@afilados/db';
 import type { AutomationRule } from '@afilados/db';
 import {
   createShopeeAdapter,
+  getAliexpressAdapter,
   getTagAdapter,
   discoverMercadoLivreByKeyword,
   discoverAmazonByKeyword,
   discoverMagaluByKeyword,
+  type AliexpressCredentials,
   type ShopeeCredentials,
 } from '@afilados/marketplaces';
 import { type MarketplaceKind, type ProductData, mapAwinCatalogRowToProductData } from '@afilados/shared';
@@ -17,6 +19,7 @@ const KEYWORD_CACHE_TTL_SEC = 15 * 60;
 
 export interface DiscoveryDeps {
   searchShopee?: (creds: ShopeeCredentials, keyword: string) => Promise<ProductData[]>;
+  searchAliexpress?: (creds: AliexpressCredentials, keyword: string) => Promise<ProductData[]>;
   /** Sorteio do marketplace (injetável em teste; padrão: aleatório real). */
   pickMarketplace?: (options: MarketplaceKind[]) => MarketplaceKind;
   /** Descoberta por keyword para ML/Amazon/Magalu (injetável em teste). */
@@ -136,6 +139,23 @@ async function discoverShopee(rule: AutomationRule, keyword: string, deps: Disco
   return search(creds, keyword);
 }
 
+async function discoverAliexpress(rule: AutomationRule, keyword: string, deps: DiscoveryDeps): Promise<ProductData[]> {
+  const conn = await prisma.marketplaceConnection.findFirst({ where: { tenantId: rule.tenantId, kind: 'ALIEXPRESS' } });
+  if (!conn?.encryptedCredentials) return [];
+  const creds = decryptJson<AliexpressCredentials>(Buffer.from(conn.encryptedCredentials));
+  const search =
+    deps.searchAliexpress ??
+    ((c: AliexpressCredentials, k: string) =>
+      getAliexpressAdapter().search!(c, {
+        source: 'ALIEXPRESS',
+        mode: 'keyword',
+        query: k,
+        sort: 'DISCOUNT_DESC',
+        limit: 20,
+      }));
+  return search(creds, keyword);
+}
+
 async function discoverAwin(rule: AutomationRule, keyword: string): Promise<ProductData[]> {
   const rows = await prisma.awinCatalogProduct.findMany({
     where: { tenantId: rule.tenantId, title: { contains: keyword, mode: 'insensitive' } },
@@ -217,9 +237,11 @@ export async function discoverForRule(rule: AutomationRule, deps: DiscoveryDeps 
     results =
       marketplace === 'SHOPEE'
         ? await discoverShopee(rule, keyword, deps)
-        : marketplace === 'AWIN'
-          ? await discoverAwin(rule, keyword)
-          : await discoverScraped(marketplace, keyword, rule, deps);
+        : marketplace === 'ALIEXPRESS'
+          ? await discoverAliexpress(rule, keyword, deps)
+          : marketplace === 'AWIN'
+            ? await discoverAwin(rule, keyword)
+            : await discoverScraped(marketplace, keyword, rule, deps);
   } catch (e) {
     await prisma.automationLog.create({
       data: {

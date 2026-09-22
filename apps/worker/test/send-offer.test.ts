@@ -371,4 +371,65 @@ describe('sendOffer', () => {
       expect(msg.caption).toContain('&clickref=');
     }
   });
+
+  it('gera link de afiliado do AliExpress com subId personalizado no envio', async () => {
+    await prisma.marketplaceConnection.upsert({
+      where: { tenantId_kind: { tenantId, kind: 'ALIEXPRESS' } },
+      create: {
+        tenantId,
+        kind: 'ALIEXPRESS',
+        encryptedCredentials: encryptJson({ appKey: 'k', appSecret: 's', trackingId: 't' }),
+        status: 'OK',
+      },
+      update: {
+        encryptedCredentials: encryptJson({ appKey: 'k', appSecret: 's', trackingId: 't' }),
+        status: 'OK',
+      },
+    });
+    const aliProductId = (
+      await prisma.product.create({
+        data: {
+          tenantId,
+          source: 'ALIEXPRESS',
+          externalId: '1005001',
+          title: 'Produto AliExpress',
+          price: 29.9,
+          images: ['https://img/ali.jpg'],
+          originalUrl: 'https://pt.aliexpress.com/item/1005001.html',
+          raw: {},
+        },
+      })
+    ).id;
+    const batch = await prisma.batch.create({
+      data: {
+        tenantId,
+        sessionId,
+        templateId,
+        name: 'b-ali',
+        groupJids: ['g1@g.us'],
+        telegramChatIds: [],
+        intervalMin: 1,
+        mediaMode: 'IMAGE',
+        status: 'SCHEDULED',
+        items: { create: [{ productId: aliProductId, order: 0, runAt: new Date() }] },
+      },
+      include: { items: true },
+    });
+    const item = batch.items[0]!;
+
+    const aliexpress = {
+      kind: 'ALIEXPRESS' as const,
+      checkConnection: async () => ({ ok: true }),
+      fetchByUrls: async () => [],
+      toAffiliateLink: async (_creds: unknown, _url: string, subId?: string) =>
+        `https://s.click.aliexpress.com/e/_converted?sub_id=${subId}`,
+    };
+    const result = await sendOffer({ ...deps, aliexpress }, item.id);
+    expect(result.outcome).toBe('sent');
+    const msg = gateway.sent[0]!.msg;
+    expect(msg.kind).toBe('image');
+    if (msg.kind === 'image') {
+      expect(msg.caption).toContain('https://s.click.aliexpress.com/e/_converted?sub_id=');
+    }
+  });
 });

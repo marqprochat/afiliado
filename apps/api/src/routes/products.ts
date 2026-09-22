@@ -19,7 +19,14 @@ import {
   discoverMagaluByKeyword,
 } from '@afilados/marketplaces';
 import { requireAuth } from '../plugins/auth';
-import { getShopeeAdapter, getTagAdapter, loadShopeeCredentials, loadTagCredentials } from '../lib/marketplaces';
+import {
+  getAliexpressAdapter,
+  getShopeeAdapter,
+  getTagAdapter,
+  loadAliexpressCredentials,
+  loadShopeeCredentials,
+  loadTagCredentials,
+} from '../lib/marketplaces';
 import { toApiProduct, upsertProducts } from '../lib/products';
 import { getQueue } from '../lib/redis';
 import { searchAwinCatalog, fetchAwinCatalogByUrls } from '../lib/awin-catalog';
@@ -58,6 +65,18 @@ export async function productsRoutes(app: FastifyInstance) {
       let found: ProductData[];
       try {
         found = await getShopeeAdapter().search!(creds, q);
+      } catch (e) {
+        throw new ApiError('MARKETPLACE_ERROR', e instanceof Error ? e.message : String(e), 502);
+      }
+      const rows = await upsertProducts(req.db, req.tenantId, found);
+      return { products: rows.map(toApiProduct) };
+    }
+
+    if (q.source === 'ALIEXPRESS') {
+      const creds = await loadAliexpressCredentials(req.db);
+      let found: ProductData[];
+      try {
+        found = await getAliexpressAdapter().search!(creds, q);
       } catch (e) {
         throw new ApiError('MARKETPLACE_ERROR', e instanceof Error ? e.message : String(e), 502);
       }
@@ -131,7 +150,7 @@ export async function productsRoutes(app: FastifyInstance) {
     }
 
     const allFound: ProductData[] = [];
-    const queuedUrls: { kind: Exclude<MarketplaceKind, 'SHOPEE' | 'AWIN'>; url: string }[] = [];
+    const queuedUrls: { kind: Exclude<MarketplaceKind, 'SHOPEE' | 'AWIN' | 'ALIEXPRESS'>; url: string }[] = [];
     let lastError: Error | null = null;
 
     for (const item of itemsWithMeta) {
@@ -155,7 +174,7 @@ export async function productsRoutes(app: FastifyInstance) {
       });
     }
 
-    // Shopee usa a API oficial (rápida) e responde de forma síncrona.
+    // Shopee e AliExpress usam APIs oficiais (rápidas) e respondem de forma síncrona.
     // ML/Amazon/Magalu exigem scraping: uma URL só é resolvida na hora; lotes vão para a fila
     // product-enrich, que enriquece em background com cache e rate-limit gentil.
     const scrapeInline = urls.length === 1;
@@ -165,6 +184,10 @@ export async function productsRoutes(app: FastifyInstance) {
         if (kind === 'SHOPEE') {
           const { creds } = await loadShopeeCredentials(req.db);
           const found = await getShopeeAdapter().fetchByUrls(creds, kindUrls);
+          allFound.push(...found);
+        } else if (kind === 'ALIEXPRESS') {
+          const creds = await loadAliexpressCredentials(req.db);
+          const found = await getAliexpressAdapter().fetchByUrls(creds, kindUrls);
           allFound.push(...found);
         } else if (kind === 'AWIN') {
           const found = await fetchAwinCatalogByUrls(req.db, kindUrls);

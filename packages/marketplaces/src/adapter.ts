@@ -16,6 +16,12 @@ export interface AwinCredentials {
   feedIds: string[];
 }
 
+export interface AliexpressCredentials {
+  appKey: string;
+  appSecret: string;
+  trackingId: string;
+}
+
 export interface MarketplaceAdapter<C = unknown> {
   readonly kind: MarketplaceKind;
   checkConnection(creds: C): Promise<ConnectionStatus>;

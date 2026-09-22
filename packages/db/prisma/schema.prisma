@@ -160,6 +160,7 @@ enum MarketplaceKind {
   AMAZON
   MAGALU
   AWIN
+  ALIEXPRESS
 }
 
 enum ConnectionStatus {
@@ -222,6 +223,7 @@ enum ProductSource {
   AMAZON
   MAGALU
   AWIN
+  ALIEXPRESS
   MANUAL
 }
 

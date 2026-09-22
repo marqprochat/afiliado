@@ -10,7 +10,14 @@ import {
   renderCouponTemplate,
   renderTemplate,
 } from '@afilados/core';
-import { getTagAdapter, type AwinCredentials, type MarketplaceAdapter, type ShopeeCredentials } from '@afilados/marketplaces';
+import {
+  getAliexpressAdapter,
+  getTagAdapter,
+  type AliexpressCredentials,
+  type AwinCredentials,
+  type MarketplaceAdapter,
+  type ShopeeCredentials,
+} from '@afilados/marketplaces';
 import type { ProductData, SendOfferJob, SendTelegramJob, TagCredentials } from '@afilados/shared';
 import { publishEvent } from '../lib/events';
 import { enqueueSendTelegram } from '../lib/queue-helpers';
@@ -24,6 +31,7 @@ export interface SendOfferDeps {
   gateway: WhatsAppGateway;
   shopee: MarketplaceAdapter<ShopeeCredentials>;
   awin: MarketplaceAdapter<AwinCredentials>;
+  aliexpress?: MarketplaceAdapter<AliexpressCredentials>;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
   rng?: () => number;
@@ -166,9 +174,23 @@ export async function sendOffer(
       } catch (err) {
         log.warn({ batchItemId: item.id, err }, 'falha ao gerar link de afiliado da Awin; usando link original');
       }
+    } else if (product.source === 'ALIEXPRESS' && conn?.encryptedCredentials) {
+      const creds = decryptJson<AliexpressCredentials>(Buffer.from(conn.encryptedCredentials));
+      const subId = generateSubId(subIdPattern, {
+        now: t,
+        batchId: batch.id,
+        timezone: window.timezone,
+      });
+      try {
+        const adapter = deps.aliexpress ?? getAliexpressAdapter();
+        affiliateLink = await adapter.toAffiliateLink(creds, product.originalUrl, subId);
+      } catch (err) {
+        log.warn({ batchItemId: item.id, err }, 'falha ao gerar link de afiliado do AliExpress; usando link original');
+      }
     } else if (
       product.source !== 'SHOPEE' &&
       product.source !== 'AWIN' &&
+      product.source !== 'ALIEXPRESS' &&
       product.source !== 'MANUAL' &&
       conn?.encryptedCredentials
     ) {

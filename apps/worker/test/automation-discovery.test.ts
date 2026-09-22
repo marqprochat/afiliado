@@ -273,3 +273,52 @@ describe('discoverForRule (Awin)', () => {
     expect(items[0]!.product!.source).toBe('AWIN');
   });
 });
+
+describe('discoverForRule (AliExpress)', () => {
+  it('descobre produto do AliExpress quando searchAliexpress é injetado e enfileira os elegíveis', async () => {
+    await prisma.marketplaceConnection.create({
+      data: {
+        tenantId,
+        kind: 'ALIEXPRESS',
+        status: 'OK',
+        encryptedCredentials: encryptJson({ appKey: 'k', appSecret: 's', trackingId: 't' }),
+      },
+    });
+
+    const rule = await prisma.automationRule.create({
+      data: {
+        tenantId,
+        name: 'discovery-rule-ali',
+        marketplaces: ['ALIEXPRESS'],
+        keywords: ['mouse'],
+        blockedKeywords: ['quebrado'],
+        sessionId: (await prisma.waSession.create({ data: { tenantId, label: 's-ali' } })).id,
+        groupJids: ['g@g.us'],
+        templateId: (await prisma.template.create({ data: { tenantId, name: 't-ali', body: 'x' } })).id,
+      },
+    });
+
+    const searchResults = [
+      {
+        source: 'ALIEXPRESS' as const,
+        externalId: '10050011',
+        title: 'Mouse Sem Fio Gamer',
+        price: 35,
+        images: ['https://x/mouse.png'],
+        shipping: 'NONE' as const,
+        originalUrl: 'https://pt.aliexpress.com/item/10050011.html',
+        raw: {},
+      },
+    ];
+
+    await discoverForRule(rule, {
+      searchAliexpress: async () => searchResults,
+    });
+
+    const items = await prisma.automationQueueItem.findMany({ where: { ruleId: rule.id }, include: { product: true } });
+    expect(items).toHaveLength(1);
+    expect(items[0]!.product!.title).toBe('Mouse Sem Fio Gamer');
+    expect(items[0]!.product!.source).toBe('ALIEXPRESS');
+  });
+});
+

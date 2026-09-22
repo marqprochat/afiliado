@@ -16,7 +16,7 @@ import {
   type SendTelegramJob,
   type WaCommandJob,
 } from '@afilados/shared';
-import { createShopeeAdapter, createAwinAdapter } from '@afilados/marketplaces';
+import { createShopeeAdapter, createAwinAdapter, createAliexpressAdapter } from '@afilados/marketplaces';
 import { config } from './config';
 import { getRedis, closeRedis } from './lib/redis';
 import { BaileysGateway } from './wa/baileys-gateway';
@@ -47,7 +47,12 @@ const waWorker = new Worker<WaCommandJob>(QUEUE_WA_COMMANDS, processWaCommand(ma
 });
 const sendWorker = new Worker<SendOfferJob>(
   QUEUE_SEND_OFFER,
-  processSendOffer({ gateway, shopee: createShopeeAdapter(), awin: createAwinAdapter() }),
+  processSendOffer({
+    gateway,
+    shopee: createShopeeAdapter(),
+    awin: createAwinAdapter(),
+    aliexpress: createAliexpressAdapter(),
+  }),
   { connection: getRedis(), concurrency: 1 },
 );
 const mirrorWorker = new Worker<MirrorMessageJob>(
@@ -63,7 +68,11 @@ const enrichWorker = new Worker<ProductEnrichJob>(
 );
 const telegramWorker = new Worker<SendTelegramJob>(
   QUEUE_SEND_TELEGRAM,
-  processSendTelegram({ shopee: createShopeeAdapter(), awin: createAwinAdapter() }),
+  processSendTelegram({
+    shopee: createShopeeAdapter(),
+    awin: createAwinAdapter(),
+    aliexpress: createAliexpressAdapter(),
+  }),
   { connection: getRedis(), concurrency: 2 },
 );
 const awinImportWorker = new Worker<AwinImportJob>(QUEUE_AWIN_IMPORT, createAwinImportProcessor(), {
