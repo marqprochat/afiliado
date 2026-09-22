@@ -40,8 +40,13 @@ function initialFieldValue(key: MarketplaceFieldKey, connection?: MarketplaceCon
       return connection?.mattTool ?? '';
     case 'amazonClientId':
       return connection?.amazonClientId ?? '';
+    case 'publisherId':
+      return connection?.awinPublisherId ?? '';
+    case 'feedIds':
+      return connection?.awinFeedIds?.join(', ') ?? '';
     case 'secret':
     case 'amazonClientSecret':
+    case 'datafeedApiKey':
       return '';
   }
 }
@@ -76,6 +81,8 @@ export function MarketplaceDrawer({
   onSubmit,
   pending,
   feedback,
+  onImportNow,
+  importPending,
 }: {
   kind: MarketplaceKind;
   connection?: MarketplaceConnection;
@@ -84,6 +91,8 @@ export function MarketplaceDrawer({
   onSubmit: (payload: MarketplaceSubmitPayload) => Promise<void>;
   pending: boolean;
   feedback: MarketplaceFeedback | null;
+  onImportNow?: () => Promise<void>;
+  importPending?: boolean;
 }) {
   const config = MARKETPLACE_CONFIGS[kind];
   const [values, setValues] = useState<Record<string, string>>({});
@@ -133,7 +142,8 @@ export function MarketplaceDrawer({
     const fields: Partial<Record<MarketplaceFieldKey, string>> = {};
     for (const field of config.fields) {
       const value = values[field.key]?.trim();
-      if (value) fields[field.key] = value;
+      if (!value) continue;
+      fields[field.key] = value;
     }
     // Amazon: Client ID e Client Secret da Creators API são salvos como par — a API só
     // substitui `amazonApi` quando os dois chegam juntos, senão preserva o que já estava
@@ -254,6 +264,18 @@ export function MarketplaceDrawer({
                   para sincronizar automaticamente.
                 </p>
               )}
+            </div>
+          )}
+
+          {kind === 'AWIN' && onImportNow && (
+            <div className="rounded-lg border border-border bg-surface-2 p-3.5">
+              <p className="mb-2 text-sm font-medium">Catálogo importado</p>
+              <p className="mb-2 text-xs text-muted-foreground">
+                Reimporta automaticamente a cada 12h. Use o botão abaixo para atualizar agora.
+              </p>
+              <Button type="button" variant="outline" disabled={importPending} onClick={onImportNow}>
+                {importPending ? 'Importando...' : 'Importar agora'}
+              </Button>
             </div>
           )}
 
