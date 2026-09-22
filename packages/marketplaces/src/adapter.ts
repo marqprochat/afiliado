@@ -11,8 +11,7 @@ export interface ShopeeCredentials {
 }
 
 export interface AwinCredentials {
-  publisherId: string;
-  datafeedApiKey: string;
+  feedListUrl: string;
   feedIds: string[];
 }
 
