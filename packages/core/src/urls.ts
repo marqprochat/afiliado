@@ -39,5 +39,9 @@ export function parseProductUrl(raw: string): ParsedProductUrl {
     const m = path.match(/\/p\/([a-z0-9]+)/i) || path.match(/\/([a-z0-9]{7,12})\//i);
     if (m) return { source: 'MAGALU', externalId: m[1]! };
   }
+  if (host === 'awin1.com') {
+    const awinmid = u.searchParams.get('awinmid');
+    return { source: 'AWIN', externalId: awinmid ?? 'unknown' };
+  }
   return { source: 'UNSUPPORTED', reason: `Domínio ou formato não reconhecido: ${host}${path}` };
 }
