@@ -17,13 +17,14 @@ afterAll(async () => {
 });
 
 describe('marketplaces', () => {
-  it('lista as 4 lojas como UNCONFIGURED', async () => {
+  it('lista as 5 lojas como UNCONFIGURED', async () => {
     const r = await app.inject({ method: 'GET', url: '/api/v1/marketplaces', headers: { cookie } });
     expect(r.json().map((c: { kind: string; status: string }) => [c.kind, c.status])).toEqual([
       ['SHOPEE', 'UNCONFIGURED'],
       ['MERCADOLIVRE', 'UNCONFIGURED'],
       ['AMAZON', 'UNCONFIGURED'],
       ['MAGALU', 'UNCONFIGURED'],
+      ['AWIN', 'UNCONFIGURED'],
     ]);
   });
   it('PUT shopee criptografa e nunca devolve o secret', async () => {
@@ -294,5 +295,28 @@ describe('marketplaces', () => {
     );
     expect(creds.tag).toBe('minhaloja');
     expect(creds.magaluSession?.cookies).toEqual({ magalu_session: 'tokenunico' });
+  });
+
+  it('PUT AWIN salva publisherId/datafeedApiKey/feedIds', async () => {
+    const r = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/marketplaces/AWIN',
+      headers: { cookie },
+      payload: { publisherId: 'pub1', datafeedApiKey: 'key1', feedIds: ['111', '222'] },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({
+      kind: 'AWIN',
+      awinPublisherId: 'pub1',
+      hasAwinDatafeedApiKey: true,
+      awinFeedIds: ['111', '222'],
+    });
+    expect(JSON.stringify(r.json())).not.toContain('key1');
+  });
+
+  it('POST /marketplaces/awin/import enfileira o job', async () => {
+    const r = await app.inject({ method: 'POST', url: '/api/v1/marketplaces/awin/import', headers: { cookie } });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ queued: true });
   });
 });

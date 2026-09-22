@@ -4,12 +4,14 @@ import { decryptJson } from '@afilados/db';
 import {
   ApiError,
   MARKETPLACE_KINDS,
+  QUEUE_AWIN_IMPORT,
   marketplaceKindParam,
   marketplaceUpdateSchema,
   marketplaceSessionSchema,
   parseCookieString,
   supportsSessionCookie,
   SESSION_FIELD_BY_KIND,
+  type AwinImportJob,
 } from '@afilados/shared';
 import { requireAuth } from '../plugins/auth';
 import {
@@ -18,6 +20,7 @@ import {
   publicConnection,
   upsertMarketplaceCredentials,
 } from '../lib/marketplaces';
+import { getQueue } from '../lib/redis';
 
 const kindParams = z.object({ kind: marketplaceKindParam });
 
@@ -40,29 +43,35 @@ export async function marketplacesRoutes(app: FastifyInstance) {
       (prev) =>
         kind === 'SHOPEE'
           ? { appId: body.appId ?? prev.appId, secret: body.secret ?? prev.secret }
-          : kind === 'MERCADOLIVRE'
+          : kind === 'AWIN'
             ? {
-                mattWord: body.mattWord ?? prev.mattWord,
-                mattTool: body.mattTool ?? prev.mattTool,
-                // sessão sincronizada pela extensão/manualmente não é editável aqui; só preservada
-                ...(prev.mlSession ? { mlSession: prev.mlSession } : {}),
+                publisherId: body.publisherId ?? prev.publisherId,
+                datafeedApiKey: body.datafeedApiKey ?? prev.datafeedApiKey,
+                feedIds: body.feedIds ?? prev.feedIds,
               }
-            : {
-                tag: body.affiliateTag ?? prev.tag,
-                // sessão manual (Amazon/Magalu) não é editável aqui; só preservada
-                ...(prev.amazonSession ? { amazonSession: prev.amazonSession } : {}),
-                ...(prev.magaluSession ? { magaluSession: prev.magaluSession } : {}),
-                // Client ID/Secret da Creators API só são substituídos quando os dois vêm
-                // juntos no body; caso contrário preserva o que já estava salvo (ou undefined).
-                ...(kind === 'AMAZON'
-                  ? {
-                      amazonApi:
-                        body.amazonClientId && body.amazonClientSecret
-                          ? { clientId: body.amazonClientId, clientSecret: body.amazonClientSecret }
-                          : prev.amazonApi,
-                    }
-                  : {}),
-              },
+            : kind === 'MERCADOLIVRE'
+              ? {
+                  mattWord: body.mattWord ?? prev.mattWord,
+                  mattTool: body.mattTool ?? prev.mattTool,
+                  // sessão sincronizada pela extensão/manualmente não é editável aqui; só preservada
+                  ...(prev.mlSession ? { mlSession: prev.mlSession } : {}),
+                }
+              : {
+                  tag: body.affiliateTag ?? prev.tag,
+                  // sessão manual (Amazon/Magalu) não é editável aqui; só preservada
+                  ...(prev.amazonSession ? { amazonSession: prev.amazonSession } : {}),
+                  ...(prev.magaluSession ? { magaluSession: prev.magaluSession } : {}),
+                  // Client ID/Secret da Creators API só são substituídos quando os dois vêm
+                  // juntos no body; caso contrário preserva o que já estava salvo (ou undefined).
+                  ...(kind === 'AMAZON'
+                    ? {
+                        amazonApi:
+                          body.amazonClientId && body.amazonClientSecret
+                            ? { clientId: body.amazonClientId, clientSecret: body.amazonClientSecret }
+                            : prev.amazonApi,
+                      }
+                    : {}),
+                },
       (merged, existing) => ({
         status: 'UNCONFIGURED',
         lastError: null,
@@ -124,5 +133,15 @@ export async function marketplacesRoutes(app: FastifyInstance) {
       () => ({ status: 'OK', lastCheckedAt: new Date(), lastError: null }),
     );
     return publicConnection(row, kind);
+  });
+
+  app.post('/marketplaces/awin/import', async (req) => {
+    const q = getQueue<AwinImportJob>(QUEUE_AWIN_IMPORT);
+    await q.add(
+      'awin-import',
+      { tenantId: req.tenantId },
+      { jobId: `awin-import-${req.tenantId}-${Date.now()}`, attempts: 2, removeOnComplete: true, removeOnFail: 50 },
+    );
+    return { queued: true };
   });
 }
