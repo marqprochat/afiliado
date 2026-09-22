@@ -1,4 +1,4 @@
-import { QUEUE_SEND_OFFER, QUEUE_SEND_TELEGRAM, type SendOfferJob, type SendTelegramJob } from '@afilados/shared';
+import { QUEUE_AWIN_IMPORT, QUEUE_SEND_OFFER, QUEUE_SEND_TELEGRAM, type AwinImportJob, type SendOfferJob, type SendTelegramJob } from '@afilados/shared';
 import { getQueue } from './redis';
 
 export async function enqueueSendOffer(tenantId: string, batchItemId: string) {
@@ -26,4 +26,13 @@ export async function enqueueSendTelegram(job: SendTelegramJob & { jobId: string
     removeOnComplete: 1000,
     removeOnFail: 1000,
   });
+}
+
+export async function enqueueAwinImport(tenantId: string) {
+  const q = getQueue<AwinImportJob>(QUEUE_AWIN_IMPORT);
+  await q.add(
+    'awin-import',
+    { tenantId },
+    { jobId: `awin-import-${tenantId}-${Date.now()}`, attempts: 2, removeOnComplete: true, removeOnFail: 50 },
+  );
 }
