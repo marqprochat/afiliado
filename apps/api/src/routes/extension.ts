@@ -8,6 +8,7 @@ import {
 } from '@afilados/shared';
 import { hashToken } from './api-tokens';
 import { toApiProduct, upsertProducts } from '../lib/products';
+import { fetchAwinCatalogByUrls } from '../lib/awin-catalog';
 import {
   getShopeeAdapter,
   getTagAdapter,
@@ -81,6 +82,7 @@ export async function extensionRoutes(app: FastifyInstance) {
     const { tenantId } = await authenticateExtension(req);
     const body = extensionCaptureSchema.parse(req.body);
 
+    const tenantDb = forTenant(tenantId);
     let productData: ProductData;
     if (body.title && body.price !== undefined && body.price !== null) {
       // Produto já veio com metadados extraídos pelo content script
@@ -102,12 +104,14 @@ export async function extensionRoutes(app: FastifyInstance) {
       // Faz scraping via adapter (Shopee usa a API oficial com as credenciais do tenant)
       let list: ProductData[];
       if (body.marketplaceKind === 'SHOPEE') {
-        const { creds } = await loadShopeeCredentials(forTenant(tenantId));
+        const { creds } = await loadShopeeCredentials(tenantDb);
         list = await getShopeeAdapter().fetchByUrls(creds, [body.url]);
+      } else if (body.marketplaceKind === 'AWIN') {
+        list = await fetchAwinCatalogByUrls(tenantDb, [body.url]);
       } else {
         const amazonCreds =
           body.marketplaceKind === 'AMAZON'
-            ? await loadTagCredentials(forTenant(tenantId), body.marketplaceKind)
+            ? await loadTagCredentials(tenantDb, body.marketplaceKind)
             : {};
         list = await getTagAdapter(body.marketplaceKind).fetchByUrls(amazonCreds, [body.url]);
       }
@@ -118,7 +122,6 @@ export async function extensionRoutes(app: FastifyInstance) {
       productData = first;
     }
 
-    const tenantDb = forTenant(tenantId);
     const [savedProduct] = await upsertProducts(tenantDb, tenantId, [productData]);
     if (!savedProduct) {
       throw new ApiError('INTERNAL', 'Falha ao salvar produto', 500);
