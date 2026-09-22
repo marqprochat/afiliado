@@ -8,9 +8,7 @@ export type MarketplaceFieldKey =
   | 'mattTool'
   | 'amazonClientId'
   | 'amazonClientSecret'
-  | 'publisherId'
-  | 'datafeedApiKey'
-  | 'feedIds'
+  | 'feedListUrl'
   | 'appKey'
   | 'appSecret'
   | 'trackingId';
@@ -150,34 +148,17 @@ export const MARKETPLACE_CONFIGS: Record<MarketplaceKind, MarketplaceConfig> = {
   AWIN: {
     kind: 'AWIN',
     label: 'Awin',
-    description: 'Publisher ID e Datafeed API Key — importa o catálogo dos programas que você participa.',
+    description: 'Cole o link da lista de feeds e escolha os programas que você quer importar.',
     platformUrl: 'https://ui.awin.com/',
     fields: [
       {
-        key: 'publisherId',
-        label: 'Publisher ID',
-        type: 'text',
-        required: true,
-        placeholder: 'Ex: 1234567',
-        helpTitle: 'Onde encontro meu Publisher ID?',
-        helpContent: 'No canto superior do painel da Awin, ao lado do nome da sua conta de publisher.',
-      },
-      {
-        key: 'datafeedApiKey',
-        label: 'Datafeed API Key',
+        key: 'feedListUrl',
+        label: 'Link da lista de feeds',
         type: 'password',
         required: true,
-        helpTitle: 'Onde consigo a Datafeed API Key?',
-        helpContent: 'Painel Awin → Toolbox → Create-a-Feed → copie a chave usada na URL de download dos feeds.',
-      },
-      {
-        key: 'feedIds',
-        label: 'Feed IDs (separados por vírgula)',
-        type: 'text',
-        required: true,
-        placeholder: 'Ex: 111111, 222222',
-        helpTitle: 'Onde encontro o Feed ID de um programa?',
-        helpContent: 'Painel Awin → Toolbox → Create-a-Feed → coluna "Feed ID" do programa que você quer importar.',
+        helpTitle: 'Onde encontro o link da lista de feeds?',
+        helpContent:
+          'No painel da Awin: Toolbox → Create-a-Feed → copie o link de download da lista de feeds (feed list).',
       },
     ],
     supportsSession: false,
