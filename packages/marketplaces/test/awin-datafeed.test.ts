@@ -58,8 +58,8 @@ describe('listDatafeeds', () => {
       '111,Loja X,BR,active,222,Feed Principal,pt,,2026-09-01,https://productdata.awin.com/download/222\n';
     const fetchImpl = fetchReturningText(200, csv);
     const result = await listDatafeeds('https://x', { fetchImpl });
-    expect(result[0].format).toBe('Awin');
-    expect(result[0].productCount).toBeNull();
+    expect(result[0]!.format).toBe('Awin');
+    expect(result[0]!.productCount).toBeNull();
   });
 
   it('lança AWIN_UNAUTHORIZED em 401, sem incluir a URL na mensagem', async () => {
