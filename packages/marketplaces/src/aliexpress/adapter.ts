@@ -51,26 +51,30 @@ export function createAliexpressAdapter(
       const sort = query.sort ? SORT_MAP[query.sort] ?? 'last_volume_desc' : 'last_volume_desc';
       const pageSize = query.limit ? Math.min(query.limit, 50) : 20;
 
-      const res = await client.execute<any>('aliexpress.affiliate.product.query', {
-        keywords: query.query,
+      const method =
+        query.mode === 'trending'
+          ? 'aliexpress.affiliate.hotproduct.query'
+          : 'aliexpress.affiliate.product.query';
+
+      const businessParams: Record<string, unknown> = {
         page_size: pageSize,
         page_no: 1,
         sort,
         target_currency: 'BRL',
         target_language: 'PT',
         tracking_id: creds.trackingId,
-      });
+      };
 
-      const root = res?.aliexpress_affiliate_product_query_response?.resp_result?.result ?? res?.result ?? res;
-      let rawList: AliexpressRawProduct[] = [];
-
-      if (Array.isArray(root?.products)) {
-        rawList = root.products;
-      } else if (Array.isArray(root?.products?.product)) {
-        rawList = root.products.product;
-      } else if (Array.isArray(root)) {
-        rawList = root;
+      if (query.query) {
+        businessParams.keywords = query.query;
       }
+      if (query.categoryId) {
+        businessParams.category_ids = query.categoryId;
+      }
+
+      const res = await client.execute<any>(method, businessParams);
+      const root = extractAliResult(res);
+      const rawList: AliexpressRawProduct[] = extractArray(root, 'products');
 
       return rawList.map(mapAliexpressProduct);
     },
@@ -94,16 +98,8 @@ export function createAliexpressAdapter(
         tracking_id: creds.trackingId,
       });
 
-      const root = res?.aliexpress_affiliate_productdetail_get_response?.resp_result?.result ?? res?.result ?? res;
-      let rawList: AliexpressRawProduct[] = [];
-
-      if (Array.isArray(root?.products)) {
-        rawList = root.products;
-      } else if (Array.isArray(root?.products?.product)) {
-        rawList = root.products.product;
-      } else if (Array.isArray(root)) {
-        rawList = root;
-      }
+      const root = extractAliResult(res);
+      const rawList: AliexpressRawProduct[] = extractArray(root, 'products');
 
       return rawList.map(mapAliexpressProduct);
     },
@@ -120,14 +116,8 @@ export function createAliexpressAdapter(
       }
 
       const res = await client.execute<any>('aliexpress.affiliate.link.generate', businessParams);
-      const root = res?.aliexpress_affiliate_link_generate_response?.resp_result?.result ?? res?.result ?? res;
-
-      let links: any[] = [];
-      if (Array.isArray(root?.promotion_links)) {
-        links = root.promotion_links;
-      } else if (Array.isArray(root?.promotion_links?.promotion_link)) {
-        links = root.promotion_links.promotion_link;
-      }
+      const root = extractAliResult(res);
+      const links = extractArray(root, 'promotion_links');
 
       const affLink = links[0]?.promotion_link;
       if (typeof affLink === 'string' && affLink.length > 0) {
@@ -138,4 +128,38 @@ export function createAliexpressAdapter(
       return url;
     },
   };
+}
+
+function extractAliResult(res: any): any {
+  if (!res) return null;
+  for (const key of Object.keys(res)) {
+    if (key.endsWith('_response') && res[key]?.resp_result?.result !== undefined) {
+      return res[key].resp_result.result;
+    }
+    if (key.endsWith('_response') && res[key]?.result !== undefined) {
+      return res[key].result;
+    }
+  }
+  if (res?.resp_result?.result !== undefined) {
+    return res.resp_result.result;
+  }
+  if (res?.result !== undefined) {
+    return res.result;
+  }
+  return res;
+}
+
+function extractArray(obj: any, key: string): any[] {
+  if (!obj) return [];
+  const val = obj[key];
+  if (Array.isArray(val)) return val;
+  if (val && typeof val === 'object') {
+    const innerKey = key.endsWith('s') ? key.slice(0, -1) : key;
+    if (Array.isArray(val[innerKey])) return val[innerKey];
+    for (const k of Object.keys(val)) {
+      if (Array.isArray(val[k])) return val[k];
+    }
+  }
+  if (Array.isArray(obj)) return obj;
+  return [];
 }

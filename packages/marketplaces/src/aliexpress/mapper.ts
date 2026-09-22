@@ -16,6 +16,7 @@ export interface AliexpressRawProduct {
   commission_rate?: string | number;
   shop_id?: string | number;
   shop_title?: string;
+  shop_name?: string;
   [key: string]: unknown;
 }
 
@@ -84,6 +85,8 @@ export function mapAliexpressProduct(raw: AliexpressRawProduct): ProductData {
     originalUrl,
     ...(raw.lastest_volume != null ? { salesCount: raw.lastest_volume } : {}),
     ...(commissionPct != null ? { commissionPct } : {}),
+    ...(raw.shop_id != null ? { shopId: String(raw.shop_id) } : {}),
+    ...(raw.shop_title || raw.shop_name ? { shopName: String(raw.shop_title || raw.shop_name) } : {}),
     raw: raw as unknown as object,
   };
 }

@@ -270,4 +270,73 @@ describe('createAliexpressAdapter', () => {
     expect(calledUrl).toContain('sub_id=batch-123');
     expect(calledUrl).toContain('tracking_id=track_xyz');
   });
+
+  it('suporta formato simplificado (simplify=true) na busca', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        resp_result: {
+          resp_code: 200,
+          result: {
+            products: {
+              product: [
+                {
+                  product_id: 999,
+                  product_title: 'Fone TWS',
+                  target_sale_price: '55.00',
+                  shop_id: 12345,
+                  shop_name: 'Minha Loja',
+                },
+              ],
+            },
+          },
+        },
+      }),
+    });
+
+    const adapter = createAliexpressAdapter({ fetchImpl: mockFetch as any });
+    const items = await adapter.search!(creds, {
+      source: 'ALIEXPRESS',
+      mode: 'keyword',
+      query: 'fone',
+      limit: 10,
+    });
+
+    expect(items.length).toBe(1);
+    expect(items[0]!.title).toBe('Fone TWS');
+    expect(items[0]!.shopId).toBe('12345');
+    expect(items[0]!.shopName).toBe('Minha Loja');
+  });
+
+  it('busca trending usa aliexpress.affiliate.hotproduct.query', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        resp_result: {
+          resp_code: 200,
+          result: {
+            products: [
+              {
+                product_id: 888,
+                product_title: 'Hot Product',
+                target_sale_price: '20.00',
+              },
+            ],
+          },
+        },
+      }),
+    });
+
+    const adapter = createAliexpressAdapter({ fetchImpl: mockFetch as any });
+    const items = await adapter.search!(creds, {
+      source: 'ALIEXPRESS',
+      mode: 'trending',
+      limit: 10,
+    });
+
+    expect(items.length).toBe(1);
+    expect(items[0]!.title).toBe('Hot Product');
+    const calledUrl = mockFetch.mock.calls[0][0];
+    expect(calledUrl).toContain('method=aliexpress.affiliate.hotproduct.query');
+  });
 });

@@ -34,6 +34,7 @@ export class AliexpressClient {
   async execute<T>(
     method: string,
     businessParams: Record<string, unknown> = {},
+    retried = false,
   ): Promise<T> {
     const timestamp = Date.now();
     const params: Record<string, unknown> = {
@@ -73,6 +74,10 @@ export class AliexpressClient {
     if (data.error_response) {
       const err = data.error_response;
       const msg = err.sub_msg || err.msg || 'Erro na API do AliExpress';
+      if (!retried && (err.code === 'ApiCallLimit' || String(msg).includes('frequency exceeds'))) {
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+        return this.execute<T>(method, businessParams, true);
+      }
       throw new AliexpressApiError(msg, err.code, err.sub_code);
     }
 
