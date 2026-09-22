@@ -80,6 +80,17 @@ describe('listDatafeeds', () => {
   });
 });
 
+describe('downloadFeed — falhas no meio do stream', () => {
+  it('rejeita (não trava) quando o gzip vem corrompido', async () => {
+    const valid = gzipSync(Buffer.from('id,title\n1,a\n'.repeat(2000)));
+    const corrupted = Buffer.concat([valid.subarray(0, 40), Buffer.alloc(200, 0xff)]);
+    const iter = await downloadFeed('https://x/f.csv.gz', {
+      fetchImpl: fetchReturningBody(200, corrupted),
+    });
+    await expect(collect(iter)).rejects.toThrow();
+  }, 5000);
+});
+
 describe('downloadFeed', () => {
   it('transmite (streaming) um CSV simples em linhas de objeto', async () => {
     const csv = 'aw_product_id,product_name,search_price\np1,Produto 1,10.50\n';

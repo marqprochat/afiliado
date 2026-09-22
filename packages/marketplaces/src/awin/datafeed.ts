@@ -1,7 +1,7 @@
 import { parse } from 'csv-parse/sync';
 import { parse as parseStream } from 'csv-parse';
 import { createGunzip } from 'node:zlib';
-import { Readable } from 'node:stream';
+import { Readable, pipeline } from 'node:stream';
 
 export class AwinApiError extends Error {
   constructor(
@@ -113,8 +113,6 @@ export async function downloadFeed(
 
   if (!ended && firstChunk.length > 0) nodeStream.unshift(firstChunk);
 
-  const source: NodeJS.ReadableStream = isGzip ? nodeStream.pipe(createGunzip()) : nodeStream;
-
   const parser = parseStream({
     columns: true,
     bom: true,
@@ -123,7 +121,13 @@ export async function downloadFeed(
     relax_column_count: true,
     trim: true,
   });
-  source.pipe(parser);
+  // pipeline (não .pipe) propaga erro de rede/gzip corrompido até o parser — senão o
+  // `for await` do import ficaria pendurado para sempre, travando a fila de imports.
+  const onError = (err: Error | null) => {
+    if (err) parser.destroy(err);
+  };
+  if (isGzip) pipeline(nodeStream, createGunzip(), parser, onError);
+  else pipeline(nodeStream, parser, onError);
 
   return parser as unknown as AsyncIterable<AwinFeedRow>;
 }
