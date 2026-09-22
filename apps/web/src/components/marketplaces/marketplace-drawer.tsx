@@ -17,6 +17,7 @@ import {
 import { formatDateTime } from '@/lib/format';
 import type { MarketplaceConnection } from '@/lib/types';
 import { MARKETPLACE_CONFIGS, type MarketplaceFieldKey } from './marketplace-config';
+import { AwinProgramsPanel } from './awin-programs-panel';
 
 export interface MarketplaceSubmitPayload {
   fields: Partial<Record<MarketplaceFieldKey, string>>;
@@ -40,17 +41,13 @@ function initialFieldValue(key: MarketplaceFieldKey, connection?: MarketplaceCon
       return connection?.mattTool ?? '';
     case 'amazonClientId':
       return connection?.amazonClientId ?? '';
-    case 'publisherId':
-      return connection?.awinPublisherId ?? '';
-    case 'feedIds':
-      return connection?.awinFeedIds?.join(', ') ?? '';
     case 'appKey':
       return connection?.aliexpressAppKey ?? '';
     case 'trackingId':
       return connection?.aliexpressTrackingId ?? '';
     case 'secret':
     case 'amazonClientSecret':
-    case 'datafeedApiKey':
+    case 'feedListUrl':
     case 'appSecret':
       return '';
   }
@@ -86,8 +83,6 @@ export function MarketplaceDrawer({
   onSubmit,
   pending,
   feedback,
-  onImportNow,
-  importPending,
 }: {
   kind: MarketplaceKind;
   connection?: MarketplaceConnection;
@@ -96,8 +91,6 @@ export function MarketplaceDrawer({
   onSubmit: (payload: MarketplaceSubmitPayload) => Promise<void>;
   pending: boolean;
   feedback: MarketplaceFeedback | null;
-  onImportNow?: () => Promise<void>;
-  importPending?: boolean;
 }) {
   const config = MARKETPLACE_CONFIGS[kind];
   const [values, setValues] = useState<Record<string, string>>({});
@@ -209,8 +202,8 @@ export function MarketplaceDrawer({
                       ? connection?.hasAmazonApiSecret
                         ? '•••• (já salvo)'
                         : ''
-                      : field.key === 'datafeedApiKey'
-                        ? connection?.hasAwinDatafeedApiKey
+                      : field.key === 'feedListUrl'
+                        ? connection?.hasAwinFeedListUrl
                           ? '•••• (já salvo)'
                           : ''
                         : field.key === 'appSecret'
@@ -280,17 +273,7 @@ export function MarketplaceDrawer({
             </div>
           )}
 
-          {kind === 'AWIN' && onImportNow && (
-            <div className="rounded-lg border border-border bg-surface-2 p-3.5">
-              <p className="mb-2 text-sm font-medium">Catálogo importado</p>
-              <p className="mb-2 text-xs text-muted-foreground">
-                Reimporta automaticamente a cada 12h. Use o botão abaixo para atualizar agora.
-              </p>
-              <Button type="button" variant="outline" disabled={importPending} onClick={onImportNow}>
-                {importPending ? 'Importando...' : 'Importar agora'}
-              </Button>
-            </div>
-          )}
+          {kind === 'AWIN' && connection?.hasAwinFeedListUrl && <AwinProgramsPanel />}
 
           {displayedFeedback && (
             <p className={`text-xs ${displayedFeedback.ok ? 'text-emerald-500' : 'text-red-400'}`}>

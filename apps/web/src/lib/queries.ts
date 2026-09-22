@@ -4,6 +4,7 @@ import { apiFetch } from './api';
 import type {
   AutomationQueueItem,
   AutomationRule,
+  AwinFeed,
   BatchDetail,
   BatchSummary,
   MarketplaceConnection,
@@ -43,6 +44,12 @@ export const useMarketplaces = () =>
   useQuery({
     queryKey: ['marketplaces'],
     queryFn: () => apiFetch<MarketplaceConnection[]>('/marketplaces'),
+  });
+export const useAwinFeeds = (enabled: boolean) =>
+  useQuery({
+    queryKey: ['marketplaces', 'awin', 'feeds'],
+    enabled,
+    queryFn: () => apiFetch<{ feeds: AwinFeed[] }>('/marketplaces/awin/feeds'),
   });
 export const useTelegramBots = () =>
   useQuery({

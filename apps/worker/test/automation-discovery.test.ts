@@ -238,7 +238,7 @@ describe('discoverForRule (Mercado Livre / Amazon / Magalu)', () => {
 describe('discoverForRule (Awin)', () => {
   it('busca no cache local por palavra-chave e enfileira os elegíveis', async () => {
     await prisma.marketplaceConnection.create({
-      data: { tenantId, kind: 'AWIN', status: 'OK', encryptedCredentials: encryptJson({ publisherId: 'p', datafeedApiKey: 'k', feedIds: ['f1'] }) },
+      data: { tenantId, kind: 'AWIN', status: 'OK', encryptedCredentials: encryptJson({ feedListUrl: 'https://ui.awin.com/feedList/secret', feedIds: ['f1'] }) },
     });
     await prisma.awinCatalogProduct.create({
       data: {

@@ -319,8 +319,7 @@ describe('sendOffer', () => {
         kind: 'AWIN',
         status: 'OK',
         encryptedCredentials: encryptJson({
-          publisherId: 'p1',
-          datafeedApiKey: 'k1',
+          feedListUrl: 'https://ui.awin.com/feedList/secret',
           feedIds: ['f1'],
         } satisfies AwinCredentials),
       },

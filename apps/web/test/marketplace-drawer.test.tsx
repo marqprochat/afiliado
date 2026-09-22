@@ -19,9 +19,11 @@ const baseConnection: MarketplaceConnection = {
   amazonSessionSource: null,
   magaluSessionSyncedAt: null,
   magaluSessionSource: null,
-  awinPublisherId: null,
-  hasAwinDatafeedApiKey: false,
+  hasAwinFeedListUrl: false,
   awinFeedIds: [],
+  aliexpressAppKey: null,
+  hasAliexpressAppSecret: false,
+  aliexpressTrackingId: null,
   lastCheckedAt: null,
   lastError: null,
 };

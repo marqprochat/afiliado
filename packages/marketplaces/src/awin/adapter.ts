@@ -7,15 +7,21 @@ export function createAwinAdapter(opts: AwinDatafeedOptions = {}): MarketplaceAd
     kind: 'AWIN',
 
     async checkConnection(creds): Promise<ConnectionStatus> {
-      if (!creds?.datafeedApiKey || !creds.feedIds?.length) {
-        return { ok: false, error: 'Informe a Datafeed API Key e ao menos um Feed ID' };
+      if (!creds?.feedListUrl) {
+        return { ok: false, error: 'Cole o link da lista de feeds da Awin' };
       }
       try {
-        const feeds = await listDatafeeds(creds.datafeedApiKey, opts);
-        const available = new Set(feeds.map((f) => f.feedId));
-        const missing = creds.feedIds.filter((id) => !available.has(id));
-        if (missing.length > 0) {
-          return { ok: false, error: `Feed ID(s) não encontrado(s) na sua conta Awin: ${missing.join(', ')}` };
+        const feeds = await listDatafeeds(creds.feedListUrl, opts);
+        const active = feeds.filter((f) => f.membershipStatus === 'active');
+        if (active.length === 0) {
+          return { ok: false, error: 'Nenhum programa aprovado na sua conta Awin' };
+        }
+        if (creds.feedIds?.length) {
+          const available = new Set(active.map((f) => f.feedId));
+          const missing = creds.feedIds.filter((id) => !available.has(id));
+          if (missing.length > 0) {
+            return { ok: false, error: `Feed ID(s) não encontrado(s) na sua conta Awin: ${missing.join(', ')}` };
+          }
         }
         return { ok: true };
       } catch (e) {
@@ -30,7 +36,13 @@ export function createAwinAdapter(opts: AwinDatafeedOptions = {}): MarketplaceAd
     },
 
     async toAffiliateLink(_creds, url, subId) {
-      if (!url.includes('awin1.com')) {
+      let hostname: string;
+      try {
+        hostname = new URL(url).hostname.replace(/^www\./, '');
+      } catch {
+        hostname = '';
+      }
+      if (hostname !== 'awin1.com') {
         throw new UnsupportedError(
           'Awin: só é possível gerar link de afiliado para produtos vindos do catálogo importado',
         );

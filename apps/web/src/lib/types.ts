@@ -64,8 +64,7 @@ export interface MarketplaceConnection {
   mattTool: string | null;
   amazonClientId: string | null;
   hasAmazonApiSecret: boolean;
-  awinPublisherId: string | null;
-  hasAwinDatafeedApiKey: boolean;
+  hasAwinFeedListUrl: boolean;
   awinFeedIds: string[];
   aliexpressAppKey: string | null;
   hasAliexpressAppSecret: boolean;
@@ -81,6 +80,15 @@ export interface MarketplaceConnection {
   magaluSessionSource: 'extension' | 'manual' | null;
   lastCheckedAt: string | null;
   lastError: string | null;
+}
+
+export interface AwinFeed {
+  feedId: string;
+  advertiserName: string;
+  region: string;
+  format: 'Google' | 'Awin';
+  productCount: number | null;
+  selected: boolean;
 }
 
 export interface ApiProduct {

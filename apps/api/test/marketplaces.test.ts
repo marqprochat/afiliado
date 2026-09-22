@@ -298,21 +298,109 @@ describe('marketplaces', () => {
     expect(creds.magaluSession?.cookies).toEqual({ magalu_session: 'tokenunico' });
   });
 
-  it('PUT AWIN salva publisherId/datafeedApiKey/feedIds', async () => {
+  it('PUT AWIN salva feedListUrl/feedIds, sem nunca devolver o link (contém a API key)', async () => {
+    const feedListUrl = 'https://ui.awin.com/productdata-darwin-download/publisher/1/segredo123/1/feedList';
     const r = await app.inject({
       method: 'PUT',
       url: '/api/v1/marketplaces/AWIN',
       headers: { cookie },
-      payload: { publisherId: 'pub1', datafeedApiKey: 'key1', feedIds: ['111', '222'] },
+      payload: { feedListUrl, feedIds: ['111', '222'] },
     });
     expect(r.statusCode).toBe(200);
     expect(r.json()).toMatchObject({
       kind: 'AWIN',
-      awinPublisherId: 'pub1',
-      hasAwinDatafeedApiKey: true,
+      hasAwinFeedListUrl: true,
       awinFeedIds: ['111', '222'],
     });
-    expect(JSON.stringify(r.json())).not.toContain('key1');
+    expect(JSON.stringify(r.json())).not.toContain('segredo123');
+    expect(JSON.stringify(r.json())).not.toContain(feedListUrl);
+  });
+
+  it('PUT AWIN rejeita link de host inválido (400)', async () => {
+    const r = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/marketplaces/AWIN',
+      headers: { cookie },
+      payload: { feedListUrl: 'https://evil.example/feedList' },
+    });
+    expect(r.statusCode).toBe(400);
+  });
+
+  it('PUT AWIN com link novo preserva feedIds já selecionados quando não enviados', async () => {
+    const feedListUrl1 = 'https://ui.awin.com/productdata-darwin-download/publisher/1/k1/1/feedList';
+    await app.inject({
+      method: 'PUT',
+      url: '/api/v1/marketplaces/AWIN',
+      headers: { cookie },
+      payload: { feedListUrl: feedListUrl1, feedIds: ['111'] },
+    });
+    const feedListUrl2 = 'https://ui.awin.com/productdata-darwin-download/publisher/1/k2/1/feedList';
+    const r = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/marketplaces/AWIN',
+      headers: { cookie },
+      payload: { feedListUrl: feedListUrl2 },
+    });
+    expect(r.json()).toMatchObject({ awinFeedIds: ['111'] });
+  });
+
+  it('PUT AWIN sobre credencial do formato antigo (sem link) zera a seleção de feedIds', async () => {
+    const other = await createTenantWithUser();
+    const otherCookie = await loginCookie(app, other.email, other.password);
+    const { encryptJson } = await import('@afilados/db');
+    await prisma.marketplaceConnection.create({
+      data: {
+        tenantId: other.tenantId,
+        kind: 'AWIN',
+        encryptedCredentials: encryptJson({ publisherId: '1', datafeedApiKey: 'k', feedIds: ['97', '98'] }),
+      },
+    });
+    const r = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/marketplaces/AWIN',
+      headers: { cookie: otherCookie },
+      payload: { feedListUrl: 'https://ui.awin.com/productdata-darwin-download/publisher/1/k/1/feedList' },
+    });
+    expect(r.json()).toMatchObject({ hasAwinFeedListUrl: true, awinFeedIds: [] });
+    await cleanupTenant(other.tenantId);
+  });
+
+  it('GET /marketplaces/awin/feeds sem link configurado responde 400', async () => {
+    const other = await createTenantWithUser();
+    const otherCookie = await loginCookie(app, other.email, other.password);
+    const r = await app.inject({
+      method: 'GET',
+      url: '/api/v1/marketplaces/awin/feeds',
+      headers: { cookie: otherCookie },
+    });
+    expect(r.statusCode).toBe(400);
+    await cleanupTenant(other.tenantId);
+  });
+
+  it('GET /marketplaces/awin/feeds propaga erro da Awin como MARKETPLACE_ERROR (502)', async () => {
+    const other = await createTenantWithUser();
+    const otherCookie = await loginCookie(app, other.email, other.password);
+    await app.inject({
+      method: 'PUT',
+      url: '/api/v1/marketplaces/AWIN',
+      headers: { cookie: otherCookie },
+      payload: { feedListUrl: 'https://ui.awin.com/feedList/badkey' },
+    });
+    const fetchSpy = vi
+      .spyOn(global, 'fetch')
+      .mockImplementation((async () => ({ ok: false, status: 401 })) as unknown as typeof fetch);
+    try {
+      const r = await app.inject({
+        method: 'GET',
+        url: '/api/v1/marketplaces/awin/feeds',
+        headers: { cookie: otherCookie },
+      });
+      expect(r.statusCode).toBe(502);
+      expect(r.json()).toMatchObject({ error: { code: 'MARKETPLACE_ERROR' } });
+    } finally {
+      fetchSpy.mockRestore();
+      await cleanupTenant(other.tenantId);
+    }
   });
 
   it('PUT ALIEXPRESS salva appKey/appSecret/trackingId sem expor o secret', async () => {
@@ -340,7 +428,7 @@ describe('marketplaces', () => {
     });
   });
 
-  it('POST /marketplaces/awin/import enfileira o job', async () => {
+  it('POST /marketplaces/awin/import enfileira o job quando há feeds selecionados', async () => {
     const r = await app.inject({ method: 'POST', url: '/api/v1/marketplaces/awin/import', headers: { cookie } });
     expect(r.statusCode).toBe(200);
     expect(r.json()).toEqual({ queued: true });
@@ -349,6 +437,25 @@ describe('marketplaces', () => {
   it('POST /marketplaces/awin/import sem credenciais configuradas responde com erro, não enfileira', async () => {
     const other = await createTenantWithUser();
     const otherCookie = await loginCookie(app, other.email, other.password);
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/v1/marketplaces/awin/import',
+      headers: { cookie: otherCookie },
+    });
+    expect(r.statusCode).toBe(400);
+    expect(r.json()).toMatchObject({ error: { code: 'MARKETPLACE_ERROR' } });
+    await cleanupTenant(other.tenantId);
+  });
+
+  it('POST /marketplaces/awin/import com feedListUrl mas sem seleção responde 400, não enfileira', async () => {
+    const other = await createTenantWithUser();
+    const otherCookie = await loginCookie(app, other.email, other.password);
+    await app.inject({
+      method: 'PUT',
+      url: '/api/v1/marketplaces/AWIN',
+      headers: { cookie: otherCookie },
+      payload: { feedListUrl: 'https://ui.awin.com/feedList/x' },
+    });
     const r = await app.inject({
       method: 'POST',
       url: '/api/v1/marketplaces/awin/import',
