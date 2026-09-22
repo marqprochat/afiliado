@@ -1,4 +1,4 @@
-﻿import type { ProductData } from './product';
+import type { ProductData } from './product';
 
 export interface AwinCatalogRow {
   externalId: string;
