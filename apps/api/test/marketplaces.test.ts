@@ -344,6 +344,27 @@ describe('marketplaces', () => {
     expect(r.json()).toMatchObject({ awinFeedIds: ['111'] });
   });
 
+  it('PUT AWIN sobre credencial do formato antigo (sem link) zera a seleção de feedIds', async () => {
+    const other = await createTenantWithUser();
+    const otherCookie = await loginCookie(app, other.email, other.password);
+    const { encryptJson } = await import('@afilados/db');
+    await prisma.marketplaceConnection.create({
+      data: {
+        tenantId: other.tenantId,
+        kind: 'AWIN',
+        encryptedCredentials: encryptJson({ publisherId: '1', datafeedApiKey: 'k', feedIds: ['97', '98'] }),
+      },
+    });
+    const r = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/marketplaces/AWIN',
+      headers: { cookie: otherCookie },
+      payload: { feedListUrl: 'https://ui.awin.com/productdata-darwin-download/publisher/1/k/1/feedList' },
+    });
+    expect(r.json()).toMatchObject({ hasAwinFeedListUrl: true, awinFeedIds: [] });
+    await cleanupTenant(other.tenantId);
+  });
+
   it('GET /marketplaces/awin/feeds sem link configurado responde 400', async () => {
     const other = await createTenantWithUser();
     const otherCookie = await loginCookie(app, other.email, other.password);
