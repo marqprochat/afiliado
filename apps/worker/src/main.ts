@@ -2,19 +2,21 @@ import { Worker } from 'bullmq';
 import pino from 'pino';
 import { prisma } from '@afilados/db';
 import {
+  QUEUE_AWIN_IMPORT,
   QUEUE_MIRROR_MESSAGE,
   QUEUE_PRODUCT_ENRICH,
   QUEUE_SEND_OFFER,
   QUEUE_SEND_TELEGRAM,
   QUEUE_WA_COMMANDS,
   REDIS_EVENTS_CHANNEL,
+  type AwinImportJob,
   type MirrorMessageJob,
   type ProductEnrichJob,
   type SendOfferJob,
   type SendTelegramJob,
   type WaCommandJob,
 } from '@afilados/shared';
-import { createShopeeAdapter } from '@afilados/marketplaces';
+import { createShopeeAdapter, createAwinAdapter } from '@afilados/marketplaces';
 import { config } from './config';
 import { getRedis, closeRedis } from './lib/redis';
 import { BaileysGateway } from './wa/baileys-gateway';
@@ -24,8 +26,10 @@ import { processSendOffer, finalizeBatchIfComplete } from './processors/send-off
 import { processSendTelegram } from './processors/send-telegram';
 import { processMirrorMessage } from './processors/mirror-message';
 import { createProductEnrichProcessor } from './processors/product-enrich';
+import { createAwinImportProcessor } from './processors/awin-import';
 import { MirrorListener } from './mirror/listener';
 import { AutomationScheduler } from './automation/scheduler';
+import { AwinImportScheduler } from './automation/awin-import-scheduler';
 import { TelegramManager } from './telegram/manager';
 import { startHttp } from './http';
 
@@ -34,6 +38,7 @@ const gateway = new BaileysGateway();
 const manager = new WaSessionManager(gateway);
 const mirrorListener = new MirrorListener(gateway);
 const automationScheduler = new AutomationScheduler();
+const awinImportScheduler = new AwinImportScheduler();
 const telegramManager = new TelegramManager();
 
 const waWorker = new Worker<WaCommandJob>(QUEUE_WA_COMMANDS, processWaCommand(manager), {
@@ -42,7 +47,7 @@ const waWorker = new Worker<WaCommandJob>(QUEUE_WA_COMMANDS, processWaCommand(ma
 });
 const sendWorker = new Worker<SendOfferJob>(
   QUEUE_SEND_OFFER,
-  processSendOffer({ gateway, shopee: createShopeeAdapter() }),
+  processSendOffer({ gateway, shopee: createShopeeAdapter(), awin: createAwinAdapter() }),
   { connection: getRedis(), concurrency: 1 },
 );
 const mirrorWorker = new Worker<MirrorMessageJob>(
@@ -58,11 +63,15 @@ const enrichWorker = new Worker<ProductEnrichJob>(
 );
 const telegramWorker = new Worker<SendTelegramJob>(
   QUEUE_SEND_TELEGRAM,
-  processSendTelegram({ shopee: createShopeeAdapter() }),
+  processSendTelegram({ shopee: createShopeeAdapter(), awin: createAwinAdapter() }),
   { connection: getRedis(), concurrency: 2 },
 );
+const awinImportWorker = new Worker<AwinImportJob>(QUEUE_AWIN_IMPORT, createAwinImportProcessor(), {
+  connection: getRedis(),
+  concurrency: 1,
+});
 
-for (const w of [waWorker, sendWorker, mirrorWorker, enrichWorker, telegramWorker]) {
+for (const w of [waWorker, sendWorker, mirrorWorker, enrichWorker, telegramWorker, awinImportWorker]) {
   w.on('failed', (job, err) => log.error({ jobId: job?.id, err: err.message }, 'job falhou'));
 }
 sendWorker.on('failed', (job, err) => {
@@ -107,6 +116,7 @@ const http = startHttp(config.WORKER_PORT, () => manager.sessionCount());
 await manager.start();
 await mirrorListener.start();
 await automationScheduler.start();
+awinImportScheduler.start();
 await telegramManager.start();
 log.info({ port: config.WORKER_PORT }, 'worker iniciado');
 
@@ -117,6 +127,7 @@ async function shutdown() {
   log.info('encerrando');
   try {
     automationScheduler.stop();
+    awinImportScheduler.stop();
     telegramManager.stop();
     await Promise.all([
       waWorker.close(),
@@ -124,6 +135,7 @@ async function shutdown() {
       mirrorWorker.close(),
       enrichWorker.close(),
       telegramWorker.close(),
+      awinImportWorker.close(),
     ]);
     await redisSub.unsubscribe();
     redisSub.disconnect();

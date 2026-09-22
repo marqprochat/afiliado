@@ -7,6 +7,9 @@ export * from './tag-adapter';
 export * from './registry';
 export * from './scrapers';
 export * from './mercadolivre/official-link';
+export * from './awin/datafeed';
+export * from './awin/mapper';
+export * from './awin/adapter';
 export { AmazonSessionError, generateOfficialAmazonLink, findFirstUrl } from './amazon/official-link';
 export {
   AmazonApiError,

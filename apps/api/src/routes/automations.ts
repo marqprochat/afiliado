@@ -13,6 +13,7 @@ import { requireAuth } from '../plugins/auth';
 import { getAutomationStats } from '../lib/automations';
 import { getShopeeAdapter, loadShopeeCredentials, loadTagCredentials } from '../lib/marketplaces';
 import { toApiProduct, upsertProducts } from '../lib/products';
+import { fetchAwinCatalogByUrls } from '../lib/awin-catalog';
 
 const idParam = z.object({ id: z.string().min(1) });
 const queueItemParam = z.object({ id: z.string().min(1), itemId: z.string().min(1) });
@@ -153,6 +154,8 @@ export async function automationsRoutes(app: FastifyInstance) {
     if (parsed.source === 'SHOPEE') {
       const { creds } = await loadShopeeCredentials(req.db);
       [found] = await getShopeeAdapter().fetchByUrls(creds, [url]);
+    } else if (parsed.source === 'AWIN') {
+      [found] = await fetchAwinCatalogByUrls(req.db, [url]);
     } else {
       const creds = parsed.source === 'AMAZON' ? await loadTagCredentials(req.db, parsed.source) : {};
       [found] = await getTagAdapter(parsed.source).fetchByUrls(creds, [url]);

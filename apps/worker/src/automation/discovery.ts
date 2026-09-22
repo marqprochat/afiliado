@@ -8,7 +8,7 @@ import {
   discoverMagaluByKeyword,
   type ShopeeCredentials,
 } from '@afilados/marketplaces';
-import { type MarketplaceKind, type ProductData } from '@afilados/shared';
+import { type MarketplaceKind, type ProductData, mapAwinCatalogRowToProductData } from '@afilados/shared';
 import { getRedis } from '../lib/redis';
 import { createHash } from 'node:crypto';
 import { loadTagCredentials } from '../lib/marketplace-credentials';
@@ -136,6 +136,25 @@ async function discoverShopee(rule: AutomationRule, keyword: string, deps: Disco
   return search(creds, keyword);
 }
 
+async function discoverAwin(rule: AutomationRule, keyword: string): Promise<ProductData[]> {
+  const rows = await prisma.awinCatalogProduct.findMany({
+    where: { tenantId: rule.tenantId, title: { contains: keyword, mode: 'insensitive' } },
+    take: 20,
+  });
+  return rows.map((r) =>
+    mapAwinCatalogRowToProductData({
+      feedId: r.feedId,
+      externalId: r.externalId,
+      title: r.title,
+      price: Number(r.price),
+      originalPrice: r.originalPrice !== null ? Number(r.originalPrice) : null,
+      imageUrl: r.imageUrl,
+      deepLink: r.deepLink,
+      raw: r.raw,
+    }),
+  );
+}
+
 const KEYWORD_DISCOVERERS = {
   MERCADOLIVRE: discoverMercadoLivreByKeyword,
   AMAZON: discoverAmazonByKeyword,
@@ -198,7 +217,9 @@ export async function discoverForRule(rule: AutomationRule, deps: DiscoveryDeps 
     results =
       marketplace === 'SHOPEE'
         ? await discoverShopee(rule, keyword, deps)
-        : await discoverScraped(marketplace, keyword, rule, deps);
+        : marketplace === 'AWIN'
+          ? await discoverAwin(rule, keyword)
+          : await discoverScraped(marketplace, keyword, rule, deps);
   } catch (e) {
     await prisma.automationLog.create({
       data: {

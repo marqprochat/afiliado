@@ -234,3 +234,42 @@ describe('discoverForRule (Mercado Livre / Amazon / Magalu)', () => {
     expect(items.length).toBe(0);
   });
 });
+
+describe('discoverForRule (Awin)', () => {
+  it('busca no cache local por palavra-chave e enfileira os elegíveis', async () => {
+    await prisma.marketplaceConnection.create({
+      data: { tenantId, kind: 'AWIN', status: 'OK', encryptedCredentials: encryptJson({ publisherId: 'p', datafeedApiKey: 'k', feedIds: ['f1'] }) },
+    });
+    await prisma.awinCatalogProduct.create({
+      data: {
+        tenantId,
+        feedId: 'f1',
+        externalId: 'aw-fone',
+        title: 'Fone de Ouvido Bluetooth',
+        price: 80,
+        deepLink: 'https://www.awin1.com/cread.php?x=aw-fone',
+        raw: {},
+      },
+    });
+
+    const rule = await prisma.automationRule.create({
+      data: {
+        tenantId,
+        name: 'discovery-rule-awin',
+        marketplaces: ['AWIN'],
+        keywords: ['fone'],
+        blockedKeywords: [],
+        sessionId: (await prisma.waSession.create({ data: { tenantId, label: 's-awin' } })).id,
+        groupJids: ['g@g.us'],
+        templateId: (await prisma.template.create({ data: { tenantId, name: 't-awin', body: 'x' } })).id,
+      },
+    });
+
+    await discoverForRule(rule);
+
+    const items = await prisma.automationQueueItem.findMany({ where: { ruleId: rule.id }, include: { product: true } });
+    expect(items).toHaveLength(1);
+    expect(items[0]!.product!.title).toBe('Fone de Ouvido Bluetooth');
+    expect(items[0]!.product!.source).toBe('AWIN');
+  });
+});

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { MarketplaceKind, TagCredentials } from '@afilados/shared';
 import { parseProductUrl, type ParsedProductUrl } from './urls';
 
@@ -61,6 +62,8 @@ export function buildAffiliateUrl(
     }
     case 'SHOPEE':
       throw new Error('Shopee usa a API (generateShortLink)');
+    case 'AWIN':
+      throw new Error('Awin usa o adapter dedicado (toAffiliateLink)');
   }
 }
 
@@ -70,6 +73,7 @@ export function rewriteLinks(text: string, replacements: Map<string, string>): s
   return out;
 }
 
-export function productKey(parsed: { source: string; externalId: string }): string {
-  return `${parsed.source}:${parsed.externalId}`;
+export function productKey(parsed: { source: string; externalId?: string }, url: string): string {
+  const id = parsed.externalId ?? createHash('sha1').update(url).digest('hex');
+  return `${parsed.source}:${id}`;
 }

@@ -22,6 +22,7 @@ import { requireAuth } from '../plugins/auth';
 import { getShopeeAdapter, getTagAdapter, loadShopeeCredentials, loadTagCredentials } from '../lib/marketplaces';
 import { toApiProduct, upsertProducts } from '../lib/products';
 import { getQueue } from '../lib/redis';
+import { searchAwinCatalog, fetchAwinCatalogByUrls } from '../lib/awin-catalog';
 
 const idsQuery = z.object({ ids: z.string().min(1) });
 
@@ -60,6 +61,13 @@ export async function productsRoutes(app: FastifyInstance) {
       } catch (e) {
         throw new ApiError('MARKETPLACE_ERROR', e instanceof Error ? e.message : String(e), 502);
       }
+      const rows = await upsertProducts(req.db, req.tenantId, found);
+      return { products: rows.map(toApiProduct) };
+    }
+
+    if (q.source === 'AWIN') {
+      if (!q.query) throw ApiError.validation('Informe uma palavra-chave');
+      const found = await searchAwinCatalog(req.db, q.query, q.limit);
       const rows = await upsertProducts(req.db, req.tenantId, found);
       return { products: rows.map(toApiProduct) };
     }
@@ -123,7 +131,7 @@ export async function productsRoutes(app: FastifyInstance) {
     }
 
     const allFound: ProductData[] = [];
-    const queuedUrls: { kind: Exclude<MarketplaceKind, 'SHOPEE'>; url: string }[] = [];
+    const queuedUrls: { kind: Exclude<MarketplaceKind, 'SHOPEE' | 'AWIN'>; url: string }[] = [];
     let lastError: Error | null = null;
 
     for (const item of itemsWithMeta) {
@@ -158,6 +166,15 @@ export async function productsRoutes(app: FastifyInstance) {
           const { creds } = await loadShopeeCredentials(req.db);
           const found = await getShopeeAdapter().fetchByUrls(creds, kindUrls);
           allFound.push(...found);
+        } else if (kind === 'AWIN') {
+          const found = await fetchAwinCatalogByUrls(req.db, kindUrls);
+          allFound.push(...found);
+          const foundUrls = new Set(found.map((f) => f.originalUrl));
+          for (const u of kindUrls) {
+            if (!foundUrls.has(u)) {
+              unsupported.push({ url: u, reason: 'Produto Awin não encontrado no catálogo importado' });
+            }
+          }
         } else if (scrapeInline) {
           const amazonCreds = kind === 'AMAZON' ? await loadTagCredentials(req.db, kind) : {};
           const found = await getTagAdapter(kind).fetchByUrls(amazonCreds, kindUrls);

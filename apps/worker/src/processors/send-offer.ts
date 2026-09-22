@@ -10,7 +10,7 @@ import {
   renderCouponTemplate,
   renderTemplate,
 } from '@afilados/core';
-import { getTagAdapter, type MarketplaceAdapter, type ShopeeCredentials } from '@afilados/marketplaces';
+import { getTagAdapter, type AwinCredentials, type MarketplaceAdapter, type ShopeeCredentials } from '@afilados/marketplaces';
 import type { ProductData, SendOfferJob, SendTelegramJob, TagCredentials } from '@afilados/shared';
 import { publishEvent } from '../lib/events';
 import { enqueueSendTelegram } from '../lib/queue-helpers';
@@ -23,6 +23,7 @@ const log = pino({ name: 'send-offer' });
 export interface SendOfferDeps {
   gateway: WhatsAppGateway;
   shopee: MarketplaceAdapter<ShopeeCredentials>;
+  awin: MarketplaceAdapter<AwinCredentials>;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
   rng?: () => number;
@@ -153,7 +154,24 @@ export async function sendOffer(
         timezone: window.timezone,
       });
       affiliateLink = await deps.shopee.toAffiliateLink(creds, product.originalUrl, subId);
-    } else if (product.source !== 'SHOPEE' && product.source !== 'MANUAL' && conn?.encryptedCredentials) {
+    } else if (product.source === 'AWIN' && conn?.encryptedCredentials) {
+      const creds = decryptJson<AwinCredentials>(Buffer.from(conn.encryptedCredentials));
+      const subId = generateSubId(subIdPattern, {
+        now: t,
+        batchId: batch.id,
+        timezone: window.timezone,
+      });
+      try {
+        affiliateLink = await deps.awin.toAffiliateLink(creds, product.originalUrl, subId);
+      } catch (err) {
+        log.warn({ batchItemId: item.id, err }, 'falha ao gerar link de afiliado da Awin; usando link original');
+      }
+    } else if (
+      product.source !== 'SHOPEE' &&
+      product.source !== 'AWIN' &&
+      product.source !== 'MANUAL' &&
+      conn?.encryptedCredentials
+    ) {
       const creds = decryptJson<TagCredentials>(Buffer.from(conn.encryptedCredentials));
       try {
         affiliateLink = await resolveTagAdapter(product.source).toAffiliateLink(

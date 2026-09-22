@@ -15,6 +15,7 @@ const ALL_MARKETS: { key: MarketplaceKind; label: string }[] = [
   { key: 'MERCADOLIVRE', label: 'Mercado Livre' },
   { key: 'AMAZON', label: 'Amazon' },
   { key: 'MAGALU', label: 'Magalu' },
+  { key: 'AWIN', label: 'Awin' },
 ];
 
 const selectCls = 'mt-1 h-9 w-full rounded-md border border-input bg-surface-2 px-2 text-sm';

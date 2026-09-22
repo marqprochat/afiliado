@@ -3,6 +3,7 @@ export const QUEUE_SEND_OFFER = 'send-offer';
 export const QUEUE_MIRROR_MESSAGE = 'mirror-message';
 export const QUEUE_PRODUCT_ENRICH = 'product-enrich';
 export const QUEUE_SEND_TELEGRAM = 'send-telegram';
+export const QUEUE_AWIN_IMPORT = 'awin-import';
 
 export type WaCommand =
   | 'connect'
@@ -67,4 +68,8 @@ export interface SendTelegramJob {
   templateId: string;
   productId?: string;
   couponId?: string;
+}
+
+export interface AwinImportJob {
+  tenantId: string;
 }

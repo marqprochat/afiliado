@@ -47,3 +47,19 @@ describe('parseProductUrl', () => {
     expect(parseProductUrl('https://evilmercadolivre.com.br/MLB123').source).toBe('UNSUPPORTED');
   });
 });
+
+describe('parseProductUrl — Awin', () => {
+  it('reconhece um deep link awin1.com e não retorna externalId (awinmid é o anunciante, não o produto)', () => {
+    const result = parseProductUrl(
+      'https://www.awin1.com/cread.php?awinmid=111&awinaffid=456&ued=https%3A%2F%2Floja.com%2Fp1',
+    );
+    expect(result).toEqual({ source: 'AWIN' });
+    expect('externalId' in result).toBe(false);
+  });
+
+  it('reconhece um deep link awin1.com mesmo sem awinmid, também sem externalId', () => {
+    const result = parseProductUrl('https://www.awin1.com/cread.php?ued=x');
+    expect(result).toEqual({ source: 'AWIN' });
+    expect('externalId' in result).toBe(false);
+  });
+});

@@ -170,7 +170,13 @@ export function SearchFilters({
         )}
         {!isShopee && (mode === 'category' || mode === 'shop' || mode === 'trending') && (
           <p className="text-xs text-muted-foreground">
-            {source === 'MERCADOLIVRE' ? 'Mercado Livre' : source === 'AMAZON' ? 'Amazon' : 'Magalu'}
+            {source === 'MERCADOLIVRE'
+              ? 'Mercado Livre'
+              : source === 'AMAZON'
+                ? 'Amazon'
+                : source === 'AWIN'
+                  ? 'Awin'
+                  : 'Magalu'}
             : só busca por palavra-chave está disponível.
           </p>
         )}

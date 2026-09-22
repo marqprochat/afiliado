@@ -21,6 +21,7 @@ export function MarketplacesClient() {
   const openKind = searchParams.get('open') as MarketplaceKind | null;
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState<MarketplaceFeedback | null>(null);
+  const [importPending, setImportPending] = useState(false);
 
   function openDrawer(kind: MarketplaceKind) {
     setFeedback(null);
@@ -35,7 +36,14 @@ export function MarketplacesClient() {
     setFeedback(null);
     try {
       if (Object.keys(payload.fields).length > 0) {
-        await apiFetch(`/marketplaces/${kind}`, { method: 'PUT', json: payload.fields });
+        const body: Record<string, unknown> = { ...payload.fields };
+        if (typeof body.feedIds === 'string') {
+          body.feedIds = body.feedIds
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean);
+        }
+        await apiFetch(`/marketplaces/${kind}`, { method: 'PUT', json: body });
       }
       if (payload.cookie) {
         await apiFetch(`/marketplaces/${kind}/session`, {
@@ -102,6 +110,22 @@ export function MarketplacesClient() {
           onSubmit={(payload) => handleSubmit(openKind, payload)}
           pending={pending}
           feedback={feedback}
+          onImportNow={
+            openKind === 'AWIN'
+              ? async () => {
+                  setImportPending(true);
+                  try {
+                    await apiFetch('/marketplaces/awin/import', { method: 'POST' });
+                    setFeedback({ message: 'Import solicitado — os produtos aparecem em alguns minutos.', ok: true });
+                  } catch (err) {
+                    setFeedback({ message: err instanceof Error ? err.message : 'Falha ao solicitar import.', ok: false });
+                  } finally {
+                    setImportPending(false);
+                  }
+                }
+              : undefined
+          }
+          importPending={importPending}
         />
       )}
     </div>

@@ -220,3 +220,39 @@ describe('products + queue', () => {
     ).toBe(1);
   });
 });
+
+describe('produtos — Awin', () => {
+  it('POST /products/search com source AWIN busca no cache local', async () => {
+    await prisma.awinCatalogProduct.create({
+      data: {
+        tenantId: t.tenantId,
+        feedId: 'f1',
+        externalId: 'aw1',
+        title: 'Liquidificador Turbo',
+        price: 150,
+        deepLink: 'https://www.awin1.com/cread.php?x=aw1',
+        raw: {},
+      },
+    });
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/v1/products/search',
+      headers: { cookie },
+      payload: { source: 'AWIN', mode: 'keyword', query: 'liquidificador', limit: 10 },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().products).toHaveLength(1);
+    expect(r.json().products[0].title).toBe('Liquidificador Turbo');
+  });
+
+  it('POST /products/import com uma URL awin1.com resolve pelo cache', async () => {
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/v1/products/import',
+      headers: { cookie },
+      payload: { urls: ['https://www.awin1.com/cread.php?x=aw1'] },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().products).toHaveLength(1);
+  });
+});

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { prisma, encryptJson } from '@afilados/db';
-import { createShopeeAdapter } from '@afilados/marketplaces';
+import { createShopeeAdapter, createAwinAdapter, type AwinCredentials } from '@afilados/marketplaces';
 import { sendOffer, type SendOfferDeps } from '../src/processors/send-offer';
 import type { OutgoingMessage, WhatsAppGateway } from '../src/wa/gateway';
 import { closeRedis } from '../src/lib/redis';
@@ -52,6 +52,7 @@ const gateway = new FakeGateway();
 const deps: SendOfferDeps = {
   gateway,
   shopee: createShopeeAdapter({ mock: true }),
+  awin: createAwinAdapter(),
   now: () => new Date('2026-09-14T12:00:00-03:00'),
   sleep: async () => undefined,
   rng: () => 0.5,
@@ -309,5 +310,65 @@ describe('sendOffer', () => {
 
     const updated = await prisma.batchItem.findUniqueOrThrow({ where: { id: itemId } });
     expect(updated.status).toBe('SENT');
+  });
+
+  it('gera o link de afiliado da Awin com clickref no envio', async () => {
+    await prisma.marketplaceConnection.create({
+      data: {
+        tenantId,
+        kind: 'AWIN',
+        status: 'OK',
+        encryptedCredentials: encryptJson({
+          publisherId: 'p1',
+          datafeedApiKey: 'k1',
+          feedIds: ['f1'],
+        } satisfies AwinCredentials),
+      },
+    });
+    const awinProductId = (
+      await prisma.product.create({
+        data: {
+          tenantId,
+          source: 'AWIN',
+          externalId: 'a1',
+          title: 'Produto Awin',
+          price: 49.9,
+          images: ['https://img/awin.jpg'],
+          originalUrl: 'https://www.awin1.com/cread.php?x=1',
+          raw: {},
+        },
+      })
+    ).id;
+    const batch = await prisma.batch.create({
+      data: {
+        tenantId,
+        sessionId,
+        templateId,
+        name: 'b-awin',
+        groupJids: ['g1@g.us'],
+        telegramChatIds: [],
+        intervalMin: 1,
+        mediaMode: 'IMAGE',
+        status: 'SCHEDULED',
+        items: { create: [{ productId: awinProductId, order: 0, runAt: new Date() }] },
+      },
+      include: { items: true },
+    });
+    const item = batch.items[0]!;
+
+    const awin = {
+      kind: 'AWIN' as const,
+      checkConnection: async () => ({ ok: true }),
+      fetchByUrls: async () => [],
+      toAffiliateLink: async (_creds: unknown, url: string, subId?: string) =>
+        `${url}&clickref=${subId}`,
+    };
+    const result = await sendOffer({ ...deps, awin }, item.id);
+    expect(result.outcome).toBe('sent');
+    const msg = gateway.sent[0]!.msg;
+    expect(msg.kind).toBe('image');
+    if (msg.kind === 'image') {
+      expect(msg.caption).toContain('&clickref=');
+    }
   });
 });

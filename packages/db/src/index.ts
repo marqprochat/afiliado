@@ -31,6 +31,7 @@ const TENANT_MODELS = new Set([
   'AutomationQueueItem',
   'TelegramBot',
   'TelegramChat',
+  'AwinCatalogProduct',
 ]);
 
 const FILTERED_OPS = new Set([

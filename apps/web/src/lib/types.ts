@@ -64,6 +64,9 @@ export interface MarketplaceConnection {
   mattTool: string | null;
   amazonClientId: string | null;
   hasAmazonApiSecret: boolean;
+  awinPublisherId: string | null;
+  hasAwinDatafeedApiKey: boolean;
+  awinFeedIds: string[];
   /** Sessão do ML sincronizada (extensão ou colagem manual); gera link oficial meli.la. */
   mlSessionSyncedAt: string | null;
   mlSessionSource: 'extension' | 'manual' | null;

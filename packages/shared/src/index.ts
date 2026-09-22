@@ -9,3 +9,4 @@ export * from './api';
 export * from './marketplaces';
 export * from './cookie-parser';
 export * from './automation';
+export * from './awin';
