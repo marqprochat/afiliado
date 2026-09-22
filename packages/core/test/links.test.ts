@@ -76,5 +76,33 @@ describe('rewriteLinks', () => {
 
 describe('productKey', () => {
   it('formata', () =>
-    expect(productKey({ source: 'AMAZON', externalId: 'B0X' })).toBe('AMAZON:B0X'));
+    expect(productKey({ source: 'AMAZON', externalId: 'B0X' }, 'https://amazon.com.br/dp/B0X')).toBe(
+      'AMAZON:B0X',
+    ));
+
+  it('com externalId presente, ignora a URL (mesma chave independente da URL)', () => {
+    const withUrlA = productKey(
+      { source: 'AMAZON', externalId: 'B08N5WRWNW' },
+      'https://amazon.com.br/dp/B08N5WRWNW',
+    );
+    const withUrlB = productKey(
+      { source: 'AMAZON', externalId: 'B08N5WRWNW' },
+      'https://amazon.com.br/outro-caminho-qualquer',
+    );
+    expect(withUrlA).toBe('AMAZON:B08N5WRWNW');
+    expect(withUrlB).toBe('AMAZON:B08N5WRWNW');
+  });
+
+  it('sem externalId (ex.: Awin), URLs diferentes geram chaves diferentes', () => {
+    const keyA = productKey({ source: 'AWIN' }, 'https://www.awin1.com/cread.php?x=1');
+    const keyB = productKey({ source: 'AWIN' }, 'https://www.awin1.com/cread.php?x=2');
+    expect(keyA).not.toBe(keyB);
+    expect(keyA.startsWith('AWIN:')).toBe(true);
+    expect(keyB.startsWith('AWIN:')).toBe(true);
+  });
+
+  it('sem externalId, a mesma URL sempre gera a mesma chave (determinístico)', () => {
+    const url = 'https://www.awin1.com/cread.php?x=1';
+    expect(productKey({ source: 'AWIN' }, url)).toBe(productKey({ source: 'AWIN' }, url));
+  });
 });

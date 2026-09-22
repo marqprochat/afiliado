@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { MarketplaceKind, TagCredentials } from '@afilados/shared';
 import { parseProductUrl, type ParsedProductUrl } from './urls';
 
@@ -72,6 +73,7 @@ export function rewriteLinks(text: string, replacements: Map<string, string>): s
   return out;
 }
 
-export function productKey(parsed: { source: string; externalId?: string }): string {
-  return `${parsed.source}:${parsed.externalId ?? ''}`;
+export function productKey(parsed: { source: string; externalId?: string }, url: string): string {
+  const id = parsed.externalId ?? createHash('sha1').update(url).digest('hex');
+  return `${parsed.source}:${id}`;
 }

@@ -170,7 +170,7 @@ export async function mirrorMessage(
     }
   }
 
-  const prodKey = productKey(links[0]!.parsed);
+  const prodKey = productKey(links[0]!.parsed, links[0]!.url);
   let effectiveMode: 'CLONE' | 'TEMPLATE' = 'CLONE';
   let fallbackReason: string | null = null;
   let templateProducts: { product: ProductData; convertedUrl: string }[] = [];
