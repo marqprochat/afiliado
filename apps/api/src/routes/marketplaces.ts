@@ -19,9 +19,11 @@ import {
   getShopeeAdapter,
   loadAwinCredentials,
   publicConnection,
+  selectableAwinFeeds,
   upsertMarketplaceCredentials,
 } from '../lib/marketplaces';
 import { getQueue } from '../lib/redis';
+import { listDatafeeds } from '@afilados/marketplaces';
 
 const kindParams = z.object({ kind: marketplaceKindParam });
 
@@ -52,9 +54,8 @@ export async function marketplacesRoutes(app: FastifyInstance) {
               }
           : kind === 'AWIN'
             ? {
-                publisherId: body.publisherId ?? prev.publisherId,
-                datafeedApiKey: body.datafeedApiKey ?? prev.datafeedApiKey,
-                feedIds: body.feedIds ?? prev.feedIds,
+                feedListUrl: body.feedListUrl ?? prev.feedListUrl,
+                feedIds: body.feedIds ?? prev.feedIds ?? [],
               }
             : kind === 'MERCADOLIVRE'
               ? {
@@ -144,10 +145,34 @@ export async function marketplacesRoutes(app: FastifyInstance) {
     return publicConnection(row, kind);
   });
 
+  app.get('/marketplaces/awin/feeds', async (req) => {
+    const creds = await loadAwinCredentials(req.db);
+    let entries;
+    try {
+      entries = await listDatafeeds(creds.feedListUrl);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      throw new ApiError('MARKETPLACE_ERROR', message, 502);
+    }
+    const selected = new Set(creds.feedIds);
+    const feeds = selectableAwinFeeds(entries).map((f) => ({
+      feedId: f.feedId,
+      advertiserName: f.advertiserName,
+      region: f.region,
+      format: f.format,
+      productCount: f.productCount,
+      selected: selected.has(f.feedId),
+    }));
+    return { feeds };
+  });
+
   app.post('/marketplaces/awin/import', async (req) => {
     // Valida as credenciais antes de enfileirar — sem isso, um tenant sem AWIN configurada
     // recebe { queued: true } mas o job roda e não faz nada (importAwinCatalog retorna []).
-    await loadAwinCredentials(req.db);
+    const creds = await loadAwinCredentials(req.db);
+    if (!creds.feedIds.length) {
+      throw new ApiError('MARKETPLACE_ERROR', 'Selecione ao menos um programa para importar', 400);
+    }
     const q = getQueue<AwinImportJob>(QUEUE_AWIN_IMPORT);
     await q.add(
       'awin-import',

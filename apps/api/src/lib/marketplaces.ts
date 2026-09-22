@@ -13,6 +13,7 @@ import {
   getTagAdapter,
   type AliexpressCredentials,
   type AwinCredentials,
+  type AwinFeedListEntry,
   type MarketplaceAdapter,
   type ShopeeCredentials,
 } from '@afilados/marketplaces';
@@ -27,8 +28,7 @@ export function getShopeeAdapter() {
 type AnyCreds = {
   appId?: string;
   secret?: string;
-  publisherId?: string;
-  datafeedApiKey?: string;
+  feedListUrl?: string;
   feedIds?: string[];
   appKey?: string;
   appSecret?: string;
@@ -54,8 +54,7 @@ export function publicConnection(
     mattTool: creds?.mattTool ?? null,
     amazonClientId: creds?.amazonApi?.clientId ?? null,
     hasAmazonApiSecret: Boolean(creds?.amazonApi?.clientSecret),
-    awinPublisherId: creds?.publisherId ?? null,
-    hasAwinDatafeedApiKey: Boolean(creds?.datafeedApiKey),
+    hasAwinFeedListUrl: Boolean(creds?.feedListUrl),
     awinFeedIds: creds?.feedIds ?? [],
     aliexpressAppKey: creds?.appKey ?? null,
     hasAliexpressAppSecret: Boolean(creds?.appSecret),
@@ -115,14 +114,14 @@ export async function loadAwinCredentials(db: TenantClient): Promise<AwinCredent
   const creds = row?.encryptedCredentials
     ? decryptJson<AwinCredentials>(Buffer.from(row.encryptedCredentials))
     : ({} as Partial<AwinCredentials>);
-  if (!creds.publisherId || !creds.datafeedApiKey || !creds.feedIds?.length) {
+  if (!creds.feedListUrl) {
     throw new ApiError(
       'MARKETPLACE_ERROR',
-      'AWIN: configure Publisher ID, Datafeed API Key e ao menos um Feed ID em Configurações',
+      'AWIN: cole o link da lista de feeds em Configurações',
       400,
     );
   }
-  return creds as AwinCredentials;
+  return { feedListUrl: creds.feedListUrl, feedIds: creds.feedIds ?? [] };
 }
 
 export async function loadAliexpressCredentials(db: TenantClient): Promise<AliexpressCredentials> {
@@ -187,6 +186,21 @@ export async function upsertMarketplaceCredentials(
     await db.marketplaceConnection.create({ data: { kind, ...data } });
   }
   return (await db.marketplaceConnection.findFirst({ where: { kind } }))!;
+}
+
+/**
+ * Filtra só os feeds ativos (`membershipStatus === 'active'`) e ordena BR primeiro, depois por
+ * nome do anunciante — usado tanto por GET /marketplaces/awin/feeds quanto testável isolado.
+ */
+export function selectableAwinFeeds(feeds: AwinFeedListEntry[]): AwinFeedListEntry[] {
+  return feeds
+    .filter((f) => f.membershipStatus === 'active')
+    .sort((a, b) => {
+      const aBr = a.region === 'BR' ? 0 : 1;
+      const bBr = b.region === 'BR' ? 0 : 1;
+      if (aBr !== bBr) return aBr - bBr;
+      return a.advertiserName.localeCompare(b.advertiserName);
+    });
 }
 
 export { getAdapter, getAwinAdapter, getTagAdapter, getAliexpressAdapter };
