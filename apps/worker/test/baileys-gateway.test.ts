@@ -98,3 +98,86 @@ describe('BaileysGateway.sendMessage', () => {
     await gw.stopAll();
   });
 });
+
+describe('BaileysGateway.onMessage', () => {
+  const groupJid = '120363405287806336@g.us';
+
+  const connected = async () => {
+    const gw = new BaileysGateway();
+    await gw.connect(session(), { mode: 'qr' });
+    const sock = sockets[sockets.length - 1]!;
+    sock.emit('connection.update', { connection: 'open' });
+    await vi.waitFor(() => expect(gw.isConnected(sessionId)).toBe(true));
+    return { gw, sock };
+  };
+
+  it('entrega mensagem que o próprio dono colou no grupo (fromMe)', async () => {
+    const { gw, sock } = await connected();
+    const received: string[] = [];
+    gw.onMessage((m) => received.push(m.msgId));
+
+    sock.emit('messages.upsert', {
+      type: 'notify',
+      messages: [
+        {
+          key: { remoteJid: groupJid, fromMe: true, id: 'COLADO-PELO-DONO' },
+          message: { conversation: 'https://mercadolivre.com.br/p/123' },
+        },
+      ],
+    });
+
+    expect(received).toEqual(['COLADO-PELO-DONO']);
+    await gw.stopAll();
+  });
+
+  it('ignora o eco das mensagens que o próprio espelhamento enviou (anti-loop)', async () => {
+    const { gw, sock } = await connected();
+    const received: string[] = [];
+    gw.onMessage((m) => received.push(m.msgId));
+
+    const { messageId } = await gw.sendMessage(
+      sessionId,
+      groupJid,
+      { kind: 'text', text: 'oferta espelhada' },
+      { dedupeEcho: true },
+    );
+
+    sock.emit('messages.upsert', {
+      type: 'notify',
+      messages: [
+        {
+          key: { remoteJid: groupJid, fromMe: true, id: messageId },
+          message: { conversation: 'oferta espelhada' },
+        },
+      ],
+    });
+
+    expect(received).toEqual([]);
+    await gw.stopAll();
+  });
+
+  it('NÃO ignora envio de outra origem (ex.: automação de ofertas) no mesmo grupo', async () => {
+    const { gw, sock } = await connected();
+    const received: string[] = [];
+    gw.onMessage((m) => received.push(m.msgId));
+
+    // Sem dedupeEcho: é a automação de disparo de ofertas enviando pro grupo, não o mirror.
+    const { messageId } = await gw.sendMessage(sessionId, groupJid, {
+      kind: 'text',
+      text: 'oferta automática',
+    });
+
+    sock.emit('messages.upsert', {
+      type: 'notify',
+      messages: [
+        {
+          key: { remoteJid: groupJid, fromMe: true, id: messageId },
+          message: { conversation: 'oferta automática' },
+        },
+      ],
+    });
+
+    expect(received).toEqual([messageId]);
+    await gw.stopAll();
+  });
+});

@@ -306,7 +306,9 @@ export async function mirrorMessage(
     try {
       let lastMessageId: string | undefined;
       for (const msg of outgoingMessages) {
-        const res = await deps.gateway.sendMessage(rule.sessionId, targetJid, msg);
+        const res = await deps.gateway.sendMessage(rule.sessionId, targetJid, msg, {
+          dedupeEcho: true,
+        });
         lastMessageId = res.messageId;
       }
       mirroredCount++;

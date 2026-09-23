@@ -124,6 +124,7 @@ describe('mirrorMessage processor', () => {
         kind: 'text',
         text: 'Olha isso: https://www.amazon.com.br/dp/B0ABCDEF12?tag=minha-20',
       }),
+      { dedupeEcho: true },
     );
 
     const log = await prisma.mirrorLog.findFirstOrThrow({

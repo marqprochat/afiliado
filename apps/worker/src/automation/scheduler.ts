@@ -260,7 +260,7 @@ export class AutomationScheduler {
               .catch(() => null);
             if (!bot) continue;
             await this.enqueueTelegram({
-              jobId: `${batch.items[0]!.id}:${chatId}`,
+              jobId: `${batch.items[0]!.id}-${chatId}`,
               tenantId: rule.tenantId,
               botId: bot.botId,
               chatId,

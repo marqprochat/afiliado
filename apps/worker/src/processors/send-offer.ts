@@ -302,7 +302,7 @@ async function sendPlainMessages(
       .catch(() => null);
     if (!chat) continue;
     await enqueueTelegram({
-      jobId: `${item.id}:${chatId}`,
+      jobId: `${item.id}-${chatId}`,
       tenantId,
       botId: chat.botId,
       chatId,

@@ -42,7 +42,12 @@ export interface GroupDetails {
 }
 export interface WhatsAppGateway {
   isConnected(sessionId: string): boolean;
-  sendMessage(sessionId: string, jid: string, msg: OutgoingMessage): Promise<{ messageId: string }>;
+  sendMessage(
+    sessionId: string,
+    jid: string,
+    msg: OutgoingMessage,
+    opts?: { dedupeEcho?: boolean },
+  ): Promise<{ messageId: string }>;
   fetchGroups(sessionId: string): Promise<GroupInfo[]>;
   onMessage(handler: (msg: IncomingGroupMessage) => void): void;
   downloadMedia(sessionId: string, message: unknown): Promise<Buffer>;

@@ -77,6 +77,31 @@ describe('MirrorListener', () => {
     ]);
   });
 
+  it('jobId gerado não pode conter ":" (BullMQ rejeita Custom Id com um único ":")', async () => {
+    const gateway = new FakeGateway();
+    const opts: { jobId: string }[] = [];
+    const queue = {
+      add: async (_n: string, _data: unknown, o: { jobId: string }) => {
+        opts.push(o);
+      },
+    };
+    const listener = new MirrorListener(gateway as unknown as WhatsAppGateway, {
+      queue: queue as never,
+    });
+    await listener.start();
+
+    gateway.emit({
+      sessionId,
+      sourceJid: 'src@g.us',
+      msgId: 'M1',
+      message: { conversation: 'x' },
+    });
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(opts).toHaveLength(1);
+    expect(opts[0]!.jobId).not.toContain(':');
+  });
+
   it('regra desativada não é carregada; reload() atualiza o cache', async () => {
     await prisma.mirrorRule.updateMany({ where: { id: ruleId }, data: { enabled: false } });
     const gateway = new FakeGateway();

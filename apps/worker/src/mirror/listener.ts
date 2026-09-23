@@ -69,7 +69,9 @@ export class MirrorListener {
         message: m.message,
       };
       await this.queue.add('mirror-message', job, {
-        jobId: `${rule.id}:${m.msgId}`,
+        // BullMQ rejeita Custom Id com ":" (reservado p/ jobs repetíveis, exige 3 partes) —
+        // ids de mensagem do WhatsApp podem conter ":", então trocamos o separador e saneamos.
+        jobId: `${rule.id}-${m.msgId}`.replace(/:/g, '_'),
         attempts: 3,
         backoff: { type: 'exponential', delay: 30_000 },
       });

@@ -203,7 +203,7 @@ describe('sendOffer', () => {
     );
     expect(enqueued).toEqual([
       {
-        jobId: `${item.id}:-100999`,
+        jobId: `${item.id}--100999`,
         tenantId,
         botId: bot.id,
         chatId: '-100999',

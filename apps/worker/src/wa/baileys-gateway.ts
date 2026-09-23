@@ -85,6 +85,8 @@ export class BaileysGateway implements WhatsAppGateway {
   /** reconexões agendadas, mesmo sem socket vivo no mapa `live` */
   private pendingReconnects = new Map<string, NodeJS.Timeout>();
   private messageHandlers: ((m: IncomingGroupMessage) => void)[] = [];
+  /** ids das mensagens enviadas pelo processor de espelhamento, para não reespelhar o próprio eco */
+  private dedupedEchoIds = new Set<string>();
   private groupCache = new Map<string, { data: unknown; timestamp: number }>();
 
   onMessage(handler: (m: IncomingGroupMessage) => void) {
@@ -232,7 +234,14 @@ export class BaileysGateway implements WhatsAppGateway {
       if (type !== 'notify') return;
       for (const msg of messages) {
         const remoteJid = msg.key.remoteJid;
-        if (!remoteJid?.endsWith('@g.us') || msg.key.fromMe || !msg.key.id) continue;
+        if (!remoteJid?.endsWith('@g.us') || !msg.key.id) continue;
+        // O dono cola as ofertas no grupo de origem pela própria conta conectada, então
+        // `fromMe` precisa passar. Só o eco do que o PRÓPRIO ESPELHAMENTO enviou é descartado
+        // (via sendMessage(..., { dedupeEcho: true })) — senão a mensagem espelhada, ao cair
+        // num grupo que também é origem de outra regra, entraria em loop. Envios de outras
+        // origens (ex.: automação de ofertas) não são marcados e por isso continuam elegíveis
+        // a serem espelhados normalmente.
+        if (msg.key.fromMe && this.dedupedEchoIds.has(msg.key.id)) continue;
         const incoming: IncomingGroupMessage = {
           sessionId,
           sourceJid: remoteJid,
@@ -404,7 +413,12 @@ export class BaileysGateway implements WhatsAppGateway {
       await this.setStatus(sessionId, s.tenantId, 'LOGGED_OUT', { lastQr: null, pairCode: null });
   }
 
-  async sendMessage(sessionId: string, jid: string, msg: OutgoingMessage) {
+  async sendMessage(
+    sessionId: string,
+    jid: string,
+    msg: OutgoingMessage,
+    opts?: { dedupeEcho?: boolean },
+  ) {
     const l = this.live.get(sessionId);
     if (!l || !this.isConnected(sessionId)) throw new Error('WA_NOT_CONNECTED');
 
@@ -495,6 +509,12 @@ export class BaileysGateway implements WhatsAppGateway {
 
     const messageId = sent?.key?.id;
     if (!messageId) throw new Error('Envio sem messageId');
+    if (opts?.dedupeEcho) {
+      if (this.dedupedEchoIds.size >= 5000) {
+        this.dedupedEchoIds.delete(this.dedupedEchoIds.values().next().value!);
+      }
+      this.dedupedEchoIds.add(messageId);
+    }
     return { messageId };
   }
 

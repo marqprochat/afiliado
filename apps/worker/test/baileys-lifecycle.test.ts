@@ -130,7 +130,7 @@ describe('BaileysGateway — ciclo de vida', () => {
     await gw.stopAll();
   });
 
-  it('onMessage repassa mensagem de grupo não-própria; ignora fromMe e DM', async () => {
+  it('onMessage repassa mensagens de grupo (inclusive as do próprio dono); ignora DM', async () => {
     const gw = new BaileysGateway();
     const received: unknown[] = [];
     gw.onMessage((m) => received.push(m));
@@ -147,8 +147,9 @@ describe('BaileysGateway — ciclo de vida', () => {
         },
       ],
     });
-    expect(received).toHaveLength(1);
+    expect(received).toHaveLength(2);
     expect(received[0]).toMatchObject({ sessionId, sourceJid: 'g1@g.us', msgId: 'M1' });
+    expect(received[1]).toMatchObject({ sessionId, sourceJid: 'g1@g.us', msgId: 'M2' });
     await gw.stopAll();
   });
 });

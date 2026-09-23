@@ -3104,8 +3104,8 @@ packages:
   msgpackr@2.0.5:
     resolution: {integrity: sha512-cef05H/dSYpLpqp3sj/qyZh5vhUYCalnaLO7j1yOmpsR0y/XwLVtK7r5gn+U/F7CTEfMowcGhlUQJDLcLf7jcA==}
 
-  music-metadata@11.15.0:
-    resolution: {integrity: sha512-TN+kO1/oOc8UzDW5N3vSDncBcv9WyNnQQe/NFMcFWq6G1+zVeYUkGvkYpQ/S8wb8vKtUD7i78dIaY0cv+cmPRA==}
+  music-metadata@11.16.0:
+    resolution: {integrity: sha512-D5zZHjQUbfR+JhHjnwdbgeB4qj7zVJtisCB1I0GAI5sjSPGqPLoY14WMIzMeR8iA+4nSFswVLpO4crksZUybBg==}
     engines: {node: '>=18'}
 
   nanoid@3.3.19:
@@ -5368,7 +5368,7 @@ snapshots:
       async-mutex: 0.5.0
       axios: 1.20.0
       libsignal: https://codeload.github.com/whiskeysockets/libsignal-node/tar.gz/bcea72df9ec34d9d9140ab30619cf479c7c144c7
-      music-metadata: 11.15.0
+      music-metadata: 11.16.0
       pino: 9.14.0
       protobufjs: 7.6.6
       sharp: 0.33.5
@@ -6604,7 +6604,7 @@ snapshots:
     optionalDependencies:
       msgpackr-extract: 3.0.4
 
-  music-metadata@11.15.0:
+  music-metadata@11.16.0:
     dependencies:
       '@borewit/text-codec': 0.2.2
       '@tokenizer/token': 0.3.0
