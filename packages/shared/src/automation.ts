@@ -49,3 +49,8 @@ export const automationQueueCouponSchema = z
     }
   });
 export type AutomationQueueCouponBody = z.infer<typeof automationQueueCouponSchema>;
+
+export const automationQueueOrderSchema = z.object({
+  itemIds: z.array(z.string().min(1)).min(1),
+});
+export type AutomationQueueOrderBody = z.infer<typeof automationQueueOrderSchema>;

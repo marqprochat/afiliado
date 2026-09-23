@@ -6,6 +6,7 @@ import {
   automationRuleUpdateSchema,
   automationQueueLinkSchema,
   automationQueueCouponSchema,
+  automationQueueOrderSchema,
 } from '@afilados/shared';
 import { parseProductUrl } from '@afilados/core';
 import { getTagAdapter } from '@afilados/marketplaces';
@@ -126,10 +127,49 @@ export async function automationsRoutes(app: FastifyInstance) {
     const { id } = idParam.parse(req.params);
     const items = await req.db.automationQueueItem.findMany({
       where: { ruleId: id, status: 'PENDING' },
-      orderBy: [{ manual: 'desc' }, { addedAt: 'asc' }],
+      orderBy: { position: 'asc' },
       include: { product: true, coupon: true },
     });
-    return items.map((i) => ({ ...i, product: i.product ? toApiProduct(i.product) : null }));
+    return items.map((i) => ({
+      ...i,
+      product: i.product ? toApiProduct(i.product) : null,
+      marketplace: i.kind === 'PRODUCT' ? (i.product?.source ?? null) : (i.coupon?.store ?? null),
+    }));
+  });
+
+  app.patch('/automations/:id/queue/order', async (req, reply) => {
+    const { id } = idParam.parse(req.params);
+    const { itemIds } = automationQueueOrderSchema.parse(req.body);
+    const rule = await req.db.automationRule.findFirst({ where: { id } });
+    if (!rule) throw ApiError.notFound('Regra não encontrada');
+
+    const pending = await req.db.automationQueueItem.findMany({
+      where: { ruleId: id, status: 'PENDING' },
+      select: { id: true },
+    });
+    const pendingIds = new Set(pending.map((p) => p.id));
+    const receivedIds = new Set(itemIds);
+    const sameSet =
+      pendingIds.size === receivedIds.size &&
+      pendingIds.size === itemIds.length &&
+      itemIds.every((itemId) => pendingIds.has(itemId));
+    if (!sameSet) {
+      throw ApiError.validation(
+        'A lista precisa conter exatamente os itens pendentes da regra, sem repetição',
+      );
+    }
+
+    await req.db.$transaction(
+      itemIds.map((itemId, index) =>
+        req.db.automationQueueItem.updateMany({
+          where: { id: itemId, ruleId: id },
+          data: { position: index },
+        }),
+      ),
+    );
+
+    await app.events.publish(req.tenantId, { type: 'automation.queue.updated', ruleId: id });
+    return reply.status(204).send();
   });
 
   app.delete('/automations/:id/queue/:itemId', async (req, reply) => {
