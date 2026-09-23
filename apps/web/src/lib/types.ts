@@ -259,6 +259,7 @@ export interface AutomationQueueItem {
   manual: boolean;
   status: 'PENDING' | 'DISPATCHED' | 'REMOVED';
   addedAt: string;
+  marketplace: string | null;
   product: ApiProduct | null;
   coupon: { id: string; store: string; code: string; description: string; expiresAt: string | null; sourceUrl: string | null } | null;
 }
