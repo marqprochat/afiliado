@@ -54,3 +54,13 @@ export const automationQueueOrderSchema = z.object({
   itemIds: z.array(z.string().min(1)).min(1),
 });
 export type AutomationQueueOrderBody = z.infer<typeof automationQueueOrderSchema>;
+
+/**
+ * Chave Redis que marca "esta regra está buscando produtos agora" — setada pelo worker no
+ * início de discoverForRule e removida ao final (sucesso ou erro), com TTL de segurança para
+ * nunca ficar travada caso o processo caia no meio da busca. Lida pela API (getAutomationStats)
+ * para expor `isDiscovering` no painel.
+ */
+export function automationDiscoveringKey(ruleId: string): string {
+  return `automation-discovering:${ruleId}`;
+}
