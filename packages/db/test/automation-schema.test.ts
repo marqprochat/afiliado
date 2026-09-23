@@ -61,5 +61,45 @@ describe('schema de automação', () => {
     expect(couponTemplate.kind).toBe('COUPON');
 
     await prisma.tenant.delete({ where: { id: tenant.id } });
+    expect(queueItem.position).toBeTypeOf('number');
+    expect(couponItem.position).toBeGreaterThan(queueItem.position);
+  });
+
+  it('cada AutomationQueueItem novo nasce com position maior que o anterior da mesma regra', async () => {
+    const tenant = await prisma.tenant.create({ data: { name: 'automation-position-test' } });
+    const session = await prisma.waSession.create({ data: { tenantId: tenant.id, label: 's' } });
+    const template = await prisma.template.create({
+      data: { tenantId: tenant.id, name: 't', body: 'oi' },
+    });
+    const rule = await prisma.automationRule.create({
+      data: {
+        tenantId: tenant.id,
+        name: 'Regra Position',
+        marketplaces: ['SHOPEE'],
+        keywords: ['fone'],
+        blockedKeywords: [],
+        sessionId: session.id,
+        groupJids: ['g@g.us'],
+        templateId: template.id,
+      },
+    });
+    const product = await prisma.product.create({
+      data: {
+        tenantId: tenant.id,
+        source: 'SHOPEE',
+        title: 'Fone Y',
+        price: 50,
+        images: ['https://x/y.png'],
+        originalUrl: 'https://shopee.com.br/p/y',
+        raw: {},
+      },
+    });
+    const first = await prisma.automationQueueItem.create({
+      data: { tenantId: tenant.id, ruleId: rule.id, kind: 'PRODUCT', productId: product.id },
+    });
+    const second = await prisma.automationQueueItem.create({
+      data: { tenantId: tenant.id, ruleId: rule.id, kind: 'PRODUCT', productId: product.id },
+    });
+    expect(second.position).toBeGreaterThan(first.position);
   });
 });

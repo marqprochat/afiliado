@@ -184,6 +184,60 @@ describe('AutomationScheduler', () => {
     expect(logs.map((l) => l.action)).toEqual(['SKIPPED', 'DISPATCHED']);
   });
 
+  it('despacha pela ordem de position, não por manual nem por addedAt', async () => {
+    const rule = await prisma.automationRule.create({
+      data: {
+        tenantId,
+        name: 'r-position',
+        enabled: true,
+        marketplaces: ['SHOPEE'],
+        keywords: ['fone'],
+        blockedKeywords: [],
+        intervalMin: 5,
+        sessionId,
+        groupJids: ['g1@g.us'],
+        templateId,
+      },
+    });
+    const product = await prisma.product.create({
+      data: {
+        tenantId,
+        source: 'SHOPEE',
+        title: 'Fone Automático',
+        price: 40,
+        images: ['https://x/auto.png'],
+        originalUrl: 'https://shopee.com.br/p/auto',
+        raw: {},
+      },
+    });
+    // Item AUTOMÁTICO criado primeiro (position menor por padrão)
+    const autoItem = await prisma.automationQueueItem.create({
+      data: { tenantId, ruleId: rule.id, kind: 'PRODUCT', productId: product.id, manual: false },
+    });
+    // Item MANUAL criado depois (position maior por padrão) — no comportamento antigo,
+    // manual sempre venceria; agora precisa perder porque tem position maior.
+    const manualItem = await prisma.automationQueueItem.create({
+      data: { tenantId, ruleId: rule.id, kind: 'PRODUCT', productId: product.id, manual: true },
+    });
+    expect(manualItem.position).toBeGreaterThan(autoItem.position);
+
+    const enqueued: string[] = [];
+    const scheduler = new AutomationScheduler({
+      enqueue: async (_tenantId, batchItemId) => {
+        enqueued.push(batchItemId);
+      },
+      discover: async () => {},
+    });
+    await scheduler.reload();
+    await scheduler.tick();
+
+    expect(enqueued.length).toBe(1);
+    const dispatchedAuto = await prisma.automationQueueItem.findUniqueOrThrow({ where: { id: autoItem.id } });
+    const stillPendingManual = await prisma.automationQueueItem.findUniqueOrThrow({ where: { id: manualItem.id } });
+    expect(dispatchedAuto.status).toBe('DISPATCHED');
+    expect(stillPendingManual.status).toBe('PENDING');
+  });
+
   it('ignora tick reentrante enquanto o anterior ainda está em andamento', async () => {
     const rule = await prisma.automationRule.create({
       data: {

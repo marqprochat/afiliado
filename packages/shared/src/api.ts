@@ -187,6 +187,9 @@ export const extensionCaptureSchema = z.object({
   shipping: z.enum(['NONE', 'FREE', 'FULL', 'UNKNOWN']).nullish(),
   flashSaleEndsAt: z.string().datetime().nullish(),
   affiliateUrl: z.string().url().nullish(),
+  // Quando presente, o produto capturado vai direto para a fila desta automação (item manual)
+  // em vez de cair na Fila de Triagem.
+  automationRuleId: z.string().min(1).nullish(),
 });
 export type ExtensionCaptureBody = z.infer<typeof extensionCaptureSchema>;
 

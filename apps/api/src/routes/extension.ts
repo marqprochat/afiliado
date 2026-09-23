@@ -77,12 +77,31 @@ export async function extensionRoutes(app: FastifyInstance) {
     },
   });
 
+  // 1.5 Lista as automações ativas do tenant, para a extensão escolher destino da captura
+  app.get('/extension/automations', async (req) => {
+    const { tenantId } = await authenticateExtension(req);
+    const db = forTenant(tenantId);
+    const rules = await db.automationRule.findMany({
+      where: { enabled: true },
+      select: { id: true, name: true, keywords: true, marketplaces: true },
+      orderBy: { name: 'asc' },
+    });
+    return rules;
+  });
+
   // 2. Captura de produto da aba ativa diretamente pela extensão
   app.post('/extension/capture', async (req) => {
     const { tenantId } = await authenticateExtension(req);
     const body = extensionCaptureSchema.parse(req.body);
 
     const tenantDb = forTenant(tenantId);
+
+    let rule: { id: string } | null = null;
+    if (body.automationRuleId) {
+      rule = await tenantDb.automationRule.findFirst({ where: { id: body.automationRuleId } });
+      if (!rule) throw ApiError.notFound('Automação não encontrada');
+    }
+
     let productData: ProductData;
     if (body.title && body.price !== undefined && body.price !== null) {
       // Produto já veio com metadados extraídos pelo content script
@@ -125,6 +144,19 @@ export async function extensionRoutes(app: FastifyInstance) {
     const [savedProduct] = await upsertProducts(tenantDb, tenantId, [productData]);
     if (!savedProduct) {
       throw new ApiError('INTERNAL', 'Falha ao salvar produto', 500);
+    }
+
+    if (rule) {
+      const queueItem = await tenantDb.automationQueueItem.create({
+        // @ts-expect-error tenantId é injetado pela extensão forTenant
+        data: { ruleId: rule.id, kind: 'PRODUCT', productId: savedProduct.id, manual: true },
+      });
+      await app.events.publish(tenantId, { type: 'automation.queue.updated', ruleId: rule.id });
+      return {
+        ok: true,
+        product: toApiProduct(savedProduct),
+        automationQueueItem: { id: queueItem.id, ruleId: rule.id },
+      };
     }
 
     // Adiciona na Fila de Triagem como selecionado

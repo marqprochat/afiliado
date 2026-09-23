@@ -11,6 +11,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const configMsg = document.getElementById('config-msg');
   const btnCapture = document.getElementById('btn-capture');
   const captureStatus = document.getElementById('capture-status');
+  const captureTarget = document.getElementById('capture-target');
+  const captureTargetLabel = document.getElementById('capture-target-label');
   const linkDashboard = document.getElementById('link-dashboard');
   const mlSection = document.getElementById('ml-session-section');
   const mlPill = document.getElementById('ml-session-pill');
@@ -90,7 +92,83 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  const isAuthed = await checkAuth();
+  let isAuthed = await checkAuth();
+
+  // --- Destino da captura: Fila de Triagem (padrão) ou uma automação ---
+  let automationRules = [];
+
+  function updateCaptureButtonLabel() {
+    const selected = captureTarget.value;
+    if (!selected) {
+      btnCapture.textContent = '⚡ Enviar para Fila de Triagem';
+      return;
+    }
+    const rule = automationRules.find((r) => r.id === selected);
+    btnCapture.textContent = rule ? `⚡ Enviar para: ${rule.name}` : '⚡ Enviar para Fila de Triagem';
+  }
+
+  async function loadAutomationTargets() {
+    if (!isAuthed) {
+      captureTargetLabel.classList.add('hidden');
+      captureTarget.classList.add('hidden');
+      return;
+    }
+    let fetchFailed = false;
+    try {
+      const url = `${normalizeApiUrl(config.apiUrl)}/api/v1/extension/automations`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${config.apiToken}` },
+      });
+      if (!res.ok) {
+        fetchFailed = true;
+        automationRules = [];
+      } else {
+        automationRules = await res.json();
+      }
+    } catch {
+      fetchFailed = true;
+      automationRules = [];
+    }
+
+    if (fetchFailed || automationRules.length === 0) {
+      captureTargetLabel.classList.add('hidden');
+      captureTarget.classList.add('hidden');
+      captureTarget.innerHTML = '';
+      updateCaptureButtonLabel();
+      return;
+    }
+
+    captureTargetLabel.classList.remove('hidden');
+    captureTarget.classList.remove('hidden');
+    captureTarget.innerHTML = '';
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.textContent = 'Fila de Triagem';
+    captureTarget.appendChild(defaultOpt);
+    for (const rule of automationRules) {
+      const opt = document.createElement('option');
+      opt.value = rule.id;
+      opt.textContent = rule.name;
+      captureTarget.appendChild(opt);
+    }
+
+    if (typeof chrome !== 'undefined' && chrome.storage) {
+      const { lastCaptureTarget } = await chrome.storage.local.get(['lastCaptureTarget']);
+      if (lastCaptureTarget && automationRules.some((r) => r.id === lastCaptureTarget)) {
+        captureTarget.value = lastCaptureTarget;
+      }
+    }
+    updateCaptureButtonLabel();
+  }
+
+  captureTarget.addEventListener('change', async () => {
+    updateCaptureButtonLabel();
+    if (typeof chrome !== 'undefined' && chrome.storage) {
+      await chrome.storage.local.set({ lastCaptureTarget: captureTarget.value });
+    }
+  });
+
+  await loadAutomationTargets();
 
   // --- Sessão do Mercado Livre (cookies → link oficial meli.la) ---
   function fmtDate(iso) {
@@ -154,6 +232,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const ok = await checkAuth();
     if (ok) {
+      isAuthed = ok;
       configMsg.textContent = 'Conectado com sucesso!';
       configMsg.className = 'msg msg-success';
       // primeira sincronização da sessão ML logo após conectar
@@ -162,6 +241,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         .then(renderMlSession)
         .catch(() => {});
       setTimeout(() => inspectCurrentTab(), 500);
+      void loadAutomationTargets();
     }
   });
 
@@ -269,6 +349,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       ...(currentProduct.images && currentProduct.images.length > 0 ? { images: currentProduct.images } : {}),
       ...(currentProduct.shipping && currentProduct.shipping !== 'UNKNOWN' ? { shipping: currentProduct.shipping } : {}),
       ...(currentProduct.couponCode ? { couponCode: currentProduct.couponCode } : {}),
+      ...(captureTarget.value ? { automationRuleId: captureTarget.value } : {}),
     };
 
     try {
@@ -283,9 +364,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
 
       if (res.ok) {
-        captureStatus.textContent = '✅ Oferta adicionada na Fila de Triagem!';
+        const destino = captureTarget.value
+          ? `automação "${automationRules.find((r) => r.id === captureTarget.value)?.name ?? ''}"`
+          : 'Fila de Triagem';
+        captureStatus.textContent = `✅ Oferta adicionada em ${destino}!`;
         captureStatus.className = 'msg msg-success';
-        btnCapture.textContent = '✓ Adicionado na Fila';
+        btnCapture.textContent = '✓ Adicionado';
       } else {
         const err = await res.json().catch(() => null);
         captureStatus.textContent = `❌ ${err?.error?.message || 'Falha ao capturar oferta'}`;

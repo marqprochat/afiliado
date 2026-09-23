@@ -117,6 +117,160 @@ describe('API Tokens & Extension Routes (Fase 3)', () => {
     expect(queueCount).toBe(1);
   });
 
+  it('lista automações ativas do tenant em GET /extension/automations', async () => {
+    const tokenRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/api-tokens',
+      headers: { cookie },
+      payload: { name: 'Token Automacoes' },
+    });
+    const { token } = tokenRes.json();
+
+    const session = await prisma.waSession.create({ data: { tenantId: t.tenantId, label: 's' } });
+    const template = await prisma.template.findFirstOrThrow({ where: { tenantId: t.tenantId } });
+    const enabledRule = await prisma.automationRule.create({
+      data: {
+        tenantId: t.tenantId,
+        name: 'Ativa',
+        enabled: true,
+        marketplaces: ['SHOPEE'],
+        keywords: ['fone'],
+        blockedKeywords: [],
+        sessionId: session.id,
+        groupJids: ['g@g.us'],
+        templateId: template.id,
+      },
+    });
+    await prisma.automationRule.create({
+      data: {
+        tenantId: t.tenantId,
+        name: 'Desligada',
+        enabled: false,
+        marketplaces: ['SHOPEE'],
+        keywords: ['fone'],
+        blockedKeywords: [],
+        sessionId: session.id,
+        groupJids: ['g@g.us'],
+        templateId: template.id,
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/extension/automations',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const list = res.json();
+    expect(list.map((r: { id: string }) => r.id)).toContain(enabledRule.id);
+    expect(list.map((r: { name: string }) => r.name)).not.toContain('Desligada');
+  });
+
+  it('captura com automationRuleId cria item na fila da automação, não na fila de triagem', async () => {
+    const tokenRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/api-tokens',
+      headers: { cookie },
+      payload: { name: 'Token Automacao Captura' },
+    });
+    const { token } = tokenRes.json();
+
+    const session = await prisma.waSession.create({ data: { tenantId: t.tenantId, label: 's2' } });
+    const template = await prisma.template.findFirstOrThrow({ where: { tenantId: t.tenantId } });
+    const rule = await prisma.automationRule.create({
+      data: {
+        tenantId: t.tenantId,
+        name: 'Destino',
+        enabled: true,
+        marketplaces: ['SHOPEE'],
+        keywords: ['fone'],
+        blockedKeywords: [],
+        sessionId: session.id,
+        groupJids: ['g@g.us'],
+        templateId: template.id,
+      },
+    });
+
+    const captureRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/extension/capture',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        url: 'https://shopee.com.br/produto-x-i.111.222',
+        marketplaceKind: 'SHOPEE',
+        title: 'Produto Capturado Para Automação',
+        price: 39.9,
+        automationRuleId: rule.id,
+      },
+    });
+    expect(captureRes.statusCode).toBe(200);
+
+    const queueItems = await prisma.automationQueueItem.findMany({ where: { ruleId: rule.id } });
+    expect(queueItems.length).toBe(1);
+    expect(queueItems[0]!.manual).toBe(true);
+    expect(queueItems[0]!.status).toBe('PENDING');
+
+    const queueListRes = await app.inject({
+      method: 'GET',
+      url: `/api/v1/automations/${rule.id}/queue`,
+      headers: { cookie },
+    });
+    const queueList = queueListRes.json();
+    expect(queueList[0].marketplace).toBe('SHOPEE');
+
+    // Não deve ter ido para a Fila de Triagem
+    const triageItems = await prisma.queueItem.findMany({
+      where: { tenantId: t.tenantId, product: { title: 'Produto Capturado Para Automação' } },
+    });
+    expect(triageItems.length).toBe(0);
+  });
+
+  it('rejeita automationRuleId de outro tenant na captura → 404', async () => {
+    const tokenRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/api-tokens',
+      headers: { cookie },
+      payload: { name: 'Token Automacao Foreign' },
+    });
+    const { token } = tokenRes.json();
+
+    const other = await createTenantWithUser('extensao-outro-tenant');
+    const otherSession = await prisma.waSession.create({ data: { tenantId: other.tenantId, label: 's3' } });
+    const otherTemplate = await prisma.template.findFirstOrThrow({ where: { tenantId: other.tenantId } });
+    const foreignRule = await prisma.automationRule.create({
+      data: {
+        tenantId: other.tenantId,
+        name: 'De outro tenant',
+        enabled: true,
+        marketplaces: ['SHOPEE'],
+        keywords: ['fone'],
+        blockedKeywords: [],
+        sessionId: otherSession.id,
+        groupJids: ['g@g.us'],
+        templateId: otherTemplate.id,
+      },
+    });
+
+    const captureRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/extension/capture',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        url: 'https://shopee.com.br/produto-y-i.333.444',
+        marketplaceKind: 'SHOPEE',
+        title: 'Produto IDOR',
+        price: 10,
+        automationRuleId: foreignRule.id,
+      },
+    });
+    expect(captureRes.statusCode).toBe(404);
+
+    const items = await prisma.automationQueueItem.findMany({ where: { ruleId: foreignRule.id } });
+    expect(items.length).toBe(0);
+
+    await cleanupTenant(other.tenantId);
+  });
+
   it('aceita captura da extensão com campos opcionais nulos (nullish)', async () => {
     const tokenRes = await app.inject({
       method: 'POST',

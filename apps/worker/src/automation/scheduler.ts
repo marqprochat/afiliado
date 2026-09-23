@@ -126,35 +126,38 @@ export class AutomationScheduler {
     let discovered = false;
 
     for (let attempt = 0; attempt < MAX_DISPATCH_ATTEMPTS; attempt++) {
-      const manual = await prisma.automationQueueItem.findFirst({
-        where: { ruleId: rule.id, manual: true, status: 'PENDING' },
-        orderBy: { addedAt: 'asc' },
-        include: { product: true, coupon: true },
-      });
-
-      let candidate = manual;
-      if (!candidate) {
-        if (!discovered) {
+      // Gatilho da descoberta preservado do comportamento original: só dispara quando não há
+      // NENHUM item manual pendente nesta rodada (mesmo que já existam itens automáticos na
+      // fila) — no máximo uma vez por chamada de dispatchNext, via a flag `discovered`.
+      if (!discovered) {
+        const hasManualPending = await prisma.automationQueueItem.count({
+          where: { ruleId: rule.id, manual: true, status: 'PENDING' },
+        });
+        if (hasManualPending === 0) {
           await this.discover(rule);
           discovered = true;
         }
-        candidate = await prisma.automationQueueItem.findFirst({
-          where: { ruleId: rule.id, manual: false, status: 'PENDING' },
-          orderBy: { addedAt: 'asc' },
-          include: { product: true, coupon: true },
+      }
+
+      // Escolha do candidato: sempre pela ordem da fila (position), manual ou automático —
+      // é a ordem que o usuário vê e reorganiza no painel.
+      const candidate = await prisma.automationQueueItem.findFirst({
+        where: { ruleId: rule.id, status: 'PENDING' },
+        orderBy: { position: 'asc' },
+        include: { product: true, coupon: true },
+      });
+
+      if (!candidate) {
+        await prisma.automationLog.create({
+          data: {
+            tenantId: rule.tenantId,
+            ruleId: rule.id,
+            marketplace: rule.marketplaces[0] ?? 'SHOPEE',
+            action: 'SKIPPED',
+            reason: 'nenhum produto elegível encontrado',
+          },
         });
-        if (!candidate) {
-          await prisma.automationLog.create({
-            data: {
-              tenantId: rule.tenantId,
-              ruleId: rule.id,
-              marketplace: rule.marketplaces[0] ?? 'SHOPEE',
-              action: 'SKIPPED',
-              reason: 'nenhum produto elegível encontrado',
-            },
-          });
-          return;
-        }
+        return;
       }
 
       const productMarketplace =

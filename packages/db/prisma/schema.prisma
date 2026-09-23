@@ -574,10 +574,15 @@ model AutomationQueueItem {
   template     Template?              @relation("QueueItemCouponTemplate", fields: [templateId], references: [id])
   manual       Boolean                @default(false)
   status       AutomationQueueStatus  @default(PENDING)
+  // Ordem de disparo dentro da regra — menor primeiro. Autoincrementa sozinho em cada create(),
+  // então um item novo (manual, cupom, descoberta automática ou extensão) sempre nasce no fim
+  // da fila sem nenhum código precisar calcular "próxima posição". Reordenar é só regravar este
+  // campo (ver PATCH /automations/:id/queue/order).
+  position     Int                    @default(autoincrement())
   addedAt      DateTime               @default(now())
   dispatchedAt DateTime?
 
-  @@index([tenantId, ruleId, status, addedAt])
+  @@index([tenantId, ruleId, status, position])
 }
 
 model ScheduledMessage {
