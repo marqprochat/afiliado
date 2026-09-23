@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnCapture = document.getElementById('btn-capture');
   const captureStatus = document.getElementById('capture-status');
   const captureTarget = document.getElementById('capture-target');
+  const captureTargetLabel = document.getElementById('capture-target-label');
   const linkDashboard = document.getElementById('link-dashboard');
   const mlSection = document.getElementById('ml-session-section');
   const mlPill = document.getElementById('ml-session-pill');
@@ -91,7 +92,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  const isAuthed = await checkAuth();
+  let isAuthed = await checkAuth();
 
   // --- Destino da captura: Fila de Triagem (padrão) ou uma automação ---
   let automationRules = [];
@@ -107,18 +108,38 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function loadAutomationTargets() {
-    if (!isAuthed) return;
+    if (!isAuthed) {
+      captureTargetLabel.classList.add('hidden');
+      captureTarget.classList.add('hidden');
+      return;
+    }
+    let fetchFailed = false;
     try {
       const url = `${normalizeApiUrl(config.apiUrl)}/api/v1/extension/automations`;
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${config.apiToken}` },
       });
-      if (!res.ok) return;
-      automationRules = await res.json();
+      if (!res.ok) {
+        fetchFailed = true;
+        automationRules = [];
+      } else {
+        automationRules = await res.json();
+      }
     } catch {
+      fetchFailed = true;
       automationRules = [];
     }
 
+    if (fetchFailed || automationRules.length === 0) {
+      captureTargetLabel.classList.add('hidden');
+      captureTarget.classList.add('hidden');
+      captureTarget.innerHTML = '';
+      updateCaptureButtonLabel();
+      return;
+    }
+
+    captureTargetLabel.classList.remove('hidden');
+    captureTarget.classList.remove('hidden');
     captureTarget.innerHTML = '';
     const defaultOpt = document.createElement('option');
     defaultOpt.value = '';
@@ -211,6 +232,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const ok = await checkAuth();
     if (ok) {
+      isAuthed = ok;
       configMsg.textContent = 'Conectado com sucesso!';
       configMsg.className = 'msg msg-success';
       // primeira sincronização da sessão ML logo após conectar

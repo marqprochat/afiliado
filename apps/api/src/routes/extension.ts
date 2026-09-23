@@ -95,6 +95,13 @@ export async function extensionRoutes(app: FastifyInstance) {
     const body = extensionCaptureSchema.parse(req.body);
 
     const tenantDb = forTenant(tenantId);
+
+    let rule: { id: string } | null = null;
+    if (body.automationRuleId) {
+      rule = await tenantDb.automationRule.findFirst({ where: { id: body.automationRuleId } });
+      if (!rule) throw ApiError.notFound('Automação não encontrada');
+    }
+
     let productData: ProductData;
     if (body.title && body.price !== undefined && body.price !== null) {
       // Produto já veio com metadados extraídos pelo content script
@@ -139,10 +146,7 @@ export async function extensionRoutes(app: FastifyInstance) {
       throw new ApiError('INTERNAL', 'Falha ao salvar produto', 500);
     }
 
-    if (body.automationRuleId) {
-      const rule = await tenantDb.automationRule.findFirst({ where: { id: body.automationRuleId } });
-      if (!rule) throw ApiError.notFound('Automação não encontrada');
-
+    if (rule) {
       const queueItem = await tenantDb.automationQueueItem.create({
         // @ts-expect-error tenantId é injetado pela extensão forTenant
         data: { ruleId: rule.id, kind: 'PRODUCT', productId: savedProduct.id, manual: true },

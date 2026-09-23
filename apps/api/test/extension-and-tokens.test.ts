@@ -210,6 +210,14 @@ describe('API Tokens & Extension Routes (Fase 3)', () => {
     expect(queueItems[0]!.manual).toBe(true);
     expect(queueItems[0]!.status).toBe('PENDING');
 
+    const queueListRes = await app.inject({
+      method: 'GET',
+      url: `/api/v1/automations/${rule.id}/queue`,
+      headers: { cookie },
+    });
+    const queueList = queueListRes.json();
+    expect(queueList[0].marketplace).toBe('SHOPEE');
+
     // Não deve ter ido para a Fila de Triagem
     const triageItems = await prisma.queueItem.findMany({
       where: { tenantId: t.tenantId, product: { title: 'Produto Capturado Para Automação' } },
