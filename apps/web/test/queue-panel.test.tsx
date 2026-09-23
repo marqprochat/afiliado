@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { QueuePanel } from '@/components/automations/queue-panel';
 import type { AutomationQueueItem } from '@/lib/types';
@@ -66,5 +66,19 @@ describe('QueuePanel', () => {
     expect(screen.getByText('Amazon')).toBeInTheDocument();
     expect(screen.getByText('Cupom PROMO10')).toBeInTheDocument();
     expect(screen.getByText('manual')).toBeInTheDocument();
+  });
+
+  it('clicar na linha do item abre o link original em nova aba', async () => {
+    apiFetchMock.mockResolvedValue(items);
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    renderPanel();
+    const title = await screen.findByText('Fone Bluetooth');
+    fireEvent.click(title.closest('li')!);
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://shopee.com.br/p/1',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    openSpy.mockRestore();
   });
 });

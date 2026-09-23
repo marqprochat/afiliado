@@ -233,6 +233,7 @@ export interface AutomationStats {
   discoveredToday: number;
   dispatchedToday: number;
   lastDispatchedAt: string | null;
+  isDiscovering: boolean;
 }
 export interface AutomationRule {
   id: string;

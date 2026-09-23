@@ -61,6 +61,9 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       if (e.type.startsWith('mirror.')) {
         void qc.invalidateQueries({ queryKey: ['mirror'] });
       }
+      if (e.type.startsWith('automation.')) {
+        void qc.invalidateQueries({ queryKey: ['automations'] });
+      }
       if (e.type === 'product.enriched' || e.type === 'queue.updated') {
         void qc.invalidateQueries({ queryKey: ['products'] });
         void qc.invalidateQueries({ queryKey: ['queue'] });
