@@ -529,6 +529,20 @@ describe('discoverForRule (cota balanceada entre marketplaces)', () => {
     expect(items.map((i) => i.product!.source)).toEqual(['SHOPEE', 'AWIN', 'SHOPEE', 'AWIN']);
   });
 
+  it('descobre produtos novos em rodadas seguintes, sem travar nos mesmos já enfileirados', async () => {
+    const rule = await makeRule({ marketplaces: ['SHOPEE'], maxOffersPerDay: 4 });
+    const allResults = shopeeResults(6, 'Fone Rodada');
+
+    await discoverForRule(rule, { searchShopee: async () => allResults });
+    const afterFirst = await prisma.automationQueueItem.findMany({ where: { ruleId: rule.id } });
+    expect(afterFirst.length).toBe(4);
+
+    await discoverForRule(rule, { searchShopee: async () => allResults });
+    const afterSecond = await prisma.automationQueueItem.findMany({ where: { ruleId: rule.id } });
+    // A segunda rodada não deve reenfileirar os 4 já existentes — deve pegar os 2 restantes dos 6 originais.
+    expect(afterSecond.length).toBe(6);
+  });
+
   it('marca e remove a chave Redis de "buscando" mesmo quando uma busca falha', async () => {
     const { getRedis } = await import('../src/lib/redis');
     const { automationDiscoveringKey } = await import('@afilados/shared');

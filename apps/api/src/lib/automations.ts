@@ -19,7 +19,7 @@ export async function getAutomationStats(db: TenantClient, ruleId: string): Prom
     db.automationLog.count({ where: { ruleId, action: 'DISCOVERED', createdAt: { gte: startOfDay } } }),
     db.automationLog.count({ where: { ruleId, action: 'DISPATCHED', createdAt: { gte: startOfDay } } }),
     db.automationLog.findFirst({ where: { ruleId, action: 'DISPATCHED' }, orderBy: { createdAt: 'desc' } }),
-    getRedis().exists(automationDiscoveringKey(ruleId)),
+    getRedis().exists(automationDiscoveringKey(ruleId)).catch(() => 0),
   ]);
 
   return {

@@ -334,24 +334,44 @@ export async function discoverForRule(rule: AutomationRule, deps: DiscoveryDeps 
   );
 
   try {
+    const alreadyQueued = await prisma.automationQueueItem.findMany({
+      where: { ruleId: rule.id },
+      select: { product: { select: { source: true, externalId: true } } },
+    });
+    const alreadyQueuedKeys = new Set(
+      alreadyQueued
+        .filter((i) => i.product)
+        .map((i) => `${i.product!.source}:${i.product!.externalId}`),
+    );
+
+    const settled = await Promise.allSettled(
+      rule.marketplaces.map((marketplace) => searchOneMarketplace(marketplace, rule, keyword, deps)),
+    );
     const resultsByMarketplace = new Map<MarketplaceKind, ProductData[]>();
-    for (const marketplace of rule.marketplaces) {
+    for (let i = 0; i < rule.marketplaces.length; i++) {
+      const marketplace = rule.marketplaces[i]!;
+      const result = settled[i]!;
       let raw: ProductData[];
-      try {
-        raw = await searchOneMarketplace(marketplace, rule, keyword, deps);
-      } catch (e) {
+      if (result.status === 'fulfilled') {
+        raw = result.value;
+      } else {
         await prisma.automationLog.create({
           data: {
             tenantId: rule.tenantId,
             ruleId: rule.id,
             marketplace,
             action: 'ERROR',
-            reason: e instanceof Error ? e.message : String(e),
+            reason: result.reason instanceof Error ? result.reason.message : String(result.reason),
           },
         });
         raw = [];
       }
-      resultsByMarketplace.set(marketplace, raw.filter((p) => matchesFilters(p, rule, keyword)));
+      resultsByMarketplace.set(
+        marketplace,
+        raw.filter(
+          (p) => matchesFilters(p, rule, keyword) && !alreadyQueuedKeys.has(`${p.source}:${p.externalId ?? ''}`),
+        ),
+      );
     }
 
     const taken = distributeWithQuota(rule.marketplaces, resultsByMarketplace, quota);
