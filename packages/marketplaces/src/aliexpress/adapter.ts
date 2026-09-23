@@ -4,12 +4,20 @@ import type { ConnectionStatus, MarketplaceAdapter, AliexpressCredentials } from
 import { AliexpressClient } from './client';
 import { mapAliexpressProduct, type AliexpressRawProduct } from './mapper';
 
+// A API de afiliados do AliExpress só reconhece os sorts documentados; um valor fora da lista
+// não dá erro — ela simplesmente ignora a ordenação E o ranking de relevância da keyword,
+// devolvendo um recorte solto do match amplo (busca por "notebook" retornando estojos, caixas e
+// cadernos, porque o termo também é traduzido). Validado contra a API real: 'discount_desc' e
+// 'commission_rate_desc' devolvem exatamente o mesmo conjunto que um sort inventado — só
+// last_volume_desc e sale_price_asc/desc são realmente aceitos. Por isso "maior desconto" e
+// "maior comissão" caem no padrão last_volume_desc (mais vendidos), que preserva a relevância;
+// desconto mínimo e comissão continuam sendo aplicados nos filtros locais.
 const SORT_MAP: Record<SearchSort, string> = {
   SALES_DESC: 'last_volume_desc',
-  COMMISSION_DESC: 'commission_rate_desc',
+  COMMISSION_DESC: 'last_volume_desc',
   PRICE_ASC: 'sale_price_asc',
   PRICE_DESC: 'sale_price_desc',
-  DISCOUNT_DESC: 'discount_desc',
+  DISCOUNT_DESC: 'last_volume_desc',
 };
 
 export interface AliexpressAdapterOptions {

@@ -75,6 +75,86 @@ describe('discoverForRule (Shopee)', () => {
     expect(discoveredLogs[0]!.marketplace).toBe('SHOPEE');
   });
 
+  it('descarta resultado cujo título não contém a keyword pesquisada', async () => {
+    const rule = await prisma.automationRule.create({
+      data: {
+        tenantId,
+        name: 'discovery-keyword-obrigatoria',
+        marketplaces: ['SHOPEE'],
+        keywords: ['notebook'],
+        blockedKeywords: [],
+        sessionId: (await prisma.waSession.create({ data: { tenantId, label: 'skw' } })).id,
+        groupJids: ['g@g.us'],
+        templateId: (await prisma.template.create({ data: { tenantId, name: 'tkw', body: 'x' } })).id,
+      },
+    });
+
+    const searchResults = [
+      {
+        source: 'SHOPEE' as const,
+        externalId: 'kw1',
+        title: 'Notebook Dell Gamer i7',
+        price: 3500,
+        images: ['https://x/kw1.png'],
+        shipping: 'FREE' as const,
+        originalUrl: 'https://shopee.com.br/p/kw1',
+        raw: {},
+      },
+      {
+        source: 'SHOPEE' as const,
+        externalId: 'kw2',
+        title: 'Estojo de Lápis Kawaii Gato Gordinho',
+        price: 15,
+        images: ['https://x/kw2.png'],
+        shipping: 'FREE' as const,
+        originalUrl: 'https://shopee.com.br/p/kw2',
+        raw: {},
+      },
+    ];
+
+    await discoverForRule(rule, { searchShopee: async () => searchResults });
+
+    const items = await prisma.automationQueueItem.findMany({
+      where: { ruleId: rule.id },
+      include: { product: true },
+    });
+    expect(items.length).toBe(1);
+    expect(items[0]!.product!.title).toBe('Notebook Dell Gamer i7');
+  });
+
+  it('compara a keyword ignorando acentos e caixa', async () => {
+    const rule = await prisma.automationRule.create({
+      data: {
+        tenantId,
+        name: 'discovery-keyword-acentos',
+        marketplaces: ['SHOPEE'],
+        keywords: ['fone ouvido'],
+        blockedKeywords: [],
+        sessionId: (await prisma.waSession.create({ data: { tenantId, label: 'sac' } })).id,
+        groupJids: ['g@g.us'],
+        templateId: (await prisma.template.create({ data: { tenantId, name: 'tac', body: 'x' } })).id,
+      },
+    });
+
+    await discoverForRule(rule, {
+      searchShopee: async () => [
+        {
+          source: 'SHOPEE' as const,
+          externalId: 'ac1',
+          title: 'FONE de OUVIDO Bluetooth com Microfone',
+          price: 99,
+          images: ['https://x/ac1.png'],
+          shipping: 'FREE' as const,
+          originalUrl: 'https://shopee.com.br/p/ac1',
+          raw: {},
+        },
+      ],
+    });
+
+    const items = await prisma.automationQueueItem.findMany({ where: { ruleId: rule.id } });
+    expect(items.length).toBe(1);
+  });
+
   it('não duplica AutomationQueueItem se o produto já estiver na fila da regra', async () => {
     const rule = await prisma.automationRule.create({
       data: {

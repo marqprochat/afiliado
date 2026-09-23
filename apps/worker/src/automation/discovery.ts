@@ -28,11 +28,33 @@ export interface DiscoveryDeps {
   fetchByUrls?: Partial<Record<'MERCADOLIVRE' | 'AMAZON' | 'MAGALU', (urls: string[]) => Promise<ProductData[]>>>;
 }
 
+function normalizeText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+/**
+ * A busca por palavra-chave dos marketplaces é fuzzy: a Shopee mistura itens só parecidos e o
+ * AliExpress ainda traduz o termo (buscar "notebook" traz caderno, bloco de notas e estojo).
+ * A keyword da regra é obrigatória para o usuário, então ela é reaplicada aqui sobre o título —
+ * cada palavra dela precisa aparecer, ignorando acentos e caixa.
+ */
+function matchesKeyword(title: string, keyword: string): boolean {
+  const normalizedTitle = normalizeText(title);
+  const tokens = normalizeText(keyword).split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+  return tokens.every((token) => normalizedTitle.includes(token));
+}
+
 function matchesFilters(
   p: ProductData,
   rule: Pick<AutomationRule, 'blockedKeywords' | 'minDiscountPct' | 'minPrice' | 'maxPrice'>,
+  keyword: string,
 ): boolean {
   const title = p.title.toLowerCase();
+  if (!matchesKeyword(p.title, keyword)) return false;
   if (rule.blockedKeywords.some((k) => title.includes(k.toLowerCase()))) return false;
   if (rule.minDiscountPct != null && (p.discountPct ?? 0) < rule.minDiscountPct) return false;
   if (rule.minPrice != null && p.price < Number(rule.minPrice)) return false;
@@ -73,8 +95,13 @@ async function cachedDiscoverUrls(
   return urls;
 }
 
-async function queueEligibleProducts(rule: AutomationRule, marketplace: MarketplaceKind, results: ProductData[]) {
-  const eligible = results.filter((p) => matchesFilters(p, rule));
+async function queueEligibleProducts(
+  rule: AutomationRule,
+  marketplace: MarketplaceKind,
+  results: ProductData[],
+  keyword: string,
+) {
+  const eligible = results.filter((p) => matchesFilters(p, rule, keyword));
   for (const p of eligible) {
     const product = await prisma.product.upsert({
       where: {
@@ -255,5 +282,5 @@ export async function discoverForRule(rule: AutomationRule, deps: DiscoveryDeps 
     return;
   }
 
-  await queueEligibleProducts(rule, marketplace, results);
+  await queueEligibleProducts(rule, marketplace, results, keyword);
 }

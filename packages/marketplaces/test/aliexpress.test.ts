@@ -339,4 +339,41 @@ describe('createAliexpressAdapter', () => {
     const calledUrl = mockFetch.mock.calls[0][0];
     expect(calledUrl).toContain('method=aliexpress.affiliate.hotproduct.query');
   });
+  it('não envia sorts que a API do AliExpress não aceita (discount_desc) — cai no padrão last_volume_desc', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        aliexpress_affiliate_product_query_response: {
+          resp_result: { resp_code: 200, result: { products: { product: [] } } },
+        },
+      }),
+    });
+
+    const adapter = createAliexpressAdapter({ fetchImpl: mockFetch as any });
+    await adapter.search!(creds, {
+      source: 'ALIEXPRESS',
+      mode: 'keyword',
+      query: 'notebook',
+      sort: 'DISCOUNT_DESC',
+      limit: 10,
+      topSellers: false,
+      extraCommission: false,
+    });
+
+    const calledUrl = String(mockFetch.mock.calls[0]![0]);
+    expect(calledUrl).toContain('sort=last_volume_desc');
+    expect(calledUrl).not.toContain('discount_desc');
+
+    mockFetch.mockClear();
+    await adapter.search!(creds, {
+      source: 'ALIEXPRESS',
+      mode: 'keyword',
+      query: 'notebook',
+      sort: 'COMMISSION_DESC',
+      limit: 10,
+      topSellers: false,
+      extraCommission: false,
+    });
+    expect(String(mockFetch.mock.calls[0]![0])).toContain('sort=last_volume_desc');
+  });
 });
