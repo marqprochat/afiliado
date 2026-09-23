@@ -257,6 +257,9 @@ describe('API Tokens & Extension Routes (Fase 3)', () => {
     });
     expect(captureRes.statusCode).toBe(404);
 
+    const items = await prisma.automationQueueItem.findMany({ where: { ruleId: foreignRule.id } });
+    expect(items.length).toBe(0);
+
     await cleanupTenant(other.tenantId);
   });
 
