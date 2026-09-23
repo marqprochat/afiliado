@@ -27,6 +27,13 @@ function marketplaceLabel(marketplace: string | null): string {
   return MARKETPLACE_LABELS[marketplace] ?? marketplace;
 }
 
+/** Link original do item, para teste manual — produto usa originalUrl, cupom usa sourceUrl (pode não existir). Só aceita http(s) — nunca abre um esquema arbitrário (ex: javascript:) num window.open. */
+function itemUrl(it: AutomationQueueItem): string | null {
+  const url = it.kind === 'PRODUCT' ? (it.product?.originalUrl ?? null) : (it.coupon?.sourceUrl ?? null);
+  if (!url || !/^https?:\/\//i.test(url)) return null;
+  return url;
+}
+
 export function QueuePanel({ ruleId }: { ruleId: string }) {
   const { data: items } = useAutomationQueue(ruleId);
   const [linkUrl, setLinkUrl] = useState('');
@@ -82,57 +89,71 @@ export function QueuePanel({ ruleId }: { ruleId: string }) {
     <div className="mt-3 space-y-2 border-t border-border pt-3">
       <p className="text-sm font-medium">Programado para disparar</p>
       <ul className="space-y-1">
-        {order.map((it, index) => (
-          <li
-            key={it.id}
-            draggable
-            onDragStart={() => {
-              dragIndexRef.current = index;
-            }}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={() => handleDrop(index)}
-            className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-2 px-2 py-1 text-sm"
-          >
-            <span className="flex min-w-0 items-center gap-1.5">
-              <GripVertical
-                className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground"
-                aria-hidden
-              />
-              <Badge variant="outline" className="shrink-0 text-[10px]">
-                {marketplaceLabel(it.marketplace)}
-              </Badge>
-              {it.manual && (
-                <Badge variant="secondary" className="shrink-0 text-[10px]">
-                  manual
-                </Badge>
+        {order.map((it, index) => {
+          const url = itemUrl(it);
+          return (
+            <li
+              key={it.id}
+              draggable
+              onDragStart={() => {
+                dragIndexRef.current = index;
+              }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => handleDrop(index)}
+              onClick={() => {
+                if (url) window.open(url, '_blank', 'noopener,noreferrer');
+              }}
+              title={url ? 'Clique para abrir o link e testar manualmente' : undefined}
+              className={cn(
+                'flex flex-wrap items-start justify-between gap-2 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-sm transition-colors',
+                url && 'cursor-pointer hover:border-brand/50',
               )}
-              <span className="truncate">
-                {it.kind === 'PRODUCT' ? it.product?.title : `Cupom ${it.coupon?.code}`}
-              </span>
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="shrink-0"
-              onClick={() => removeItem.mutate(it.id)}
             >
-              Remover
-            </Button>
-          </li>
-        ))}
+              <span className="flex min-w-0 flex-1 items-start gap-1.5">
+                <GripVertical
+                  className="mt-0.5 h-4 w-4 shrink-0 cursor-grab text-muted-foreground"
+                  aria-hidden
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <Badge variant="outline" className="mt-0.5 shrink-0 text-[10px]">
+                  {marketplaceLabel(it.marketplace)}
+                </Badge>
+                {it.manual && (
+                  <Badge variant="secondary" className="mt-0.5 shrink-0 text-[10px]">
+                    manual
+                  </Badge>
+                )}
+                <span className="min-w-0 whitespace-normal break-words">
+                  {it.kind === 'PRODUCT' ? it.product?.title : `Cupom ${it.coupon?.code}`}
+                </span>
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeItem.mutate(it.id);
+                }}
+              >
+                Remover
+              </Button>
+            </li>
+          );
+        })}
         {order.length === 0 && (
           <li className="text-sm text-muted-foreground">Nada na fila ainda.</li>
         )}
       </ul>
       <form
-        className={cn('flex gap-2')}
+        className="flex flex-wrap gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           addLink.mutate();
         }}
       >
         <Input
-          className="flex-1"
+          className="min-w-0 flex-1"
           placeholder="Colar link de produto…"
           value={linkUrl}
           onChange={(e) => setLinkUrl(e.target.value)}

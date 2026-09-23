@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { automationRuleCreateSchema, automationQueueLinkSchema, automationQueueCouponSchema } from '../src/automation';
+import { automationRuleCreateSchema, automationQueueLinkSchema, automationQueueCouponSchema, automationDiscoveringKey } from '../src/automation';
 
 describe('automationRuleCreateSchema', () => {
   it('aceita uma regra válida', () => {
@@ -77,5 +77,12 @@ describe('automationQueueCouponSchema', () => {
       coupon: { store: 'AMAZON', code: 'PROMO10', description: '10% off' },
     });
     expect(withNew.coupon?.code).toBe('PROMO10');
+  });
+});
+
+describe('automationDiscoveringKey', () => {
+  it('gera uma chave estável e única por regra', () => {
+    expect(automationDiscoveringKey('rule-1')).toBe('automation-discovering:rule-1');
+    expect(automationDiscoveringKey('rule-2')).not.toBe(automationDiscoveringKey('rule-1'));
   });
 });

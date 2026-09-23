@@ -38,6 +38,7 @@ export type RealtimeEvent =
   | { type: 'mirror.rules.changed' }
   | { type: 'automation.rules.changed' }
   | { type: 'automation.queue.updated'; ruleId: string }
+  | { type: 'automation.discovery'; ruleId: string; discovering: boolean }
   | { type: 'product.enriched'; productId: string; status: 'SUCCESS' | 'ERROR'; error?: string }
   | { type: 'queue.updated' }
   | { type: 'marketplace.updated'; kind: MarketplaceKind }

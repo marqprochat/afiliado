@@ -60,7 +60,28 @@ describe('automations routes', () => {
       discoveredToday: 0,
       dispatchedToday: 0,
       lastDispatchedAt: null,
+      isDiscovering: false,
     });
+  });
+
+  it('GET /automations expõe isDiscovering (true enquanto a chave Redis existe)', async () => {
+    const { getRedis } = await import('../src/lib/redis');
+    const { automationDiscoveringKey } = await import('@afilados/shared');
+    const key = automationDiscoveringKey(ruleId);
+
+    const before = await app.inject({ method: 'GET', url: '/api/v1/automations', headers: { cookie } });
+    const ruleBefore = before.json().find((r: { id: string }) => r.id === ruleId);
+    expect(ruleBefore.stats.isDiscovering).toBe(false);
+
+    await getRedis().set(key, '1', 'EX', 60);
+    const during = await app.inject({ method: 'GET', url: '/api/v1/automations', headers: { cookie } });
+    const ruleDuring = during.json().find((r: { id: string }) => r.id === ruleId);
+    expect(ruleDuring.stats.isDiscovering).toBe(true);
+
+    await getRedis().del(key);
+    const after = await app.inject({ method: 'GET', url: '/api/v1/automations', headers: { cookie } });
+    const ruleAfter = after.json().find((r: { id: string }) => r.id === ruleId);
+    expect(ruleAfter.stats.isDiscovering).toBe(false);
   });
 
   it('liga a automação (toggle)', async () => {

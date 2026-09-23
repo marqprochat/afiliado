@@ -10,18 +10,24 @@ import {
   type AliexpressCredentials,
   type ShopeeCredentials,
 } from '@afilados/marketplaces';
-import { type MarketplaceKind, type ProductData, mapAwinCatalogRowToProductData } from '@afilados/shared';
+import {
+  type MarketplaceKind,
+  type ProductData,
+  mapAwinCatalogRowToProductData,
+  automationDiscoveringKey,
+} from '@afilados/shared';
 import { getRedis } from '../lib/redis';
+import { publishEvent } from '../lib/events';
 import { createHash } from 'node:crypto';
 import { loadTagCredentials } from '../lib/marketplace-credentials';
 
 const KEYWORD_CACHE_TTL_SEC = 15 * 60;
+/** TTL de segurança do selo "buscando" — evita ficar travado para sempre se o worker cair no meio da busca. */
+const DISCOVERING_TTL_SEC = 5 * 60;
 
 export interface DiscoveryDeps {
   searchShopee?: (creds: ShopeeCredentials, keyword: string) => Promise<ProductData[]>;
   searchAliexpress?: (creds: AliexpressCredentials, keyword: string) => Promise<ProductData[]>;
-  /** Sorteio do marketplace (injetável em teste; padrão: aleatório real). */
-  pickMarketplace?: (options: MarketplaceKind[]) => MarketplaceKind;
   /** Descoberta por keyword para ML/Amazon/Magalu (injetável em teste). */
   discoverByKeyword?: Partial<Record<'MERCADOLIVRE' | 'AMAZON' | 'MAGALU', (keyword: string) => Promise<string[]>>>;
   /** Enriquecimento das URLs descobertas (injetável em teste; padrão: getTagAdapter real). */
@@ -95,56 +101,48 @@ async function cachedDiscoverUrls(
   return urls;
 }
 
-async function queueEligibleProducts(
-  rule: AutomationRule,
-  marketplace: MarketplaceKind,
-  results: ProductData[],
-  keyword: string,
-) {
-  const eligible = results.filter((p) => matchesFilters(p, rule, keyword));
-  for (const p of eligible) {
-    const product = await prisma.product.upsert({
-      where: {
-        tenantId_source_externalId: {
-          tenantId: rule.tenantId,
-          source: p.source,
-          externalId: p.externalId ?? '',
-        },
-      },
-      update: {
-        title: p.title,
-        price: p.price,
-        originalPrice: p.originalPrice ?? null,
-        discountPct: p.discountPct ?? null,
-        images: p.images,
-        shipping: p.shipping,
-        raw: p.raw as object,
-      },
-      create: {
+async function queueDiscoveredProduct(rule: AutomationRule, marketplace: MarketplaceKind, p: ProductData) {
+  const product = await prisma.product.upsert({
+    where: {
+      tenantId_source_externalId: {
         tenantId: rule.tenantId,
         source: p.source,
         externalId: p.externalId ?? '',
-        title: p.title,
-        price: p.price,
-        originalPrice: p.originalPrice ?? null,
-        discountPct: p.discountPct ?? null,
-        images: p.images,
-        shipping: p.shipping,
-        originalUrl: p.originalUrl,
-        raw: p.raw as object,
       },
-    });
-    const already = await prisma.automationQueueItem.findFirst({
-      where: { ruleId: rule.id, productId: product.id },
-    });
-    if (already) continue;
-    await prisma.automationQueueItem.create({
-      data: { tenantId: rule.tenantId, ruleId: rule.id, kind: 'PRODUCT', productId: product.id, manual: false },
-    });
-    await prisma.automationLog.create({
-      data: { tenantId: rule.tenantId, ruleId: rule.id, marketplace, action: 'DISCOVERED', productId: product.id },
-    });
-  }
+    },
+    update: {
+      title: p.title,
+      price: p.price,
+      originalPrice: p.originalPrice ?? null,
+      discountPct: p.discountPct ?? null,
+      images: p.images,
+      shipping: p.shipping,
+      raw: p.raw as object,
+    },
+    create: {
+      tenantId: rule.tenantId,
+      source: p.source,
+      externalId: p.externalId ?? '',
+      title: p.title,
+      price: p.price,
+      originalPrice: p.originalPrice ?? null,
+      discountPct: p.discountPct ?? null,
+      images: p.images,
+      shipping: p.shipping,
+      originalUrl: p.originalUrl,
+      raw: p.raw as object,
+    },
+  });
+  const already = await prisma.automationQueueItem.findFirst({
+    where: { ruleId: rule.id, productId: product.id },
+  });
+  if (already) return;
+  await prisma.automationQueueItem.create({
+    data: { tenantId: rule.tenantId, ruleId: rule.id, kind: 'PRODUCT', productId: product.id, manual: false },
+  });
+  await prisma.automationLog.create({
+    data: { tenantId: rule.tenantId, ruleId: rule.id, marketplace, action: 'DISCOVERED', productId: product.id },
+  });
 }
 
 async function discoverShopee(rule: AutomationRule, keyword: string, deps: DiscoveryDeps): Promise<ProductData[]> {
@@ -251,36 +249,140 @@ async function discoverScraped(
   return fetchFn(urls);
 }
 
+async function searchOneMarketplace(
+  marketplace: MarketplaceKind,
+  rule: AutomationRule,
+  keyword: string,
+  deps: DiscoveryDeps,
+): Promise<ProductData[]> {
+  if (marketplace === 'SHOPEE') return discoverShopee(rule, keyword, deps);
+  if (marketplace === 'ALIEXPRESS') return discoverAliexpress(rule, keyword, deps);
+  if (marketplace === 'AWIN') return discoverAwin(rule, keyword);
+  return discoverScraped(marketplace, keyword, rule, deps);
+}
+
+/**
+ * Cota base por marketplace = floor(maxOffersPerDay / nº de marketplaces selecionados); a sobra
+ * da divisão não exata fica sem uso. Quando um marketplace não atinge sua cota (poucos
+ * elegíveis, erro ou bloqueio anti-bot), a diferença é redistribuída em rodízio pelos
+ * marketplaces que sobraram itens além da própria cota — sem nenhuma chamada extra às APIs, só
+ * usando o que a busca com folga (~20 por marketplace) já trouxe.
+ */
+function distributeWithQuota(
+  marketplaces: MarketplaceKind[],
+  resultsByMarketplace: Map<MarketplaceKind, ProductData[]>,
+  quota: number,
+): Map<MarketplaceKind, ProductData[]> {
+  const taken = new Map<MarketplaceKind, ProductData[]>();
+  for (const m of marketplaces) {
+    const results = resultsByMarketplace.get(m) ?? [];
+    taken.set(m, results.slice(0, Math.min(quota, results.length)));
+  }
+  let shortfall = 0;
+  for (const m of marketplaces) shortfall += Math.max(0, quota - taken.get(m)!.length);
+
+  let progressed = true;
+  while (shortfall > 0 && progressed) {
+    progressed = false;
+    for (const m of marketplaces) {
+      if (shortfall <= 0) break;
+      const results = resultsByMarketplace.get(m) ?? [];
+      const current = taken.get(m)!;
+      if (current.length < results.length) {
+        taken.set(m, [...current, results[current.length]!]);
+        shortfall--;
+        progressed = true;
+      }
+    }
+  }
+  return taken;
+}
+
+/** Intercala os itens já decididos por marketplace, um de cada vez, na ordem de rule.marketplaces. */
+function interleaveByMarketplace(
+  marketplaces: MarketplaceKind[],
+  taken: Map<MarketplaceKind, ProductData[]>,
+): { marketplace: MarketplaceKind; product: ProductData }[] {
+  const cursors = new Map<MarketplaceKind, number>(marketplaces.map((m) => [m, 0]));
+  const out: { marketplace: MarketplaceKind; product: ProductData }[] = [];
+  const total = [...taken.values()].reduce((sum, arr) => sum + arr.length, 0);
+  while (out.length < total) {
+    for (const m of marketplaces) {
+      const items = taken.get(m)!;
+      const cursor = cursors.get(m)!;
+      if (cursor < items.length) {
+        out.push({ marketplace: m, product: items[cursor]! });
+        cursors.set(m, cursor + 1);
+      }
+    }
+  }
+  return out;
+}
+
 export async function discoverForRule(rule: AutomationRule, deps: DiscoveryDeps = {}) {
   if (rule.marketplaces.length === 0) return;
-  const pick = deps.pickMarketplace ?? ((options) => options[Math.floor(Math.random() * options.length)]!);
-  const marketplace = pick(rule.marketplaces);
-
   const keyword = rule.keywords[Math.floor(Math.random() * rule.keywords.length)];
   if (!keyword) return;
 
-  let results: ProductData[];
-  try {
-    results =
-      marketplace === 'SHOPEE'
-        ? await discoverShopee(rule, keyword, deps)
-        : marketplace === 'ALIEXPRESS'
-          ? await discoverAliexpress(rule, keyword, deps)
-          : marketplace === 'AWIN'
-            ? await discoverAwin(rule, keyword)
-            : await discoverScraped(marketplace, keyword, rule, deps);
-  } catch (e) {
-    await prisma.automationLog.create({
-      data: {
-        tenantId: rule.tenantId,
-        ruleId: rule.id,
-        marketplace,
-        action: 'ERROR',
-        reason: e instanceof Error ? e.message : String(e),
-      },
-    });
-    return;
-  }
+  const quota = Math.floor(rule.maxOffersPerDay / rule.marketplaces.length);
+  if (quota <= 0) return;
 
-  await queueEligibleProducts(rule, marketplace, results, keyword);
+  const discoveringKey = automationDiscoveringKey(rule.id);
+  await getRedis().set(discoveringKey, '1', 'EX', DISCOVERING_TTL_SEC).catch(() => {});
+  await publishEvent(rule.tenantId, { type: 'automation.discovery', ruleId: rule.id, discovering: true }).catch(
+    () => {},
+  );
+
+  try {
+    const alreadyQueued = await prisma.automationQueueItem.findMany({
+      where: { ruleId: rule.id },
+      select: { product: { select: { source: true, externalId: true } } },
+    });
+    const alreadyQueuedKeys = new Set(
+      alreadyQueued
+        .filter((i) => i.product)
+        .map((i) => `${i.product!.source}:${i.product!.externalId}`),
+    );
+
+    const settled = await Promise.allSettled(
+      rule.marketplaces.map((marketplace) => searchOneMarketplace(marketplace, rule, keyword, deps)),
+    );
+    const resultsByMarketplace = new Map<MarketplaceKind, ProductData[]>();
+    for (let i = 0; i < rule.marketplaces.length; i++) {
+      const marketplace = rule.marketplaces[i]!;
+      const result = settled[i]!;
+      let raw: ProductData[];
+      if (result.status === 'fulfilled') {
+        raw = result.value;
+      } else {
+        await prisma.automationLog.create({
+          data: {
+            tenantId: rule.tenantId,
+            ruleId: rule.id,
+            marketplace,
+            action: 'ERROR',
+            reason: result.reason instanceof Error ? result.reason.message : String(result.reason),
+          },
+        });
+        raw = [];
+      }
+      resultsByMarketplace.set(
+        marketplace,
+        raw.filter(
+          (p) => matchesFilters(p, rule, keyword) && !alreadyQueuedKeys.has(`${p.source}:${p.externalId ?? ''}`),
+        ),
+      );
+    }
+
+    const taken = distributeWithQuota(rule.marketplaces, resultsByMarketplace, quota);
+    const interleaved = interleaveByMarketplace(rule.marketplaces, taken);
+    for (const { marketplace, product } of interleaved) {
+      await queueDiscoveredProduct(rule, marketplace, product);
+    }
+  } finally {
+    await getRedis().del(discoveringKey).catch(() => {});
+    await publishEvent(rule.tenantId, { type: 'automation.discovery', ruleId: rule.id, discovering: false }).catch(
+      () => {},
+    );
+  }
 }

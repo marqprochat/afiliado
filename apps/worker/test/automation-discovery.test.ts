@@ -242,7 +242,6 @@ describe('discoverForRule (Mercado Livre / Amazon / Magalu)', () => {
     };
 
     await discoverForRule(rule, {
-      pickMarketplace: () => 'MERCADOLIVRE',
       discoverByKeyword: { MERCADOLIVRE: async () => [foundUrl] },
       fetchByUrls: { MERCADOLIVRE: async () => [enriched] },
     });
@@ -270,7 +269,6 @@ describe('discoverForRule (Mercado Livre / Amazon / Magalu)', () => {
     });
 
     await discoverForRule(rule, {
-      pickMarketplace: () => 'AMAZON',
       discoverByKeyword: {
         AMAZON: async () => {
           throw new Error('timeout ao buscar amazon.com.br');
@@ -303,7 +301,6 @@ describe('discoverForRule (Mercado Livre / Amazon / Magalu)', () => {
     // autenticado real) retorna [] em vez de lançar — uma página de desafio anti-bot parseia
     // como HTML válido, só sem links de produto reconhecíveis.
     await discoverForRule(rule, {
-      pickMarketplace: () => 'MERCADOLIVRE',
       discoverByKeyword: { MERCADOLIVRE: async () => [] },
     });
 
@@ -399,6 +396,169 @@ describe('discoverForRule (AliExpress)', () => {
     expect(items).toHaveLength(1);
     expect(items[0]!.product!.title).toBe('Mouse Sem Fio Gamer');
     expect(items[0]!.product!.source).toBe('ALIEXPRESS');
+  });
+});
+
+describe('discoverForRule (cota balanceada entre marketplaces)', () => {
+  async function makeRule(overrides: {
+    marketplaces: ('SHOPEE' | 'AWIN')[];
+    maxOffersPerDay: number;
+    keywords?: string[];
+  }) {
+    return prisma.automationRule.create({
+      data: {
+        tenantId,
+        name: `quota-${Date.now()}-${Math.random()}`,
+        marketplaces: overrides.marketplaces,
+        keywords: overrides.keywords ?? ['fone'],
+        blockedKeywords: [],
+        maxOffersPerDay: overrides.maxOffersPerDay,
+        sessionId: (await prisma.waSession.create({ data: { tenantId, label: `sq${Math.random()}` } })).id,
+        groupJids: ['g@g.us'],
+        templateId: (await prisma.template.create({ data: { tenantId, name: `tq${Math.random()}`, body: 'x' } })).id,
+      },
+    });
+  }
+
+  async function seedAwinProducts(count: number, titlePrefix = 'Fone Awin') {
+    for (let i = 0; i < count; i++) {
+      await prisma.awinCatalogProduct.create({
+        data: {
+          tenantId,
+          feedId: 'f-quota',
+          externalId: `awin-quota-${Date.now()}-${i}-${Math.random()}`,
+          title: `${titlePrefix} ${i}`,
+          price: 50,
+          deepLink: `https://www.awin1.com/cread.php?x=quota-${i}`,
+          raw: {},
+        },
+      });
+    }
+  }
+
+  function shopeeResults(count: number, titlePrefix = 'Fone Shopee'): any[] {
+    return Array.from({ length: count }, (_, i) => ({
+      source: 'SHOPEE' as const,
+      externalId: `shopee-quota-${Date.now()}-${i}-${Math.random()}`,
+      title: `${titlePrefix} ${i}`,
+      price: 40,
+      images: [`https://x/sq${i}.png`],
+      shipping: 'FREE' as const,
+      originalUrl: `https://shopee.com.br/p/quota-${i}`,
+      raw: {},
+    }));
+  }
+
+  it('cota exata quando os dois marketplaces têm produtos suficientes', async () => {
+    const rule = await makeRule({ marketplaces: ['SHOPEE', 'AWIN'], maxOffersPerDay: 4 });
+    await seedAwinProducts(3);
+
+    await discoverForRule(rule, { searchShopee: async () => shopeeResults(3) });
+
+    const items = await prisma.automationQueueItem.findMany({
+      where: { ruleId: rule.id },
+      include: { product: true },
+    });
+    expect(items.length).toBe(4); // floor(4/2)=2 de cada
+    const bySource = items.reduce<Record<string, number>>((acc, i) => {
+      const s = i.product!.source;
+      acc[s] = (acc[s] ?? 0) + 1;
+      return acc;
+    }, {});
+    expect(bySource.SHOPEE).toBe(2);
+    expect(bySource.AWIN).toBe(2);
+  });
+
+  it('redistribui a diferença quando um marketplace não atinge a cota', async () => {
+    const rule = await makeRule({ marketplaces: ['SHOPEE', 'AWIN'], maxOffersPerDay: 6 });
+    await seedAwinProducts(5);
+
+    await discoverForRule(rule, { searchShopee: async () => shopeeResults(1) });
+
+    const items = await prisma.automationQueueItem.findMany({
+      where: { ruleId: rule.id },
+      include: { product: true },
+    });
+    // cota base 3 cada; Shopee só tem 1 (shortfall 2); Awin tem sobra (5-3=2) que cobre o shortfall
+    expect(items.length).toBe(6);
+    const bySource = items.reduce<Record<string, number>>((acc, i) => {
+      const s = i.product!.source;
+      acc[s] = (acc[s] ?? 0) + 1;
+      return acc;
+    }, {});
+    expect(bySource.SHOPEE).toBe(1);
+    expect(bySource.AWIN).toBe(5);
+  });
+
+  it('marketplace sem nenhum resultado tem a cota inteira redistribuída', async () => {
+    const rule = await makeRule({ marketplaces: ['SHOPEE', 'AWIN'], maxOffersPerDay: 4 });
+    await seedAwinProducts(8);
+
+    await discoverForRule(rule, { searchShopee: async () => [] });
+
+    const items = await prisma.automationQueueItem.findMany({
+      where: { ruleId: rule.id },
+      include: { product: true },
+    });
+    expect(items.length).toBe(4);
+    expect(items.every((i) => i.product!.source === 'AWIN')).toBe(true);
+  });
+
+  it('sobra da divisão não exata fica sem uso', async () => {
+    const rule = await makeRule({ marketplaces: ['SHOPEE', 'AWIN'], maxOffersPerDay: 7 });
+    await seedAwinProducts(3);
+
+    await discoverForRule(rule, { searchShopee: async () => shopeeResults(3) });
+
+    const items = await prisma.automationQueueItem.findMany({ where: { ruleId: rule.id } });
+    // floor(7/2)=3 cada = 6 total, não 7
+    expect(items.length).toBe(6);
+  });
+
+  it('intercala os itens na fila alternando o marketplace, na ordem de rule.marketplaces', async () => {
+    const rule = await makeRule({ marketplaces: ['SHOPEE', 'AWIN'], maxOffersPerDay: 4 });
+    await seedAwinProducts(2);
+
+    await discoverForRule(rule, { searchShopee: async () => shopeeResults(2) });
+
+    const items = await prisma.automationQueueItem.findMany({
+      where: { ruleId: rule.id },
+      orderBy: { position: 'asc' },
+      include: { product: true },
+    });
+    expect(items.map((i) => i.product!.source)).toEqual(['SHOPEE', 'AWIN', 'SHOPEE', 'AWIN']);
+  });
+
+  it('descobre produtos novos em rodadas seguintes, sem travar nos mesmos já enfileirados', async () => {
+    const rule = await makeRule({ marketplaces: ['SHOPEE'], maxOffersPerDay: 4 });
+    const allResults = shopeeResults(6, 'Fone Rodada');
+
+    await discoverForRule(rule, { searchShopee: async () => allResults });
+    const afterFirst = await prisma.automationQueueItem.findMany({ where: { ruleId: rule.id } });
+    expect(afterFirst.length).toBe(4);
+
+    await discoverForRule(rule, { searchShopee: async () => allResults });
+    const afterSecond = await prisma.automationQueueItem.findMany({ where: { ruleId: rule.id } });
+    // A segunda rodada não deve reenfileirar os 4 já existentes — deve pegar os 2 restantes dos 6 originais.
+    expect(afterSecond.length).toBe(6);
+  });
+
+  it('marca e remove a chave Redis de "buscando" mesmo quando uma busca falha', async () => {
+    const { getRedis } = await import('../src/lib/redis');
+    const { automationDiscoveringKey } = await import('@afilados/shared');
+    const rule = await makeRule({ marketplaces: ['SHOPEE'], maxOffersPerDay: 4 });
+    const key = automationDiscoveringKey(rule.id);
+
+    let sawKeySetDuringSearch = false;
+    await discoverForRule(rule, {
+      searchShopee: async () => {
+        sawKeySetDuringSearch = (await getRedis().exists(key)) === 1;
+        throw new Error('falha simulada');
+      },
+    });
+
+    expect(sawKeySetDuringSearch).toBe(true);
+    expect(await getRedis().exists(key)).toBe(0);
   });
 });
 

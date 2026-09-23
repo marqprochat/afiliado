@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { apiFetch } from '@/lib/api';
 import { useApiMutation } from '@/lib/mutations';
@@ -21,7 +21,7 @@ export function RuleCard({ rule }: { rule: AutomationRule }) {
 
   return (
     <div className="rounded-lg border border-border bg-surface">
-      <div className="flex items-center gap-2 p-3">
+      <div className="flex flex-wrap items-center gap-2 p-3">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
@@ -64,15 +64,22 @@ export function RuleCard({ rule }: { rule: AutomationRule }) {
       </div>
       {open && (
         <div className="border-t border-border p-3 pt-2">
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
             <span>Frescos p/ enviar: {rule.stats.freshCount}</span>
             <span>Buscados hoje: {rule.stats.discoveredToday}</span>
+            <span>Enviados hoje: {rule.stats.dispatchedToday}</span>
             <span>
               Último disparo:{' '}
               {rule.stats.lastDispatchedAt
                 ? new Date(rule.stats.lastDispatchedAt).toLocaleString('pt-BR')
                 : 'Nunca'}
             </span>
+            {rule.stats.isDiscovering && (
+              <span className="flex items-center gap-1 text-brand">
+                <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                Buscando...
+              </span>
+            )}
           </div>
           <QueuePanel ruleId={rule.id} />
         </div>
