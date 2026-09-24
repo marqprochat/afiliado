@@ -95,6 +95,32 @@ A conversão para link de afiliado itera essa lista usando `targetUrl`. Em segui
 
 A reason própria (em vez de reusar `no-links`) existe para separar no diagnóstico "não tinha link" de "tinha link, mas não consegui abrir".
 
+## 6.1 Motivos legíveis na interface
+
+Hoje `apps/web/src/components/mirror/log-table.tsx:87` renderiza `log.reason` cru, então o usuário vê `no-links`, `duplicate`, `template->clone`, `unsupported-store:AMAZON` e, nos erros, a mensagem da exceção em inglês.
+
+**Onde traduzir:** na camada web, no momento de exibir. O banco continua guardando o código (`no-links`, `duplicate`, …), o que mantém filtro e análise por código estáveis e permite reescrever o texto depois sem migrar registro antigo. O worker não muda.
+
+**Rótulos** (curtos, português do Brasil):
+
+| Código gravado | Rótulo exibido |
+|---|---|
+| `no-links` | Sem links |
+| `short-link-unresolved` | Link encurtado não abriu |
+| `duplicate` | Duplicado |
+| `template->clone` | Enviado como cópia |
+| `unsupported-store:<LOJA>` | Sem credencial: <Loja> |
+| `WA_NOT_CONNECTED` | WhatsApp desconectado |
+| `No sessions` | Falha de sessão |
+| `Connection Closed` | Conexão caiu |
+| `Timed Out` | Tempo esgotado |
+
+`unsupported-store:` é paramétrico: o sufixo é uma lista de `MarketplaceKind` separada por vírgula, e cada uma vira nome de exibição (`AMAZON` → Amazon, `MERCADOLIVRE` → Mercado Livre, `MAGALU` → Magalu, `SHOPEE` → Shopee, `ALIEXPRESS` → AliExpress, `AWIN` → Awin).
+
+**Código não mapeado** (exceção nova e inesperada) é exibido cru, sem alteração. Esconder atrás de frase genérica tiraria a única pista disponível na tela quando aparecer falha desconhecida.
+
+**Testes:** unitários da função de tradução — cada código conhecido, o caso paramétrico com uma e com várias lojas, e o fallback devolvendo a string original intacta.
+
 ## 7. Segurança
 
 Seguir redirect de URL vinda de mensagem de terceiro é vetor de SSRF. Mitigações:
@@ -130,3 +156,4 @@ Seguir redirect de URL vinda de mensagem de terceiro é vetor de SSRF. Mitigaç�
 - **Sem cache na v1:** otimização sem evidência de necessidade.
 - **`textUrl` vs `targetUrl` explícitos:** a confusão entre os dois é o erro mais provável desta implementação, já que quebraria a substituição no texto de forma silenciosa.
 - **`extractUrls` exportado do core:** evita duas implementações divergentes de "o que conta como URL no texto", cujo sintoma seria um 404 intermitente difícil de rastrear.
+- **Tradução dos motivos na web, não no banco:** o código gravado continua estável para filtro e análise, e a redação pode mudar sem migração. Erro não mapeado aparece cru de propósito, para não esconder a causa.
