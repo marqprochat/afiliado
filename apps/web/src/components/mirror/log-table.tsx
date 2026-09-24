@@ -1,6 +1,6 @@
 'use client';
 import { StatusPill } from '@/components/app-shell/status-pill';
-import { formatDateTime } from '@/lib/format';
+import { formatDateTime, translateMirrorReason } from '@/lib/format';
 import type { MirrorLog } from '@/lib/types';
 
 export function MirrorLogTable({
@@ -84,7 +84,8 @@ export function MirrorLogTable({
                     {log.productKey ?? '-'}
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground max-w-sm truncate">
-                    {log.reason ?? (log.waMessageId ? `WA ID: ${log.waMessageId}` : '-')}
+                    {translateMirrorReason(log.reason) ??
+                      (log.waMessageId ? `WA ID: ${log.waMessageId}` : '-')}
                   </td>
                 </tr>
               ))
