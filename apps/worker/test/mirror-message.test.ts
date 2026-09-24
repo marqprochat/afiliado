@@ -339,4 +339,60 @@ describe('mirrorMessage processor', () => {
       { dedupeEcho: true },
     );
   });
+
+  it('link do AliExpress cujo host também está na allowlist de encurtadores não é processado duas vezes', async () => {
+    await prisma.marketplaceConnection.create({
+      data: {
+        tenantId,
+        kind: 'ALIEXPRESS',
+        encryptedCredentials: encryptJson({ appKey: 'k', appSecret: 's', trackingId: 't' }),
+        status: 'OK',
+      },
+    });
+    const rule = await prisma.mirrorRule.create({
+      data: {
+        tenantId,
+        sessionId,
+        sourceJids: ['s@g.us'],
+        targetJids: ['t1@g.us'],
+        mode: 'CLONE',
+        mediaMode: 'PREVIEW',
+        enabled: true,
+      },
+    });
+    const jobData: MirrorMessageJob = {
+      tenantId,
+      ruleId: rule.id,
+      sessionId,
+      sourceJid: 's@g.us',
+      msgId: 'M-aliexpress-short',
+      message: { message: { conversation: 'Oferta: https://s.click.aliexpress.com/e/_xyz' } },
+    };
+    let toAffiliateLinkCalls = 0;
+    const deps: MirrorMessageDeps = {
+      gateway: fakeGateway,
+      sleep: async () => {},
+      resolveShortLinks: async () =>
+        new Map([
+          ['https://s.click.aliexpress.com/e/_xyz', 'https://pt.aliexpress.com/item/1005006789012345.html'],
+        ]),
+      getAdapter: () =>
+        ({
+          toAffiliateLink: async (_creds: unknown, url: string) => {
+            toAffiliateLinkCalls++;
+            return `https://s.click.aliexpress.com/afiliado?url=${encodeURIComponent(url)}`;
+          },
+        }) as never,
+    };
+    const res = await mirrorMessage(deps, jobData);
+    expect(res).toEqual({ outcome: 'mirrored', count: 1 });
+    expect(toAffiliateLinkCalls).toBe(1);
+
+    const log = await prisma.mirrorLog.findFirstOrThrow({
+      where: { ruleId: rule.id, targetJid: 't1@g.us' },
+    });
+    expect(log.status).toBe('MIRRORED');
+    expect(log.reason).toBeNull();
+    expect(log.productKey).toBe('ALIEXPRESS:1005006789012345');
+  });
 });

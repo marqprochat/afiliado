@@ -89,7 +89,15 @@ export async function mirrorMessage(
 
   const tenantId = rule.tenantId;
   const text = pickText(jobData.message);
-  const storeLinks = extractStoreLinks(text);
+  const isShortenerUrl = (url: string): boolean => {
+    try {
+      return SHORTENER_HOSTS.has(new URL(url).hostname.replace(/^www\./, ''));
+    } catch {
+      return false;
+    }
+  };
+
+  const storeLinks = extractStoreLinks(text).filter((l) => !isShortenerUrl(l.url));
   const expansions = await resolveShortLinks(text);
 
   const resolvedLinks: ResolvedLink[] = storeLinks.map((l) => ({
@@ -104,15 +112,7 @@ export async function mirrorMessage(
     }
   }
 
-  const candidateShortUrls = new Set(
-    extractUrls(text).filter((u) => {
-      try {
-        return SHORTENER_HOSTS.has(new URL(u).hostname.replace(/^www\./, ''));
-      } catch {
-        return false;
-      }
-    }),
-  );
+  const candidateShortUrls = new Set(extractUrls(text).filter(isShortenerUrl));
   const hasUnresolvedShortLink = [...candidateShortUrls].some((u) => !expansions.has(u));
 
   if (resolvedLinks.length === 0) {
