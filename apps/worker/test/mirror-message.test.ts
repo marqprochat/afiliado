@@ -204,4 +204,139 @@ describe('mirrorMessage processor', () => {
     expect(log.status).toBe('MIRRORED');
     expect(log.reason).toBe('template->clone');
   });
+
+  it('mensagem com link encurtado (meli.la) é espelhada com a URL curta substituída pelo link de afiliado', async () => {
+    await prisma.marketplaceConnection.create({
+      data: {
+        tenantId,
+        kind: 'MERCADOLIVRE',
+        encryptedCredentials: encryptJson({ mattWord: 'minhaid', mattTool: '12345678' }),
+        status: 'OK',
+      },
+    });
+    const rule = await prisma.mirrorRule.create({
+      data: {
+        tenantId,
+        sessionId,
+        sourceJids: ['s@g.us'],
+        targetJids: ['t1@g.us'],
+        mode: 'CLONE',
+        mediaMode: 'PREVIEW',
+        enabled: true,
+      },
+    });
+    const jobData: MirrorMessageJob = {
+      tenantId,
+      ruleId: rule.id,
+      sessionId,
+      sourceJid: 's@g.us',
+      msgId: 'M-short',
+      message: { message: { conversation: 'Oferta: https://meli.la/1h21Ywb' } },
+    };
+    const deps: MirrorMessageDeps = {
+      gateway: fakeGateway,
+      sleep: async () => {},
+      resolveShortLinks: async () =>
+        new Map([
+          ['https://meli.la/1h21Ywb', 'https://produto.mercadolivre.com.br/MLB-123456789'],
+        ]),
+    };
+    const res = await mirrorMessage(deps, jobData);
+    expect(res).toEqual({ outcome: 'mirrored', count: 1 });
+    expect(fakeGateway.sendMessage).toHaveBeenCalledWith(
+      sessionId,
+      't1@g.us',
+      expect.objectContaining({
+        kind: 'text',
+        text: 'Oferta: https://produto.mercadolivre.com.br/MLB-123456789?matt_word=minhaid&matt_tool=12345678',
+      }),
+      { dedupeEcho: true },
+    );
+
+    const log = await prisma.mirrorLog.findFirstOrThrow({
+      where: { ruleId: rule.id, targetJid: 't1@g.us' },
+    });
+    expect(log).toMatchObject({ status: 'MIRRORED', productKey: 'MERCADOLIVRE:MLB123456789' });
+  });
+
+  it('mensagem só com encurtador que não resolve é descartada com short-link-unresolved', async () => {
+    const rule = await prisma.mirrorRule.create({
+      data: {
+        tenantId,
+        sessionId,
+        sourceJids: ['s@g.us'],
+        targetJids: ['t1@g.us'],
+        enabled: true,
+      },
+    });
+    const jobData: MirrorMessageJob = {
+      tenantId,
+      ruleId: rule.id,
+      sessionId,
+      sourceJid: 's@g.us',
+      msgId: 'M-unresolved',
+      message: { message: { conversation: 'Oferta: https://amzn.to/quebrado' } },
+    };
+    const deps: MirrorMessageDeps = {
+      gateway: fakeGateway,
+      sleep: async () => {},
+      resolveShortLinks: async () => new Map(),
+    };
+    const res = await mirrorMessage(deps, jobData);
+    expect(res).toEqual({ outcome: 'discarded', reason: 'short-link-unresolved' });
+    expect(fakeGateway.sendMessage).not.toHaveBeenCalled();
+
+    const log = await prisma.mirrorLog.findFirstOrThrow({ where: { ruleId: rule.id } });
+    expect(log).toMatchObject({ status: 'DISCARDED', reason: 'short-link-unresolved' });
+  });
+
+  it('link completo funcionando + encurtador que falha: espelha e anexa o motivo, mantendo o link curto intacto', async () => {
+    const rule = await prisma.mirrorRule.create({
+      data: {
+        tenantId,
+        sessionId,
+        sourceJids: ['s@g.us'],
+        targetJids: ['t1@g.us'],
+        mode: 'CLONE',
+        mediaMode: 'PREVIEW',
+        enabled: true,
+      },
+    });
+    const jobData: MirrorMessageJob = {
+      tenantId,
+      ruleId: rule.id,
+      sessionId,
+      sourceJid: 's@g.us',
+      msgId: 'M-partial',
+      message: {
+        message: {
+          conversation:
+            'Amazon: https://www.amazon.com.br/dp/B0PARTIAL1 e encurtado: https://amzn.to/quebrado',
+        },
+      },
+    };
+    const deps: MirrorMessageDeps = {
+      gateway: fakeGateway,
+      sleep: async () => {},
+      resolveShortLinks: async () => new Map(),
+    };
+    const res = await mirrorMessage(deps, jobData);
+    expect(res).toEqual({ outcome: 'mirrored', count: 1 });
+
+    const log = await prisma.mirrorLog.findFirstOrThrow({
+      where: { ruleId: rule.id, targetJid: 't1@g.us' },
+    });
+    expect(log.status).toBe('MIRRORED');
+    expect(log.reason).toBe('short-link-unresolved');
+
+    expect(fakeGateway.sendMessage).toHaveBeenCalledWith(
+      sessionId,
+      't1@g.us',
+      expect.objectContaining({
+        kind: 'text',
+        text: expect.stringContaining('https://amzn.to/quebrado'),
+      }),
+      { dedupeEcho: true },
+    );
+  });
 });

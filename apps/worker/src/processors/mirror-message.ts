@@ -4,14 +4,17 @@ import pino from 'pino';
 import { prisma, decryptJson } from '@afilados/db';
 import {
   extractStoreLinks,
+  extractUrls,
   hasImage,
   isWithinOperatingWindow,
   nextWindowOpen,
+  parseProductUrl,
   pickText,
   productKey,
   renderTemplate,
   rewriteLinks,
   generateSubId,
+  type StoreLink,
 } from '@afilados/core';
 import {
   getAdapter,
@@ -32,6 +35,10 @@ import { publishEvent } from '../lib/events';
 import { getRedis } from '../lib/redis';
 import { TokenBucket, jitter, waitForToken } from '../lib/rate-limit';
 import type { OutgoingMessage, WhatsAppGateway } from '../wa/gateway';
+import {
+  resolveShortLinks as resolveShortLinksImpl,
+  SHORTENER_HOSTS,
+} from '../mirror/resolve-short-links';
 
 const log = pino({ name: 'mirror-message' });
 
@@ -43,13 +50,20 @@ export interface MirrorMessageDeps {
   sleep?: (ms: number) => Promise<void>;
   rng?: () => number;
   bucketFor?: (sessionId: string, ratePerMin: number) => { take(): Promise<number> };
+  resolveShortLinks?: (text: string) => Promise<Map<string, string>>;
 }
 
 export type MirrorMessageResult =
   | { outcome: 'mirrored'; count: number }
-  | { outcome: 'discarded'; reason: 'no-links' }
+  | { outcome: 'discarded'; reason: 'no-links' | 'short-link-unresolved' }
   | { outcome: 'skipped'; reason: 'rule-disabled' | 'missing' }
   | { outcome: 'rescheduled'; runAt: Date };
+
+interface ResolvedLink {
+  textUrl: string;
+  targetUrl: string;
+  parsed: StoreLink['parsed'];
+}
 
 export async function mirrorMessage(
   deps: MirrorMessageDeps,
@@ -65,6 +79,7 @@ export async function mirrorMessage(
     deps.bucketFor ??
     ((sessionId: string, rate: number) =>
       new TokenBucket(getRedis(), `wa:rate:${sessionId}`, rate));
+  const resolveShortLinks = deps.resolveShortLinks ?? resolveShortLinksImpl;
 
   const rule = await prisma.mirrorRule.findUnique({
     where: { id: jobData.ruleId },
@@ -74,9 +89,36 @@ export async function mirrorMessage(
 
   const tenantId = rule.tenantId;
   const text = pickText(jobData.message);
-  const links = extractStoreLinks(text);
+  const storeLinks = extractStoreLinks(text);
+  const expansions = await resolveShortLinks(text);
 
-  if (links.length === 0) {
+  const resolvedLinks: ResolvedLink[] = storeLinks.map((l) => ({
+    textUrl: l.url,
+    targetUrl: l.url,
+    parsed: l.parsed,
+  }));
+  for (const [shortUrl, expandedUrl] of expansions) {
+    const parsed = parseProductUrl(expandedUrl);
+    if (parsed.source !== 'UNSUPPORTED') {
+      resolvedLinks.push({ textUrl: shortUrl, targetUrl: expandedUrl, parsed });
+    }
+  }
+
+  const candidateShortUrls = new Set(
+    extractUrls(text).filter((u) => {
+      try {
+        return SHORTENER_HOSTS.has(new URL(u).hostname.replace(/^www\./, ''));
+      } catch {
+        return false;
+      }
+    }),
+  );
+  const hasUnresolvedShortLink = [...candidateShortUrls].some((u) => !expansions.has(u));
+
+  if (resolvedLinks.length === 0) {
+    const reason: 'no-links' | 'short-link-unresolved' = hasUnresolvedShortLink
+      ? 'short-link-unresolved'
+      : 'no-links';
     for (const targetJid of rule.targetJids) {
       const logRow = await prisma.mirrorLog.create({
         data: {
@@ -86,7 +128,7 @@ export async function mirrorMessage(
           sourceMsgId: jobData.msgId,
           targetJid,
           status: 'DISCARDED',
-          reason: 'no-links',
+          reason,
         },
       });
       await publishEvent(tenantId, {
@@ -94,11 +136,11 @@ export async function mirrorMessage(
         ruleId: rule.id,
         logId: logRow.id,
         status: 'DISCARDED',
-        reason: 'no-links',
+        reason,
         targetJid,
       });
     }
-    return { outcome: 'discarded', reason: 'no-links' };
+    return { outcome: 'discarded', reason };
   }
 
   const [windowRow, settingsRows, connections] = await Promise.all([
@@ -128,9 +170,10 @@ export async function mirrorMessage(
 
   const connMap = new Map(connections.map((c) => [c.kind, c]));
   const replacements = new Map<string, string>();
+  const convertedByTarget = new Map<string, string>();
   const unsupportedStores = new Set<string>();
 
-  for (const storeLink of links) {
+  for (const storeLink of resolvedLinks) {
     const kind = storeLink.parsed.source;
     const conn = connMap.get(kind);
     try {
@@ -143,10 +186,12 @@ export async function mirrorMessage(
             timezone: window.timezone,
           });
           const adapter = adapterGetter('SHOPEE') as MarketplaceAdapter<ShopeeCredentials>;
-          const affLink = await adapter.toAffiliateLink(creds, storeLink.url, subId);
-          replacements.set(storeLink.url, affLink);
+          const affLink = await adapter.toAffiliateLink(creds, storeLink.targetUrl, subId);
+          replacements.set(storeLink.textUrl, affLink);
+          convertedByTarget.set(storeLink.targetUrl, affLink);
         } else {
-          replacements.set(storeLink.url, storeLink.url);
+          replacements.set(storeLink.textUrl, storeLink.textUrl);
+          convertedByTarget.set(storeLink.targetUrl, storeLink.targetUrl);
           unsupportedStores.add('SHOPEE');
         }
       } else if (kind === 'ALIEXPRESS') {
@@ -158,10 +203,12 @@ export async function mirrorMessage(
             timezone: window.timezone,
           });
           const adapter = adapterGetter('ALIEXPRESS') as MarketplaceAdapter<AliexpressCredentials>;
-          const affLink = await adapter.toAffiliateLink(creds, storeLink.url, subId);
-          replacements.set(storeLink.url, affLink);
+          const affLink = await adapter.toAffiliateLink(creds, storeLink.targetUrl, subId);
+          replacements.set(storeLink.textUrl, affLink);
+          convertedByTarget.set(storeLink.targetUrl, affLink);
         } else {
-          replacements.set(storeLink.url, storeLink.url);
+          replacements.set(storeLink.textUrl, storeLink.textUrl);
+          convertedByTarget.set(storeLink.targetUrl, storeLink.targetUrl);
           unsupportedStores.add('ALIEXPRESS');
         }
       } else {
@@ -169,24 +216,28 @@ export async function mirrorMessage(
           const creds = decryptJson<TagCredentials>(Buffer.from(conn.encryptedCredentials));
           if (hasTagCredentials(kind, creds)) {
             const adapter = adapterGetter(kind) as MarketplaceAdapter<TagCredentials>;
-            const affLink = await adapter.toAffiliateLink(creds, storeLink.url);
-            replacements.set(storeLink.url, affLink);
+            const affLink = await adapter.toAffiliateLink(creds, storeLink.targetUrl);
+            replacements.set(storeLink.textUrl, affLink);
+            convertedByTarget.set(storeLink.targetUrl, affLink);
           } else {
-            replacements.set(storeLink.url, storeLink.url);
+            replacements.set(storeLink.textUrl, storeLink.textUrl);
+            convertedByTarget.set(storeLink.targetUrl, storeLink.targetUrl);
             unsupportedStores.add(kind);
           }
         } else {
-          replacements.set(storeLink.url, storeLink.url);
+          replacements.set(storeLink.textUrl, storeLink.textUrl);
+          convertedByTarget.set(storeLink.targetUrl, storeLink.targetUrl);
           unsupportedStores.add(kind);
         }
       }
     } catch {
-      replacements.set(storeLink.url, storeLink.url);
+      replacements.set(storeLink.textUrl, storeLink.textUrl);
+      convertedByTarget.set(storeLink.targetUrl, storeLink.targetUrl);
       unsupportedStores.add(kind);
     }
   }
 
-  const prodKey = productKey(links[0]!.parsed, links[0]!.url);
+  const prodKey = productKey(resolvedLinks[0]!.parsed, resolvedLinks[0]!.targetUrl);
   let effectiveMode: 'CLONE' | 'TEMPLATE' = 'CLONE';
   let fallbackReason: string | null = null;
   let templateProducts: { product: ProductData; convertedUrl: string }[] = [];
@@ -198,7 +249,7 @@ export async function mirrorMessage(
         (await prisma.template.findFirst({ where: { tenantId, isDefault: true } })) ??
         (await prisma.template.findFirst({ where: { tenantId } }));
     }
-    const allShopee = links.every((l) => l.parsed.source === 'SHOPEE');
+    const allShopee = resolvedLinks.every((l) => l.parsed.source === 'SHOPEE');
     const shopeeConn = connMap.get('SHOPEE');
     if (allShopee && template && shopeeConn?.encryptedCredentials) {
       try {
@@ -206,14 +257,14 @@ export async function mirrorMessage(
         const adapter = adapterGetter('SHOPEE') as MarketplaceAdapter<ShopeeCredentials>;
         const fetched = await adapter.fetchByUrls(
           creds,
-          links.map((l) => l.url),
+          resolvedLinks.map((l) => l.targetUrl),
         );
 
         if (fetched.length > 0) {
           effectiveMode = 'TEMPLATE';
           templateProducts = fetched.map((p) => ({
             product: p,
-            convertedUrl: replacements.get(p.originalUrl) ?? p.originalUrl,
+            convertedUrl: convertedByTarget.get(p.originalUrl) ?? p.originalUrl,
           }));
         } else {
           fallbackReason = 'template->clone';
@@ -312,11 +363,13 @@ export async function mirrorMessage(
         lastMessageId = res.messageId;
       }
       mirroredCount++;
-      const reason =
-        fallbackReason ??
-        (unsupportedStores.size > 0
-          ? `unsupported-store:${Array.from(unsupportedStores).join(',')}`
-          : null);
+      const extraReasons: string[] = [];
+      if (fallbackReason) extraReasons.push(fallbackReason);
+      if (unsupportedStores.size > 0) {
+        extraReasons.push(`unsupported-store:${Array.from(unsupportedStores).join(',')}`);
+      }
+      if (hasUnresolvedShortLink) extraReasons.push('short-link-unresolved');
+      const reason = extraReasons.length > 0 ? extraReasons.join(';') : null;
       const logRow = await prisma.mirrorLog.create({
         data: {
           tenantId,
