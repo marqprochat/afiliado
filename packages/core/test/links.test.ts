@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildAffiliateUrl, extractStoreLinks, productKey, rewriteLinks } from '../src/links';
+import { buildAffiliateUrl, extractStoreLinks, extractUrls, productKey, rewriteLinks } from '../src/links';
 
 describe('extractStoreLinks', () => {
   it('pega só links oficiais, sem duplicar, na ordem', () => {
@@ -18,6 +18,18 @@ de novo https://shopee.com.br/Prod-i.123.456?sp_atk=x`;
   it('vazio sem links', () => {
     expect(extractStoreLinks('sem nada aqui')).toEqual([]);
     expect(extractStoreLinks('')).toEqual([]);
+  });
+});
+
+describe('extractUrls', () => {
+  it('extrai as URLs do texto removendo pontuação final grudada', () => {
+    expect(extractUrls('veja https://meli.la/1h21Ywb. e https://a.co/x2,')).toEqual([
+      'https://meli.la/1h21Ywb',
+      'https://a.co/x2',
+    ]);
+  });
+  it('vazio sem URLs', () => {
+    expect(extractUrls('sem nada aqui')).toEqual([]);
   });
 });
 

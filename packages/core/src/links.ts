@@ -9,11 +9,14 @@ export interface StoreLink {
 const URL_RE = /https?:\/\/[^\s<>()"'`]+/gi;
 const TRAILING = /[.,;:!?)\]]+$/;
 
+export function extractUrls(text: string): string[] {
+  return (text.match(URL_RE) ?? []).map((raw) => raw.replace(TRAILING, ''));
+}
+
 export function extractStoreLinks(text: string): StoreLink[] {
   const seen = new Set<string>();
   const out: StoreLink[] = [];
-  for (const raw of text.match(URL_RE) ?? []) {
-    const url = raw.replace(TRAILING, '');
+  for (const url of extractUrls(text)) {
     if (seen.has(url)) continue;
     const parsed = parseProductUrl(url);
     if (parsed.source === 'UNSUPPORTED') continue;
