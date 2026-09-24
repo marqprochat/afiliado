@@ -395,4 +395,46 @@ describe('mirrorMessage processor', () => {
     expect(log.reason).toBeNull();
     expect(log.productKey).toBe('ALIEXPRESS:1005006789012345');
   });
+
+  it('link do AliExpress na allowlist de encurtadores, quando a resolução falha, ainda espelha pelo caminho direto (comportamento pré-existente preservado)', async () => {
+    // A conexão ALIEXPRESS já foi criada pelo teste anterior (tenantId é compartilhado
+    // e não há cleanup de marketplaceConnection entre testes neste describe).
+    const rule = await prisma.mirrorRule.create({
+      data: {
+        tenantId,
+        sessionId,
+        sourceJids: ['s@g.us'],
+        targetJids: ['t1@g.us'],
+        mode: 'CLONE',
+        mediaMode: 'PREVIEW',
+        enabled: true,
+      },
+    });
+    const jobData: MirrorMessageJob = {
+      tenantId,
+      ruleId: rule.id,
+      sessionId,
+      sourceJid: 's@g.us',
+      msgId: 'M-aliexpress-fallback',
+      message: { message: { conversation: 'Oferta: https://s.click.aliexpress.com/e/_semrede' } },
+    };
+    const deps: MirrorMessageDeps = {
+      gateway: fakeGateway,
+      sleep: async () => {},
+      resolveShortLinks: async () => new Map(), // falha de rede: nenhuma expansão
+      getAdapter: () =>
+        ({
+          toAffiliateLink: async (_creds: unknown, url: string) =>
+            `https://s.click.aliexpress.com/afiliado?url=${encodeURIComponent(url)}`,
+        }) as never,
+    };
+    const res = await mirrorMessage(deps, jobData);
+    expect(res).toEqual({ outcome: 'mirrored', count: 1 });
+
+    const log = await prisma.mirrorLog.findFirstOrThrow({
+      where: { ruleId: rule.id, targetJid: 't1@g.us' },
+    });
+    expect(log.status).toBe('MIRRORED');
+    expect(log.reason).toBeNull(); // não deve aparecer short-link-unresolved: o link foi espelhado com sucesso pelo caminho direto
+  });
 });

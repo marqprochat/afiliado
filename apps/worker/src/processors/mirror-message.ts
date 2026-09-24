@@ -97,8 +97,8 @@ export async function mirrorMessage(
     }
   };
 
-  const storeLinks = extractStoreLinks(text).filter((l) => !isShortenerUrl(l.url));
   const expansions = await resolveShortLinks(text);
+  const storeLinks = extractStoreLinks(text).filter((l) => !expansions.has(l.url));
 
   const resolvedLinks: ResolvedLink[] = storeLinks.map((l) => ({
     textUrl: l.url,
@@ -113,7 +113,9 @@ export async function mirrorMessage(
   }
 
   const candidateShortUrls = new Set(extractUrls(text).filter(isShortenerUrl));
-  const hasUnresolvedShortLink = [...candidateShortUrls].some((u) => !expansions.has(u));
+  const hasUnresolvedShortLink = [...candidateShortUrls].some(
+    (u) => !expansions.has(u) && !storeLinks.some((l) => l.url === u),
+  );
 
   if (resolvedLinks.length === 0) {
     const reason: 'no-links' | 'short-link-unresolved' = hasUnresolvedShortLink
