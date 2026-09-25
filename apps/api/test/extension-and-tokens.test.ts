@@ -384,4 +384,165 @@ describe('API Tokens & Extension Routes (Fase 3)', () => {
     });
     expect(bad.statusCode).toBe(400);
   });
+
+  it('lista cupons ativos para o carrinho via GET /extension/coupons', async () => {
+    const tokenRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/api-tokens',
+      headers: { cookie },
+      payload: { name: 'Token Carrinho' },
+    });
+    const { token } = tokenRes.json();
+
+    // Cria cupons no banco: um VALID, um UNVERIFIED, um INVALID, um EXPIRED
+    await prisma.coupon.createMany({
+      data: [
+        {
+          tenantId: t.tenantId,
+          store: 'SHOPEE',
+          code: 'VAL10',
+          description: '10% off',
+          status: 'VALID',
+          origin: 'MANUAL',
+        },
+        {
+          tenantId: t.tenantId,
+          store: 'SHOPEE',
+          code: 'UNV20',
+          description: '20% off',
+          status: 'UNVERIFIED',
+          origin: 'EXTENSION',
+        },
+        {
+          tenantId: t.tenantId,
+          store: 'SHOPEE',
+          code: 'INV30',
+          description: '30% off',
+          status: 'INVALID',
+          origin: 'MANUAL',
+        },
+        {
+          tenantId: t.tenantId,
+          store: 'AMAZON',
+          code: 'AMZ10',
+          description: 'Amazon cupom',
+          status: 'VALID',
+          origin: 'MANUAL',
+        },
+      ],
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/extension/coupons?store=SHOPEE',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const { coupons } = res.json();
+    expect(coupons).toHaveLength(2);
+    expect(coupons.map((c: any) => c.code)).toEqual(['VAL10', 'UNV20']);
+  });
+
+  it('cria e atualiza cupons via POST /extension/coupons e verifica via POST /extension/coupons/:id/verification', async () => {
+    const tokenRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/api-tokens',
+      headers: { cookie },
+      payload: { name: 'Token Cupons' },
+    });
+    const { token } = tokenRes.json();
+
+    // 1. Cria cupom visto na página
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/extension/coupons',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        store: 'ALIEXPRESS',
+        code: 'ali50',
+        description: 'R$50 off',
+        sourceUrl: 'https://aliexpress.com/item/123.html',
+      },
+    });
+
+    expect(createRes.statusCode).toBe(200);
+    const { coupon } = createRes.json();
+    expect(coupon.code).toBe('ALI50');
+    expect(coupon.status).toBe('UNVERIFIED');
+    expect(coupon.origin).toBe('EXTENSION');
+
+    // 2. Re-envia o mesmo cupom: atualiza lastSeenAt sem alterar status
+    const reCreateRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/extension/coupons',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        store: 'ALIEXPRESS',
+        code: 'ALI50',
+        description: 'R$50 off atualizado',
+      },
+    });
+    expect(reCreateRes.statusCode).toBe(200);
+
+    // 3. Testa no carrinho e envia verificação
+    const verifyRes = await app.inject({
+      method: 'POST',
+      url: `/api/v1/extension/coupons/${coupon.id}/verification`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        result: 'VALID',
+        note: 'Aplicou com sucesso no checkout',
+      },
+    });
+
+    expect(verifyRes.statusCode).toBe(200);
+    expect(verifyRes.json().status).toBe('VALID');
+
+    // Confirma que o status no banco mudou para VALID
+    const dbCoupon = await prisma.coupon.findUnique({ where: { id: coupon.id } });
+    expect(dbCoupon?.status).toBe('VALID');
+    expect(dbCoupon?.lastVerifiedAt).toBeDefined();
+
+    const checks = await prisma.couponCheck.findMany({ where: { couponId: coupon.id } });
+    expect(checks).toHaveLength(1);
+    expect(checks[0]?.method).toBe('EXTENSION');
+    expect(checks[0]?.result).toBe('VALID');
+  });
+
+  it('faz upsert automático de cupom ao capturar produto com couponCode', async () => {
+    const tokenRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/api-tokens',
+      headers: { cookie },
+      payload: { name: 'Token Captura Cupom' },
+    });
+    const { token } = tokenRes.json();
+
+    const captureRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/extension/capture',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        url: 'https://shopee.com.br/product-teste-cupom',
+        marketplaceKind: 'SHOPEE',
+        title: 'Produto com Cupom',
+        price: 99.0,
+        couponCode: 'SHOPEE15',
+        couponValue: 15,
+      },
+    });
+
+    expect(captureRes.statusCode).toBe(200);
+
+    const coupon = await prisma.coupon.findFirst({
+      where: { tenantId: t.tenantId, store: 'SHOPEE', code: 'SHOPEE15' },
+    });
+    expect(coupon).toBeDefined();
+    expect(coupon?.origin).toBe('EXTENSION');
+    expect(coupon?.status).toBe('UNVERIFIED');
+    expect(Number(coupon?.discountValue)).toBe(15);
+    expect(coupon?.description).toContain('Produto com Cupom');
+  });
 });
+
