@@ -260,6 +260,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     else if (url.includes('magazineluiza.com.br') || url.includes('magazinevoce.com.br'))
       marketplaceKind = 'MAGALU';
     else if (url.includes('shopee.com.br')) marketplaceKind = 'SHOPEE';
+    else if (url.includes('aliexpress.com')) marketplaceKind = 'ALIEXPRESS';
 
     if (!marketplaceKind) {
       productSection.classList.add('hidden');

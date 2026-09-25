@@ -264,6 +264,49 @@
       if (/frete grátis/i.test(document.body.innerText)) shipping = 'FREE';
     }
 
+    // AliExpress
+    // Classes CSS-módulo com sufixo hash (ex.: "price-default--current--F8OlYIo") — a Aliexpress
+    // troca o hash a cada build, então usamos seletor por prefixo ([class*=...]) para resistir a
+    // isso. Não existe h1 de produto de verdade (o único <h1> da página é fixo "Aliexpress"), o
+    // título real fica em [class*="title--wrap"] (com fallback pro meta og:title).
+    else if (url.includes('aliexpress.com')) {
+      const titleEl = document.querySelector('[class*="title--wrap"]');
+      if (titleEl) {
+        title = titleEl.textContent.trim();
+      } else {
+        const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute('content');
+        if (ogTitle) title = ogTitle.replace(/\s*-\s*AliExpress.*$/i, '').trim();
+      }
+
+      const priceEl = document.querySelector('[class*="price-default--current"]');
+      if (priceEl) {
+        const cleaned = priceEl.textContent.replace(/[^\d,]/g, '').replace(',', '.');
+        const parsed = parseFloat(cleaned);
+        if (!isNaN(parsed)) price = parsed;
+      }
+
+      const origEl = document.querySelector('[class*="price-default--original"]');
+      if (origEl) {
+        const cleaned = origEl.textContent.replace(/[^\d,]/g, '').replace(',', '.');
+        const parsed = parseFloat(cleaned);
+        if (!isNaN(parsed)) originalPrice = parsed;
+      }
+
+      const discountEl = document.querySelector('[class*="price-default--discount"]');
+      if (discountEl) {
+        const m = discountEl.textContent.match(/(\d+)%/);
+        if (m) discountPct = parseInt(m[1], 10);
+      }
+      if (!discountPct && originalPrice && price && originalPrice > price) {
+        discountPct = Math.round(((originalPrice - price) / originalPrice) * 100);
+      }
+
+      const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content');
+      if (ogImage && ogImage.startsWith('http')) images.push(ogImage);
+
+      if (/frete gr[aá]tis/i.test(document.body.innerText)) shipping = 'FREE';
+    }
+
     return {
       title,
       price,
@@ -303,6 +346,9 @@
     ) {
       return /\/p\/([a-z0-9]+)/i.test(path) || /\/([a-z0-9]{7,12})\//i.test(path);
     }
+    if (host === 'aliexpress.com' || host.endsWith('.aliexpress.com')) {
+      return /\/item\/(\d+)/i.test(path) || /_p(\d+)/i.test(path);
+    }
     return false;
   }
 
@@ -322,14 +368,37 @@
       } catch {
         return;
       }
-      if (!isProductUrl(absolute) || seen.has(absolute)) return;
-      seen.add(absolute);
+      if (!isProductUrl(absolute)) return;
+      // Dedup pela URL sem querystring: variações de cor/tamanho do mesmo produto
+      // geram links com o mesmo path mas parâmetros diferentes (ex: pdp_filters=deal:MLBxxxx-1
+      // no Mercado Livre, um por cor), e são o mesmo produto.
+      let dedupeKey;
+      try {
+        const du = new URL(absolute);
+        dedupeKey = du.origin + du.pathname;
+      } catch {
+        dedupeKey = absolute;
+      }
+      if (seen.has(dedupeKey)) return;
+      seen.add(dedupeKey);
 
       // Sobe a partir do link até achar um container de card razoável: o primeiro
       // ancestral que já contém uma imagem e um valor em R$ (até 6 níveis acima).
+      // Para não vazar preço/imagem de um card vizinho, a subida é interrompida assim
+      // que o próximo ancestral passaria a conter mais de um link de produto — sinal
+      // de que já saímos do card individual e entramos num wrapper de grade/listagem.
       let container = a;
       for (let i = 0; i < 6 && container.parentElement; i++) {
-        container = container.parentElement;
+        const next = container.parentElement;
+        const productLinksInNext = Array.from(next.querySelectorAll('a[href]')).filter((el) => {
+          try {
+            return isProductUrl(new URL(el.getAttribute('href'), window.location.href).toString());
+          } catch {
+            return false;
+          }
+        });
+        if (productLinksInNext.length > 1) break;
+        container = next;
         if (container.querySelector('img[src]') && /R\$\s?[\d.,]+/.test(container.textContent || '')) {
           break;
         }
@@ -449,6 +518,7 @@
       else if (url.includes('amazon.com.br')) marketplaceKind = 'AMAZON';
       else if (url.includes('magazineluiza.com.br') || url.includes('magazinevoce.com.br'))
         marketplaceKind = 'MAGALU';
+      else if (url.includes('aliexpress.com')) marketplaceKind = 'ALIEXPRESS';
 
       const payload = {
         url,

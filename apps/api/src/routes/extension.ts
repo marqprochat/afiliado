@@ -10,8 +10,10 @@ import { hashToken } from './api-tokens';
 import { toApiProduct, upsertProducts } from '../lib/products';
 import { fetchAwinCatalogByUrls } from '../lib/awin-catalog';
 import {
+  getAliexpressAdapter,
   getShopeeAdapter,
   getTagAdapter,
+  loadAliexpressCredentials,
   loadShopeeCredentials,
   loadTagCredentials,
   upsertMarketplaceCredentials,
@@ -127,6 +129,9 @@ export async function extensionRoutes(app: FastifyInstance) {
         list = await getShopeeAdapter().fetchByUrls(creds, [body.url]);
       } else if (body.marketplaceKind === 'AWIN') {
         list = await fetchAwinCatalogByUrls(tenantDb, [body.url]);
+      } else if (body.marketplaceKind === 'ALIEXPRESS') {
+        const creds = await loadAliexpressCredentials(tenantDb);
+        list = await getAliexpressAdapter().fetchByUrls(creds, [body.url]);
       } else {
         const amazonCreds =
           body.marketplaceKind === 'AMAZON'

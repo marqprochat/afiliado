@@ -21,7 +21,8 @@
     "*://*.amazon.com.br/*",
     "*://*.magazineluiza.com.br/*",
     "*://*.magazinevoce.com.br/*",
-    "*://*.shopee.com.br/*"
+    "*://*.shopee.com.br/*",
+    "*://*.aliexpress.com/*"
   ],
   "background": {
     "service_worker": "background/background.js"
@@ -33,7 +34,8 @@
         "*://*.amazon.com.br/*",
         "*://*.magazineluiza.com.br/*",
         "*://*.magazinevoce.com.br/*",
-        "*://*.shopee.com.br/*"
+        "*://*.shopee.com.br/*",
+        "*://*.aliexpress.com/*"
       ],
       "js": ["content/content.js"],
       "css": ["content/content.css"]
