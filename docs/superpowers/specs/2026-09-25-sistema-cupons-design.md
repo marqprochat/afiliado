@@ -275,3 +275,49 @@ task do plano, **só executada se o usuário aprovar**.
 Todos os campos novos têm default ou são opcionais, e `POST /automations/:id/queue/coupon`
 continua funcionando (cria com `origin=MANUAL`). O único ponto que exige cuidado é a troca do
 `@@unique`: a migração precisa dropar o índice antigo e criar o novo.
+
+## Apêndice — resultados do spike (Task 0)
+
+Resultados da verificação ao vivo realizada em 25/09/2026 com credenciais reais dos tenants:
+
+### 1. AliExpress (`aliexpress.affiliate.hotproduct.query` e `product.query`)
+- **`hotproduct.query` (BRL/PT/BR, páginas 1–3, 149 produtos):** 0 produtos retornaram `promo_code_info.promo_code` (tanto com quanto sem o parâmetro `fields`).
+- **`product.query` com keywords:**
+  - `keywords="fones"`: 49 produtos retornados, **3 com código de cupom ativo**.
+  - `keywords="fone bluetooth"`: 50 produtos retornados, **2 com código de cupom ativo**.
+  - `keywords="smartwatch"`, `"celular"`: 0 códigos.
+- **Formato real do payload retornado:**
+  ```json
+  {
+    "code_campaigntype": "1",
+    "code_availabletime_start": "2026-06-27 00:36:26",
+    "code_availabletime_end": "2027-06-30 23:59:59",
+    "code_quantity": "1946",
+    "code_value": "On order over BRL 83.6 , get BRL 5.02 off",
+    "promo_code": "LV6WVV6WZV3M",
+    "code_mini_spend": "83.6"
+  }
+  ```
+- **Tipos de dados:**
+  - `promo_code`: string (ex.: `"LV6WVV6WZV3M"`).
+  - `code_availabletime_start` / `code_availabletime_end`: strings `"YYYY-MM-DD HH:mm:ss"`.
+  - `code_value`: string com texto explicativo do desconto (ex.: `"On order over BRL 83.6 , get BRL 5.02 off"`).
+  - `code_mini_spend`: string decimal (`"83.6"`).
+  - `code_campaigntype`: string numérica (`"1"` = valor fixo, `"2"` = percentual).
+  - `code_quantity`: string com usos restantes (`"1946"`).
+- **Conclusão:** O job `coupon-sync` deve utilizar tanto `hotproduct.query` quanto `product.query` com as keywords das regras de automação ativas no tenant para maximizar a colheita de cupons.
+
+### 2. Awin (Offers API)
+- As credenciais configuradas atualmente no banco contêm apenas a chave do datafeed (`feedListUrl`).
+- `publisherId` e `offersApiToken` (token de API de publisher) **ainda não estão configurados**.
+- **Decisão:** A Task 4 será implementada com fixtures mockadas e a sincronização da Awin ficará em modo "aguardando credencial" (pulando a execução silenciosamente se os campos não estiverem preenchidos).
+
+### 3. Shopee (Affiliate Open API GraphQL)
+- Introspecção completa (`__schema`) executada no endpoint oficial `https://open-api.affiliate.shopee.com.br/graphql` com credenciais reais.
+- As únicas queries raiz disponíveis são: `shopOfferV2`, `shopeeOfferV2`, `productOfferV2`, `conversionReport`, `validatedReport`, `partnerOrderReport`, `listItemFeeds`, `getItemFeedData`.
+- **Confirmado:** Nenhuma query de voucher/cupom existe na Affiliate Open API da Shopee. Premissa do spec validada.
+
+### 4. Seletores de carrinho
+- Ambiente sandbox/headless sem sessão autenticada de usuário nas lojas.
+- A inspeção de seletores de checkout/carrinho será executada no navegador com sessão logada do usuário quando da validação assistida da extensão.
+
