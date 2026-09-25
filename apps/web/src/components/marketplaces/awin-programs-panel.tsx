@@ -58,8 +58,27 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
         method: 'PUT',
         json: { feedIds: [...effectiveSelected] },
       });
-      await apiFetch('/marketplaces/awin/import', { method: 'POST' });
-      setFeedback({ message: 'Import solicitado — os produtos aparecem em alguns minutos.', ok: true });
+      const res = await apiFetch<{
+        queued: boolean;
+        totalImported?: number;
+        totalRemoved?: number;
+        failedCount?: number;
+      }>('/marketplaces/awin/import', { method: 'POST' });
+      if (res.queued) {
+        setFeedback({ message: 'Import solicitado — os produtos aparecem em alguns minutos.', ok: true });
+      } else if (res.totalImported === 0) {
+        setFeedback({
+          message:
+            'Nenhum produto foi encontrado nos feeds selecionados — verifique o link da lista de feeds ou os programas escolhidos.',
+          ok: false,
+        });
+      } else {
+        const failedNote = res.failedCount ? ` (${res.failedCount} feed(s) com erro)` : '';
+        setFeedback({
+          message: `${res.totalImported} produto(s) importado(s) pelo link do feed${failedNote}.`,
+          ok: true,
+        });
+      }
       onImported?.();
     } catch (err) {
       setFeedback({ message: err instanceof Error ? err.message : 'Falha ao solicitar import.', ok: false });

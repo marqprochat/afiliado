@@ -16,6 +16,10 @@ export interface ShopeeProductOfferNode {
   offerLink: string;
   periodStartTime: number;
   periodEndTime: number;
+  /** IDs reais da taxonomia de categorias da Open Platform (ex.: 100632) — namespace diferente
+   * do ID que aparece na URL de categorias do site shopee.com.br. Opcional porque fixtures de
+   * teste antigas não têm esse campo. */
+  productCatIds?: number[];
 }
 
 export function mapProductOffer(n: ShopeeProductOfferNode): ProductData {

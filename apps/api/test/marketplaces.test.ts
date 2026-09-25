@@ -428,10 +428,20 @@ describe('marketplaces', () => {
     });
   });
 
-  it('POST /marketplaces/awin/import enfileira o job quando há feeds selecionados', async () => {
+  it('POST /marketplaces/awin/import enfileira o job e devolve quantos produtos foram encontrados pelo link', async () => {
     const r = await app.inject({ method: 'POST', url: '/api/v1/marketplaces/awin/import', headers: { cookie } });
     expect(r.statusCode).toBe(200);
-    expect(r.json()).toEqual({ queued: true });
+    // A rota aguarda o job terminar (com timeout) para devolver a contagem real de produtos
+    // encontrados pelo link do feed, em vez de só "queued: true" sem nenhum retorno útil.
+    // Aqui o feedListUrl é fake (não é uma URL real da Awin), então o resultado esperado é
+    // uma falha por feed — o que já é suficiente para provar que a contagem chega ao cliente.
+    expect(r.json()).toMatchObject({
+      queued: false,
+      totalImported: 0,
+      totalRemoved: 0,
+      failedCount: expect.any(Number),
+      feeds: expect.any(Array),
+    });
   });
 
   it('POST /marketplaces/awin/import sem credenciais configuradas responde com erro, não enfileira', async () => {

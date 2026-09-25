@@ -79,6 +79,16 @@ export function createAliexpressAdapter(
       if (query.categoryId) {
         businessParams.category_ids = query.categoryId;
       }
+      // min_sale_price/max_sale_price são parâmetros documentados oficialmente da Open Platform
+      // (mesma unidade decimal de target_currency, ex.: 19.90) — diferente da Shopee, que não tem
+      // filtro de preço nenhum na API. O filtro final ainda é reaplicado em
+      // apps/api/src/routes/products.ts#applySearchFilters como garantia, caso a API não respeite.
+      if (query.minPrice !== undefined) {
+        businessParams.min_sale_price = query.minPrice;
+      }
+      if (query.maxPrice !== undefined) {
+        businessParams.max_sale_price = query.maxPrice;
+      }
 
       const res = await client.execute<any>(method, businessParams);
       const root = extractAliResult(res);
@@ -136,6 +146,36 @@ export function createAliexpressAdapter(
       return url;
     },
   };
+}
+
+export interface AliexpressCategory {
+  categoryId: string;
+  categoryName: string;
+  parentCategoryId?: string;
+}
+
+/**
+ * Lista as categorias reais da Open Platform via `aliexpress.affiliate.category.get` —
+ * confirmado ao vivo que `category_ids` em `aliexpress.affiliate.product.query` só filtra de
+ * verdade quando recebe um ID vindo daqui (ex.: 200003782 = "Office Electronics"). Diferente da
+ * Shopee, o AliExpress tem esse endpoint oficial, então dá pra montar uma lista de categorias
+ * de verdade em vez de pedir pro usuário adivinhar/copiar um ID de algum lugar.
+ */
+export async function getAliexpressCategories(
+  creds: AliexpressCredentials,
+  opts: AliexpressAdapterOptions = {},
+): Promise<AliexpressCategory[]> {
+  const client = new AliexpressClient(creds, opts);
+  const res = await client.execute<any>('aliexpress.affiliate.category.get', {});
+  const root = extractAliResult(res);
+  const rawList = extractArray(root, 'categories');
+  return rawList
+    .map((c) => ({
+      categoryId: String(c.category_id),
+      categoryName: String(c.category_name),
+      ...(c.parent_category_id ? { parentCategoryId: String(c.parent_category_id) } : {}),
+    }))
+    .sort((a, b) => a.categoryName.localeCompare(b.categoryName));
 }
 
 function extractAliResult(res: any): any {

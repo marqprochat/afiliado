@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from './api';
 import type {
+  AliexpressCategory,
   AutomationQueueItem,
   AutomationRule,
   AwinFeed,
@@ -50,6 +51,14 @@ export const useAwinFeeds = (enabled: boolean) =>
     queryKey: ['marketplaces', 'awin', 'feeds'],
     enabled,
     queryFn: () => apiFetch<{ feeds: AwinFeed[] }>('/marketplaces/awin/feeds'),
+  });
+export const useAliexpressCategories = (enabled: boolean) =>
+  useQuery({
+    queryKey: ['marketplaces', 'aliexpress', 'categories'],
+    enabled,
+    staleTime: 60 * 60_000,
+    queryFn: () =>
+      apiFetch<{ categories: AliexpressCategory[] }>('/marketplaces/aliexpress/categories'),
   });
 export const useTelegramBots = () =>
   useQuery({

@@ -196,6 +196,7 @@ describe('createAliexpressAdapter', () => {
       mode: 'keyword',
       query: 'smartwatch',
       limit: 10,
+      freeShippingOnly: false,
     });
 
     expect(items.length).toBe(1);
@@ -300,6 +301,7 @@ describe('createAliexpressAdapter', () => {
       mode: 'keyword',
       query: 'fone',
       limit: 10,
+      freeShippingOnly: false,
     });
 
     expect(items.length).toBe(1);
@@ -332,6 +334,7 @@ describe('createAliexpressAdapter', () => {
       source: 'ALIEXPRESS',
       mode: 'trending',
       limit: 10,
+      freeShippingOnly: false,
     });
 
     expect(items.length).toBe(1);
@@ -358,6 +361,7 @@ describe('createAliexpressAdapter', () => {
       limit: 10,
       topSellers: false,
       extraCommission: false,
+      freeShippingOnly: false,
     });
 
     const calledUrl = String(mockFetch.mock.calls[0]![0]);
@@ -373,6 +377,7 @@ describe('createAliexpressAdapter', () => {
       limit: 10,
       topSellers: false,
       extraCommission: false,
+      freeShippingOnly: false,
     });
     expect(String(mockFetch.mock.calls[0]![0])).toContain('sort=last_volume_desc');
   });

@@ -12,6 +12,7 @@ describe('searchQuerySchema', () => {
       limit: 100,
       topSellers: false,
       extraCommission: false,
+      freeShippingOnly: false,
     });
   });
 
@@ -27,5 +28,33 @@ describe('searchQuerySchema', () => {
     expect(() =>
       searchQuerySchema.parse({ source: 'SHOPEE', mode: 'trending', limit: 501 }),
     ).toThrow();
+  });
+
+  it('rejeita minPrice maior que maxPrice', () => {
+    expect(() =>
+      searchQuerySchema.parse({
+        source: 'SHOPEE',
+        mode: 'trending',
+        minPrice: 100,
+        maxPrice: 50,
+      }),
+    ).toThrow();
+  });
+
+  it('aceita filtros de preço/desconto/vendas/frete', () => {
+    const q = searchQuerySchema.parse({
+      source: 'SHOPEE',
+      mode: 'trending',
+      minPrice: 10,
+      maxPrice: 200,
+      minDiscountPct: 20,
+      minSales: 5,
+      freeShippingOnly: true,
+    });
+    expect(q.minPrice).toBe(10);
+    expect(q.maxPrice).toBe(200);
+    expect(q.minDiscountPct).toBe(20);
+    expect(q.minSales).toBe(5);
+    expect(q.freeShippingOnly).toBe(true);
   });
 });

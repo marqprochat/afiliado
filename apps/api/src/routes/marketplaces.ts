@@ -17,13 +17,14 @@ import { requireAuth } from '../plugins/auth';
 import {
   getAdapter,
   getShopeeAdapter,
+  loadAliexpressCredentials,
   loadAwinCredentials,
   publicConnection,
   selectableAwinFeeds,
   upsertMarketplaceCredentials,
 } from '../lib/marketplaces';
-import { getQueue } from '../lib/redis';
-import { listDatafeeds } from '@afilados/marketplaces';
+import { getQueue, getQueueEvents } from '../lib/redis';
+import { getAliexpressCategories, listDatafeeds } from '@afilados/marketplaces';
 
 const kindParams = z.object({ kind: marketplaceKindParam });
 
@@ -168,6 +169,17 @@ export async function marketplacesRoutes(app: FastifyInstance) {
     return { feeds };
   });
 
+  app.get('/marketplaces/aliexpress/categories', async (req) => {
+    const creds = await loadAliexpressCredentials(req.db);
+    try {
+      const categories = await getAliexpressCategories(creds);
+      return { categories };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      throw new ApiError('MARKETPLACE_ERROR', message, 502);
+    }
+  });
+
   app.post('/marketplaces/awin/import', async (req) => {
     // Valida as credenciais antes de enfileirar — sem isso, um tenant sem AWIN configurada
     // recebe { queued: true } mas o job roda e não faz nada (importAwinCatalog retorna []).
@@ -176,11 +188,30 @@ export async function marketplacesRoutes(app: FastifyInstance) {
       throw new ApiError('MARKETPLACE_ERROR', 'Selecione ao menos um programa para importar', 400);
     }
     const q = getQueue<AwinImportJob>(QUEUE_AWIN_IMPORT);
-    await q.add(
+    const job = await q.add(
       'awin-import',
       { tenantId: req.tenantId },
       { jobId: `awin-import-${req.tenantId}-${Date.now()}`, attempts: 2, removeOnComplete: true, removeOnFail: 50 },
     );
-    return { queued: true };
+    // Aguarda o job terminar para devolver quantos produtos foram encontrados pelo link do
+    // feed — sem isso o usuário só via "os produtos aparecem em alguns minutos" e não tinha
+    // como saber se o import funcionou ou trouxe 0 produtos (link/feed inválido ou expirado).
+    try {
+      const results = (await job.waitUntilFinished(getQueueEvents(QUEUE_AWIN_IMPORT), 45_000)) as {
+        feedId: string;
+        ok: boolean;
+        imported: number;
+        removed: number;
+        error?: string;
+      }[];
+      const totalImported = results.reduce((sum, r) => sum + r.imported, 0);
+      const totalRemoved = results.reduce((sum, r) => sum + r.removed, 0);
+      const failed = results.filter((r) => !r.ok);
+      return { queued: false, totalImported, totalRemoved, failedCount: failed.length, feeds: results };
+    } catch {
+      // Timeout (feed grande) ou job perdido: cai no fluxo assíncrono anterior — o worker
+      // continua processando em background e o catálogo é atualizado de qualquer forma.
+      return { queued: true };
+    }
   });
 }

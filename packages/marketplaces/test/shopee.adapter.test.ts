@@ -21,6 +21,7 @@ const baseQuery = {
   limit: 100,
   topSellers: false,
   extraCommission: false,
+  freeShippingOnly: false,
 };
 
 describe('ShopeeAdapter (mock)', () => {

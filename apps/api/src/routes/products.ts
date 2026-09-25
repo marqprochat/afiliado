@@ -12,6 +12,7 @@ import {
   type ProductData,
   type ProductEnrichJob,
   type ProductsImportItem,
+  type SearchQuery,
 } from '@afilados/shared';
 import {
   discoverAmazonByKeyword,
@@ -32,6 +33,23 @@ import { getQueue } from '../lib/redis';
 import { searchAwinCatalog, fetchAwinCatalogByUrls } from '../lib/awin-catalog';
 
 const idsQuery = z.object({ ids: z.string().min(1) });
+
+/** Filtros de preço/desconto/vendas/frete aplicados depois da busca, iguais para qualquer
+ * marketplace — nenhuma das APIs de origem tem todos esses filtros nativos (a Shopee não tem
+ * nenhum filtro de preço; o AliExpress tem só min/max preço, aplicado também na query em
+ * getAliexpressAdapter().search para não desperdiçar página de resultado; ML/Amazon/Magalu/Awin
+ * não têm filtro nenhum, pois vêm de scraping/CSV). Aplicar aqui garante o mesmo comportamento
+ * em todo lugar, mesmo quando a origem já filtrou por conta própria. */
+function applySearchFilters(products: ProductData[], q: SearchQuery): ProductData[] {
+  return products.filter((p) => {
+    if (q.minPrice !== undefined && p.price < q.minPrice) return false;
+    if (q.maxPrice !== undefined && p.price > q.maxPrice) return false;
+    if (q.minDiscountPct !== undefined && (p.discountPct ?? 0) < q.minDiscountPct) return false;
+    if (q.minSales !== undefined && (p.salesCount ?? 0) < q.minSales) return false;
+    if (q.freeShippingOnly && p.shipping !== 'FREE') return false;
+    return true;
+  });
+}
 
 /** Busca por palavra-chave fora da Shopee, best-effort e anônima. ML/Magalu bloqueiam esse tipo
  * de busca mesmo autenticados (confirmado em testes com navegador headless) — o caminho que
@@ -68,7 +86,7 @@ export async function productsRoutes(app: FastifyInstance) {
       } catch (e) {
         throw new ApiError('MARKETPLACE_ERROR', e instanceof Error ? e.message : String(e), 502);
       }
-      const rows = await upsertProducts(req.db, req.tenantId, found);
+      const rows = await upsertProducts(req.db, req.tenantId, applySearchFilters(found, q));
       return { products: rows.map(toApiProduct) };
     }
 
@@ -80,14 +98,14 @@ export async function productsRoutes(app: FastifyInstance) {
       } catch (e) {
         throw new ApiError('MARKETPLACE_ERROR', e instanceof Error ? e.message : String(e), 502);
       }
-      const rows = await upsertProducts(req.db, req.tenantId, found);
+      const rows = await upsertProducts(req.db, req.tenantId, applySearchFilters(found, q));
       return { products: rows.map(toApiProduct) };
     }
 
     if (q.source === 'AWIN') {
       if (!q.query) throw ApiError.validation('Informe uma palavra-chave');
       const found = await searchAwinCatalog(req.db, q.query, q.limit);
-      const rows = await upsertProducts(req.db, req.tenantId, found);
+      const rows = await upsertProducts(req.db, req.tenantId, applySearchFilters(found, q));
       return { products: rows.map(toApiProduct) };
     }
 
@@ -109,7 +127,7 @@ export async function productsRoutes(app: FastifyInstance) {
     if (urls.length === 0) return { products: [] };
     const amazonCreds = kind === 'AMAZON' ? await loadTagCredentials(req.db, kind) : {};
     const found = await getTagAdapter(kind).fetchByUrls(amazonCreds, urls.slice(0, q.limit));
-    const rows = await upsertProducts(req.db, req.tenantId, found);
+    const rows = await upsertProducts(req.db, req.tenantId, applySearchFilters(found, q));
     return { products: rows.map(toApiProduct) };
   });
 

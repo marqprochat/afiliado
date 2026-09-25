@@ -1,4 +1,5 @@
 'use client';
+import { toast } from 'sonner';
 import { NativeCheckbox } from '@/components/ui/native-checkbox';
 import { Button } from '@/components/ui/button';
 import { formatBRL } from '@/lib/format';
@@ -17,6 +18,15 @@ export function ProductCard({
   onCopy: (p: ApiProduct) => void;
 }) {
   const pending = Boolean(p.raw?.pendingEnrich);
+  // Único jeito confiável de descobrir um ID de categoria válido para a busca por categoria da
+  // Shopee: o ID que aparece na URL do site (shopee.com.br/...-cat.NNNNNNNN) é de um namespace
+  // diferente do usado pela Open Platform e sempre retorna 0 resultados (testado ao vivo).
+  const shopeeCatId = p.source === 'SHOPEE' ? p.raw?.productCatIds?.[0] : undefined;
+  async function copyCatId() {
+    if (!shopeeCatId) return;
+    await navigator.clipboard.writeText(String(shopeeCatId));
+    toast.success(`ID de categoria ${shopeeCatId} copiado`);
+  }
   return (
     <div
       className={cn(
@@ -77,6 +87,16 @@ export function ProductCard({
         )}
         {p.couponCode && <span className="text-amber-300 font-medium">🎟️ {p.couponCode}</span>}
       </div>
+      {shopeeCatId && (
+        <button
+          type="button"
+          onClick={copyCatId}
+          title="Copiar ID de categoria para usar em Explorar Categorias"
+          className="mt-1 w-fit rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+        >
+          🏷️ Categoria {shopeeCatId}
+        </button>
+      )}
       <Button size="sm" variant="secondary" className="mt-2 text-xs" onClick={() => onCopy(p)}>
         Copiar texto + link
       </Button>

@@ -91,6 +91,12 @@ export interface AwinFeed {
   selected: boolean;
 }
 
+export interface AliexpressCategory {
+  categoryId: string;
+  categoryName: string;
+  parentCategoryId?: string;
+}
+
 export interface ApiProduct {
   id: string;
   source: string;
@@ -108,8 +114,10 @@ export interface ApiProduct {
   originalUrl: string;
   shopId: string | null;
   shopName: string | null;
-  /** Metadados brutos; `pendingEnrich: true` enquanto o worker ainda raspa a página. */
-  raw?: { pendingEnrich?: boolean } | null;
+  /** Metadados brutos; `pendingEnrich: true` enquanto o worker ainda raspa a página.
+   * `productCatIds`: IDs reais de categoria da Shopee (namespace da Open Platform, diferente
+   * do ID visível na URL do site) — únicos IDs válidos para buscar por categoria. */
+  raw?: { pendingEnrich?: boolean; productCatIds?: number[] } | null;
 }
 export interface QueueItem {
   id: string;

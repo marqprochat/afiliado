@@ -22,13 +22,18 @@ const MARKETS: { key: MarketplaceKind; label: string }[] = [
   { key: 'AWIN', label: 'Awin' },
   { key: 'ALIEXPRESS', label: 'AliExpress' },
 ];
-// Categoria/loja favorita/mais buscados são conceitos da API oficial da Shopee — os demais
-// marketplaces só têm busca por palavra-chave (scraping) e importação por link.
-const ALL_SUBTABS: { key: SearchMode | 'import'; label: string; shopeeOnly?: boolean }[] = [
+// Categoria/mais buscados existem na API oficial da Shopee e na do AliExpress. Loja
+// favorita é só Shopee (shopId na productOfferV2). Os demais marketplaces só têm busca
+// por palavra-chave (scraping) e importação por link.
+const ALL_SUBTABS: {
+  key: SearchMode | 'import';
+  label: string;
+  sources?: MarketplaceKind[];
+}[] = [
   { key: 'keyword', label: 'Captura de Produtos' },
-  { key: 'category', label: 'Explorar Categorias', shopeeOnly: true },
-  { key: 'trending', label: 'Mais Buscados', shopeeOnly: true },
-  { key: 'shop', label: 'Lojas Favoritas', shopeeOnly: true },
+  { key: 'category', label: 'Explorar Categorias', sources: ['SHOPEE', 'ALIEXPRESS'] },
+  { key: 'trending', label: 'Mais Buscados', sources: ['SHOPEE', 'ALIEXPRESS'] },
+  { key: 'shop', label: 'Lojas Favoritas', sources: ['SHOPEE'] },
   { key: 'import', label: 'Por Links / CSV' },
 ];
 
@@ -37,11 +42,12 @@ export default function ProdutosPage() {
   const [sub, setSub] = useState<SearchMode | 'import'>('keyword');
   const [products, setProducts] = useState<ApiProduct[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const SUBTABS = ALL_SUBTABS.filter((t) => source === 'SHOPEE' || !t.shopeeOnly);
+  const SUBTABS = ALL_SUBTABS.filter((t) => !t.sources || t.sources.includes(source));
 
   function selectSource(kind: MarketplaceKind) {
     setSource(kind);
-    if (kind !== 'SHOPEE' && sub !== 'keyword' && sub !== 'import') setSub('keyword');
+    const stillValid = ALL_SUBTABS.find((t) => t.key === sub);
+    if (stillValid?.sources && !stillValid.sources.includes(kind)) setSub('keyword');
   }
 
   // Produtos importados em lote chegam como esqueleto e são atualizados quando o worker termina

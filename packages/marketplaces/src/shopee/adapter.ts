@@ -31,8 +31,14 @@ const PRODUCT_OFFER_ARG_TYPES: Record<string, string> = {
   isKeySeller: 'Boolean',
 };
 
+// productCatIds foi descoberto por introspecção do schema real da Shopee: é o único campo do
+// tipo ProductOfferV2 com informação de categoria (não existe "categoryId"). É a única forma
+// confiável de descobrir productCatIds válidos, já que a Open Platform não tem query de
+// categorias e os IDs usados na URL do site (shopee.com.br/...-cat.NNNNNNNN) são de um
+// namespace totalmente diferente — testado ao vivo e productCatId com um ID da URL do site
+// sempre retorna 0 resultados, mesmo sendo uma categoria real e existente.
 const PRODUCT_OFFER_NODE_FIELDS =
-  'itemId shopId productName priceMin priceDiscountRate sales commissionRate imageUrl shopName productLink';
+  'itemId shopId productName priceMin priceDiscountRate sales commissionRate imageUrl shopName productLink productCatIds';
 
 /**
  * Monta a query pedindo SÓ os argumentos realmente usados nesta chamada.

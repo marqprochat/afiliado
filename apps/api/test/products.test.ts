@@ -53,6 +53,17 @@ describe('products + queue', () => {
     ids = r.json().products.map((p: { id: string }) => p.id);
     expect(await prisma.product.count({ where: { tenantId: t.tenantId } })).toBe(2);
   });
+  it('search com maxPrice filtra produtos acima do teto', async () => {
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/v1/products/search',
+      headers: { cookie },
+      payload: { source: 'SHOPEE', mode: 'keyword', query: 'ryzen', maxPrice: 1000 },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().products).toHaveLength(1);
+    expect(r.json().products[0].price).toBeLessThanOrEqual(1000);
+  });
   it('search repetida não duplica', async () => {
     await app.inject({
       method: 'POST',
