@@ -1,7 +1,13 @@
 import type { Job } from 'bullmq';
 import pino from 'pino';
 import { prisma, decryptJson } from '@afilados/db';
-import { generateSubId, isEligibleCoupon, renderCouponTemplate, renderTemplate } from '@afilados/core';
+import {
+  generateSubId,
+  isEligibleCoupon,
+  renderCouponTemplate,
+  renderTemplate,
+  whatsappToTelegramHtml,
+} from '@afilados/core';
 import {
   getAliexpressAdapter,
   getTagAdapter,
@@ -142,9 +148,10 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
       return;
     }
 
+    const html = whatsappToTelegramHtml(text);
     const result = imageUrl
-      ? await client.sendPhoto(job.chatId, imageUrl, text)
-      : await client.sendMessage(job.chatId, text);
+      ? await client.sendPhoto(job.chatId, imageUrl, html)
+      : await client.sendMessage(job.chatId, html);
     log.info(
       { botId: job.botId, chatId: job.chatId, messageId: result.messageId },
       'oferta enviada no telegram',

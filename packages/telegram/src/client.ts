@@ -108,6 +108,7 @@ export class TelegramClient {
     const r = await this.request<{ message_id: number }>('sendMessage', {
       chat_id: chatId,
       text,
+      parse_mode: 'HTML',
       disable_web_page_preview: false,
     });
     return { messageId: r.message_id };
@@ -115,7 +116,10 @@ export class TelegramClient {
 
   async sendPhoto(chatId: string, photoUrl: string, caption?: string): Promise<{ messageId: number }> {
     const body: Record<string, unknown> = { chat_id: chatId, photo: photoUrl };
-    if (caption) body.caption = caption;
+    if (caption) {
+      body.caption = caption;
+      body.parse_mode = 'HTML';
+    }
     const r = await this.request<{ message_id: number }>('sendPhoto', body);
     return { messageId: r.message_id };
   }

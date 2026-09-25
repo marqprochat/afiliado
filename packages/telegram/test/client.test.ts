@@ -76,4 +76,15 @@ describe('TelegramClient', () => {
     expect(await client.sendMessage('-100123', 'oi')).toEqual({ messageId: 55 });
     expect(await client.sendPhoto('-100123', 'https://x/img.jpg', 'legenda')).toEqual({ messageId: 56 });
   });
+
+  it('sendMessage e sendPhoto (com legenda) enviam parse_mode HTML', async () => {
+    const f = fakeFetch([{ ok: true, result: { message_id: 1 } }, { ok: true, result: { message_id: 2 } }]);
+    const client = new TelegramClient('TOKEN', f as unknown as typeof fetch);
+    await client.sendMessage('-100123', '<b>oi</b>');
+    await client.sendPhoto('-100123', 'https://x/img.jpg', '<b>legenda</b>');
+    const calls = f.mock.calls as unknown as [string, RequestInit][];
+    const bodies = calls.map(([, init]) => JSON.parse(init.body as string));
+    expect(bodies[0]).toMatchObject({ parse_mode: 'HTML' });
+    expect(bodies[1]).toMatchObject({ parse_mode: 'HTML' });
+  });
 });
