@@ -58,7 +58,7 @@ export interface ProductEnrichJob {
   tenantId: string;
   productId: string;
   url: string;
-  marketplaceKind: 'SHOPEE' | 'MERCADOLIVRE' | 'AMAZON' | 'MAGALU';
+  marketplaceKind: 'SHOPEE' | 'MERCADOLIVRE' | 'AMAZON' | 'MAGALU' | 'ALIEXPRESS';
 }
 
 export interface SendTelegramJob {

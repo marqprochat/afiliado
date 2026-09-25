@@ -28,6 +28,7 @@ model Tenant {
   mirrorRules       MirrorRule[]
   mirrorLogs        MirrorLog[]
   coupons           Coupon[]
+  couponChecks      CouponCheck[]
   scheduledMessages ScheduledMessage[]
   apiTokens         ApiToken[]
   automationRules   AutomationRule[]
@@ -475,20 +476,83 @@ model MirrorLog {
 }
 
 
-model Coupon {
-  id          String          @id @default(cuid())
-  tenantId    String
-  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  store       MarketplaceKind
-  code        String
-  description String
-  expiresAt   DateTime?
-  sourceUrl   String?
-  fetchedAt   DateTime        @default(now())
-  automationQueueItems AutomationQueueItem[]
-  batchItems  BatchItem[]
+enum CouponOrigin {
+  MANUAL
+  API
+  EXTENSION
+  IMPORT
+  MIRROR
+}
 
-  @@unique([tenantId, store, code])
+enum CouponStatus {
+  UNVERIFIED
+  VALID
+  INVALID
+  EXPIRED
+}
+
+enum CouponDiscountType {
+  PERCENT
+  FIXED
+  FREE_SHIPPING
+}
+
+enum CouponCheckMethod {
+  MANUAL
+  EXTENSION
+  SOURCE
+  EXPIRY
+}
+
+model Coupon {
+  id             String              @id @default(cuid())
+  tenantId       String
+  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  store          MarketplaceKind
+  /// Escopo da unicidade dentro da loja: advertiser.id na Awin, '' nas demais.
+  scope          String              @default("")
+  advertiserName String?
+  code           String
+  description    String
+  terms          String?
+  discountType   CouponDiscountType?
+  discountValue  Decimal?            @db.Decimal(10, 2)
+  minSpend       Decimal?            @db.Decimal(10, 2)
+  startsAt       DateTime?
+  expiresAt      DateTime?
+  sourceUrl      String?
+  /// Link de afiliado com o cupom já aplicado (AliExpress code_promotionurl, Awin urlTracking).
+  affiliateUrl   String?
+  /// ID na fonte (Awin promotionId, AliExpress product_id de onde o código veio).
+  externalId     String?
+  remainingUses  Int?
+  origin         CouponOrigin        @default(MANUAL)
+  status         CouponStatus        @default(UNVERIFIED)
+  lastVerifiedAt DateTime?
+  /// Última vez que uma fonte automática devolveu este cupom.
+  lastSeenAt     DateTime?
+  fetchedAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  automationQueueItems AutomationQueueItem[]
+  batchItems     BatchItem[]
+  checks         CouponCheck[]
+
+  @@unique([tenantId, store, code, scope])
+  @@index([tenantId, status, expiresAt])
+}
+
+model CouponCheck {
+  id        String            @id @default(cuid())
+  tenantId  String
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  couponId  String
+  coupon    Coupon            @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  result    CouponStatus      // VALID | INVALID | EXPIRED
+  method    CouponCheckMethod
+  note      String?
+  createdAt DateTime          @default(now())
+
+  @@index([couponId, createdAt])
 }
 
 enum TemplateKind {

@@ -15,8 +15,8 @@ export class AliexpressApiError extends Error {
 }
 
 export interface AliexpressClientOptions {
-  apiUrl?: string;
-  fetchImpl?: typeof fetch;
+  apiUrl?: string | undefined;
+  fetchImpl?: typeof fetch | undefined;
 }
 
 export class AliexpressClient {

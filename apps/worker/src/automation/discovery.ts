@@ -160,6 +160,7 @@ async function discoverShopee(rule: AutomationRule, keyword: string, deps: Disco
         limit: 20,
         topSellers: false,
         extraCommission: false,
+        freeShippingOnly: false,
       }));
   return search(creds, keyword);
 }
@@ -177,6 +178,9 @@ async function discoverAliexpress(rule: AutomationRule, keyword: string, deps: D
         query: k,
         sort: 'DISCOUNT_DESC',
         limit: 20,
+        topSellers: false,
+        extraCommission: false,
+        freeShippingOnly: false,
       }));
   return search(creds, keyword);
 }

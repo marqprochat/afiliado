@@ -70,7 +70,7 @@ describe('AliexpressClient', () => {
     });
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
-    const calledUrl = mockFetch.mock.calls[0][0];
+    const calledUrl = mockFetch.mock.calls[0]![0];
     expect(calledUrl).toContain('app_key=test_app_key');
     expect(calledUrl).toContain('sign=');
     expect(calledUrl).toContain('method=aliexpress.affiliate.link.generate');
@@ -195,6 +195,9 @@ describe('createAliexpressAdapter', () => {
       source: 'ALIEXPRESS',
       mode: 'keyword',
       query: 'smartwatch',
+      sort: 'DISCOUNT_DESC',
+      topSellers: false,
+      extraCommission: false,
       limit: 10,
       freeShippingOnly: false,
     });
@@ -267,7 +270,7 @@ describe('createAliexpressAdapter', () => {
     );
 
     expect(link).toBe('https://s.click.aliexpress.com/e/_d7subid');
-    const calledUrl = mockFetch.mock.calls[0][0];
+    const calledUrl = mockFetch.mock.calls[0]![0];
     expect(calledUrl).toContain('sub_id=batch-123');
     expect(calledUrl).toContain('tracking_id=track_xyz');
   });
@@ -300,6 +303,9 @@ describe('createAliexpressAdapter', () => {
       source: 'ALIEXPRESS',
       mode: 'keyword',
       query: 'fone',
+      sort: 'DISCOUNT_DESC',
+      topSellers: false,
+      extraCommission: false,
       limit: 10,
       freeShippingOnly: false,
     });
@@ -333,13 +339,16 @@ describe('createAliexpressAdapter', () => {
     const items = await adapter.search!(creds, {
       source: 'ALIEXPRESS',
       mode: 'trending',
+      sort: 'DISCOUNT_DESC',
+      topSellers: false,
+      extraCommission: false,
       limit: 10,
       freeShippingOnly: false,
     });
 
     expect(items.length).toBe(1);
     expect(items[0]!.title).toBe('Hot Product');
-    const calledUrl = mockFetch.mock.calls[0][0];
+    const calledUrl = mockFetch.mock.calls[0]![0];
     expect(calledUrl).toContain('method=aliexpress.affiliate.hotproduct.query');
   });
   it('não envia sorts que a API do AliExpress não aceita (discount_desc) — cai no padrão last_volume_desc', async () => {

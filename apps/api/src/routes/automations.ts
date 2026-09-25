@@ -12,7 +12,13 @@ import { parseProductUrl } from '@afilados/core';
 import { getTagAdapter } from '@afilados/marketplaces';
 import { requireAuth } from '../plugins/auth';
 import { getAutomationStats } from '../lib/automations';
-import { getShopeeAdapter, loadShopeeCredentials, loadTagCredentials } from '../lib/marketplaces';
+import {
+  getShopeeAdapter,
+  loadShopeeCredentials,
+  loadTagCredentials,
+  getAliexpressAdapter,
+  loadAliexpressCredentials,
+} from '../lib/marketplaces';
 import { toApiProduct, upsertProducts } from '../lib/products';
 import { fetchAwinCatalogByUrls } from '../lib/awin-catalog';
 
@@ -194,6 +200,9 @@ export async function automationsRoutes(app: FastifyInstance) {
     if (parsed.source === 'SHOPEE') {
       const { creds } = await loadShopeeCredentials(req.db);
       [found] = await getShopeeAdapter().fetchByUrls(creds, [url]);
+    } else if (parsed.source === 'ALIEXPRESS') {
+      const creds = await loadAliexpressCredentials(req.db);
+      [found] = await getAliexpressAdapter().fetchByUrls(creds, [url]);
     } else if (parsed.source === 'AWIN') {
       [found] = await fetchAwinCatalogByUrls(req.db, [url]);
     } else {
