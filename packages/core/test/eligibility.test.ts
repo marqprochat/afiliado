@@ -70,6 +70,23 @@ describe('isEligibleCoupon', () => {
     });
   });
 
+  it('rejeita cupom com status INVALID ou EXPIRED', () => {
+    expect(isEligibleCoupon({ code: 'PROMO10', expiresAt: null, status: 'INVALID' })).toEqual({
+      ok: false,
+      reason: 'invalid',
+    });
+    expect(isEligibleCoupon({ code: 'PROMO10', expiresAt: null, status: 'EXPIRED' })).toEqual({
+      ok: false,
+      reason: 'expired',
+    });
+    expect(isEligibleCoupon({ code: 'PROMO10', expiresAt: null, status: 'VALID' })).toEqual({
+      ok: true,
+    });
+    expect(isEligibleCoupon({ code: 'PROMO10', expiresAt: null, status: 'UNVERIFIED' })).toEqual({
+      ok: true,
+    });
+  });
+
   it('rejeita código vazio', () => {
     expect(isEligibleCoupon({ code: '', expiresAt: null })).toEqual({
       ok: false,
@@ -77,3 +94,4 @@ describe('isEligibleCoupon', () => {
     });
   });
 });
+

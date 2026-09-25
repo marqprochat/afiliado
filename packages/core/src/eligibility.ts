@@ -1,3 +1,5 @@
+import type { CouponStatus } from '@afilados/shared';
+
 export type EligibilityResult = { ok: true } | { ok: false; reason: string };
 
 export interface EligibleProductInput {
@@ -25,9 +27,12 @@ export function isEligibleProduct(p: EligibleProductInput): EligibilityResult {
 export interface EligibleCouponInput {
   code: string;
   expiresAt: string | null;
+  status?: CouponStatus;
 }
 
 export function isEligibleCoupon(c: EligibleCouponInput): EligibilityResult {
+  if (c.status === 'INVALID') return { ok: false, reason: 'invalid' };
+  if (c.status === 'EXPIRED') return { ok: false, reason: 'expired' };
   if (!c.code.trim()) return { ok: false, reason: 'empty-code' };
   if (c.expiresAt && new Date(c.expiresAt).getTime() < Date.now())
     return { ok: false, reason: 'expired' };

@@ -8,5 +8,6 @@ export * from './links';
 export * from './wa-message';
 export * from './telegram-format';
 export * from './eligibility';
+export * from './coupon-parse';
 
 export * from './subid';
