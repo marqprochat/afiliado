@@ -37,7 +37,7 @@
         "*://*.shopee.com.br/*",
         "*://*.aliexpress.com/*"
       ],
-      "js": ["content/content.js"],
+      "js": ["content/coupon-stores.js", "content/content.js"],
       "css": ["content/content.css"]
     }
   ]

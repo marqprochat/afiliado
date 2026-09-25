@@ -13,6 +13,59 @@
     return isNaN(val) ? null : val;
   }
 
+  // Helper para verificar se uma palavra é stopword/termo genérico de cupom
+  function isCouponStopword(word) {
+    if (!word || typeof word !== 'string') return true;
+    const upper = word.trim().toUpperCase();
+    if (upper.length < 3 || upper.length > 25) return true;
+    if (/^\d+$/.test(upper)) return true;
+    const stopwords = window.AFILADOS_COUPON_STOPWORDS;
+    if (stopwords && stopwords.has(upper)) return true;
+    return false;
+  }
+
+  // Extrai código de cupom com escopo restrito a containers promocionais da loja
+  function extractCouponFromScope(scope, storeKey) {
+    if (!scope) return null;
+    const stores = window.AFILADOS_COUPON_STORES || {};
+    const store = stores[storeKey];
+    const selectors = (store && store.productCouponSelectors) || [
+      '[class*="coupon"]',
+      '[class*="cupom"]',
+      '[class*="voucher"]',
+      '[class*="promo"]',
+    ];
+
+    // 1. Tenta seletores específicos de cupom/promoção
+    for (const sel of selectors) {
+      const els = scope.querySelectorAll(sel);
+      for (const el of els) {
+        const text = el.textContent || '';
+        const keywordMatch = text.match(/(?:cupom|c[oó]digo|voucher|promo(?:code)?|claim\s*code)[\s:]+([A-Za-z0-9_\-]{3,20})/i);
+        if (keywordMatch && !isCouponStopword(keywordMatch[1])) {
+          return keywordMatch[1].toUpperCase();
+        }
+        const trimmed = text.trim();
+        if (/^[A-Za-z0-9_\-]{4,15}$/.test(trimmed) && !isCouponStopword(trimmed)) {
+          return trimmed.toUpperCase();
+        }
+      }
+    }
+
+    // 2. Fallback em containers de preço restritos (evita pegar o body inteiro)
+    const priceContainer = scope.querySelector(
+      '.ui-pdp-price, #corePrice_feature_div, [data-testid*="price"], [class*="price-default"], .product-price',
+    );
+    if (priceContainer) {
+      const match = priceContainer.textContent.match(/(?:cupom|c[oó]digo|voucher)[\s:]+([A-Za-z0-9_\-]{3,20})/i);
+      if (match && !isCouponStopword(match[1])) {
+        return match[1].toUpperCase();
+      }
+    }
+
+    return null;
+  }
+
   // Extrai metadados do DOM da página atual
   function extractProductFromPage() {
     const url = window.location.href;
@@ -114,10 +167,7 @@
       }
 
       // 6. Cupom
-      const couponMatch = document.body.innerText.match(/cupom[:\s]+([A-Z0-9_\-]{4,20})/i);
-      if (couponMatch) {
-        couponCode = couponMatch[1].toUpperCase();
-      }
+      couponCode = extractCouponFromScope(document, 'MERCADOLIVRE');
     }
 
     // Amazon
@@ -180,10 +230,8 @@
       if (document.querySelector('.a-icon-prime, #primeSavingsUpsell')) shipping = 'FREE';
       else if (/frete grátis/i.test(document.body.innerText)) shipping = 'FREE';
 
-      const couponText = document.querySelector('#couponText, .couponBadge')?.textContent?.trim();
-      if (couponText) {
-        couponCode = 'CUPOM AMAZON';
-      }
+      // 6. Cupom Amazon (sem valor genérico fixo)
+      couponCode = extractCouponFromScope(document, 'AMAZON');
     }
 
     // Magalu
@@ -234,6 +282,9 @@
       }
 
       if (/frete grátis|retira rápido|retira grátis/i.test(document.body.innerText)) shipping = 'FREE';
+
+      // 6. Cupom Magalu
+      couponCode = extractCouponFromScope(document, 'MAGALU');
     }
 
     // Shopee
@@ -262,6 +313,9 @@
       }
 
       if (/frete grátis/i.test(document.body.innerText)) shipping = 'FREE';
+
+      // 6. Cupom Shopee
+      couponCode = extractCouponFromScope(document, 'SHOPEE');
     }
 
     // AliExpress
@@ -386,6 +440,9 @@
       }
 
       if (/frete gr[aá]tis/i.test(document.body.innerText)) shipping = 'FREE';
+
+      // 6. Cupom AliExpress
+      couponCode = extractCouponFromScope(scope, 'ALIEXPRESS');
     }
 
     return {
@@ -664,6 +721,21 @@
         if (res.ok) {
           btn.innerHTML = '<span>✓</span> Capturado!';
           btn.classList.add('success');
+          // Envia o cupom explicitamente para a Central de Cupons se detectado
+          if (product.couponCode) {
+            fetch(`${apiUrl}/api/v1/extension/coupons`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${apiToken}`,
+              },
+              body: JSON.stringify({
+                code: product.couponCode,
+                store: marketplaceKind,
+                source: 'EXTENSION',
+              }),
+            }).catch(() => {});
+          }
           setTimeout(() => {
             btn.innerHTML = '<span>⚡</span> Afilados';
             btn.classList.remove('loading', 'success');
@@ -687,10 +759,199 @@
     document.body.appendChild(btn);
   }
 
+  // --- Painel Flutuante de Cupons no Carrinho / Checkout ---
+
+  function detectCartStore() {
+    const currentUrl = window.location.href;
+    const stores = window.AFILADOS_COUPON_STORES || {};
+    for (const key of Object.keys(stores)) {
+      const s = stores[key];
+      if (s.cartMatch && s.cartMatch.test(currentUrl)) {
+        return { key, ...s };
+      }
+    }
+    return null;
+  }
+
+  function renderCartCouponPanel(coupons, store, apiUrl, apiToken) {
+    if (document.getElementById('afilados-cart-coupons-panel')) return;
+
+    const panel = document.createElement('div');
+    panel.id = 'afilados-cart-coupons-panel';
+
+    const header = document.createElement('div');
+    header.id = 'afilados-cart-coupons-header';
+    header.innerHTML = `
+      <h4>
+        <span>🎟️ Cupons Afilados</span>
+        <span class="afilados-cart-badge-count">${coupons.length}</span>
+      </h4>
+      <button class="afilados-cart-toggle-btn" title="Minimizar / Expandir">—</button>
+    `;
+
+    const body = document.createElement('div');
+    body.id = 'afilados-cart-coupons-body';
+
+    coupons.forEach((coupon) => {
+      const card = document.createElement('div');
+      card.className = 'afilados-cart-coupon-card';
+      card.dataset.couponId = coupon.id;
+
+      let statusClass = 'afilados-status--unverified';
+      let statusLabel = 'Não verificado';
+      if (coupon.status === 'VALID') {
+        statusClass = 'afilados-status--valid';
+        statusLabel = 'Válido';
+      } else if (coupon.status === 'INVALID') {
+        statusClass = 'afilados-status--invalid';
+        statusLabel = 'Inválido';
+      }
+
+      let discountText = coupon.description || '';
+      if (coupon.discountValue) {
+        const valStr =
+          coupon.discountType === 'PERCENTAGE'
+            ? `${coupon.discountValue}% OFF`
+            : `R$ ${coupon.discountValue} OFF`;
+        discountText = discountText ? `${valStr} - ${discountText}` : valStr;
+      }
+
+      const metaParts = [];
+      if (coupon.minSpend) metaParts.push(`Mín: R$ ${coupon.minSpend}`);
+      if (coupon.validUntil) {
+        try {
+          metaParts.push(`Até ${new Date(coupon.validUntil).toLocaleDateString('pt-BR')}`);
+        } catch {}
+      }
+
+      card.innerHTML = `
+        <div class="afilados-cart-coupon-top">
+          <span class="afilados-cart-code-tag">${coupon.code}</span>
+          <span class="afilados-cart-status-badge ${statusClass}">${statusLabel}</span>
+        </div>
+        ${discountText ? `<div class="afilados-cart-coupon-desc">${discountText}</div>` : ''}
+        ${metaParts.length > 0 ? `<div class="afilados-cart-coupon-meta">${metaParts.join(' • ')}</div>` : ''}
+        <div class="afilados-cart-actions">
+          <button class="afilados-btn-copy" type="button">
+            <span>📋</span> Copiar e destacar campo
+          </button>
+          <div class="afilados-feedback-box" style="display: none;">
+            <span>Funcionou?</span>
+            <div class="afilados-feedback-actions">
+              <button class="afilados-btn-feedback success" type="button">👍 Sim</button>
+              <button class="afilados-btn-feedback fail" type="button">👎 Não</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const btnCopy = card.querySelector('.afilados-btn-copy');
+      const feedbackBox = card.querySelector('.afilados-feedback-box');
+      const btnSuccess = card.querySelector('.afilados-btn-feedback.success');
+      const btnFail = card.querySelector('.afilados-btn-feedback.fail');
+
+      btnCopy.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(coupon.code);
+          btnCopy.innerHTML = '<span>✓</span> Código copiado!';
+          btnCopy.classList.add('copied');
+        } catch {
+          btnCopy.innerHTML = '<span>✓</span> ' + coupon.code;
+        }
+
+        // Destaca o input de cupom no carrinho
+        if (store && store.input) {
+          try {
+            const inputEl = document.querySelector(store.input);
+            if (inputEl) {
+              inputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              inputEl.classList.add('afilados-input-highlight');
+              inputEl.focus();
+              setTimeout(() => {
+                inputEl.classList.remove('afilados-input-highlight');
+              }, 6000);
+            }
+          } catch {}
+        }
+
+        // Exibe opções de feedback de validação
+        feedbackBox.style.display = 'flex';
+      });
+
+      const sendVerification = async (result) => {
+        btnSuccess.disabled = true;
+        btnFail.disabled = true;
+        try {
+          await fetch(`${apiUrl}/api/v1/extension/coupons/${coupon.id}/verification`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${apiToken}`,
+            },
+            body: JSON.stringify({
+              result,
+              metadata: {
+                source: 'EXTENSION',
+                appliedUrl: window.location.href,
+              },
+            }),
+          });
+          feedbackBox.innerHTML = `<span class="afilados-feedback-done">✓ Feedback registrado!</span>`;
+        } catch {
+          feedbackBox.innerHTML = `<span class="afilados-feedback-done">✓ Registrado localmente</span>`;
+        }
+      };
+
+      btnSuccess.addEventListener('click', () => sendVerification('SUCCESS'));
+      btnFail.addEventListener('click', () => sendVerification('FAILURE'));
+
+      body.appendChild(card);
+    });
+
+    // Toggle minimizar
+    const toggleBtn = header.querySelector('.afilados-cart-toggle-btn');
+    const toggleCollapse = () => {
+      panel.classList.toggle('collapsed');
+      const isCollapsed = panel.classList.contains('collapsed');
+      toggleBtn.textContent = isCollapsed ? '+' : '—';
+      body.style.display = isCollapsed ? 'none' : 'flex';
+    };
+    header.addEventListener('click', toggleCollapse);
+
+    panel.appendChild(header);
+    panel.appendChild(body);
+    document.body.appendChild(panel);
+  }
+
+  async function initCartCouponPanel() {
+    const store = detectCartStore();
+    if (!store) return;
+    if (document.getElementById('afilados-cart-coupons-panel')) return;
+
+    if (typeof chrome === 'undefined' || !chrome.storage) return;
+
+    try {
+      const saved = await chrome.storage.local.get(['apiUrl', 'apiToken']);
+      const apiUrl = (saved.apiUrl || 'http://localhost:3011').replace(/\/+$/, '');
+      const apiToken = saved.apiToken;
+      if (!apiToken) return;
+
+      const res = await fetch(`${apiUrl}/api/v1/extension/coupons?store=${store.key}`, {
+        headers: { Authorization: `Bearer ${apiToken}` },
+      });
+      if (!res.ok) return;
+      const coupons = await res.json();
+      if (Array.isArray(coupons) && coupons.length > 0) {
+        renderCartCouponPanel(coupons, store, apiUrl, apiToken);
+      }
+    } catch {}
+  }
+
   // Injeta após carregar a página
   function injectButtons() {
     injectFloatingButton();
     injectCopyLinksButton();
+    void initCartCouponPanel();
   }
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
     injectButtons();
@@ -698,3 +959,4 @@
     window.addEventListener('DOMContentLoaded', injectButtons);
   }
 })();
+
