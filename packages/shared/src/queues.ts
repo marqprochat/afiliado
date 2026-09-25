@@ -4,6 +4,7 @@ export const QUEUE_MIRROR_MESSAGE = 'mirror-message';
 export const QUEUE_PRODUCT_ENRICH = 'product-enrich';
 export const QUEUE_SEND_TELEGRAM = 'send-telegram';
 export const QUEUE_AWIN_IMPORT = 'awin-import';
+export const QUEUE_COUPON_SYNC = 'coupon-sync';
 
 export type WaCommand =
   | 'connect'
@@ -72,4 +73,9 @@ export interface SendTelegramJob {
 
 export interface AwinImportJob {
   tenantId: string;
+}
+
+export interface CouponSyncJob {
+  tenantId: string;
+  trigger: 'schedule' | 'manual';
 }

@@ -45,3 +45,16 @@ export type AutomationItemKind = (typeof AUTOMATION_ITEM_KINDS)[number];
 
 export const AUTOMATION_QUEUE_STATUSES = ['PENDING', 'DISPATCHED', 'REMOVED'] as const;
 export type AutomationQueueStatus = (typeof AUTOMATION_QUEUE_STATUSES)[number];
+
+export const COUPON_ORIGINS = ['MANUAL', 'API', 'EXTENSION', 'IMPORT', 'MIRROR'] as const;
+export type CouponOrigin = (typeof COUPON_ORIGINS)[number];
+
+export const COUPON_STATUSES = ['UNVERIFIED', 'VALID', 'INVALID', 'EXPIRED'] as const;
+export type CouponStatus = (typeof COUPON_STATUSES)[number];
+
+export const COUPON_DISCOUNT_TYPES = ['PERCENT', 'FIXED', 'FREE_SHIPPING'] as const;
+export type CouponDiscountType = (typeof COUPON_DISCOUNT_TYPES)[number];
+
+export const COUPON_CHECK_METHODS = ['MANUAL', 'EXTENSION', 'SOURCE', 'EXPIRY'] as const;
+export type CouponCheckMethod = (typeof COUPON_CHECK_METHODS)[number];
+

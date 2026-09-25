@@ -44,6 +44,7 @@ export type RealtimeEvent =
   | { type: 'marketplace.updated'; kind: MarketplaceKind }
   | { type: 'telegram.bots.changed' }
   | { type: 'telegram.chats.synced'; botId: string; count: number }
+  | { type: 'coupons.updated' }
   | { type: 'error'; code: string; message: string };
 
 export const REDIS_EVENTS_CHANNEL = 'afilados:events';
