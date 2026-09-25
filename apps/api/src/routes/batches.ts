@@ -1,7 +1,14 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import type { Prisma } from '@afilados/db';
 import { scheduleBatch, shuffleInterleaved } from '@afilados/core';
-import { ApiError, batchCreateSchema } from '@afilados/shared';
+import {
+  ApiError,
+  batchAddItemsSchema,
+  batchCreateSchema,
+  batchOrderSchema,
+  batchUpdateSchema,
+} from '@afilados/shared';
 import { requireAuth } from '../plugins/auth';
 import { getOperatingWindow, toCoreWindow } from '../lib/settings';
 import { enqueueBatchItems, removePendingJobs } from '../lib/batches';
@@ -19,6 +26,47 @@ async function findBatch(req: FastifyRequest) {
   return b;
 }
 
+async function findPausedBatch(req: FastifyRequest) {
+  const b = await findBatch(req);
+  if (b.status !== 'PAUSED') throw new ApiError('VALIDATION', 'Pause o lote antes de editar', 409);
+  return b;
+}
+
+async function assertTargets(
+  req: FastifyRequest,
+  sessionId: string,
+  t: {
+    groupJids?: string[] | undefined;
+    telegramChatIds?: string[] | undefined;
+    templateId?: string | undefined;
+  },
+) {
+  if (t.groupJids) {
+    const groups = await req.db.waGroup.findMany({
+      where: { sessionId, jid: { in: t.groupJids } },
+      select: { jid: true },
+    });
+    const known = new Set(groups.map((g) => g.jid));
+    const unknown = t.groupJids.filter((j) => !known.has(j));
+    if (unknown.length) throw ApiError.validation(`Grupos desconhecidos: ${unknown.join(', ')}`);
+  }
+  if (t.telegramChatIds?.length) {
+    const chats = await req.db.telegramChat.findMany({
+      where: { chatId: { in: t.telegramChatIds } },
+      select: { chatId: true },
+    });
+    const knownChats = new Set(chats.map((c) => c.chatId));
+    const unknownChats = t.telegramChatIds.filter((c) => !knownChats.has(c));
+    if (unknownChats.length) {
+      throw ApiError.validation(`Chats do Telegram desconhecidos: ${unknownChats.join(', ')}`);
+    }
+  }
+  if (t.templateId) {
+    const template = await req.db.template.findFirst({ where: { id: t.templateId } });
+    if (!template) throw ApiError.notFound('Template não encontrado');
+  }
+}
+
 export async function batchesRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireAuth);
 
@@ -28,26 +76,7 @@ export async function batchesRoutes(app: FastifyInstance) {
     if (!session) throw ApiError.notFound('Sessão não encontrada');
     if (session.status !== 'CONNECTED')
       throw new ApiError('WA_NOT_CONNECTED', 'WhatsApp não está conectado', 400);
-    const groups = await req.db.waGroup.findMany({
-      where: { sessionId: session.id, jid: { in: body.groupJids } },
-      select: { jid: true },
-    });
-    const known = new Set(groups.map((g) => g.jid));
-    const unknown = body.groupJids.filter((j) => !known.has(j));
-    if (unknown.length) throw ApiError.validation(`Grupos desconhecidos: ${unknown.join(', ')}`);
-    if (body.telegramChatIds.length) {
-      const chats = await req.db.telegramChat.findMany({
-        where: { chatId: { in: body.telegramChatIds } },
-        select: { chatId: true },
-      });
-      const knownChats = new Set(chats.map((c) => c.chatId));
-      const unknownChats = body.telegramChatIds.filter((c) => !knownChats.has(c));
-      if (unknownChats.length) {
-        throw ApiError.validation(`Chats do Telegram desconhecidos: ${unknownChats.join(', ')}`);
-      }
-    }
-    const template = await req.db.template.findFirst({ where: { id: body.templateId } });
-    if (!template) throw ApiError.notFound('Template não encontrado');
+    await assertTargets(req, session.id, body);
 
     const queueItems = body.productIds
       ? await req.db.queueItem.findMany({
@@ -71,7 +100,7 @@ export async function batchesRoutes(app: FastifyInstance) {
       data: {
         tenantId: req.tenantId,
         sessionId: session.id,
-        templateId: template.id,
+        templateId: body.templateId,
         name: body.name,
         groupJids: body.groupJids,
         telegramChatIds: body.telegramChatIds,
@@ -117,7 +146,19 @@ export async function batchesRoutes(app: FastifyInstance) {
     const { id } = idParam.parse(req.params);
     const b = await req.db.batch.findFirst({
       where: { id },
-      include: { items: { orderBy: { order: 'asc' }, include: { product: true } } },
+      include: {
+        items: {
+          orderBy: { order: 'asc' },
+          include: {
+            product: true,
+            coupon: true,
+            sendLogs: {
+              select: { groupJid: true, status: true, error: true, sentAt: true },
+              orderBy: { sentAt: 'asc' },
+            },
+          },
+        },
+      },
     });
     if (!b) throw ApiError.notFound('Lote não encontrado');
     return {
@@ -139,6 +180,10 @@ export async function batchesRoutes(app: FastifyInstance) {
     const b = await findBatch(req);
     if (b.status !== 'PAUSED') throw ApiError.validation(`Lote está ${b.status}`);
     const pending = b.items.filter((i) => i.status === 'PENDING');
+    if (pending.length === 0) {
+      await req.db.batch.updateMany({ where: { id: b.id }, data: { status: 'DONE' } });
+      return { status: 'DONE', estimatedEndAt: b.estimatedEndAt };
+    }
     const window = toCoreWindow(await getOperatingWindow(req.db, req.tenantId));
     const now = new Date();
     const { runAt, estimatedEndAt } = scheduleBatch(pending.length, b.intervalMin, window, now);
@@ -176,5 +221,87 @@ export async function batchesRoutes(app: FastifyInstance) {
     });
     await req.db.batch.updateMany({ where: { id: b.id }, data: { status: 'CANCELLED' } });
     return { status: 'CANCELLED' };
+  });
+
+  app.patch('/batches/:id', async (req) => {
+    const body = batchUpdateSchema.parse(req.body);
+    const b = await findPausedBatch(req);
+    await assertTargets(req, b.sessionId, body);
+    const data = Object.fromEntries(
+      Object.entries(body).filter(([, v]) => v !== undefined),
+    ) as Prisma.BatchUncheckedUpdateInput;
+    await req.db.batch.update({ where: { id: b.id }, data });
+    return { ok: true };
+  });
+
+  app.put('/batches/:id/order', async (req) => {
+    const { itemIds } = batchOrderSchema.parse(req.body);
+    const b = await findPausedBatch(req);
+    const pending = b.items.filter((i) => i.status === 'PENDING');
+    const pendingIds = new Set(pending.map((i) => i.id));
+    if (itemIds.length !== pendingIds.size || new Set(itemIds).size !== itemIds.length || !itemIds.every((id) => pendingIds.has(id))) {
+      throw ApiError.validation('A nova ordem precisa conter exatamente os itens pendentes do lote');
+    }
+    const base = Math.max(-1, ...b.items.filter((i) => i.status !== 'PENDING').map((i) => i.order)) + 1;
+    await req.db.$transaction(
+      itemIds.map((id, idx) =>
+        req.db.batchItem.updateMany({ where: { id, batchId: b.id }, data: { order: base + idx } }),
+      ),
+    );
+    return { ok: true };
+  });
+
+  app.post('/batches/:id/items', async (req) => {
+    const { productIds } = batchAddItemsSchema.parse(req.body);
+    const b = await findPausedBatch(req);
+    const unique = [...new Set(productIds)];
+    const products = await req.db.product.findMany({
+      where: { id: { in: unique } },
+      select: { id: true },
+    });
+    const found = new Set(products.map((p) => p.id));
+    const missing = unique.filter((id) => !found.has(id));
+    if (missing.length) throw ApiError.notFound(`Produtos não encontrados: ${missing.join(', ')}`);
+    const already = new Set(b.items.map((i) => i.productId).filter(Boolean));
+    const toAdd = unique.filter((id) => !already.has(id));
+    const nextOrder = Math.max(-1, ...b.items.map((i) => i.order)) + 1;
+    const now = new Date();
+    if (toAdd.length) {
+      await req.db.batchItem.createMany({
+        data: toAdd.map((productId, idx) => ({
+          batchId: b.id,
+          productId,
+          order: nextOrder + idx,
+          runAt: now,
+        })),
+      });
+    }
+    return { added: toAdd.length, skipped: unique.length - toAdd.length };
+  });
+
+  app.delete('/batches/:id/items/:itemId', async (req, reply) => {
+    const { itemId } = z.object({ itemId: z.string().min(1) }).parse(req.params);
+    const b = await findPausedBatch(req);
+    const item = b.items.find((i) => i.id === itemId);
+    if (!item) throw ApiError.notFound('Item não encontrado neste lote');
+    if (item.status === 'SENT' || item.status === 'SENDING') {
+      throw new ApiError('VALIDATION', 'Item já enviado ou em envio não pode ser removido', 409);
+    }
+    await removePendingJobs([item.id]);
+    await req.db.batchItem.deleteMany({ where: { id: item.id, batchId: b.id } });
+    return reply.status(204).send();
+  });
+
+  app.delete('/batches/:id', async (req, reply) => {
+    const b = await findBatch(req);
+    if (b.status === 'SCHEDULED' || b.status === 'RUNNING') {
+      throw new ApiError('VALIDATION', 'Pause ou cancele o lote antes de excluir', 409);
+    }
+    if (b.items.some((i) => i.status === 'SENDING')) {
+      throw new ApiError('VALIDATION', 'Há um envio em andamento; aguarde', 409);
+    }
+    await removePendingJobs(b.items.filter((i) => i.status === 'PENDING').map((i) => i.id));
+    await req.db.batch.deleteMany({ where: { id: b.id } });
+    return reply.status(204).send();
   });
 }

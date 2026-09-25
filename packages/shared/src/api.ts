@@ -225,3 +225,19 @@ export type QueueSelectBody = z.infer<typeof queueSelectSchema>;
 export type TemplateBody = z.infer<typeof templateSchema>;
 export type TemplatePreviewBody = z.infer<typeof templatePreviewSchema>;
 export type BatchCreateBody = z.infer<typeof batchCreateSchema>;
+
+export const batchUpdateSchema = z.object({
+  name: z.string().min(1).max(80).optional(),
+  templateId: z.string().min(1).optional(),
+  groupJids: z.array(z.string().min(1)).min(1).optional(),
+  telegramChatIds: z.array(z.string().min(1)).optional(),
+  intervalMin: z.number().int().min(1).max(1440).optional(),
+  mediaMode: z.enum(MEDIA_MODES).optional(),
+});
+export type BatchUpdateBody = z.infer<typeof batchUpdateSchema>;
+
+export const batchOrderSchema = z.object({ itemIds: z.array(z.string().min(1)) });
+export type BatchOrderBody = z.infer<typeof batchOrderSchema>;
+
+export const batchAddItemsSchema = z.object({ productIds: z.array(z.string().min(1)).min(1) });
+export type BatchAddItemsBody = z.infer<typeof batchAddItemsSchema>;

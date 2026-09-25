@@ -64,7 +64,7 @@ export async function waRoutes(app: FastifyInstance) {
     if (inUse > 0) {
       throw new ApiError(
         'VALIDATION',
-        'Sessão possui lotes; cancele/remova os lotes antes de excluir',
+        `Sessão possui ${inUse} lote(s) vinculado(s). Exclua-os em Enviar Oferta antes de remover a sessão.`,
         409,
       );
     }

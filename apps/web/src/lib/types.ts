@@ -153,15 +153,26 @@ export interface BatchSummary {
   sent: number;
   errors: number;
 }
+export interface BatchItemSendLog {
+  groupJid: string;
+  status: 'SENT' | 'ERROR';
+  error: string | null;
+  sentAt: string;
+}
 export interface BatchItem {
   id: string;
   order: number;
   runAt: string;
   status: BatchItemStatus;
   error: string | null;
-  product: ApiProduct;
+  productId: string | null;
+  product: ApiProduct | null;
+  coupon: { id: string; code: string } | null;
+  sendLogs: BatchItemSendLog[];
 }
 export interface BatchDetail extends Omit<BatchSummary, 'total' | 'sent' | 'errors'> {
+  sessionId: string;
+  templateId: string;
   items: BatchItem[];
 }
 export interface Overview {

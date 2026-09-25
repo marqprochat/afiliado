@@ -4,6 +4,7 @@ import type { BatchFormOutput } from '@/components/queue/batch-form';
 import { QueueTable } from '@/components/queue/queue-table';
 import { BatchForm } from '@/components/queue/batch-form';
 import { BatchList } from '@/components/queue/batch-list';
+import { BatchManageDrawer } from '@/components/queue/batch-manage-drawer';
 import { apiFetch } from '@/lib/api';
 import { useApiMutation } from '@/lib/mutations';
 import {
@@ -51,6 +52,17 @@ export default function EnviarPage() {
       apiFetch(`/batches/${id}/${a}`, { method: 'POST' }),
     { invalidate: INV },
   );
+  const [managingId, setManagingId] = useState<string | null>(null);
+  const deleteBatch = useApiMutation(
+    (id: string) => apiFetch(`/batches/${id}`, { method: 'DELETE' }),
+    {
+      invalidate: INV,
+      success: 'Lote excluído',
+      onSuccess: (_out, id) => {
+        if (managingId === id) setManagingId(null);
+      },
+    },
+  );
 
   const selectedCount =
     queue?.items.filter((i) => i.selected && i.status === 'PENDING').length ?? 0;
@@ -77,7 +89,10 @@ export default function EnviarPage() {
               onCancel={(id) => {
                 if (confirm('Cancelar este lote?')) action.mutate({ id, a: 'cancel' });
               }}
+              onManage={setManagingId}
+              onDelete={(id) => deleteBatch.mutate(id)}
             />
+            <BatchManageDrawer batchId={managingId} onClose={() => setManagingId(null)} />
           </section>
         </div>
         {sessions && templates && settings && (
