@@ -71,6 +71,9 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       if (e.type === 'marketplace.updated') {
         void qc.invalidateQueries({ queryKey: ['marketplaces'] });
       }
+      if (e.type === 'coupons.updated') {
+        void qc.invalidateQueries({ queryKey: ['coupons'] });
+      }
       if (e.type.startsWith('telegram.')) {
         void qc.invalidateQueries({ queryKey: ['telegram'] });
       }

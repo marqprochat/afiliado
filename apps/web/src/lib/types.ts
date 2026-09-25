@@ -4,6 +4,10 @@ import type {
   WaSessionStatus,
   BatchStatus,
   BatchItemStatus,
+  CouponOrigin,
+  CouponStatus,
+  CouponDiscountType,
+  CouponCheckMethod,
 } from '@afilados/shared';
 
 export interface Me {
@@ -66,6 +70,8 @@ export interface MarketplaceConnection {
   hasAmazonApiSecret: boolean;
   hasAwinFeedListUrl: boolean;
   awinFeedIds: string[];
+  awinPublisherId: string | null;
+  hasAwinOffersApiToken: boolean;
   aliexpressAppKey: string | null;
   hasAliexpressAppSecret: boolean;
   aliexpressTrackingId: string | null;
@@ -80,6 +86,53 @@ export interface MarketplaceConnection {
   magaluSessionSource: 'extension' | 'manual' | null;
   lastCheckedAt: string | null;
   lastError: string | null;
+}
+
+export interface ApiCouponCheck {
+  id: string;
+  couponId: string;
+  createdAt: string;
+  method: CouponCheckMethod;
+  result: CouponStatus;
+  note: string | null;
+}
+
+export interface ApiCoupon {
+  id: string;
+  tenantId: string;
+  store: MarketplaceKind;
+  scope: string;
+  advertiserName: string | null;
+  code: string;
+  description: string;
+  terms: string | null;
+  discountType: CouponDiscountType | null;
+  discountValue: number | null;
+  minSpend: number | null;
+  startsAt: string | null;
+  expiresAt: string | null;
+  status: CouponStatus;
+  origin: CouponOrigin;
+  sourceUrl: string | null;
+  affiliateUrl: string | null;
+  externalId: string | null;
+  remainingUses: number | null;
+  lastSeenAt: string | null;
+  lastVerifiedAt: string | null;
+  fetchedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  checks?: ApiCouponCheck[];
+}
+
+export interface CouponCandidateItem {
+  store: MarketplaceKind | null;
+  code: string;
+  description: string;
+  discountType: CouponDiscountType | null;
+  discountValue: number | null;
+  minSpend: number | null;
+  exists: boolean;
 }
 
 export interface AwinFeed {

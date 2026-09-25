@@ -28,6 +28,13 @@ const baseConnection = {
   amazonSessionSource: null,
   magaluSessionSyncedAt: null,
   magaluSessionSource: null,
+  hasAwinFeedListUrl: false,
+  awinFeedIds: [],
+  awinPublisherId: null,
+  hasAwinOffersApiToken: false,
+  aliexpressAppKey: null,
+  hasAliexpressAppSecret: false,
+  aliexpressTrackingId: null,
   lastCheckedAt: null,
   lastError: null,
 };

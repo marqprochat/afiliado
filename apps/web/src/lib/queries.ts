@@ -22,7 +22,10 @@ import type {
   WaGroup,
   WaSession,
   ApiToken,
+  ApiCoupon,
+  ApiCouponCheck,
 } from './types';
+import type { MarketplaceKind } from '@afilados/shared';
 
 export const useMe = () => useQuery({ queryKey: ['me'], queryFn: () => apiFetch<Me>('/me') });
 export const useOverview = () =>
@@ -136,4 +139,37 @@ export const useAutomationQueue = (ruleId: string | null) =>
     queryKey: ['automations', ruleId, 'queue'],
     enabled: !!ruleId,
     queryFn: () => apiFetch<AutomationQueueItem[]>(`/automations/${ruleId}/queue`),
+  });
+
+export const useCoupons = (params?: {
+  store?: MarketplaceKind;
+  status?: string;
+  origin?: string;
+  q?: string;
+  includeExpired?: boolean;
+}) => {
+  const qs = new URLSearchParams();
+  if (params?.store) qs.set('store', params.store);
+  if (params?.status) qs.set('status', params.status);
+  if (params?.origin) qs.set('origin', params.origin);
+  if (params?.q) qs.set('q', params.q);
+  if (params?.includeExpired) qs.set('includeExpired', 'true');
+  const queryStr = qs.toString();
+  return useQuery({
+    queryKey: ['coupons', params],
+    queryFn: async () => {
+      const res = await apiFetch<{ coupons: ApiCoupon[] }>(`/coupons${queryStr ? `?${queryStr}` : ''}`);
+      return res.coupons;
+    },
+  });
+};
+
+export const useCouponChecks = (couponId: string | null) =>
+  useQuery({
+    queryKey: ['coupons', couponId, 'checks'],
+    enabled: !!couponId,
+    queryFn: async () => {
+      const res = await apiFetch<{ checks: ApiCouponCheck[] }>(`/coupons/${couponId}/checks`);
+      return res.checks;
+    },
   });
