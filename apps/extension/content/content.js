@@ -270,29 +270,52 @@
     // isso. Não existe h1 de produto de verdade (o único <h1> da página é fixo "Aliexpress"), o
     // título real fica em [class*="title--wrap"] (com fallback pro meta og:title).
     else if (url.includes('aliexpress.com')) {
-      const titleEl = document.querySelector('[class*="title--wrap"]');
+      // 1. Em páginas SSR / Bundle Deals ou listagens, ao clicar num produto o AliExpress abre
+      // um modal (.comet-v2-modal-wrap) apensado ao final do DOM. Se houver modais, o ativo é o
+      // último visível na pilha do DOM.
+      const allModals = Array.from(
+        document.querySelectorAll(
+          '.comet-v2-modal-wrap, .cosmos-drawer-wrap, [class*="modal-wrap"], [class*="drawer-wrap"], [class*="pdp-mini-wrap"], [class*="mini--wrap"]',
+        ),
+      ).filter((m) => {
+        const style = window.getComputedStyle(m);
+        const rect = m.getBoundingClientRect();
+        return (
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          style.opacity !== '0' &&
+          rect.width > 100 &&
+          rect.height > 100 &&
+          m.querySelector('[class*="title--wrap"], [class*="price-default--current"]')
+        );
+      });
+
+      const activeModal = allModals.length > 0 ? allModals[allModals.length - 1] : null;
+      const scope = activeModal || document;
+
+      const titleEl = scope.querySelector('[class*="title--wrap"]');
       if (titleEl) {
         title = titleEl.textContent.trim();
-      } else {
+      } else if (!activeModal) {
         const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute('content');
         if (ogTitle) title = ogTitle.replace(/\s*-\s*AliExpress.*$/i, '').trim();
       }
 
-      const priceEl = document.querySelector('[class*="price-default--current"]');
+      const priceEl = scope.querySelector('[class*="price-default--current"]');
       if (priceEl) {
         const cleaned = priceEl.textContent.replace(/[^\d,]/g, '').replace(',', '.');
         const parsed = parseFloat(cleaned);
         if (!isNaN(parsed)) price = parsed;
       }
 
-      const origEl = document.querySelector('[class*="price-default--original"]');
+      const origEl = scope.querySelector('[class*="price-default--original"]');
       if (origEl) {
         const cleaned = origEl.textContent.replace(/[^\d,]/g, '').replace(',', '.');
         const parsed = parseFloat(cleaned);
         if (!isNaN(parsed)) originalPrice = parsed;
       }
 
-      const discountEl = document.querySelector('[class*="price-default--discount"]');
+      const discountEl = scope.querySelector('[class*="price-default--discount"]');
       if (discountEl) {
         const m = discountEl.textContent.match(/(\d+)%/);
         if (m) discountPct = parseInt(m[1], 10);
@@ -301,8 +324,66 @@
         discountPct = Math.round(((originalPrice - price) / originalPrice) * 100);
       }
 
-      const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content');
-      if (ogImage && ogImage.startsWith('http')) images.push(ogImage);
+      // 2. Extração de imagem do produto ativo no escopo
+      // Prioridade 1: Galeria ativa do escopo (magnifier, slider ativo, preview da esquerda)
+      const galleryImg = scope.querySelector(
+        '[class*="magnifier--image"], [class*="slider--active"] img, [class*="slider--img"] img, [class*="image-view"] img, [class*="gallery"] img, [class*="pdp-mini-info-left"] img, [class*="pdp-info-left"] img, [class*="main-image"] img',
+      );
+      if (galleryImg) {
+        let src = galleryImg.getAttribute('src') || galleryImg.getAttribute('data-src') || galleryImg.src;
+        if (src) {
+          if (src.startsWith('//')) src = `https:${src}`;
+          if (
+            src.startsWith('http') &&
+            !src.includes('evaluate') &&
+            !src.includes('avatar') &&
+            !src.includes('stars')
+          ) {
+            images.push(src);
+          }
+        }
+      }
+
+      // Prioridade 2: Foto da variação de SKU selecionada no modal/página
+      if (images.length === 0) {
+        const skuImg = scope.querySelector(
+          '[class*="sku-item--selected"] img, [class*="sku--selected"] img, [class*="skuItem--selected"] img',
+        );
+        if (skuImg) {
+          let src = skuImg.getAttribute('src') || skuImg.getAttribute('data-src') || skuImg.src;
+          if (src) {
+            if (src.startsWith('//')) src = `https:${src}`;
+            if (src.startsWith('http')) images.push(src);
+          }
+        }
+      }
+
+      // Prioridade 3: Meta tag og:image (apenas se não for modal e se não for ícone genérico)
+      if (images.length === 0 && !activeModal) {
+        const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content');
+        const isGenericOgImage =
+          ogImage &&
+          (ogImage.includes('HTB18eCBQXXXXXXfXXXX760XFXXXa') ||
+            ogImage.includes('logo') ||
+            ogImage.includes('icon'));
+        if (ogImage && ogImage.startsWith('http') && !isGenericOgImage) {
+          images.push(ogImage);
+        }
+      }
+
+      // Prioridade 4: Seletor de card no escopo (para páginas estáticas de bundle)
+      if (images.length === 0) {
+        const cardImg = scope.querySelector(
+          'img.AIC-MI-img, [class*="AIC-MI-container"] img, [class*="productContainer"] img, [class*="productSliderList"] img, [class*="product-img"] img, [class*="product-image"] img, [class*="detail-gallery"] img, [class*="item-image"] img',
+        );
+        if (cardImg) {
+          let src = cardImg.getAttribute('src') || cardImg.getAttribute('data-src') || cardImg.src;
+          if (src) {
+            if (src.startsWith('//')) src = `https:${src}`;
+            if (src.startsWith('http')) images.push(src);
+          }
+        }
+      }
 
       if (/frete gr[aá]tis/i.test(document.body.innerText)) shipping = 'FREE';
     }
@@ -352,6 +433,44 @@
     return false;
   }
 
+  // Helper para extrair imagem de um container/card de produto em listagens de busca,
+  // com suporte a lazy-load (data-src, data-original, data-lazy-src, data-zoom, srcset etc.)
+  // e descarte de placeholders vazios / pixels data:.
+  function extractCardImage(container) {
+    if (!container) return null;
+    const imgEls = Array.from(container.querySelectorAll('img'));
+    for (const img of imgEls) {
+      const candidates = [
+        img.getAttribute('src'),
+        img.getAttribute('data-src'),
+        img.getAttribute('data-original'),
+        img.getAttribute('data-lazy-src'),
+        img.getAttribute('data-old-hires'),
+        img.getAttribute('data-zoom'),
+        img.currentSrc,
+        img.src,
+      ];
+
+      const srcset = img.getAttribute('srcset') || img.getAttribute('data-srcset');
+      if (srcset) {
+        const firstSrc = srcset.split(',')[0].trim().split(/\s+/)[0];
+        if (firstSrc) candidates.push(firstSrc);
+      }
+
+      for (let url of candidates) {
+        if (!url || typeof url !== 'string') continue;
+        url = url.trim();
+        if (url.startsWith('data:') || url.startsWith('blob:')) continue;
+        if (url.startsWith('//')) url = `https:${url}`;
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+          if (url.includes('evaluate') || url.includes('avatar') || url.includes('stars')) continue;
+          return url;
+        }
+      }
+    }
+    return null;
+  }
+
   // Varre todos os links da página atual e devolve, para cada URL de produto única, também
   // título/preço/imagem lidos do próprio card na página — funciona tanto numa página de
   // busca/listagem (dezenas de cards) quanto numa página de produto único (0 ou 1 link).
@@ -399,7 +518,7 @@
         });
         if (productLinksInNext.length > 1) break;
         container = next;
-        if (container.querySelector('img[src]') && /R\$\s?[\d.,]+/.test(container.textContent || '')) {
+        if (container.querySelector('img') && /R\$\s?[\d.,]+/.test(container.textContent || '')) {
           break;
         }
       }
@@ -417,13 +536,13 @@
         if (maxV > price) originalPrice = maxV;
       }
 
-      const imgEl = container.querySelector('img[src]');
-      const image = imgEl ? imgEl.getAttribute('src') : null;
+      const image = extractCardImage(container);
 
+      const primaryImg = container.querySelector('img');
       let title =
         a.getAttribute('title') ||
         a.getAttribute('aria-label') ||
-        imgEl?.getAttribute('alt') ||
+        primaryImg?.getAttribute('alt') ||
         (a.textContent || '').trim();
       if (title) title = title.replace(/R\$\s?[\d.,]+/g, '').trim().slice(0, 200) || undefined;
 
@@ -432,7 +551,7 @@
         ...(title ? { title } : {}),
         ...(price !== undefined ? { price } : {}),
         ...(originalPrice !== undefined ? { originalPrice } : {}),
-        ...(image && image.startsWith('http') ? { images: [image] } : {}),
+        ...(image ? { images: [image] } : {}),
       });
     });
     return items;
