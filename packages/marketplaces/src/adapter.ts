@@ -13,6 +13,8 @@ export interface ShopeeCredentials {
 export interface AwinCredentials {
   feedListUrl: string;
   feedIds: string[];
+  publisherId?: string;
+  offersApiToken?: string;
 }
 
 export interface AliexpressCredentials {

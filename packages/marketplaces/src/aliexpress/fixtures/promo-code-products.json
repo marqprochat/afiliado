@@ -1,0 +1,40 @@
+[
+  {
+    "product_id": 1005007454316161,
+    "product_title": "Cabo Carregador Rápido Tipo C 100W",
+    "product_detail_url": "https://pt.aliexpress.com/item/1005007454316161.html",
+    "target_sale_price": "29.90",
+    "promo_code_info": {
+      "code_campaigntype": "1",
+      "code_availabletime_start": "2026-06-27 00:36:26",
+      "code_availabletime_end": "2027-06-30 23:59:59",
+      "code_quantity": "1946",
+      "code_value": "On order over BRL 83.6 , get BRL 5.02 off",
+      "promo_code": "LV6WVV6WZV3M",
+      "code_mini_spend": "83.6",
+      "code_promotionurl": "https://s.click.aliexpress.com/e/_promo1"
+    }
+  },
+  {
+    "product_id": 1005009999999999,
+    "product_title": "Fone de Ouvido Bluetooth TWS",
+    "product_detail_url": "https://pt.aliexpress.com/item/1005009999999999.html",
+    "target_sale_price": "59.90",
+    "promo_code_info": {
+      "code_campaigntype": "2",
+      "code_availabletime_start": "2026-01-01 00:00:00",
+      "code_availabletime_end": "2026-12-31 23:59:59",
+      "code_quantity": "500",
+      "code_value": "15% off",
+      "promo_code": "FONES15OFF",
+      "code_mini_spend": "50.0",
+      "code_promotionurl": "https://s.click.aliexpress.com/e/_promo2"
+    }
+  },
+  {
+    "product_id": 1005001111111111,
+    "product_title": "Produto sem cupom",
+    "product_detail_url": "https://pt.aliexpress.com/item/1005001111111111.html",
+    "target_sale_price": "19.90"
+  }
+]

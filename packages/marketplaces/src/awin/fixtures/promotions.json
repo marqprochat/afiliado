@@ -1,0 +1,40 @@
+{
+  "data": [
+    {
+      "promotionId": 123456,
+      "title": "10% OFF em todo o site",
+      "description": "Desconto válido para clientes selecionados",
+      "terms": "Não acumulativo com outras promoções",
+      "startDate": "2026-09-01T00:00:00Z",
+      "endDate": "2026-10-31T23:59:59Z",
+      "url": "https://www.loja-exemplo.com.br",
+      "urlTracking": "https://www.awin1.com/cread.php?awinmid=9999&awinaffid=12345",
+      "advertiser": {
+        "id": 9999,
+        "name": "Loja Exemplo"
+      },
+      "voucher": {
+        "code": "EXEMPLO10"
+      }
+    },
+    {
+      "promotionId": 654321,
+      "title": "Promoção sem voucher (apenas deal)",
+      "startDate": "2026-09-01T00:00:00Z",
+      "endDate": "2026-10-31T23:59:59Z",
+      "url": "https://www.outraloja.com.br",
+      "advertiser": {
+        "id": 8888,
+        "name": "Outra Loja"
+      },
+      "voucher": {
+        "code": null
+      }
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "pageSize": 200,
+    "total": 2
+  }
+}
