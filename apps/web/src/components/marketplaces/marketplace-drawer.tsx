@@ -45,9 +45,12 @@ function initialFieldValue(key: MarketplaceFieldKey, connection?: MarketplaceCon
       return connection?.aliexpressAppKey ?? '';
     case 'trackingId':
       return connection?.aliexpressTrackingId ?? '';
+    case 'publisherId':
+      return connection?.awinPublisherId ?? '';
     case 'secret':
     case 'amazonClientSecret':
     case 'feedListUrl':
+    case 'offersApiToken':
     case 'appSecret':
       return '';
   }

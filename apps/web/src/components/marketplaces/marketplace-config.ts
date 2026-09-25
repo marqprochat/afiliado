@@ -9,6 +9,8 @@ export type MarketplaceFieldKey =
   | 'amazonClientId'
   | 'amazonClientSecret'
   | 'feedListUrl'
+  | 'publisherId'
+  | 'offersApiToken'
   | 'appKey'
   | 'appSecret'
   | 'trackingId';
@@ -159,6 +161,25 @@ export const MARKETPLACE_CONFIGS: Record<MarketplaceKind, MarketplaceConfig> = {
         helpTitle: 'Onde encontro o link da lista de feeds?',
         helpContent:
           'No painel da Awin: Toolbox → Create-a-Feed → copie o link de download da lista de feeds (feed list).',
+      },
+      {
+        key: 'publisherId',
+        label: 'Publisher ID (para Cupons/Ofertas)',
+        type: 'text',
+        required: false,
+        placeholder: 'Ex: 1234567',
+        helpTitle: 'Onde encontrar meu Publisher ID?',
+        helpContent:
+          'Seu ID de afiliado na Awin, exibido no canto superior direito do painel da Awin.',
+      },
+      {
+        key: 'offersApiToken',
+        label: 'Token da Offers API (para Cupons)',
+        type: 'password',
+        required: false,
+        helpTitle: 'Onde encontro o token da Offers API?',
+        helpContent:
+          'No painel da Awin: API Credentials / Offers API. É o token de autorização Bearer da API de promoções e cupons.',
       },
     ],
     supportsSession: false,

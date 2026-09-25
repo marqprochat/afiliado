@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MarketplaceDrawer } from '@/components/marketplaces/marketplace-drawer';
 import type { MarketplaceConnection } from '@/lib/types';
 
@@ -174,5 +175,49 @@ describe('MarketplaceDrawer', () => {
       />,
     );
     expect(screen.getByLabelText(/client secret/i)).toHaveAttribute('placeholder', '•••• (já salvo)');
+  });
+
+  it('permite preencher e enviar Publisher ID e Token de Ofertas da Awin', async () => {
+    const onSubmit = vi.fn(async () => {});
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <MarketplaceDrawer
+          kind="AWIN"
+          connection={{
+            ...baseConnection,
+            kind: 'AWIN',
+            hasAwinFeedListUrl: true,
+            awinPublisherId: '987654',
+            hasAwinOffersApiToken: true,
+          }}
+          open
+          onOpenChange={vi.fn()}
+          onSubmit={onSubmit}
+          pending={false}
+          feedback={null}
+        />
+      </QueryClientProvider>,
+    );
+
+    // Confirma que carregou o publisherId salvo
+    const pubIdInput = screen.getByLabelText(/publisher id/i) as HTMLInputElement;
+    expect(pubIdInput.value).toBe('987654');
+
+    // Modifica o publisherId e preenche novo token
+    fireEvent.change(pubIdInput, { target: { value: '112233' } });
+    fireEvent.change(screen.getByLabelText(/token da offers api/i), {
+      target: { value: 'token-offers-secret' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /testar e salvar/i }));
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      fields: {
+        publisherId: '112233',
+        offersApiToken: 'token-offers-secret',
+      },
+      cookie: '',
+    });
   });
 });
