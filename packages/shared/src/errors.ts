@@ -1,6 +1,7 @@
 export const API_ERROR_CODES = [
   'UNAUTHORIZED',
   'VALIDATION',
+  'CONFLICT',
   'NOT_FOUND',
   'WA_NOT_CONNECTED',
   'QUEUE_FULL',
@@ -28,5 +29,8 @@ export class ApiError extends Error {
   }
   static validation(msg: string) {
     return new ApiError('VALIDATION', msg, 400);
+  }
+  static conflict(msg: string) {
+    return new ApiError('CONFLICT', msg, 409);
   }
 }

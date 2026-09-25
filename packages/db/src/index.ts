@@ -24,6 +24,7 @@ const TENANT_MODELS = new Set([
   'MirrorRule',
   'MirrorLog',
   'Coupon',
+  'CouponCheck',
   'ScheduledMessage',
   'ApiToken',
   'AutomationRule',

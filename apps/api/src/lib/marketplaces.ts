@@ -30,6 +30,8 @@ type AnyCreds = {
   secret?: string;
   feedListUrl?: string;
   feedIds?: string[];
+  publisherId?: string;
+  offersApiToken?: string;
   appKey?: string;
   appSecret?: string;
   trackingId?: string;
@@ -56,6 +58,8 @@ export function publicConnection(
     hasAmazonApiSecret: Boolean(creds?.amazonApi?.clientSecret),
     hasAwinFeedListUrl: Boolean(creds?.feedListUrl),
     awinFeedIds: creds?.feedIds ?? [],
+    awinPublisherId: creds?.publisherId ?? null,
+    hasAwinOffersApiToken: Boolean(creds?.offersApiToken),
     aliexpressAppKey: creds?.appKey ?? null,
     hasAliexpressAppSecret: Boolean(creds?.appSecret),
     aliexpressTrackingId: creds?.trackingId ?? null,
@@ -121,7 +125,12 @@ export async function loadAwinCredentials(db: TenantClient): Promise<AwinCredent
       400,
     );
   }
-  return { feedListUrl: creds.feedListUrl, feedIds: creds.feedIds ?? [] };
+  return {
+    feedListUrl: creds.feedListUrl,
+    feedIds: creds.feedIds ?? [],
+    ...(creds.publisherId ? { publisherId: creds.publisherId } : {}),
+    ...(creds.offersApiToken ? { offersApiToken: creds.offersApiToken } : {}),
+  };
 }
 
 export async function loadAliexpressCredentials(db: TenantClient): Promise<AliexpressCredentials> {

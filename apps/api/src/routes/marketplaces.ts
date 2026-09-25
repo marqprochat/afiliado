@@ -59,6 +59,8 @@ export async function marketplacesRoutes(app: FastifyInstance) {
                 // Sem link salvo antes (1ª configuração ou credencial do formato antigo), os
                 // feedIds guardados não vieram da lista real — começa a seleção do zero.
                 feedIds: body.feedIds ?? (prev.feedListUrl ? (prev.feedIds ?? []) : []),
+                publisherId: body.publisherId !== undefined ? body.publisherId : prev.publisherId,
+                offersApiToken: body.offersApiToken !== undefined ? body.offersApiToken : prev.offersApiToken,
               }
             : kind === 'MERCADOLIVRE'
               ? {

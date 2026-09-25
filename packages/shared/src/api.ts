@@ -86,6 +86,8 @@ export const marketplaceUpdateSchema = z.object({
     }, 'Link da Awin inválido')
     .optional(),
   feedIds: z.array(z.string().min(1).max(40)).max(200).optional(),
+  publisherId: z.string().min(1).max(60).optional(),
+  offersApiToken: z.string().min(1).max(200).optional(),
   appKey: z.string().min(1).optional(),
   appSecret: z.string().min(1).optional(),
   trackingId: z.string().min(1).max(100).optional(),
