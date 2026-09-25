@@ -62,7 +62,10 @@ export function mapAliexpressProduct(raw: AliexpressRawProduct): ProductData {
   }
 
   // URL original / fallback
-  const originalUrl = raw.promotion_link || raw.product_detail_url || `https://pt.aliexpress.com/item/${externalId}.html`;
+  // Prioriza a página canônica do produto: originalUrl é reenviado depois como source_values de
+  // aliexpress.affiliate.link.generate (toAffiliateLink), e passar um promotion_link já encurtado
+  // ali gera um link de afiliado em cima de outro — suspeito de causar o "page not found" no app.
+  const originalUrl = raw.product_detail_url || raw.promotion_link || `https://pt.aliexpress.com/item/${externalId}.html`;
 
   // Comissão em %
   let commissionPct: number | undefined;
