@@ -3,6 +3,7 @@ import pino from 'pino';
 import { prisma } from '@afilados/db';
 import {
   QUEUE_AWIN_IMPORT,
+  QUEUE_COUPON_SYNC,
   QUEUE_MIRROR_MESSAGE,
   QUEUE_PRODUCT_ENRICH,
   QUEUE_SEND_OFFER,
@@ -10,6 +11,7 @@ import {
   QUEUE_WA_COMMANDS,
   REDIS_EVENTS_CHANNEL,
   type AwinImportJob,
+  type CouponSyncJob,
   type MirrorMessageJob,
   type ProductEnrichJob,
   type SendOfferJob,
@@ -27,9 +29,11 @@ import { processSendTelegram } from './processors/send-telegram';
 import { processMirrorMessage } from './processors/mirror-message';
 import { createProductEnrichProcessor } from './processors/product-enrich';
 import { createAwinImportProcessor } from './processors/awin-import';
+import { createCouponSyncProcessor } from './processors/coupon-sync';
 import { MirrorListener } from './mirror/listener';
 import { AutomationScheduler } from './automation/scheduler';
 import { AwinImportScheduler } from './automation/awin-import-scheduler';
+import { CouponSyncScheduler } from './automation/coupon-sync-scheduler';
 import { TelegramManager } from './telegram/manager';
 import { startHttp } from './http';
 
@@ -39,6 +43,7 @@ const manager = new WaSessionManager(gateway);
 const mirrorListener = new MirrorListener(gateway);
 const automationScheduler = new AutomationScheduler();
 const awinImportScheduler = new AwinImportScheduler();
+const couponSyncScheduler = new CouponSyncScheduler();
 const telegramManager = new TelegramManager();
 
 const waWorker = new Worker<WaCommandJob>(QUEUE_WA_COMMANDS, processWaCommand(manager), {
@@ -79,8 +84,20 @@ const awinImportWorker = new Worker<AwinImportJob>(QUEUE_AWIN_IMPORT, createAwin
   connection: getRedis(),
   concurrency: 1,
 });
+const couponSyncWorker = new Worker<CouponSyncJob>(QUEUE_COUPON_SYNC, createCouponSyncProcessor(), {
+  connection: getRedis(),
+  concurrency: 1,
+});
 
-for (const w of [waWorker, sendWorker, mirrorWorker, enrichWorker, telegramWorker, awinImportWorker]) {
+for (const w of [
+  waWorker,
+  sendWorker,
+  mirrorWorker,
+  enrichWorker,
+  telegramWorker,
+  awinImportWorker,
+  couponSyncWorker,
+]) {
   w.on('failed', (job, err) => log.error({ jobId: job?.id, err: err.message }, 'job falhou'));
 }
 sendWorker.on('failed', (job, err) => {
@@ -126,6 +143,7 @@ await manager.start();
 await mirrorListener.start();
 await automationScheduler.start();
 awinImportScheduler.start();
+couponSyncScheduler.start();
 await telegramManager.start();
 log.info({ port: config.WORKER_PORT }, 'worker iniciado');
 
@@ -137,6 +155,7 @@ async function shutdown() {
   try {
     automationScheduler.stop();
     awinImportScheduler.stop();
+    couponSyncScheduler.stop();
     telegramManager.stop();
     await Promise.all([
       waWorker.close(),
@@ -145,6 +164,7 @@ async function shutdown() {
       enrichWorker.close(),
       telegramWorker.close(),
       awinImportWorker.close(),
+      couponSyncWorker.close(),
     ]);
     await redisSub.unsubscribe();
     redisSub.disconnect();

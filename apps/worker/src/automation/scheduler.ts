@@ -207,6 +207,7 @@ export class AutomationScheduler {
         const elig = isEligibleCoupon({
           code: candidate.coupon.code,
           expiresAt: candidate.coupon.expiresAt?.toISOString() ?? null,
+          status: candidate.coupon.status,
         });
         if (!elig.ok) {
           await prisma.automationQueueItem.update({

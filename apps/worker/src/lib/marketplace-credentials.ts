@@ -29,7 +29,12 @@ export async function loadAwinCredentials(tenantId: string): Promise<AwinCredent
   if (!creds.feedListUrl) {
     throw new Error('AWIN: configure o link da lista de feeds');
   }
-  return { feedListUrl: creds.feedListUrl, feedIds: creds.feedIds ?? [] };
+  return {
+    feedListUrl: creds.feedListUrl,
+    feedIds: creds.feedIds ?? [],
+    publisherId: creds.publisherId,
+    offersApiToken: creds.offersApiToken,
+  };
 }
 
 export async function loadAliexpressCredentials(tenantId: string): Promise<AliexpressCredentials> {

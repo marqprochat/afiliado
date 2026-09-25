@@ -400,6 +400,66 @@ describe('AutomationScheduler', () => {
     expect(discoverCalls.filter((id) => id === rule.id).length).toBe(1);
   });
 
+  it('cupom INVALID na fila vira SKIPPED com o motivo invalid e queueItem vira REMOVED', async () => {
+    const couponTemplate = await prisma.template.create({
+      data: { tenantId, name: 'tc', body: '{codigo}', kind: 'COUPON' },
+    });
+    const rule = await prisma.automationRule.create({
+      data: {
+        tenantId,
+        name: 'r-invalid-coupon',
+        enabled: true,
+        marketplaces: ['SHOPEE'],
+        keywords: ['fone'],
+        blockedKeywords: [],
+        intervalMin: 5,
+        sessionId,
+        groupJids: ['g1@g.us'],
+        templateId: couponTemplate.id,
+      },
+    });
+    const invalidCoupon = await prisma.coupon.create({
+      data: {
+        tenantId,
+        store: 'SHOPEE',
+        code: 'INVALIDO10',
+        description: 'Cupom inválido',
+        origin: 'MANUAL',
+        status: 'INVALID',
+      },
+    });
+    const queueItem = await prisma.automationQueueItem.create({
+      data: {
+        tenantId,
+        ruleId: rule.id,
+        kind: 'COUPON',
+        couponId: invalidCoupon.id,
+        manual: true,
+      },
+    });
+
+    const enqueued: string[] = [];
+    const scheduler = new AutomationScheduler({
+      enqueue: async (_t, batchItemId) => {
+        enqueued.push(batchItemId);
+      },
+      discover: async () => {},
+    });
+    await scheduler.reload();
+    await scheduler.tick();
+
+    expect(enqueued.length).toBe(0);
+    const updatedItem = await prisma.automationQueueItem.findUniqueOrThrow({
+      where: { id: queueItem.id },
+    });
+    expect(updatedItem.status).toBe('REMOVED');
+    const log = await prisma.automationLog.findFirst({
+      where: { ruleId: rule.id, action: 'SKIPPED' },
+    });
+    expect(log).not.toBeNull();
+    expect(log!.reason).toBe('invalid');
+  });
+
   it('não recarrega regra desabilitada', async () => {
     await prisma.automationRule.create({
       data: {

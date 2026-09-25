@@ -1,4 +1,13 @@
-import { QUEUE_AWIN_IMPORT, QUEUE_SEND_OFFER, QUEUE_SEND_TELEGRAM, type AwinImportJob, type SendOfferJob, type SendTelegramJob } from '@afilados/shared';
+import {
+  QUEUE_AWIN_IMPORT,
+  QUEUE_COUPON_SYNC,
+  QUEUE_SEND_OFFER,
+  QUEUE_SEND_TELEGRAM,
+  type AwinImportJob,
+  type CouponSyncJob,
+  type SendOfferJob,
+  type SendTelegramJob,
+} from '@afilados/shared';
 import { getQueue } from './redis';
 
 export async function enqueueSendOffer(tenantId: string, batchItemId: string) {
@@ -36,3 +45,15 @@ export async function enqueueAwinImport(tenantId: string) {
     { jobId: `awin-import-${tenantId}-${Date.now()}`, attempts: 2, removeOnComplete: true, removeOnFail: 50 },
   );
 }
+
+export async function enqueueCouponSync(tenantId: string, trigger: 'schedule' | 'manual' = 'schedule') {
+  const q = getQueue<CouponSyncJob>(QUEUE_COUPON_SYNC);
+  const hourBucket = Math.floor(Date.now() / (60 * 60 * 1000));
+  const jobId = trigger === 'manual' ? `coupon-sync-${tenantId}-${Date.now()}` : `coupon-sync-${tenantId}-${hourBucket}`;
+  await q.add(
+    'coupon-sync',
+    { tenantId, trigger },
+    { jobId, attempts: 2, removeOnComplete: true, removeOnFail: 50 },
+  );
+}
+
