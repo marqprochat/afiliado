@@ -12,6 +12,7 @@ import { formatBRL } from '@/lib/format';
 import { useApiMutation } from '@/lib/mutations';
 import { useQueue } from '@/lib/queries';
 import type { ApiProduct } from '@/lib/types';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 const MARKETS: { key: MarketplaceKind; label: string }[] = [
@@ -22,6 +23,8 @@ const MARKETS: { key: MarketplaceKind; label: string }[] = [
   { key: 'AWIN', label: 'Awin' },
   { key: 'ALIEXPRESS', label: 'AliExpress' },
 ];
+
+const DISABLED_KEYWORD_SOURCES: MarketplaceKind[] = ['MERCADOLIVRE', 'AMAZON', 'MAGALU'];
 // Categoria/mais buscados existem na API oficial da Shopee e na do AliExpress. Loja
 // favorita é só Shopee (shopId na productOfferV2). Os demais marketplaces só têm busca
 // por palavra-chave (scraping) e importação por link.
@@ -42,12 +45,27 @@ export default function ProdutosPage() {
   const [sub, setSub] = useState<SearchMode | 'import'>('keyword');
   const [products, setProducts] = useState<ApiProduct[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const SUBTABS = ALL_SUBTABS.filter((t) => !t.sources || t.sources.includes(source));
+  const isKeywordDisabled = DISABLED_KEYWORD_SOURCES.includes(source);
+  const baseSubtabs = ALL_SUBTABS.filter((t) => !t.sources || t.sources.includes(source));
+  const SUBTABS = isKeywordDisabled
+    ? [
+        ...baseSubtabs.filter((t) => t.key === 'import'),
+        ...baseSubtabs.filter((t) => t.key !== 'import'),
+      ]
+    : baseSubtabs;
+  const effectiveSub = isKeywordDisabled && sub === 'keyword' ? 'import' : sub;
 
   function selectSource(kind: MarketplaceKind) {
     setSource(kind);
+    const willDisableKeyword = DISABLED_KEYWORD_SOURCES.includes(kind);
+    if (willDisableKeyword && sub === 'keyword') {
+      setSub('import');
+      return;
+    }
     const stillValid = ALL_SUBTABS.find((t) => t.key === sub);
-    if (stillValid?.sources && !stillValid.sources.includes(kind)) setSub('keyword');
+    if (stillValid?.sources && !stillValid.sources.includes(kind)) {
+      setSub(willDisableKeyword ? 'import' : 'keyword');
+    }
   }
 
   // Produtos importados em lote chegam como esqueleto e são atualizados quando o worker termina
@@ -128,23 +146,43 @@ export default function ProdutosPage() {
         ))}
       </div>
       <div className="flex gap-4 border-b border-border text-sm">
-        {SUBTABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setSub(t.key)}
-            className={cn(
-              '-mb-px border-b-2 px-1 pb-2',
-              sub === t.key
-                ? 'border-brand text-brand'
-                : 'border-transparent text-muted-foreground',
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
+        {SUBTABS.map((t) => {
+          const isDisabled = isKeywordDisabled && t.key === 'keyword';
+          if (isDisabled) {
+            return (
+              <TooltipProvider key={t.key} delay={100}>
+                <Tooltip>
+                  <TooltipTrigger
+                    type="button"
+                    aria-disabled="true"
+                    className="-mb-px border-b-2 border-transparent px-1 pb-2 text-muted-foreground/40 cursor-not-allowed select-none"
+                  >
+                    {t.label}
+                  </TooltipTrigger>
+                  <TooltipContent>Em desenvolvimento</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            );
+          }
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setSub(t.key)}
+              className={cn(
+                '-mb-px border-b-2 px-1 pb-2 transition-colors',
+                effectiveSub === t.key
+                  ? 'border-brand text-brand'
+                  : 'border-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {t.label}
+            </button>
+          );
+        })}
       </div>
 
-      {sub === 'import' ? (
+      {effectiveSub === 'import' ? (
         <ImportPanel
           onImported={(r) => {
             setProducts(r.products);
@@ -153,9 +191,9 @@ export default function ProdutosPage() {
         />
       ) : (
         <SearchFilters
-          key={`${source}-${sub}`}
+          key={`${source}-${effectiveSub}`}
           source={source}
-          mode={sub}
+          mode={effectiveSub}
           onSearch={(q) => search.mutate(q)}
           loading={search.isPending}
         />

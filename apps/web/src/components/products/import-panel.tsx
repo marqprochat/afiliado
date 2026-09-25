@@ -52,6 +52,8 @@ export function ImportPanel({ onImported }: { onImported: (r: ImportResult) => v
         rows={6}
         value={text}
         onChange={(e) => setText(e.target.value)}
+        className="h-[138px] max-h-[138px] resize-none overflow-y-auto [field-sizing:fixed]"
+        style={{ fieldSizing: 'fixed' }}
         placeholder={
           'Cole uma ou mais URLs (uma por linha, ou use o botão 🔗 Copiar links\n' +
           'da extensão Afilados Connect numa página de busca do marketplace):\n' +
