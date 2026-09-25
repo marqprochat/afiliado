@@ -488,11 +488,11 @@ Layout (seguir os componentes de `components/ui` e o estilo de `config/templates
 - **Estado vazio:** explica as fontes ("Configure AliExpress ou Awin (token de ofertas) para
   busca automática, ou cadastre/cole cupons").
 
-- [ ] **Step 1:** Testes de componente: renderiza a lista com badges; o filtro de status
+- [x] **Step 1:** Testes de componente: renderiza a lista com badges; o filtro de status
   refaz a query; "Funcionou" chama o verify com `VALID`; fluxo colar → analisar → salvar
   envia só os marcados; expirados escondidos por padrão.
-- [ ] **Step 2:** Implementar. **Step 3:** `cd apps/web && npx vitest run test/coupons-page.test.tsx` + `pnpm --filter @afilados/web typecheck`.
-- [ ] **Step 4:** Commit `feat(web): Central de Cupons com cadastro, importação por texto e validação`.
+- [x] **Step 2:** Implementar. **Step 3:** `cd apps/web && npx vitest run test/coupons-page.test.tsx` + `pnpm --filter @afilados/web typecheck`.
+- [x] **Step 4:** Commit `feat(web): Central de Cupons com cadastro, importação por texto e validação`.
 
 ---
 
@@ -506,15 +506,15 @@ Layout (seguir os componentes de `components/ui` e o estilo de `config/templates
   sem quebrar o salvamento só com `feedListUrl`
 - Tests: os testes existentes de marketplaces (API) + o teste do drawer, se existir
 
-- [ ] **Step 1:** Adicionar dois campos opcionais na seção Awin: "Publisher ID" e "Token da
+- [x] **Step 1:** Adicionar dois campos opcionais na seção Awin: "Publisher ID" e "Token da
   API (Ofertas/Cupons)", com um texto de ajuda que aponta para `ui.awin.com/awin-api`. O
   token nunca volta preenchido do servidor (mostrar "•••• configurado").
-- [ ] **Step 2:** `checkConnection` da Awin: se o token vier, fazer uma chamada de
+- [x] **Step 2:** `checkConnection` da Awin: se o token vier, fazer uma chamada de
   `listAwinVouchers` com `pageSize=10` para validar; 401 → erro "Token de ofertas da Awin
   inválido". O datafeed segue validado como hoje.
-- [ ] **Step 3:** Testes: salvar sem token continua funcionando; salvar com token inválido →
+- [x] **Step 3:** Testes: salvar sem token continua funcionando; salvar com token inválido →
   erro claro.
-- [ ] **Step 4:** Commit `feat(awin): credenciais da Offers API para sincronizar cupons`.
+- [x] **Step 4:** Commit `feat(awin): credenciais da Offers API para sincronizar cupons`.
 
 ---
 
@@ -551,14 +551,14 @@ Layout (seguir os componentes de `components/ui` e o estilo de `config/templates
 - Loja sem entrada em `coupon-stores.js`, ou seletor que não casa: o painel mostra só a lista
   com o botão Copiar e os botões manuais. Nunca quebra a página.
 
-- [ ] **Step 1:** Preencher `coupon-stores.js` com os seletores do spike (Task 0) para
+- [x] **Step 1:** Preencher `coupon-stores.js` com os seletores do spike (Task 0) para
   AliExpress, Amazon BR, Magalu e ML.
-- [ ] **Step 2:** Implementar as Partes A e B e rodar `node apps/extension/build.js`.
-- [ ] **Step 3:** Teste manual assistido pelo usuário (com o usuário logado): carregar a
+- [x] **Step 2:** Implementar as Partes A e B e rodar `node apps/extension/build.js`.
+- [x] **Step 3:** Teste manual assistido pelo usuário (com o usuário logado): carregar a
   extensão de `dist/`, abrir a página de produto com cupom → cupom aparece na Central com a
   origem Extensão; abrir o carrinho → painel lista os cupons; "Copiar e destacar" +
   "Funcionou" → status VALID na Central com o histórico `EXTENSION`.
-- [ ] **Step 4:** Commit `feat(extension): captura real de cupons e painel de validação no carrinho`.
+- [x] **Step 4:** Commit `feat(extension): captura real de cupons e painel de validação no carrinho`.
 
 ---
 
