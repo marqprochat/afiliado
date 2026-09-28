@@ -558,6 +558,38 @@
       return { price, originalPrice };
     }
 
+    if (url.includes('mercadolivre.com.br')) {
+      // Preço atual: dentro de .poly-price__current (exclui parcelamento e cupom, que ficam
+      // em containers irmãos fora dele)
+      const currentFracEl = container.querySelector('.poly-price__current .andes-money-amount__fraction');
+      const currentCentsEl = container.querySelector('.poly-price__current .andes-money-amount__cents');
+      // Preço original ("De:"): dentro de .poly-price__labels, sempre marcado com --previous
+      const origFracEl = container.querySelector(
+        '.poly-price__labels .andes-money-amount--previous .andes-money-amount__fraction',
+      );
+      const origCentsEl = container.querySelector(
+        '.poly-price__labels .andes-money-amount--previous .andes-money-amount__cents',
+      );
+
+      let price;
+      let originalPrice;
+      if (currentFracEl) {
+        const frac = currentFracEl.textContent.replace(/\./g, '').trim();
+        const cents = currentCentsEl ? currentCentsEl.textContent.trim() : null;
+        const p = parseFloat(frac + (cents ? `.${cents}` : ''));
+        if (!isNaN(p) && p > 0) price = p;
+      }
+      if (origFracEl) {
+        const frac = origFracEl.textContent.replace(/\./g, '').trim();
+        const cents = origCentsEl ? origCentsEl.textContent.trim() : null;
+        const p = parseFloat(frac + (cents ? `.${cents}` : ''));
+        if (!isNaN(p) && p > 0) originalPrice = p;
+      }
+
+      if (price === undefined) return null;
+      return { price, originalPrice };
+    }
+
     return null;
   }
 
