@@ -482,7 +482,10 @@
       host === 'magazinevoce.com.br' ||
       host.endsWith('.magazinevoce.com.br')
     ) {
-      return /\/p\/([a-z0-9]+)/i.test(path) || /\/([a-z0-9]{7,12})\//i.test(path);
+      // O fallback sem "/p/" exige ao menos 1 dígito no segmento: slugs de navegação
+      // (/informatica/, /favoritos/) são só letras e batiam no padrão antigo, virando
+      // falsos positivos na captura em lote.
+      return /\/p\/([a-z0-9]+)/i.test(path) || /\/([a-z0-9]*\d[a-z0-9]{6,11})\//i.test(path);
     }
     if (host === 'aliexpress.com' || host.endsWith('.aliexpress.com')) {
       return /\/item\/(\d+)/i.test(path) || /_p(\d+)/i.test(path);
@@ -590,6 +593,38 @@
       return { price, originalPrice };
     }
 
+    if (url.includes('magazineluiza.com.br') || url.includes('magazinevoce.com.br')) {
+      // Não há preço riscado tradicional nos cards: o preço à vista/Pix fica em
+      // product-card-price-final, e o preço cheio aparece embutido no texto de
+      // parcelamento ("Ou R$ 3.999,00 em 10x de R$ 399,90 sem juros") — extraído por
+      // posição textual ("Ou R$X em"), não pela parcela em si.
+      const finalEl = container.querySelector('[data-testid="product-card-price-final"]');
+      const installmentEl = container.querySelector('[data-testid="product-card-price-installment"]');
+
+      let price;
+      let originalPrice;
+      if (finalEl) {
+        const integerEl = finalEl.querySelector('[data-testid="price-value-integer"]');
+        const centsEl = finalEl.querySelector('[data-testid="price-value-split-cents-fraction"]');
+        if (integerEl) {
+          const intPart = integerEl.textContent.replace(/\./g, '').trim();
+          const cents = centsEl ? centsEl.textContent.trim() : null;
+          const p = parseFloat(intPart + (cents ? `.${cents}` : ''));
+          if (!isNaN(p) && p > 0) price = p;
+        }
+      }
+      if (installmentEl) {
+        const m = (installmentEl.textContent || '').match(/Ou\s+R\$\s?([\d.,]+)\s+em/i);
+        if (m) {
+          const p = parseFloat(m[1].replace(/\./g, '').replace(',', '.'));
+          if (!isNaN(p) && p > 0 && (!price || p > price)) originalPrice = p;
+        }
+      }
+
+      if (price === undefined) return null;
+      return { price, originalPrice };
+    }
+
     return null;
   }
 
@@ -625,11 +660,15 @@
       seen.add(dedupeKey);
 
       // Sobe a partir do link até achar um container de card razoável.
-      // Prioridade 1: a Amazon marca o card real com data-testid="product-card"/data-asin —
-      // usamos isso direto quando existir, porque a heurística por contagem de links abaixo
-      // pode falhar mesmo dentro do card correto (ex: card com seletor de cor onde a âncora
-      // da imagem e a do título apontam para ASINs de variações diferentes).
-      const structuralCard = a.closest('[data-testid="product-card"], [data-asin]');
+      // Prioridade 1: alguns marketplaces marcam o card real com um data-testid/data-asin
+      // estável — usamos isso direto quando existir, porque a heurística por contagem de
+      // links abaixo pode falhar mesmo dentro do card correto (ex: card com seletor de cor
+      // onde a âncora da imagem e a do título apontam para ASINs de variações diferentes).
+      // Seletores exatos (não `*=`) para não bater com a própria âncora, que no Magalu tem
+      // data-testid="product-card-link" (conteria "product-card" num match parcial).
+      const structuralCard = a.closest(
+        '[data-testid="product-card"], [data-testid="product-card-container"], [data-asin]',
+      );
 
       // Prioridade 2 (fallback p/ marketplaces sem marcação estrutural): sobe até achar um
       // ancestral com imagem + valor em R$ (até 6 níveis), parando assim que o próximo
@@ -696,9 +735,14 @@
       const image = extractCardImage(container);
 
       const primaryImg = container.querySelector('img');
+      // Heading/testid de título dedicado (quando existir) é mais confiável que o alt da
+      // imagem, que em alguns marketplaces (ex: Magalu) é um texto genérico tipo "Imagem
+      // do produto" em vez do nome real.
+      const titleEl = container.querySelector('h1, h2, h3, h4, [data-testid*="title" i]');
       let title =
         a.getAttribute('title') ||
         a.getAttribute('aria-label') ||
+        titleEl?.textContent?.trim() ||
         primaryImg?.getAttribute('alt') ||
         (a.textContent || '').trim();
       if (title) title = title.replace(/R\$\s?[\d.,]+/g, '').trim().slice(0, 200) || undefined;
