@@ -717,7 +717,7 @@
       }, 3000);
     });
 
-    document.body.appendChild(btn);
+    getOrCreateFabWrapper().appendChild(btn);
   }
 
   // Responde a mensagens da extensão
@@ -737,7 +737,7 @@
     const btn = document.createElement('button');
     btn.id = 'afilados-floating-btn';
     btn.className = 'afilados-float-btn';
-    btn.innerHTML = '<span>⚡</span> Afilados';
+    btn.innerHTML = '<span>⚡</span> Enviar Produto';
     btn.title = 'Capturar oferta para o Afilados';
 
     btn.addEventListener('click', async () => {
@@ -750,7 +750,7 @@
 
       if (!apiToken) {
         alert('Afilados Connect: Configure seu Token de API abrindo o popup da extensão.');
-        btn.innerHTML = '<span>⚡</span> Afilados';
+        btn.innerHTML = '<span>⚡</span> Enviar Produto';
         btn.classList.remove('loading');
         return;
       }
@@ -805,26 +805,26 @@
             }).catch(() => {});
           }
           setTimeout(() => {
-            btn.innerHTML = '<span>⚡</span> Afilados';
+            btn.innerHTML = '<span>⚡</span> Enviar Produto';
             btn.classList.remove('loading', 'success');
           }, 3000);
         } else {
           btn.innerHTML = '<span>❌</span> Erro';
           setTimeout(() => {
-            btn.innerHTML = '<span>⚡</span> Afilados';
+            btn.innerHTML = '<span>⚡</span> Enviar Produto';
             btn.classList.remove('loading');
           }, 2500);
         }
       } catch {
         btn.innerHTML = '<span>❌</span> Offline';
         setTimeout(() => {
-          btn.innerHTML = '<span>⚡</span> Afilados';
+          btn.innerHTML = '<span>⚡</span> Enviar Produto';
           btn.classList.remove('loading');
         }, 2500);
       }
     });
 
-    document.body.appendChild(btn);
+    getOrCreateFabWrapper().appendChild(btn);
   }
 
   // --- Painel Flutuante de Cupons no Carrinho / Checkout ---
@@ -1013,6 +1013,51 @@
         renderCartCouponPanel(coupons, store, apiUrl, apiToken);
       }
     } catch {}
+  }
+
+  // Container flutuante que agrupa os botões (Enviar Produto / Copiar links) com um botão
+  // de ocultar — colapsa para uma bolinha pequena no canto, útil pra não atrapalhar a
+  // navegação em páginas onde o usuário não quer capturar nada no momento. Estado persistido
+  // em localStorage para manter a preferência entre páginas do mesmo site.
+  function getOrCreateFabWrapper() {
+    let wrapper = document.getElementById('afilados-fab-wrapper');
+    if (wrapper) return wrapper.querySelector('#afilados-fab-buttons');
+
+    wrapper = document.createElement('div');
+    wrapper.id = 'afilados-fab-wrapper';
+
+    const toggle = document.createElement('button');
+    toggle.id = 'afilados-fab-toggle';
+    toggle.title = 'Ocultar / Mostrar';
+    toggle.innerHTML = '<span>✕</span>';
+
+    const buttons = document.createElement('div');
+    buttons.id = 'afilados-fab-buttons';
+
+    let collapsed = false;
+    try {
+      collapsed = localStorage.getItem('afilados_fab_collapsed') === 'true';
+    } catch {}
+
+    function applyState() {
+      wrapper.classList.toggle('afilados-fab-collapsed', collapsed);
+      toggle.innerHTML = collapsed ? '<span>⚡</span>' : '<span>✕</span>';
+      toggle.title = collapsed ? 'Mostrar botões do Afilados' : 'Ocultar botões do Afilados';
+    }
+
+    toggle.addEventListener('click', () => {
+      collapsed = !collapsed;
+      try {
+        localStorage.setItem('afilados_fab_collapsed', String(collapsed));
+      } catch {}
+      applyState();
+    });
+
+    applyState();
+    wrapper.appendChild(buttons);
+    wrapper.appendChild(toggle);
+    document.body.appendChild(wrapper);
+    return buttons;
   }
 
   // Injeta após carregar a página
