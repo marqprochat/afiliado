@@ -528,6 +528,39 @@
     return null;
   }
 
+  // Extrai preço/preço original de um card usando seletores estruturados específicos do
+  // marketplace atual (mais confiável que regex de texto, que pega parcelamento, "economize
+  // R$X" etc). Retorna null se o marketplace não tiver seletores conhecidos, sinalizando que
+  // o chamador deve cair no fallback de regex genérica.
+  function extractCardPrice(container) {
+    const url = window.location.href;
+
+    if (url.includes('amazon.com.br')) {
+      // Preço atual: qualquer .a-price que NÃO seja o preço de lista/tachado (a-text-price)
+      const currentEl = Array.from(container.querySelectorAll('.a-price:not(.a-text-price) .a-offscreen')).find(
+        (el) => !el.closest('.a-text-price'),
+      );
+      // Preço original: preço de lista/tachado
+      const origEl = container.querySelector('.a-price.a-text-price .a-offscreen, .basisPrice .a-offscreen');
+
+      let price;
+      let originalPrice;
+      if (currentEl) {
+        const p = parseFloat(currentEl.textContent.replace(/[^\d,]/g, '').replace(',', '.'));
+        if (!isNaN(p) && p > 0) price = p;
+      }
+      if (origEl) {
+        const p = parseFloat(origEl.textContent.replace(/[^\d,]/g, '').replace(',', '.'));
+        if (!isNaN(p) && p > 0) originalPrice = p;
+      }
+
+      if (price === undefined) return null;
+      return { price, originalPrice };
+    }
+
+    return null;
+  }
+
   // Varre todos os links da página atual e devolve, para cada URL de produto única, também
   // título/preço/imagem lidos do próprio card na página — funciona tanto numa página de
   // busca/listagem (dezenas de cards) quanto numa página de produto único (0 ou 1 link).
@@ -535,6 +568,7 @@
   // para Mercado Livre/Magalu esbarra em bloqueio anti-bot e não retorna dados reais).
   function extractProductsFromPage() {
     const seen = new Set();
+    const seenContainers = new Set();
     const items = [];
     document.querySelectorAll('a[href]').forEach((a) => {
       if (items.length >= 200) return;
@@ -558,39 +592,73 @@
       if (seen.has(dedupeKey)) return;
       seen.add(dedupeKey);
 
-      // Sobe a partir do link até achar um container de card razoável: o primeiro
-      // ancestral que já contém uma imagem e um valor em R$ (até 6 níveis acima).
-      // Para não vazar preço/imagem de um card vizinho, a subida é interrompida assim
-      // que o próximo ancestral passaria a conter mais de um link de produto — sinal
-      // de que já saímos do card individual e entramos num wrapper de grade/listagem.
-      let container = a;
-      for (let i = 0; i < 6 && container.parentElement; i++) {
+      // Sobe a partir do link até achar um container de card razoável.
+      // Prioridade 1: a Amazon marca o card real com data-testid="product-card"/data-asin —
+      // usamos isso direto quando existir, porque a heurística por contagem de links abaixo
+      // pode falhar mesmo dentro do card correto (ex: card com seletor de cor onde a âncora
+      // da imagem e a do título apontam para ASINs de variações diferentes).
+      const structuralCard = a.closest('[data-testid="product-card"], [data-asin]');
+
+      // Prioridade 2 (fallback p/ marketplaces sem marcação estrutural): sobe até achar um
+      // ancestral com imagem + valor em R$ (até 6 níveis), parando assim que o próximo
+      // ancestral passaria a conter links de MAIS DE UM produto distinto — sinal de que já
+      // saímos do card individual e entramos num wrapper de grade. Contamos produtos únicos
+      // (por URL sem querystring), não links brutos: cards costumam ter 2 âncoras separadas
+      // para o mesmo produto (uma envolvendo a imagem, outra o título/preço).
+      let container = structuralCard || a;
+      for (let i = 0; !structuralCard && i < 6 && container.parentElement; i++) {
         const next = container.parentElement;
-        const productLinksInNext = Array.from(next.querySelectorAll('a[href]')).filter((el) => {
-          try {
-            return isProductUrl(new URL(el.getAttribute('href'), window.location.href).toString());
-          } catch {
-            return false;
-          }
-        });
-        if (productLinksInNext.length > 1) break;
+        const productUrlsInNext = Array.from(next.querySelectorAll('a[href]'))
+          .map((el) => {
+            try {
+              return new URL(el.getAttribute('href'), window.location.href).toString();
+            } catch {
+              return null;
+            }
+          })
+          .filter((href) => href && isProductUrl(href));
+        const uniqueProductsInNext = new Set(
+          productUrlsInNext.map((href) => {
+            try {
+              const du = new URL(href);
+              return du.origin + du.pathname;
+            } catch {
+              return href;
+            }
+          }),
+        );
+        if (uniqueProductsInNext.size > 1) break;
         container = next;
         if (container.querySelector('img') && /R\$\s?[\d.,]+/.test(container.textContent || '')) {
           break;
         }
       }
 
-      const priceMatches = Array.from((container.textContent || '').matchAll(/R\$\s?([\d.,]+)/g))
-        .map((m) => parseFloat(m[1].replace(/\./g, '').replace(',', '.')))
-        .filter((n) => !isNaN(n) && n > 0);
+      // Dedup pelo container real (não só pela URL): links de swatch de cor (Branco, Preto...)
+      // resolvem para ASINs diferentes mas para o MESMO card visual quando o card tem seletor
+      // de variação — sem isso, cada swatch vira uma entrada fantasma duplicando o produto.
+      if (seenContainers.has(container)) return;
+      seenContainers.add(container);
+
       let price;
       let originalPrice;
-      if (priceMatches.length === 1) {
-        price = priceMatches[0];
-      } else if (priceMatches.length > 1) {
-        price = Math.min(...priceMatches);
-        const maxV = Math.max(...priceMatches);
-        if (maxV > price) originalPrice = maxV;
+      const structuredPrice = extractCardPrice(container);
+      if (structuredPrice) {
+        price = structuredPrice.price;
+        originalPrice = structuredPrice.originalPrice;
+      } else {
+        // Fallback: regex genérica sobre o texto do card (marketplaces sem seletores
+        // estruturados mapeados ainda). Pode confundir parcelamento com preço original.
+        const priceMatches = Array.from((container.textContent || '').matchAll(/R\$\s?([\d.,]+)/g))
+          .map((m) => parseFloat(m[1].replace(/\./g, '').replace(',', '.')))
+          .filter((n) => !isNaN(n) && n > 0);
+        if (priceMatches.length === 1) {
+          price = priceMatches[0];
+        } else if (priceMatches.length > 1) {
+          price = Math.min(...priceMatches);
+          const maxV = Math.max(...priceMatches);
+          if (maxV > price) originalPrice = maxV;
+        }
       }
 
       const image = extractCardImage(container);
