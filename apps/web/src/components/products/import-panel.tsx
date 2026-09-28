@@ -16,23 +16,34 @@ type ImportBody = { urls: string[] } | { items: ProductsImportItem[] } | FormDat
 
 /** Aceita tanto o JSON estruturado copiado pela extensão (título/preço/imagem já lidos do
  *  card da página) quanto texto solto com URLs — o que a extensão copia quando consegue ler
- *  metadados do card vira `items`, evitando depender do backend raspar cada URL depois. */
-function parsePastedText(text: string): { urls: string[] } | { items: ProductsImportItem[] } {
+ *  metadados do card vira `items`, evitando depender do backend raspar cada URL depois.
+ *  Itens sem preço válido (0, ausente ou não numérico) são descartados: a extensão já não
+ *  deveria copiá-los, mas isso cobre colagens manuais ou de uma versão antiga dela — sem
+ *  preço, o card vira lixo na lista de importação (`droppedNoPrice` reporta quantos foram
+ *  descartados pra exibir um aviso). */
+function parsePastedText(text: string): {
+  urls?: string[];
+  items?: ProductsImportItem[];
+  droppedNoPrice: number;
+} {
   try {
     const parsed: unknown = JSON.parse(text);
     if (Array.isArray(parsed) && parsed.every((p) => p && typeof p === 'object' && typeof p.url === 'string')) {
-      return { items: parsed as ProductsImportItem[] };
+      const all = parsed as ProductsImportItem[];
+      const items = all.filter((p) => typeof p.price === 'number' && !isNaN(p.price) && p.price > 0);
+      return { items, droppedNoPrice: all.length - items.length };
     }
   } catch {
     // não é JSON — segue para extração de URLs em texto livre
   }
   const urls = [...new Set(text.match(/https?:\/\/[^\s"'<>]+/g) ?? [])];
-  return { urls };
+  return { urls, droppedNoPrice: 0 };
 }
 
 export function ImportPanel({ onImported }: { onImported: (r: ImportResult) => void }) {
   const [text, setText] = useState('');
   const [unsupported, setUnsupported] = useState<ImportResult['unsupported']>([]);
+  const [droppedNoPrice, setDroppedNoPrice] = useState(0);
   const imp = useApiMutation(
     (body: ImportBody) =>
       body instanceof FormData
@@ -45,6 +56,17 @@ export function ImportPanel({ onImported }: { onImported: (r: ImportResult) => v
       },
     },
   );
+
+  function handleImportClick() {
+    const { urls, items, droppedNoPrice: dropped } = parsePastedText(text);
+    setDroppedNoPrice(dropped);
+    if (items) {
+      if (items.length === 0) return;
+      imp.mutate({ items });
+    } else if (urls) {
+      imp.mutate({ urls });
+    }
+  }
 
   return (
     <div className="space-y-3 rounded-lg border border-border bg-surface p-4">
@@ -67,7 +89,7 @@ export function ImportPanel({ onImported }: { onImported: (r: ImportResult) => v
         <Button
           className="bg-brand text-white hover:bg-brand/90"
           disabled={imp.isPending || !text.trim()}
-          onClick={() => imp.mutate(parsePastedText(text))}
+          onClick={handleImportClick}
         >
           Importar links
         </Button>
@@ -88,6 +110,11 @@ export function ImportPanel({ onImported }: { onImported: (r: ImportResult) => v
           />
         </label>
       </div>
+      {droppedNoPrice > 0 && (
+        <p className="text-xs text-amber-300">
+          {droppedNoPrice} produto(s) ignorado(s) por não terem preço detectado.
+        </p>
+      )}
       {unsupported.length > 0 && (
         <ul className="text-xs text-amber-300">
           {unsupported.map((u) => (

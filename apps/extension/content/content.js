@@ -772,7 +772,12 @@
     btn.title = 'Copiar todos os produtos desta página para colar no Afilados';
 
     btn.addEventListener('click', async () => {
-      const items = extractProductsFromPage();
+      // Descarta produtos sem preço válido (extração falhou ou é um item fantasma tipo
+      // swatch de cor) — evita poluir a lista colada no app com itens que não servem
+      // pra nada sem preço.
+      const items = extractProductsFromPage().filter(
+        (item) => typeof item.price === 'number' && !isNaN(item.price) && item.price > 0,
+      );
       if (items.length === 0) {
         btn.innerHTML = '<span>—</span> Nenhum link';
         setTimeout(() => {
