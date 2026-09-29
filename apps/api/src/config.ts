@@ -17,6 +17,14 @@ const schema = z.object({
   // Web faz proxy same-origin de /api/*, então não há CORS a configurar; WEB_ORIGIN
   // só é usada para validar o header Origin em /ws quando presente (produção).
   WEB_ORIGIN: z.string().url().default('http://localhost:3000'),
+  // App do Mercado Livre (DevCenter) usado na API oficial. Vazios = integração desligada.
+  // Vazio no .env conta como "desligado" (não derruba a API na inicialização).
+  ML_CLIENT_ID: z.string().optional(),
+  ML_CLIENT_SECRET: z.string().optional(),
+  // redirect_uri do OAuth: DESENVOLVIMENTO=true → http://localhost:3000/callback; senão
+  // https://<DOMAIN>/callbackml. Precisa estar cadastrado exatamente assim no DevCenter.
+  DESENVOLVIMENTO: z.string().optional(),
+  DOMAIN: z.string().optional(),
 });
 
 export type Config = z.infer<typeof schema>;

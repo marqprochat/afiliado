@@ -15,10 +15,10 @@ import { getAutomationStats } from '../lib/automations';
 import {
   getShopeeAdapter,
   loadShopeeCredentials,
-  loadTagCredentials,
   getAliexpressAdapter,
   loadAliexpressCredentials,
 } from '../lib/marketplaces';
+import { loadFetchCredentials } from '../lib/ml-api';
 import { toApiProduct, upsertProducts } from '../lib/products';
 import { fetchAwinCatalogByUrls } from '../lib/awin-catalog';
 
@@ -206,7 +206,7 @@ export async function automationsRoutes(app: FastifyInstance) {
     } else if (parsed.source === 'AWIN') {
       [found] = await fetchAwinCatalogByUrls(req.db, [url]);
     } else {
-      const creds = parsed.source === 'AMAZON' ? await loadTagCredentials(req.db, parsed.source) : {};
+      const creds = await loadFetchCredentials(req.db, parsed.source);
       [found] = await getTagAdapter(parsed.source).fetchByUrls(creds, [url]);
     }
     if (!found) throw new ApiError('MARKETPLACE_ERROR', 'Não foi possível resolver a URL', 502);

@@ -24,9 +24,11 @@ import {
   upsertMarketplaceCredentials,
 } from '../lib/marketplaces';
 import { getQueue, getQueueEvents } from '../lib/redis';
+import { completeMlOAuth, startMlOAuth } from '../lib/ml-api';
 import { getAliexpressCategories, listDatafeeds } from '@afilados/marketplaces';
 
 const kindParams = z.object({ kind: marketplaceKindParam });
+const mlOAuthCallbackSchema = z.object({ code: z.string().min(1), state: z.string().min(1) });
 
 export async function marketplacesRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireAuth);
@@ -68,6 +70,8 @@ export async function marketplacesRoutes(app: FastifyInstance) {
                   mattTool: body.mattTool ?? prev.mattTool,
                   // sessão sincronizada pela extensão/manualmente não é editável aqui; só preservada
                   ...(prev.mlSession ? { mlSession: prev.mlSession } : {}),
+                  // conexão OAuth com a API oficial: só muda pelo fluxo /oauth; aqui só é preservada
+                  ...(prev.mlApi ? { mlApi: prev.mlApi } : {}),
                 }
               : {
                   tag: body.affiliateTag ?? prev.tag,
@@ -148,6 +152,31 @@ export async function marketplacesRoutes(app: FastifyInstance) {
       () => ({ status: 'OK', lastCheckedAt: new Date(), lastError: null }),
     );
     return publicConnection(row, kind);
+  });
+
+  // API oficial do Mercado Livre: OAuth (o app fica no .env; aqui só o fluxo de autorização)
+  app.post('/marketplaces/mercadolivre/oauth/start', async (req) => startMlOAuth(req.tenantId));
+
+  app.post('/marketplaces/mercadolivre/oauth/callback', async (req) => {
+    const { code, state } = mlOAuthCallbackSchema.parse(req.body);
+    await completeMlOAuth(req.db, req.tenantId, code, state);
+    return publicConnection(
+      await req.db.marketplaceConnection.findFirst({ where: { kind: 'MERCADOLIVRE' } }),
+      'MERCADOLIVRE',
+    );
+  });
+
+  app.delete('/marketplaces/mercadolivre/oauth', async (req) => {
+    const row = await upsertMarketplaceCredentials(
+      req.db,
+      'MERCADOLIVRE',
+      (prev) => {
+        const { mlApi: _removed, ...rest } = prev;
+        return rest;
+      },
+      (_merged, existing) => ({ status: existing?.status ?? 'UNCONFIGURED' }),
+    );
+    return publicConnection(row, 'MERCADOLIVRE');
   });
 
   app.get('/marketplaces/awin/feeds', async (req) => {

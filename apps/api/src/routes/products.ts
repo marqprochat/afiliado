@@ -26,8 +26,8 @@ import {
   getTagAdapter,
   loadAliexpressCredentials,
   loadShopeeCredentials,
-  loadTagCredentials,
 } from '../lib/marketplaces';
+import { loadFetchCredentials } from '../lib/ml-api';
 import { toApiProduct, upsertProducts } from '../lib/products';
 import { getQueue } from '../lib/redis';
 import { searchAwinCatalog, fetchAwinCatalogByUrls } from '../lib/awin-catalog';
@@ -125,8 +125,8 @@ export async function productsRoutes(app: FastifyInstance) {
       throw new ApiError('MARKETPLACE_ERROR', e instanceof Error ? e.message : String(e), 502);
     }
     if (urls.length === 0) return { products: [] };
-    const amazonCreds = kind === 'AMAZON' ? await loadTagCredentials(req.db, kind) : {};
-    const found = await getTagAdapter(kind).fetchByUrls(amazonCreds, urls.slice(0, q.limit));
+    const creds = await loadFetchCredentials(req.db, kind);
+    const found = await getTagAdapter(kind).fetchByUrls(creds, urls.slice(0, q.limit));
     const rows = await upsertProducts(req.db, req.tenantId, applySearchFilters(found, q));
     return { products: rows.map(toApiProduct) };
   });
@@ -217,8 +217,8 @@ export async function productsRoutes(app: FastifyInstance) {
             }
           }
         } else if (scrapeInline) {
-          const amazonCreds = kind === 'AMAZON' ? await loadTagCredentials(req.db, kind) : {};
-          const found = await getTagAdapter(kind).fetchByUrls(amazonCreds, kindUrls);
+          const creds = await loadFetchCredentials(req.db, kind);
+          const found = await getTagAdapter(kind).fetchByUrls(creds, kindUrls);
           allFound.push(...found);
         } else {
           for (const url of kindUrls) queuedUrls.push({ kind, url });

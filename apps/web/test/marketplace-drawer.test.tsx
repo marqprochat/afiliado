@@ -27,6 +27,9 @@ const baseConnection: MarketplaceConnection = {
   aliexpressAppKey: null,
   hasAliexpressAppSecret: false,
   aliexpressTrackingId: null,
+  hasMlApi: false,
+  mlApiConnectedAt: null,
+  mlApiAvailable: false,
   lastCheckedAt: null,
   lastError: null,
 };

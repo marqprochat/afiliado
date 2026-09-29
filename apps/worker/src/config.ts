@@ -11,5 +11,8 @@ const schema = z.object({
     .default('fc621d22b6cb2e4531fb4679981d07484469e616b255983f67b328cfc3c369f3'),
   SHOPEE_MOCK: z.string().optional(),
   WA_BROWSER_NAME: z.string().default('Afilados'),
+  // App do Mercado Livre (DevCenter) da API oficial. Vazio = integração desligada.
+  ML_CLIENT_ID: z.string().optional(),
+  ML_CLIENT_SECRET: z.string().optional(),
 });
 export const config = schema.parse(process.env);

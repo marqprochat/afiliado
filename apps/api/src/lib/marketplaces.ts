@@ -18,6 +18,7 @@ import {
   type ShopeeCredentials,
 } from '@afilados/marketplaces';
 import { ApiError, requiredTagFields, type TagCredentials } from '@afilados/shared';
+import { config } from '../config';
 
 let shopee: MarketplaceAdapter<ShopeeCredentials> | null = null;
 export function getShopeeAdapter() {
@@ -66,6 +67,10 @@ export function publicConnection(
     // Sessões sincronizadas (cookies nunca saem daqui, só metadados)
     mlSessionSyncedAt: creds?.mlSession?.syncedAt ?? null,
     mlSessionSource: creds?.mlSession?.source ?? null,
+    // API oficial do ML: só metadados. `mlApiAvailable` = o servidor tem ML_CLIENT_ID/SECRET.
+    hasMlApi: Boolean(creds?.mlApi?.refreshToken),
+    mlApiConnectedAt: creds?.mlApi?.connectedAt ?? null,
+    mlApiAvailable: Boolean(config.ML_CLIENT_ID?.trim() && config.ML_CLIENT_SECRET?.trim()),
     amazonSessionSyncedAt: creds?.amazonSession?.syncedAt ?? null,
     amazonSessionSource: creds?.amazonSession?.source ?? null,
     magaluSessionSyncedAt: creds?.magaluSession?.syncedAt ?? null,

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProductData } from '@afilados/shared';
 
 vi.mock('../src/scrapers', async (importOriginal) => {
@@ -99,6 +99,63 @@ describe('Mercado Livre por API oficial no tag adapter', () => {
 
     expect(mlCatalogFetch).not.toHaveBeenCalled();
     expect(scrape).toHaveBeenCalledWith(CATALOG);
+  });
+
+  describe('busca padrão (sem injeção), com fetch simulado', () => {
+    function stubMlFetch(routes: Record<string, { status: number; body?: unknown }>) {
+      const calls: string[] = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (input: string) => {
+          const path = new URL(input).pathname;
+          calls.push(path);
+          const r = routes[path] ?? { status: 404 };
+          return {
+            ok: r.status >= 200 && r.status < 300,
+            status: r.status,
+            json: async () => r.body ?? {},
+            text: async () => JSON.stringify(r.body ?? {}),
+          };
+        }),
+      );
+      return calls;
+    }
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('produto sem oferta: consulta só as ofertas, sem buscar o cadastro', async () => {
+      const calls = stubMlFetch({ '/products/MLB62010143/items': { status: 404, body: { message: 'No winners found' } } });
+      const a = createTagAdapter('MERCADOLIVRE');
+
+      expect(await a.fetchByUrls(withApi, [CATALOG])).toEqual([]);
+      expect(calls).toEqual(['/products/MLB62010143/items']);
+    });
+
+    it('produto com oferta: busca ofertas e cadastro e monta o produto', async () => {
+      const calls = stubMlFetch({
+        '/products/MLB62010143/items': {
+          status: 200,
+          body: { results: [{ item_id: 'MLB111', price: 44.55, condition: 'new', seller_id: 1 }] },
+        },
+        '/products/MLB62010143': {
+          status: 200,
+          body: { id: 'MLB62010143', name: 'Fone Bluetooth Redmi', pictures: [{ url: 'https://http2.mlstatic.com/D_1.jpg' }] },
+        },
+      });
+      const a = createTagAdapter('MERCADOLIVRE');
+
+      const result = await a.fetchByUrls(withApi, [CATALOG]);
+
+      expect(calls).toEqual(['/products/MLB62010143/items', '/products/MLB62010143']);
+      expect(result[0]).toMatchObject({
+        externalId: 'MLB62010143',
+        title: 'Fone Bluetooth Redmi',
+        price: 44.55,
+        images: ['https://http2.mlstatic.com/D_1.jpg'],
+      });
+    });
   });
 
   it('mlApi sem access token (renovação não feita) mantém a raspagem', async () => {

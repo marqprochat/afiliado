@@ -18,6 +18,7 @@ import { formatDateTime } from '@/lib/format';
 import type { MarketplaceConnection } from '@/lib/types';
 import { MARKETPLACE_CONFIGS, type MarketplaceFieldKey } from './marketplace-config';
 import { AwinProgramsPanel } from './awin-programs-panel';
+import { MlApiPanel } from './ml-api-panel';
 
 export interface MarketplaceSubmitPayload {
   fields: Partial<Record<MarketplaceFieldKey, string>>;
@@ -227,6 +228,8 @@ export function MarketplaceDrawer({
               )}
             </div>
           ))}
+
+          {kind === 'MERCADOLIVRE' && <MlApiPanel connection={connection} />}
 
           {config.supportsSession && (
             <div className="rounded-lg border border-border bg-surface-2 p-3.5">

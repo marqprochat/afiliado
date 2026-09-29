@@ -181,6 +181,19 @@ export async function searchCatalogProducts(
 }
 
 /**
+ * Descoberta por palavra-chave: URLs de catálogo (`/p/MLB…`) dos produtos encontrados. Muitos
+ * resultados estão indisponíveis (sem oferta); quem resolve as URLs descarta esses.
+ */
+export async function discoverMlCatalogUrls(
+  keyword: string,
+  accessToken: string,
+  opts?: MlApiOptions,
+): Promise<string[]> {
+  const products = await searchCatalogProducts(keyword, accessToken, { ...opts, limit: 30 });
+  return products.map((p) => `https://www.mercadolivre.com.br/p/${p.id}`);
+}
+
+/**
  * Monta o ProductData de um produto de catálogo. A oferta usada é a do `wid` (se informado), senão
  * a primeira nova — a API devolve a principal da página primeiro, não a mais barata. Devolve
  * undefined quando o produto não tem título ou não tem oferta com preço válido (indisponível).

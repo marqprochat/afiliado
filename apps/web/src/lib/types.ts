@@ -78,6 +78,10 @@ export interface MarketplaceConnection {
   /** Sessão do ML sincronizada (extensão ou colagem manual); gera link oficial meli.la. */
   mlSessionSyncedAt: string | null;
   mlSessionSource: 'extension' | 'manual' | null;
+  /** API oficial do ML (OAuth): conectada?, quando, e se o servidor tem ML_CLIENT_ID/SECRET. */
+  hasMlApi: boolean;
+  mlApiConnectedAt: string | null;
+  mlApiAvailable: boolean;
   /** Sessão da Amazon (SiteStripe) sincronizada; armazenada, sem geração de link nesta fase. */
   amazonSessionSyncedAt: string | null;
   amazonSessionSource: 'extension' | 'manual' | null;

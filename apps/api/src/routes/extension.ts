@@ -4,12 +4,15 @@ import { prisma, forTenant } from '@afilados/db';
 import {
   couponVerifySchema,
   extensionCaptureSchema,
+  extensionDiscoverSchema,
   extensionSessionSchema,
   ApiError,
   MARKETPLACE_KINDS,
   type ProductData,
 } from '@afilados/shared';
+import { parseProductUrl } from '@afilados/core';
 import { hashToken } from './api-tokens';
+import { matchesDiscoveryFilters } from '../lib/discovery-filters';
 import { toApiProduct, upsertProducts } from '../lib/products';
 import { toApiCoupon } from '../lib/coupons';
 import { fetchAwinCatalogByUrls } from '../lib/awin-catalog';
@@ -19,9 +22,9 @@ import {
   getTagAdapter,
   loadAliexpressCredentials,
   loadShopeeCredentials,
-  loadTagCredentials,
   upsertMarketplaceCredentials,
 } from '../lib/marketplaces';
+import { loadFetchCredentials } from '../lib/ml-api';
 
 async function authenticateExtension(
   req: FastifyRequest,
@@ -137,11 +140,8 @@ export async function extensionRoutes(app: FastifyInstance) {
         const creds = await loadAliexpressCredentials(tenantDb);
         list = await getAliexpressAdapter().fetchByUrls(creds, [body.url]);
       } else {
-        const amazonCreds =
-          body.marketplaceKind === 'AMAZON'
-            ? await loadTagCredentials(tenantDb, body.marketplaceKind)
-            : {};
-        list = await getTagAdapter(body.marketplaceKind).fetchByUrls(amazonCreds, [body.url]);
+        const creds = await loadFetchCredentials(tenantDb, body.marketplaceKind);
+        list = await getTagAdapter(body.marketplaceKind).fetchByUrls(creds, [body.url]);
       }
       const first = list[0];
       if (!first) {
@@ -239,6 +239,74 @@ export async function extensionRoutes(app: FastifyInstance) {
         status: queueItem.status,
       },
     };
+  });
+
+  // 2.5 Descoberta por palavra-chave feita pela extensão (ML/Magalu bloqueiam o fetch do
+  // servidor). Reaplica os filtros da regra, deduplica por produto e enfileira como o worker faz.
+  app.post('/extension/discover', async (req) => {
+    const { tenantId } = await authenticateExtension(req);
+    const body = extensionDiscoverSchema.parse(req.body);
+    const tenantDb = forTenant(tenantId);
+
+    const rule = await tenantDb.automationRule.findFirst({ where: { id: body.automationRuleId } });
+    if (!rule) throw ApiError.notFound('Automação não encontrada');
+
+    const accepted: ProductData[] = [];
+    for (const it of body.items) {
+      const parsed = parseProductUrl(it.url);
+      if (parsed.source !== body.marketplaceKind || !parsed.externalId) continue;
+      const discountPct =
+        it.originalPrice && it.originalPrice > it.price
+          ? Math.round((1 - it.price / it.originalPrice) * 100)
+          : undefined;
+      if (
+        !matchesDiscoveryFilters(
+          { title: it.title, price: it.price, discountPct },
+          rule,
+          body.keyword,
+        )
+      ) {
+        continue;
+      }
+      accepted.push({
+        source: body.marketplaceKind,
+        externalId: parsed.externalId,
+        title: it.title,
+        price: it.price,
+        originalPrice: it.originalPrice ?? undefined,
+        discountPct,
+        images: it.images ?? [],
+        shipping: 'UNKNOWN',
+        originalUrl: it.url,
+        raw: { source: 'extension-discover', keyword: body.keyword },
+      });
+    }
+
+    const saved = await upsertProducts(tenantDb, tenantId, accepted);
+    let queued = 0;
+    for (const product of saved) {
+      const already = await prisma.automationQueueItem.findFirst({
+        where: { ruleId: rule.id, productId: product.id },
+      });
+      if (already) continue;
+      await prisma.automationQueueItem.create({
+        data: { tenantId, ruleId: rule.id, kind: 'PRODUCT', productId: product.id, manual: false },
+      });
+      await prisma.automationLog.create({
+        data: {
+          tenantId,
+          ruleId: rule.id,
+          marketplace: body.marketplaceKind,
+          action: 'DISCOVERED',
+          productId: product.id,
+        },
+      });
+      queued++;
+    }
+    if (queued > 0) {
+      await app.events.publish(tenantId, { type: 'automation.queue.updated', ruleId: rule.id });
+    }
+    return { ok: true, received: body.items.length, accepted: accepted.length, queued };
   });
 
   // 3. Sincronização de cookies/sessão do afiliado (Mercado Livre → link oficial meli.la).

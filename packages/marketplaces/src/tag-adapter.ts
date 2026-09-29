@@ -62,9 +62,16 @@ export type MlCatalogFetch = (
 const ML_API_PAUSE_MS = 250;
 
 const defaultMlCatalogFetch: MlCatalogFetch = async (ref, url, accessToken) => {
-  const product = await fetchCatalogProduct(ref.productId, accessToken);
+  const pause = () => new Promise((resolve) => setTimeout(resolve, ML_API_PAUSE_MS));
+  // Ofertas primeiro: boa parte dos produtos de catálogo está indisponível (404, sem oferta), e
+  // para esses nem vale buscar o cadastro.
   const offers = await fetchProductOffers(ref.productId, accessToken);
-  await new Promise((resolve) => setTimeout(resolve, ML_API_PAUSE_MS));
+  if (offers.length === 0) {
+    await pause();
+    return undefined;
+  }
+  const product = await fetchCatalogProduct(ref.productId, accessToken);
+  await pause();
   return mapMlCatalogProduct(product, offers, url, ref.offerId);
 };
 

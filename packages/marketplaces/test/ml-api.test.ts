@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   MlApiError,
+  discoverMlCatalogUrls,
   extractMlCatalogRef,
   fetchCatalogProduct,
   fetchProductOffers,
@@ -149,6 +150,29 @@ describe('chamadas à API', () => {
       'https://api.mercadolibre.com/products/search?status=active&site_id=MLB&q=fone%20bluetooth&limit=15',
       expect.anything(),
     );
+  });
+});
+
+describe('discoverMlCatalogUrls', () => {
+  it('busca no catálogo e devolve a URL /p/ de cada produto encontrado', async () => {
+    const fetchImpl = fetchSequence({
+      status: 200,
+      body: { results: [{ id: 'MLB62010143', name: 'A' }, { id: 'MLB22239330', name: 'B' }] },
+    });
+    const urls = await discoverMlCatalogUrls('fone bluetooth', 'tok', { fetchImpl, sleep: noSleep });
+    expect(urls).toEqual([
+      'https://www.mercadolivre.com.br/p/MLB62010143',
+      'https://www.mercadolivre.com.br/p/MLB22239330',
+    ]);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      expect.stringContaining('/products/search?status=active&site_id=MLB&q=fone%20bluetooth&limit=30'),
+      expect.anything(),
+    );
+  });
+
+  it('sem resultados devolve lista vazia', async () => {
+    const fetchImpl = fetchSequence({ status: 200, body: { results: [] } });
+    expect(await discoverMlCatalogUrls('xyz', 'tok', { fetchImpl, sleep: noSleep })).toEqual([]);
   });
 });
 

@@ -5,6 +5,7 @@ import {
   getAliexpressAdapter,
   getTagAdapter,
   discoverMercadoLivreByKeyword,
+  discoverMlCatalogUrls,
   discoverAmazonByKeyword,
   discoverMagaluByKeyword,
   type AliexpressCredentials,
@@ -19,7 +20,7 @@ import {
 import { getRedis } from '../lib/redis';
 import { publishEvent } from '../lib/events';
 import { createHash } from 'node:crypto';
-import { loadTagCredentials } from '../lib/marketplace-credentials';
+import { loadMlApiCredentials, loadTagCredentials } from '../lib/marketplace-credentials';
 
 const KEYWORD_CACHE_TTL_SEC = 15 * 60;
 /** TTL de segurança do selo "buscando" — evita ficar travado para sempre se o worker cair no meio da busca. */
@@ -222,7 +223,18 @@ async function discoverScraped(
   rule: AutomationRule,
   deps: DiscoveryDeps,
 ): Promise<ProductData[]> {
-  const discoverFn = deps.discoverByKeyword?.[marketplace] ?? ((k: string) => KEYWORD_DISCOVERERS[marketplace](k));
+  // Mercado Livre com a API oficial conectada: busca no catálogo (sem raspagem, sem anti-bot).
+  // Dependências injetadas em teste sempre têm prioridade.
+  const mlCreds =
+    marketplace === 'MERCADOLIVRE' && !deps.discoverByKeyword?.MERCADOLIVRE
+      ? await loadMlApiCredentials(rule.tenantId)
+      : undefined;
+  const mlToken = mlCreds?.mlApi?.accessToken;
+  const discoverFn =
+    deps.discoverByKeyword?.[marketplace] ??
+    (mlToken
+      ? (k: string) => discoverMlCatalogUrls(k, mlToken)
+      : (k: string) => KEYWORD_DISCOVERERS[marketplace](k));
   const urls = await cachedDiscoverUrls(rule.tenantId, marketplace, keyword, discoverFn, {
     cacheEmpty: marketplace === 'AMAZON',
   });
@@ -230,7 +242,8 @@ async function discoverScraped(
     // Amazon é busca anônima e vazio ali é só "sem correspondências" — nada a reportar.
     // ML/Magalu bloqueiam esse tipo de busca automatizada (anti-bot); um vazio aqui é
     // esperado e é logado para o usuário saber que a fonte real para eles é a extensão.
-    if (marketplace !== 'AMAZON') {
+    // Pela API oficial (mlToken) vazio é resultado real, não bloqueio — nada a reportar.
+    if (marketplace !== 'AMAZON' && !mlToken) {
       const marketplaceLabel = marketplace === 'MERCADOLIVRE' ? 'Mercado Livre' : 'Magalu';
       await prisma.automationLog.create({
         data: {
@@ -247,7 +260,8 @@ async function discoverScraped(
   const fetchFn =
     deps.fetchByUrls?.[marketplace] ??
     (async (u: string[]) => {
-      const creds = marketplace === 'AMAZON' ? await loadTagCredentials(rule.tenantId, marketplace) : {};
+      const creds =
+        marketplace === 'AMAZON' ? await loadTagCredentials(rule.tenantId, marketplace) : (mlCreds ?? {});
       return getTagAdapter(marketplace).fetchByUrls(creds, u);
     });
   return fetchFn(urls);

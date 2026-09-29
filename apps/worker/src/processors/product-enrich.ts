@@ -12,7 +12,7 @@ import {
 import type { ProductData, ProductEnrichJob } from '@afilados/shared';
 import { publishEvent } from '../lib/events';
 import { getRedis } from '../lib/redis';
-import { loadTagCredentials } from '../lib/marketplace-credentials';
+import { loadFetchCredentials } from '../lib/marketplace-credentials';
 
 const log = pino({ name: 'product-enrich' });
 
@@ -67,7 +67,7 @@ async function fetchViaAdapter(
     const list = await getAliexpressAdapter().fetchByUrls(creds, [url]);
     return list[0] ?? null;
   }
-  const creds = kind === 'AMAZON' ? await loadTagCredentials(tenantId, kind) : {};
+  const creds = await loadFetchCredentials(tenantId, kind);
   const list = await getTagAdapter(kind).fetchByUrls(creds, [url]);
   return list[0] ?? null;
 }
