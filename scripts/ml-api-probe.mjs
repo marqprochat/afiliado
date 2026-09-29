@@ -155,6 +155,8 @@ function errorLine(json) {
   if (r.ok) {
     console.log(`     total ${r.json.paging?.total ?? '?'}`);
     for (const p of (r.json.results ?? []).slice(0, 3)) console.log(`     · ${p.id} — ${short(p.name, 70)}`);
+    const first = (r.json.results ?? [])[0];
+    if (first) console.log(`     campos de um resultado: ${short(Object.keys(first).join(', '), 220)}`);
   } else errorLine(r.json);
 }
 
@@ -191,6 +193,7 @@ if (!highlights.ok) {
   for (const el of sample) console.log(`     · #${el.position} ${el.type} ${el.id}`);
 
   console.log('\nResolvendo os primeiros do ranking (título, preço, link):');
+  const productIds = [];
   for (const el of sample) {
     if (el.type === 'ITEM') {
       const r = await get(`/items/${el.id}`);
@@ -204,7 +207,9 @@ if (!highlights.ok) {
       header(r.status, `/products/${el.id}`);
       if (r.ok) {
         const bb = r.json.buy_box_winner;
+        productIds.push(el.id);
         console.log(`     ${short(r.json.name, 60)}`);
+        console.log(`     campos: ${short(Object.keys(r.json).join(', '), 220)}`);
         console.log(
           bb
             ? `     buy box: item ${bb.item_id} — R$ ${bb.price} — ${short(bb.permalink, 80)}`
@@ -219,7 +224,40 @@ if (!highlights.ok) {
     }
   }
 
-  // 6. detalhes em lote de itens (o endpoint que substitui /items?ids=)
+  // 6. preço e link de um produto de catálogo: ofertas (itens) do produto → detalhe do item
+  console.log('\nOfertas dos produtos de catálogo (de onde sai o preço):');
+  for (const pid of productIds.slice(0, 2)) {
+    const offers = await get(`/products/${pid}/items?limit=3`);
+    header(offers.status, `/products/${pid}/items`);
+    if (!offers.ok) {
+      errorLine(offers.json);
+      continue;
+    }
+    const rows = Array.isArray(offers.json) ? offers.json : (offers.json.results ?? offers.json.items ?? []);
+    console.log(`     formato: ${Array.isArray(offers.json) ? 'array' : `objeto {${short(Object.keys(offers.json).join(', '), 100)}}`}, ${rows.length} ofertas`);
+    const row = rows[0];
+    if (!row) continue;
+    console.log(`     campos de uma oferta: ${short(Object.keys(row).join(', '), 200)}`);
+    const itemId = typeof row === 'string' ? row : (row.item_id ?? row.id);
+    if (!itemId) continue;
+
+    const item = await get(`/items/${itemId}`);
+    header(item.status, `/items/${itemId}`);
+    if (item.ok) {
+      const i = item.json;
+      console.log(`     ${short(i.title, 60)}`);
+      console.log(`     R$ ${i.price} (de ${i.original_price ?? '—'}) · frete grátis: ${i.shipping?.free_shipping ?? '?'} · estoque ref.: ${i.available_quantity ?? '?'}`);
+      console.log(`     link: ${short(i.permalink, 110)}`);
+      console.log(`     foto: ${short(i.thumbnail, 90)} · catalog_product_id: ${i.catalog_product_id ?? '—'}`);
+    } else errorLine(item.json);
+
+    const sale = await get(`/items/${itemId}/sale_price`);
+    header(sale.status, `/items/${itemId}/sale_price`);
+    if (sale.ok) console.log(`     amount ${sale.json.amount} · regular ${sale.json.regular_amount ?? '—'}`);
+    else errorLine(sale.json);
+  }
+
+  // 7. detalhes em lote de itens (o endpoint que substitui /items?ids=)
   const itemIds = sample.filter((e) => e.type === 'ITEM').map((e) => e.id);
   if (itemIds.length > 0) {
     const r = await get(`/items/bulk?ids=${itemIds.join(',')}&attributes=body.id,body.price,body.permalink`);
@@ -228,6 +266,21 @@ if (!highlights.ok) {
       for (const row of r.json.slice(0, 3)) console.log(`     · ${row.id ?? row.body?.id} — status ${row.status_code} — R$ ${row.body?.price}`);
     } else errorLine(r.json);
   }
+}
+
+// 8. categorias: para escolher de onde tirar o ranking de mais vendidos
+{
+  const cats = await get(`/sites/${SITE}/categories`);
+  header(cats.status, `/sites/${SITE}/categories`);
+  if (cats.ok && Array.isArray(cats.json)) {
+    console.log(`     ${cats.json.length} categorias, ex.: ${cats.json.slice(0, 6).map((c) => `${c.id}=${c.name}`).join(' | ')}`);
+  } else errorLine(cats.json);
+
+  const dd = await get(`/sites/${SITE}/domain_discovery/search?q=${encodeURIComponent(QUERY)}&limit=3`);
+  header(dd.status, `/sites/${SITE}/domain_discovery/search?q="${QUERY}"`);
+  if (dd.ok && Array.isArray(dd.json)) {
+    for (const d of dd.json.slice(0, 3)) console.log(`     · ${d.category_id} — ${short(d.category_name, 40)} (${d.domain_id})`);
+  } else errorLine(dd.json);
 }
 
 console.log('\nPronto. Nada foi salvo em disco e o token não foi impresso.');
