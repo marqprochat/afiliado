@@ -124,8 +124,13 @@ console.log(
 
 // ---------- sondas ----------
 
-async function get(path) {
+async function get(path, retried = false) {
   const res = await fetch(`${API}${path}`, { headers: { authorization: `Bearer ${token}`, accept: 'application/json' } });
+  if (res.status === 429 && !retried) {
+    console.log('     ⏳ 429 (limite de requisições) — aguardando 2s e tentando de novo');
+    await new Promise((r) => setTimeout(r, 2000));
+    return get(path, true);
+  }
   const json = await res.json().catch(() => null);
   return { status: res.status, ok: res.ok, json };
 }
@@ -148,11 +153,13 @@ function errorLine(json) {
 }
 
 // 2. busca por palavra-chave no catálogo de produtos
+let searchResults = [];
 {
-  const path = `/products/search?status=active&site_id=${SITE}&q=${encodeURIComponent(QUERY)}&limit=3`;
+  const path = `/products/search?status=active&site_id=${SITE}&q=${encodeURIComponent(QUERY)}&limit=8`;
   const r = await get(path);
   header(r.status, `/products/search?q="${QUERY}"`);
   if (r.ok) {
+    searchResults = r.json.results ?? [];
     console.log(`     total ${r.json.paging?.total ?? '?'}`);
     for (const p of (r.json.results ?? []).slice(0, 3)) console.log(`     · ${p.id} — ${short(p.name, 70)}`);
     const first = (r.json.results ?? [])[0];
@@ -266,6 +273,50 @@ if (!highlights.ok) {
       for (const row of r.json.slice(0, 3)) console.log(`     · ${row.id ?? row.body?.id} — status ${row.status_code} — R$ ${row.body?.price}`);
     } else errorLine(r.json);
   }
+}
+
+// 9. VERIFICAÇÃO DOS DADOS — compare o link e o preço de cada produto com a página do Mercado Livre
+{
+  console.log(`\n=== Verificação de dados: ${searchResults.length} produtos da busca "${QUERY}" ===`);
+  console.log('Abra alguns links abaixo e compare o preço mostrado na página com o "menor preço" e a "oferta principal".\n');
+  const stats = { total: 0, comBuyBox: 0, comOriginal: 0, comOfertas: 0, comDeal: 0 };
+  const money = (v) => (v == null ? '—' : `R$ ${Number(v).toFixed(2)}`);
+
+  for (const s of searchResults) {
+    stats.total += 1;
+    const prod = await get(`/products/${s.id}`);
+    const offers = await get(`/products/${s.id}/items?limit=10`);
+    console.log(`• ${s.id} — ${short(s.name, 70)}`);
+    if (!prod.ok) {
+      console.log(`    produto: [${prod.status}] ${short(prod.json?.message, 100)}`);
+      continue;
+    }
+    console.log(`    link:  ${short(prod.json.permalink, 120)}`);
+    const bb = prod.json.buy_box_winner;
+    if (bb) {
+      stats.comBuyBox += 1;
+      if (bb.original_price != null) stats.comOriginal += 1;
+      if (Array.isArray(bb.deal_ids) && bb.deal_ids.length > 0) stats.comDeal += 1;
+      console.log(
+        `    oferta principal: ${money(bb.price)} (de ${money(bb.original_price)}) · frete grátis: ${bb.shipping?.free_shipping ?? '?'} · ${bb.shipping?.logistic_type ?? '?'} · vendedor ${bb.seller?.reputation_level_id ?? '?'} · deals: ${bb.deal_ids?.length ?? 0}`,
+      );
+    } else {
+      console.log(`    oferta principal: (vazia) · faixa de preço: ${prod.json.buy_box_winner_price_range ? `${money(prod.json.buy_box_winner_price_range.min?.price)} a ${money(prod.json.buy_box_winner_price_range.max?.price)}` : '—'}`);
+    }
+    if (offers.ok) {
+      const rows = offers.json.results ?? [];
+      if (rows.length > 0) stats.comOfertas += 1;
+      const prices = rows.map((o) => Number(o.price)).filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
+      console.log(
+        `    ofertas: ${rows.length} (total ${offers.json.paging?.total ?? '?'}) · menor preço: ${money(prices[0])} · maior: ${money(prices[prices.length - 1])} · novas: ${rows.filter((o) => o.condition === 'new').length}`,
+      );
+    } else {
+      console.log(`    ofertas: [${offers.status}] ${short(offers.json?.message, 100)}`);
+    }
+  }
+  console.log(
+    `\nResumo: ${stats.total} produtos · oferta principal preenchida em ${stats.comBuyBox} · com preço original em ${stats.comOriginal} · com deal_ids em ${stats.comDeal} · com ofertas em ${stats.comOfertas}`,
+  );
 }
 
 // 8. categorias: para escolher de onde tirar o ranking de mais vendidos
