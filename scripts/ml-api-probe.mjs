@@ -278,7 +278,7 @@ if (!highlights.ok) {
 // 9. VERIFICAÇÃO DOS DADOS — compare o link e o preço de cada produto com a página do Mercado Livre
 {
   console.log(`\n=== Verificação de dados: ${searchResults.length} produtos da busca "${QUERY}" ===`);
-  console.log('Abra alguns links abaixo e compare o preço mostrado na página com o "menor preço" e a "oferta principal".\n');
+  console.log('Abra a "página (montada)" de 3 ou 4 produtos que têm ofertas e compare o preço PRINCIPAL da página com as ofertas abaixo (na ordem da API).\n');
   const stats = { total: 0, comBuyBox: 0, comOriginal: 0, comOfertas: 0, comDeal: 0 };
   const money = (v) => (v == null ? '—' : `R$ ${Number(v).toFixed(2)}`);
 
@@ -291,7 +291,10 @@ if (!highlights.ok) {
       console.log(`    produto: [${prod.status}] ${short(prod.json?.message, 100)}`);
       continue;
     }
-    console.log(`    link:  ${short(prod.json.permalink, 120)}`);
+    console.log(`    página (montada): https://www.mercadolivre.com.br/p/${s.id}`);
+    console.log(
+      `    permalink da API: ${JSON.stringify(prod.json.permalink)} · status: ${prod.json.status} · tipo: ${prod.json.type} · pdp_types: ${JSON.stringify(prod.json.pdp_types)} · buy_box_activation_date: ${JSON.stringify(prod.json.buy_box_activation_date ?? null)}`,
+    );
     const bb = prod.json.buy_box_winner;
     if (bb) {
       stats.comBuyBox += 1;
@@ -310,8 +313,15 @@ if (!highlights.ok) {
       console.log(
         `    ofertas: ${rows.length} (total ${offers.json.paging?.total ?? '?'}) · menor preço: ${money(prices[0])} · maior: ${money(prices[prices.length - 1])} · novas: ${rows.filter((o) => o.condition === 'new').length}`,
       );
+      // na ordem em que a API devolve — a 1ª é a que a página mostra como principal?
+      rows.slice(0, 5).forEach((o, i) => {
+        if (Array.isArray(o.deal_ids) && o.deal_ids.length > 0) stats.comDeal += 1;
+        console.log(
+          `      #${i + 1} ${money(o.price)} · vendedor ${o.seller_id} · loja oficial: ${o.official_store ?? '—'} · ${o.listing_type_id} · tier: ${o.tier ?? '—'} · deals: ${o.deal_ids?.length ?? 0} · tags: ${short((o.tags ?? []).join(','), 60)}`,
+        );
+      });
     } else {
-      console.log(`    ofertas: [${offers.status}] ${short(offers.json?.message, 100)}`);
+      console.log(`    ofertas: nenhuma [${offers.status}] ${short(offers.json?.message, 60)}`);
     }
   }
   console.log(
