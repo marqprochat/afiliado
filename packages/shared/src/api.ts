@@ -195,6 +195,26 @@ export const extensionCaptureSchema = z.object({
 });
 export type ExtensionCaptureBody = z.infer<typeof extensionCaptureSchema>;
 
+// Descoberta feita pela extensão: ela abre a busca do marketplace no Chrome do usuário (sem
+// bloqueio anti-bot) e envia os cards lidos. O servidor aplica os filtros da automação.
+export const extensionDiscoverSchema = z.object({
+  automationRuleId: z.string().min(1),
+  keyword: z.string().trim().min(1).max(120),
+  marketplaceKind: z.enum(['MERCADOLIVRE', 'MAGALU', 'AMAZON']),
+  items: z
+    .array(
+      z.object({
+        url: z.string().url(),
+        title: z.string().min(1).max(500),
+        price: z.number().positive(),
+        originalPrice: z.number().positive().nullish(),
+        images: z.array(z.string().url()).nullish(),
+      }),
+    )
+    .max(100),
+});
+export type ExtensionDiscoverBody = z.infer<typeof extensionDiscoverSchema>;
+
 export const extensionSessionSchema = z.object({
   // Só o Mercado Livre usa sessão logada (gerador oficial meli.la)
   marketplaceKind: z.literal('MERCADOLIVRE'),
