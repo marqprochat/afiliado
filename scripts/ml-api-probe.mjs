@@ -293,6 +293,9 @@ if (!highlights.ok) {
     }
     console.log(`    página (montada): https://www.mercadolivre.com.br/p/${s.id}`);
     console.log(
+      `    família: parent_id ${prod.json.parent_id ?? '—'} · filhos ${Array.isArray(prod.json.children_ids) ? prod.json.children_ids.length : '—'} · catalog_product_id ${prod.json.catalog_product_id ?? '—'}`,
+    );
+    console.log(
       `    permalink da API: ${JSON.stringify(prod.json.permalink)} · status: ${prod.json.status} · tipo: ${prod.json.type} · pdp_types: ${JSON.stringify(prod.json.pdp_types)} · buy_box_activation_date: ${JSON.stringify(prod.json.buy_box_activation_date ?? null)}`,
     );
     const bb = prod.json.buy_box_winner;
@@ -322,6 +325,18 @@ if (!highlights.ok) {
       });
     } else {
       console.log(`    ofertas: nenhuma [${offers.status}] ${short(offers.json?.message, 60)}`);
+      // hipótese: produto de variação (cor/modelo) não tem oferta própria — o preço fica no pai ou nas irmãs
+      const parent = prod.json.parent_id;
+      const kids = Array.isArray(prod.json.children_ids) ? prod.json.children_ids : [];
+      const candidates = [...(parent && parent !== s.id ? [parent] : []), ...kids.filter((k) => k !== s.id).slice(0, 3)];
+      console.log(`    variação? parent_id: ${parent ?? '—'} · filhos: ${kids.length} · a testar: ${candidates.join(', ') || 'nenhum'}`);
+      for (const cid of candidates) {
+        const r = await get(`/products/${cid}/items?limit=3`);
+        const cp = r.ok ? (r.json.results ?? []).map((o) => Number(o.price)).filter(Number.isFinite).sort((a, b) => a - b) : [];
+        console.log(
+          `      ↳ ofertas de ${cid}: ${r.ok ? `${(r.json.results ?? []).length} · menor ${money(cp[0])}` : `[${r.status}] ${short(r.json?.message, 40)}`}`,
+        );
+      }
     }
   }
   console.log(
