@@ -17,6 +17,7 @@ import {
 import {
   discoverAmazonByKeyword,
   discoverMercadoLivreByKeyword,
+  discoverMlCatalogUrls,
   discoverMagaluByKeyword,
 } from '@afilados/marketplaces';
 import { requireAuth } from '../plugins/auth';
@@ -117,15 +118,21 @@ export async function productsRoutes(app: FastifyInstance) {
       );
     }
     const kind = q.source as 'MERCADOLIVRE' | 'AMAZON' | 'MAGALU';
+    // Mercado Livre com a API oficial conectada: busca no catálogo (a raspagem é bloqueada pelo
+    // anti-bot). Só ML carrega as credenciais antes; Amazon e Magalu mantêm a ordem de sempre.
+    const mlCreds = kind === 'MERCADOLIVRE' ? await loadFetchCredentials(req.db, kind) : undefined;
+    const mlToken = mlCreds?.mlApi?.accessToken;
     let urls: string[];
     try {
-      urls = await discoverUrlsForKeyword(kind, q.query!);
+      urls = mlToken
+        ? await discoverMlCatalogUrls(q.query!, mlToken)
+        : await discoverUrlsForKeyword(kind, q.query!);
     } catch (e) {
       if (e instanceof ApiError) throw e;
       throw new ApiError('MARKETPLACE_ERROR', e instanceof Error ? e.message : String(e), 502);
     }
     if (urls.length === 0) return { products: [] };
-    const creds = await loadFetchCredentials(req.db, kind);
+    const creds = mlCreds ?? (await loadFetchCredentials(req.db, kind));
     const found = await getTagAdapter(kind).fetchByUrls(creds, urls.slice(0, q.limit));
     const rows = await upsertProducts(req.db, req.tenantId, applySearchFilters(found, q));
     return { products: rows.map(toApiProduct) };

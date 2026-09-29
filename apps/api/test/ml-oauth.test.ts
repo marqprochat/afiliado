@@ -182,6 +182,111 @@ describe('OAuth da API oficial do Mercado Livre', () => {
   });
 });
 
+describe('POST /products/search (Mercado Livre pela API oficial)', () => {
+  let app: FastifyInstance;
+  let t: Awaited<ReturnType<typeof createTenantWithUser>>;
+  let cookie: string;
+
+  beforeEach(async () => {
+    app = await buildApp({ logger: false });
+    t = await createTenantWithUser('Tenant ML Busca');
+    cookie = await loginCookie(app, t.email, t.password);
+    await prisma.marketplaceConnection.create({
+      data: {
+        tenantId: t.tenantId,
+        kind: 'MERCADOLIVRE',
+        status: 'OK',
+        encryptedCredentials: encryptJson({
+          mlApi: {
+            refreshToken: 'ref-1',
+            accessToken: 'acc-1',
+            expiresAt: new Date(Date.now() + 3 * 3600_000).toISOString(),
+          },
+        }) as never,
+      },
+    });
+  });
+
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    await cleanupTenant(t.tenantId);
+    await app.close();
+  });
+
+  function stubMlApi(routes: Record<string, { status: number; body?: unknown }>) {
+    const hosts: string[] = [];
+    const paths: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL) => {
+        const u = new URL(String(input));
+        hosts.push(u.host);
+        paths.push(u.pathname);
+        const r = routes[u.pathname] ?? { status: 404, body: { message: 'No winners found' } };
+        return {
+          ok: r.status >= 200 && r.status < 300,
+          status: r.status,
+          json: async () => r.body ?? {},
+          text: async () => JSON.stringify(r.body ?? {}),
+        };
+      }),
+    );
+    return { hosts, paths };
+  }
+
+  const search = (payload: Record<string, unknown> = {}) =>
+    app.inject({
+      method: 'POST',
+      url: '/api/v1/products/search',
+      headers: { cookie },
+      payload: { source: 'MERCADOLIVRE', mode: 'keyword', query: 'fone', limit: 20, ...payload },
+    });
+
+  const routes = {
+    '/products/search': {
+      status: 200,
+      body: { results: [{ id: 'MLB111', name: 'Fone A' }, { id: 'MLB222', name: 'Fone B' }] },
+    },
+    '/products/MLB111/items': {
+      status: 200,
+      body: { results: [{ item_id: 'MLB9', price: 44.55, condition: 'new', seller_id: 1 }] },
+    },
+    '/products/MLB111': {
+      status: 200,
+      body: { id: 'MLB111', name: 'Fone A', pictures: [{ url: 'https://http2.mlstatic.com/D_1.jpg' }] },
+    },
+    // MLB222 sem oferta: 404 "No winners found" (produto indisponível)
+  };
+
+  it('busca no catálogo pela API, descarta produto sem oferta e nunca raspa o site', async () => {
+    const seen = stubMlApi(routes);
+
+    const res = await search();
+
+    expect(res.statusCode).toBe(200);
+    const { products } = res.json();
+    expect(products).toHaveLength(1);
+    expect(products[0]).toMatchObject({ title: 'Fone A', source: 'MERCADOLIVRE' });
+    expect(Number(products[0].price)).toBe(44.55);
+    expect(seen.paths).toContain('/products/search');
+    expect(new Set(seen.hosts)).toEqual(new Set(['api.mercadolibre.com']));
+  });
+
+  it('aplica a faixa de preço da busca sobre os produtos da API', async () => {
+    stubMlApi(routes);
+    const res = await search({ maxPrice: 30 });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().products).toEqual([]);
+  });
+
+  it('erro de acesso da API vira 502 com mensagem clara', async () => {
+    stubMlApi({ '/products/search': { status: 403, body: { message: 'forbidden' } } });
+    const res = await search();
+    expect(res.statusCode).toBe(502);
+    expect(res.body).toContain('recusou o acesso');
+  });
+});
+
 describe('loadFetchCredentials (Mercado Livre)', () => {
   let t: Awaited<ReturnType<typeof createTenantWithUser>>;
 
