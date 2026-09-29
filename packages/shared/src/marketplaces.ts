@@ -13,6 +13,19 @@ export interface TagCredentials {
   magaluSession?: SessionCookies;
   /** Credenciais da Creators API (Client ID/Secret) — usadas para buscar dados de produto via GetItems. */
   amazonApi?: { clientId: string; clientSecret: string };
+  /**
+   * Conexão OAuth com a API oficial do Mercado Livre (dados de produto de catálogo). Client ID e
+   * Secret do app ficam no .env (ML_CLIENT_ID/ML_CLIENT_SECRET), não aqui. `refreshToken` é de uso
+   * único (cada renovação devolve um novo); `accessToken`/`expiresAt` são preenchidos em memória ao
+   * carregar as credenciais e gravados junto quando renovados. Datas em ISO 8601.
+   */
+  mlApi?: {
+    refreshToken: string;
+    accessToken?: string | undefined;
+    expiresAt?: string | undefined;
+    userId?: string | undefined;
+    connectedAt?: string | undefined;
+  };
 }
 
 /** Cookies de sessão de um marketplace, sincronizados pela extensão ou colados manualmente. */

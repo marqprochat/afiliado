@@ -10,6 +10,12 @@ import { scrapeMagalu, scrapeMercadoLivre } from './scrapers';
 import { generateOfficialMlLink } from './mercadolivre/official-link';
 import { generateOfficialAmazonLink } from './amazon/official-link';
 import {
+  extractMlCatalogRef,
+  fetchCatalogProduct,
+  fetchProductOffers,
+  mapMlCatalogProduct,
+} from './mercadolivre/api';
+import {
   extractAsin,
   getItems,
   mapCreatorsApiItem,
@@ -42,7 +48,25 @@ export interface TagAdapterOptions {
   onOfficialLinkError?: (err: unknown, url: string) => void;
   /** Chamador do GetItems da Creators API (injetável em testes). */
   amazonGetItems?: (asins: string[], creds: AmazonApiCredentials) => Promise<AmazonApiItem[]>;
+  /** Busca um produto de catálogo do ML pela API oficial (injetável em testes). */
+  mlCatalogFetch?: MlCatalogFetch;
 }
+
+export type MlCatalogFetch = (
+  ref: { productId: string; offerId?: string },
+  url: string,
+  accessToken: string,
+) => Promise<ProductData | undefined>;
+
+/** Pausa entre produtos: a API não publica o limite de requisições (429), então espaçamos as chamadas. */
+const ML_API_PAUSE_MS = 250;
+
+const defaultMlCatalogFetch: MlCatalogFetch = async (ref, url, accessToken) => {
+  const product = await fetchCatalogProduct(ref.productId, accessToken);
+  const offers = await fetchProductOffers(ref.productId, accessToken);
+  await new Promise((resolve) => setTimeout(resolve, ML_API_PAUSE_MS));
+  return mapMlCatalogProduct(product, offers, url, ref.offerId);
+};
 
 /** Cache curto de links oficiais para não bater no painel/SiteStripe a cada envio. */
 const officialLinkCache = new Map<string, { link: string; expiresAt: number }>();
@@ -95,6 +119,7 @@ export function createTagAdapter(
     opts.amazonOfficialLink ??
     ((url, cookies, storeId) => generateOfficialAmazonLink(url, cookies, storeId));
   const amazonGetItems = opts.amazonGetItems ?? getItems;
+  const mlCatalogFetch = opts.mlCatalogFetch ?? defaultMlCatalogFetch;
   return {
     kind,
     async checkConnection(creds): Promise<ConnectionStatus> {
@@ -128,6 +153,27 @@ export function createTagAdapter(
     async fetchByUrls(creds, urls: string[]): Promise<ProductData[]> {
       if (kind === 'AMAZON') {
         return fetchAmazonByUrls(creds, urls, amazonGetItems);
+      }
+      if (kind === 'MERCADOLIVRE' && creds.mlApi?.accessToken) {
+        // API oficial só resolve link de CATÁLOGO (/p/MLB…); anúncio individual (MLB-123-…) depende
+        // de /items/{id}, que responde 403 para este app, então mantém a raspagem. Produto
+        // indisponível (sem oferta) é descartado, sem cair na raspagem.
+        const accessToken = creds.mlApi.accessToken;
+        const results: ProductData[] = [];
+        for (const url of urls) {
+          try {
+            const ref = extractMlCatalogRef(url);
+            if (ref) {
+              const product = await mlCatalogFetch(ref, url, accessToken);
+              if (product) results.push(product);
+            } else {
+              results.push(await scrapeMercadoLivre(url));
+            }
+          } catch {
+            // Se falhar em uma URL, continua para as próximas
+          }
+        }
+        return results;
       }
       const results: ProductData[] = [];
       for (const url of urls) {
