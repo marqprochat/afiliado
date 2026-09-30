@@ -17,7 +17,8 @@ export function parseProductUrl(raw: string): ParsedProductUrl {
   if (host === 'shopee.com.br') {
     const m1 = path.match(/-i\.(\d+)\.(\d+)/);
     if (m1) return { source: 'SHOPEE', shopId: m1[1]!, externalId: m1[2]! };
-    const m2 = path.match(/^\/product\/(\d+)\/(\d+)/);
+    // /opaanlp/ é o destino do redirect de s.shopee.com.br para clientes sem JS/mobile.
+    const m2 = path.match(/^\/(?:product|opaanlp)\/(\d+)\/(\d+)/);
     if (m2) return { source: 'SHOPEE', shopId: m2[1]!, externalId: m2[2]! };
   }
   if (host === 'mercadolivre.com.br' || host.endsWith('.mercadolivre.com.br')) {

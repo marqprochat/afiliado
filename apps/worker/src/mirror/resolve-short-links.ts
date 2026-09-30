@@ -8,7 +8,16 @@ export const SHORTENER_HOSTS = new Set([
   'shope.ee',
   's.click.aliexpress.com',
   'a.aliexpress.com',
+  'tidd.ly',
 ]);
+
+// meli.la (e outros) respondem 403 a requisições sem User-Agent de navegador.
+const BROWSER_HEADERS = {
+  'user-agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+  accept: 'text/html,application/xhtml+xml,*/*;q=0.8',
+  'accept-language': 'pt-BR,pt;q=0.9',
+};
 
 const PRIVATE_HOST_RE =
   /^(localhost|127\.|0\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[0-1])\.)/i;
@@ -77,6 +86,7 @@ async function resolveOne(
     try {
       res = await fetchImpl(current.toString(), {
         method: 'GET',
+        headers: BROWSER_HEADERS,
         redirect: 'manual',
         signal: controller.signal,
       });

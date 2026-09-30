@@ -18,6 +18,13 @@ describe('parseProductUrl', () => {
       externalId: '987654',
     });
   });
+  it('shopee formato /opaanlp/shop/item (destino do s.shopee.com.br)', () => {
+    expect(
+      parseProductUrl(
+        'https://shopee.com.br/opaanlp/688161501/21197344859?__mobile__=1&credential_token=abc',
+      ),
+    ).toEqual({ source: 'SHOPEE', shopId: '688161501', externalId: '21197344859' });
+  });
   it('mercado livre MLB', () => {
     expect(parseProductUrl('https://www.mercadolivre.com.br/produto/p/MLB12345678')).toEqual({
       source: 'MERCADOLIVRE',

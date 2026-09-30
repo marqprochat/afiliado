@@ -28,6 +28,27 @@ describe('resolveShortLinks', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('envia User-Agent de navegador (meli.la devolve 403 para fetch sem UA)', async () => {
+    const fetchMock = vi.fn(async () =>
+      fakeResponse(301, { location: 'https://www.mercadolivre.com.br/p/MLB123456789' }),
+    );
+    await resolveShortLinks('https://meli.la/1TWnuiM', {
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+    const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
+    expect((init.headers as Record<string, string>)['user-agent']).toMatch(/Mozilla\/5\.0/);
+  });
+
+  it('expande tidd.ly (encurtador da Awin)', async () => {
+    const fetchMock = vi.fn(async () =>
+      fakeResponse(301, { location: 'https://www.awin1.com/cread.php?awinmid=1&awinaffid=2' }),
+    );
+    const out = await resolveShortLinks('Link: https://tidd.ly/4z61lcI', {
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+    expect(out.get('https://tidd.ly/4z61lcI')).toContain('awin1.com');
+  });
+
   it('host fora da allowlist não gera requisição alguma', async () => {
     const fetchMock = vi.fn();
     const out = await resolveShortLinks('link https://bit.ly/xyz aqui', {
