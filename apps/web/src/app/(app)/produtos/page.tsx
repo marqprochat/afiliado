@@ -10,7 +10,7 @@ import { apiFetch } from '@/lib/api';
 import { useRealtime } from '@/lib/realtime';
 import { formatBRL } from '@/lib/format';
 import { useApiMutation } from '@/lib/mutations';
-import { useQueue } from '@/lib/queries';
+import { useMarketplaces, useQueue } from '@/lib/queries';
 import type { ApiProduct } from '@/lib/types';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -24,7 +24,9 @@ const MARKETS: { key: MarketplaceKind; label: string }[] = [
   { key: 'ALIEXPRESS', label: 'AliExpress' },
 ];
 
-const DISABLED_KEYWORD_SOURCES: MarketplaceKind[] = ['MERCADOLIVRE', 'AMAZON', 'MAGALU'];
+// Busca por palavra-chave por raspagem é bloqueada pelo anti-bot. O Mercado Livre é liberado
+// quando a API oficial está conectada (Marketplaces → Mercado Livre → "Conectar API oficial").
+const SCRAPED_KEYWORD_SOURCES: MarketplaceKind[] = ['MERCADOLIVRE', 'AMAZON', 'MAGALU'];
 // Categoria/mais buscados existem na API oficial da Shopee e na do AliExpress. Loja
 // favorita é só Shopee (shopId na productOfferV2). Os demais marketplaces só têm busca
 // por palavra-chave (scraping) e importação por link.
@@ -45,6 +47,11 @@ export default function ProdutosPage() {
   const [sub, setSub] = useState<SearchMode | 'import'>('keyword');
   const [products, setProducts] = useState<ApiProduct[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const { data: marketplaces } = useMarketplaces();
+  const mlApiConnected = Boolean(marketplaces?.find((m) => m.kind === 'MERCADOLIVRE')?.hasMlApi);
+  const DISABLED_KEYWORD_SOURCES = SCRAPED_KEYWORD_SOURCES.filter(
+    (k) => !(k === 'MERCADOLIVRE' && mlApiConnected),
+  );
   const isKeywordDisabled = DISABLED_KEYWORD_SOURCES.includes(source);
   const baseSubtabs = ALL_SUBTABS.filter((t) => !t.sources || t.sources.includes(source));
   const SUBTABS = isKeywordDisabled
