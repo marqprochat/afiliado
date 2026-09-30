@@ -38,9 +38,10 @@ export function QueueTable({
   return (
     <div className="rounded-lg border border-border bg-surface">
       <div className="flex items-center gap-3 border-b border-border px-4 py-2 text-sm">
-        <b>
-          Produtos salvos ({data.count}/{data.limit})
-        </b>
+        <b>Produtos salvos ({data.items.length})</b>
+        <span className="text-xs text-muted-foreground" title="Inclui produtos que já estão em lotes">
+          fila {data.count}/{data.limit}
+        </span>
         <Button
           size="sm"
           variant="secondary"

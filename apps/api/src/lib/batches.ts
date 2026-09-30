@@ -39,6 +39,19 @@ export async function enqueueBatchItems(
   );
 }
 
+/** Remove jobs antigos (inclusive falhos/concluídos) para o mesmo jobId poder ser reenfileirado. */
+export async function removeStaleJobs(itemIds: string[]) {
+  const q = getQueue<SendOfferJob>(QUEUE_SEND_OFFER);
+  await Promise.all(
+    itemIds.map(async (id) => {
+      const job = await q.getJob(id);
+      if (!job) return;
+      const state = await job.getState();
+      if (state !== 'active') await job.remove();
+    }),
+  );
+}
+
 export async function removePendingJobs(itemIds: string[]) {
   const q = getQueue<SendOfferJob>(QUEUE_SEND_OFFER);
   await Promise.all(

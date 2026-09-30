@@ -11,7 +11,7 @@ import {
 } from '@afilados/shared';
 import { requireAuth } from '../plugins/auth';
 import { getOperatingWindow, toCoreWindow } from '../lib/settings';
-import { enqueueBatchItems, removePendingJobs } from '../lib/batches';
+import { enqueueBatchItems, removePendingJobs, removeStaleJobs } from '../lib/batches';
 import { toApiProduct } from '../lib/products';
 
 const idParam = z.object({ id: z.string().min(1) });
@@ -67,8 +67,71 @@ async function assertTargets(
   }
 }
 
+/** Recoloca itens com erro na fila do lote (todos, ou só `onlyItemId`). */
+async function retryErrorItems(req: FastifyRequest, onlyItemId?: string) {
+  const b = await findBatch(req);
+  if (b.status === 'CANCELLED') throw ApiError.validation('Lote cancelado não pode ser reenviado');
+  const failed = b.items.filter((i) => i.status === 'ERROR' && (!onlyItemId || i.id === onlyItemId));
+  if (onlyItemId && failed.length === 0) {
+    throw ApiError.notFound('Item com erro não encontrado neste lote');
+  }
+  if (failed.length === 0) return { retried: 0, status: b.status };
+
+  const window = toCoreWindow(await getOperatingWindow(req.db, req.tenantId));
+  const now = new Date();
+  const { runAt } = scheduleBatch(failed.length, b.intervalMin, window, now);
+  const ids = failed.map((i) => i.id);
+  await removeStaleJobs(ids);
+  await Promise.all(
+    failed.map((it, i) =>
+      req.db.batchItem.updateMany({
+        where: { id: it.id },
+        data: { status: 'PENDING', error: null, runAt: runAt[i]! },
+      }),
+    ),
+  );
+  const productIds = failed.map((i) => i.productId).filter((p): p is string => !!p);
+  if (productIds.length) {
+    await req.db.queueItem.updateMany({
+      where: { productId: { in: productIds } },
+      data: { status: 'PENDING' },
+    });
+  }
+  // Pausado: só volta a PENDING e é agendado no "Retomar". Demais: reabre o lote e enfileira.
+  if (b.status === 'PAUSED') return { retried: failed.length, status: b.status };
+  const last = runAt[runAt.length - 1]!;
+  await req.db.batch.updateMany({
+    where: { id: b.id },
+    data: {
+      status: 'SCHEDULED',
+      ...(!b.estimatedEndAt || b.estimatedEndAt < last ? { estimatedEndAt: last } : {}),
+    },
+  });
+  try {
+    await enqueueBatchItems(
+      failed.map((it, i) => ({ id: it.id, runAt: runAt[i]! })),
+      req.tenantId,
+      now,
+    );
+  } catch {
+    await req.db.batchItem.updateMany({
+      where: { id: { in: ids } },
+      data: { status: 'ERROR', error: 'falha ao enfileirar' },
+    });
+    throw new ApiError('INTERNAL', 'Falha ao enfileirar lote', 500);
+  }
+  return { retried: failed.length, status: 'SCHEDULED' };
+}
+
 export async function batchesRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireAuth);
+
+  app.post('/batches/:id/retry', async (req) => retryErrorItems(req));
+
+  app.post('/batches/:id/items/:itemId/retry', async (req) => {
+    const { itemId } = z.object({ itemId: z.string().min(1) }).parse(req.params);
+    return retryErrorItems(req, itemId);
+  });
 
   app.post('/batches', async (req, reply) => {
     const body = batchCreateSchema.parse(req.body);
@@ -78,13 +141,15 @@ export async function batchesRoutes(app: FastifyInstance) {
       throw new ApiError('WA_NOT_CONNECTED', 'WhatsApp não está conectado', 400);
     await assertTargets(req, session.id, body);
 
+    // produtos que já estão em um lote (não cancelado) não entram em outro
+    const notBatched = { product: { batchItems: { none: { batch: { status: { not: 'CANCELLED' as const } } } } } };
     const queueItems = body.productIds
       ? await req.db.queueItem.findMany({
-          where: { productId: { in: body.productIds } },
+          where: { productId: { in: body.productIds }, ...notBatched },
           include: { product: true },
         })
       : await req.db.queueItem.findMany({
-          where: { selected: true, status: 'PENDING' },
+          where: { selected: true, status: 'PENDING', ...notBatched },
           include: { product: true },
         });
     if (queueItems.length === 0) throw ApiError.validation('Nenhum produto selecionado na fila');

@@ -1,6 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, RotateCw, Trash2 } from 'lucide-react';
 import { StatusPill } from '@/components/app-shell/status-pill';
 import { Button } from '@/components/ui/button';
 import {
@@ -149,6 +149,17 @@ function ItemsSection({ batch, editable }: { batch: BatchDetail; editable: boole
     { invalidate: INV, success: 'Item removido do lote' },
   );
 
+  const retryOne = useApiMutation(
+    (itemId: string) => apiFetch(`/batches/${batch.id}/items/${itemId}/retry`, { method: 'POST' }),
+    { invalidate: [...INV, ['queue']], success: 'Item reenfileirado' },
+  );
+  const retryAll = useApiMutation(
+    () => apiFetch(`/batches/${batch.id}/retry`, { method: 'POST' }),
+    { invalidate: [...INV, ['queue']], success: 'Itens com erro reenfileirados' },
+  );
+  const errorCount = done.filter((i) => i.status === 'ERROR').length;
+  const canRetry = batch.status !== 'CANCELLED';
+
   const move = (idx: number, dir: -1 | 1) => {
     const j = idx + dir;
     if (j < 0 || j >= pending.length) return;
@@ -161,6 +172,17 @@ function ItemsSection({ batch, editable }: { batch: BatchDetail; editable: boole
     <section className="space-y-2">
       <div className="flex items-center gap-2">
         <h3 className="font-semibold">Fila do lote ({batch.items.length})</h3>
+        {canRetry && errorCount > 0 && (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={retryAll.isPending}
+            onClick={() => retryAll.mutate(undefined)}
+          >
+            <RotateCw className="size-3.5" />
+            Tentar novamente todos ({errorCount})
+          </Button>
+        )}
         {editable && dirty && (
           <Button
             size="sm"
@@ -178,6 +200,15 @@ function ItemsSection({ batch, editable }: { batch: BatchDetail; editable: boole
       <ol className="space-y-1.5">
         {done.map((it, idx) => (
           <ItemRow key={it.id} item={it} position={idx + 1}>
+            {canRetry && it.status === 'ERROR' && (
+              <IconBtn
+                label="Tentar novamente"
+                onClick={() => retryOne.mutate(it.id)}
+                disabled={retryOne.isPending}
+              >
+                <RotateCw className="size-3.5" />
+              </IconBtn>
+            )}
             {editable && it.status === 'ERROR' && (
               <IconBtn label="Remover" onClick={() => removeItem.mutate(it.id)} danger>
                 <Trash2 className="size-3.5" />
