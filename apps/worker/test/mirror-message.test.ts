@@ -31,6 +31,14 @@ const fakeGateway = {
     inviteCode: null,
     participants: [],
   })),
+  onGroupParticipants: vi.fn(),
+  getGroupSnapshot: vi.fn(async (_s: string, jid: string) => ({
+    jid,
+    subject: 'Grupo',
+    memberCount: 1,
+    inviteCode: null,
+  })),
+  updateGroupPicture: vi.fn(async () => {}),
 } satisfies WhatsAppGateway;
 
 beforeAll(async () => {
@@ -237,9 +245,7 @@ describe('mirrorMessage processor', () => {
       gateway: fakeGateway,
       sleep: async () => {},
       resolveShortLinks: async () =>
-        new Map([
-          ['https://meli.la/1h21Ywb', 'https://produto.mercadolivre.com.br/MLB-123456789'],
-        ]),
+        new Map([['https://meli.la/1h21Ywb', 'https://produto.mercadolivre.com.br/MLB-123456789']]),
     };
     const res = await mirrorMessage(deps, jobData);
     expect(res).toEqual({ outcome: 'mirrored', count: 1 });
@@ -374,7 +380,10 @@ describe('mirrorMessage processor', () => {
       sleep: async () => {},
       resolveShortLinks: async () =>
         new Map([
-          ['https://s.click.aliexpress.com/e/_xyz', 'https://pt.aliexpress.com/item/1005006789012345.html'],
+          [
+            'https://s.click.aliexpress.com/e/_xyz',
+            'https://pt.aliexpress.com/item/1005006789012345.html',
+          ],
         ]),
       getAdapter: () =>
         ({

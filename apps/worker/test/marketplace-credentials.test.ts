@@ -41,7 +41,10 @@ describe('loadTagCredentials (worker)', () => {
       },
     });
     const creds = await loadTagCredentials(tenantId, 'AMAZON');
-    expect(creds).toEqual({ tag: 'minha-20', amazonApi: { clientId: 'cid', clientSecret: 'csecret' } });
+    expect(creds).toEqual({
+      tag: 'minha-20',
+      amazonApi: { clientId: 'cid', clientSecret: 'csecret' },
+    });
   });
 
   it('MERCADOLIVRE: devolve {} quando não há conexão configurada, sem lançar', async () => {

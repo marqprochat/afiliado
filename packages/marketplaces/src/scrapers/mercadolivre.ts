@@ -62,7 +62,9 @@ export function parseMercadoLivreHtml(html: string, originalUrl: string): Produc
     currentPrice = parsedCurrent;
   } else {
     // Fallback meta tags de preço
-    const metaPrice = $('meta[itemprop="price"], meta[property="product:price:amount"]').first().attr('content');
+    const metaPrice = $('meta[itemprop="price"], meta[property="product:price:amount"]')
+      .first()
+      .attr('content');
     if (metaPrice) {
       const parsed = Number(metaPrice);
       if (!isNaN(parsed) && parsed > 0) currentPrice = parsed;

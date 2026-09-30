@@ -44,7 +44,14 @@ const items: AutomationQueueItem[] = [
     addedAt: '2026-09-22T00:01:00.000Z',
     marketplace: 'AMAZON',
     product: null,
-    coupon: { id: 'c1', store: 'AMAZON', code: 'PROMO10', description: '10% off', expiresAt: null, sourceUrl: null },
+    coupon: {
+      id: 'c1',
+      store: 'AMAZON',
+      code: 'PROMO10',
+      description: '10% off',
+      expiresAt: null,
+      sourceUrl: null,
+    },
   },
 ];
 

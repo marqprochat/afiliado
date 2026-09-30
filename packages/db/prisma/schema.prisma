@@ -37,6 +37,7 @@ model Tenant {
   telegramBots      TelegramBot[]
   telegramChats     TelegramChat[]
   awinCatalogProducts AwinCatalogProduct[]
+  groupLinks        GroupLink[]
 }
 
 enum UserRole {
@@ -116,6 +117,7 @@ model WaSession {
   batches    Batch[]
   mirrorRules MirrorRule[]
   automationRules AutomationRule[]
+  groupLinks  GroupLink[]
 }
 
 model WaAuthKey {
@@ -672,3 +674,84 @@ model ApiToken {
 
   @@index([tenantId])
 }
+
+// ---------- Link Fixo de Grupos ----------
+enum GroupTextPosition {
+  PREFIX
+  SUFFIX
+}
+
+enum GroupLinkStatus {
+  ACTIVE
+  PAUSED
+  ERROR
+}
+
+enum ManagedGroupStatus {
+  CREATING
+  STANDBY
+  ACTIVE
+  FULL
+  ORPHANED
+}
+
+model GroupLink {
+  id                  String            @id @default(cuid())
+  tenantId            String
+  tenant              Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sessionId           String
+  session             WaSession         @relation(fields: [sessionId], references: [id])
+  slug                String            @unique
+  label               String
+  baseName            String
+  customText          String            @default("")
+  textPosition        GroupTextPosition @default(PREFIX)
+  numberPrefix        String            @default("#")
+  startNumber         Int               @default(1)
+  nextSequence        Int               @default(1)
+  memberLimit         Int               @default(1000)
+  rotateMargin        Int               @default(20)
+  maxRotationsPerHour Int               @default(3)
+  groupDescription    String?
+  announceOnly        Boolean           @default(false)
+  seedParticipants    String[]          @default([])
+  groupImageBase64    String?
+  fallbackUrl         String?
+  enabled             Boolean           @default(true)
+  status              GroupLinkStatus   @default(ACTIVE)
+  lastError           String?
+  lastRotatedAt       DateTime?
+  clickCount          Int               @default(0)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  groups              ManagedGroup[]
+
+  @@index([tenantId])
+  @@index([sessionId])
+}
+
+model ManagedGroup {
+  id             String             @id @default(cuid())
+  tenantId       String
+  groupLinkId    String
+  groupLink      GroupLink          @relation(fields: [groupLinkId], references: [id], onDelete: Cascade)
+  sequence       Int
+  number         Int
+  jid            String?
+  name           String
+  inviteLink     String?
+  memberCount    Int                @default(0)
+  status         ManagedGroupStatus @default(CREATING)
+  countSyncedAt  DateTime?
+  inviteSyncedAt DateTime?
+  activatedAt    DateTime?
+  filledAt       DateTime?
+  lastError      String?
+  createdAt      DateTime           @default(now())
+
+  @@unique([groupLinkId, sequence])
+  @@unique([groupLinkId, jid])
+  @@index([tenantId])
+  @@index([jid])
+}
+

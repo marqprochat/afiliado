@@ -92,7 +92,10 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
         try {
           affiliateLink = await deps.awin.toAffiliateLink(creds, product.originalUrl, subId);
         } catch (err) {
-          log.warn({ botId: job.botId, err }, 'falha ao gerar link de afiliado da Awin; usando link original');
+          log.warn(
+            { botId: job.botId, err },
+            'falha ao gerar link de afiliado da Awin; usando link original',
+          );
         }
       } else if (product.source === 'ALIEXPRESS' && conn?.encryptedCredentials) {
         const creds = decryptJson<AliexpressCredentials>(Buffer.from(conn.encryptedCredentials));
@@ -101,7 +104,10 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
           const adapter = deps.aliexpress ?? getAliexpressAdapter();
           affiliateLink = await adapter.toAffiliateLink(creds, product.originalUrl, subId);
         } catch (err) {
-          log.warn({ botId: job.botId, err }, 'falha ao gerar link de afiliado do AliExpress; usando link original');
+          log.warn(
+            { botId: job.botId, err },
+            'falha ao gerar link de afiliado do AliExpress; usando link original',
+          );
         }
       } else if (
         product.source !== 'SHOPEE' &&

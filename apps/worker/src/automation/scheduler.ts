@@ -29,7 +29,8 @@ export class AutomationScheduler {
   private readonly now: () => Date;
 
   constructor(deps: AutomationSchedulerDeps = {}) {
-    this.enqueue = deps.enqueue ?? ((tenantId, batchItemId) => enqueueSendOffer(tenantId, batchItemId));
+    this.enqueue =
+      deps.enqueue ?? ((tenantId, batchItemId) => enqueueSendOffer(tenantId, batchItemId));
     this.enqueueTelegram = deps.enqueueTelegram ?? ((job) => enqueueSendTelegram(job));
     this.discover = deps.discover ?? ((rule) => discoverForRule(rule));
     this.now = deps.now ?? (() => new Date());
@@ -161,8 +162,11 @@ export class AutomationScheduler {
       }
 
       const productMarketplace =
-        candidate.product && candidate.product.source !== 'MANUAL' ? candidate.product.source : undefined;
-      const marketplaceForLog = productMarketplace ?? candidate.coupon?.store ?? rule.marketplaces[0]!;
+        candidate.product && candidate.product.source !== 'MANUAL'
+          ? candidate.product.source
+          : undefined;
+      const marketplaceForLog =
+        productMarketplace ?? candidate.coupon?.store ?? rule.marketplaces[0]!;
 
       if (candidate.kind === 'PRODUCT') {
         if (!candidate.product) {
@@ -227,7 +231,8 @@ export class AutomationScheduler {
         }
       }
 
-      const batchTemplateId = candidate.kind === 'COUPON' ? candidate.templateId ?? rule.templateId : rule.templateId;
+      const batchTemplateId =
+        candidate.kind === 'COUPON' ? (candidate.templateId ?? rule.templateId) : rule.templateId;
 
       const batch = await prisma.batch.create({
         data: {
@@ -273,7 +278,10 @@ export class AutomationScheduler {
                 ? { couponId: candidate.couponId }
                 : {}),
             }).catch((e) =>
-              log.warn({ ruleId: rule.id, chatId, err: e }, 'falha ao enfileirar envio no telegram'),
+              log.warn(
+                { ruleId: rule.id, chatId, err: e },
+                'falha ao enfileirar envio no telegram',
+              ),
             );
           }
         }

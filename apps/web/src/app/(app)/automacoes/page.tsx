@@ -13,7 +13,11 @@ export default function AutomacoesPage() {
     <div className="space-y-4 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Automações</h1>
-        <Button variant={showForm ? 'outline' : 'default'} size="sm" onClick={() => setShowForm((v) => !v)}>
+        <Button
+          variant={showForm ? 'outline' : 'default'}
+          size="sm"
+          onClick={() => setShowForm((v) => !v)}
+        >
           {showForm ? 'Cancelar' : '+ Nova automação'}
         </Button>
       </div>

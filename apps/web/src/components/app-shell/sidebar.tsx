@@ -5,6 +5,7 @@ import {
   BarChart3,
   Bot,
   Home,
+  Link2,
   LogOut,
   Megaphone,
   MessageCircle,
@@ -32,6 +33,7 @@ const PRINCIPAL = [
   { href: '/enviar', label: 'Enviar Ofertas', icon: Send },
   { href: '/espelhamento', label: 'Espelhamento', icon: Radio },
   { href: '/grupos', label: 'Grupos', icon: UsersRound },
+  { href: '/links-grupos', label: 'Links de Grupos', icon: Link2 },
   { href: '/trafego', label: 'Gestor de Tráfego IA', icon: Megaphone },
   { href: '/afiliados', label: 'Afiliados', icon: Users },
 ];

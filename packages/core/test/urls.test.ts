@@ -66,7 +66,9 @@ describe('parseProductUrl — Awin', () => {
 
 describe('parseProductUrl — AliExpress', () => {
   it('reconhece URL de item com .html', () => {
-    const result = parseProductUrl('https://pt.aliexpress.com/item/1005006240212345.html?spm=a2g0o.productlist');
+    const result = parseProductUrl(
+      'https://pt.aliexpress.com/item/1005006240212345.html?spm=a2g0o.productlist',
+    );
     expect(result).toEqual({
       source: 'ALIEXPRESS',
       externalId: '1005006240212345',
@@ -87,4 +89,3 @@ describe('parseProductUrl — AliExpress', () => {
     expect('externalId' in result).toBe(false);
   });
 });
-

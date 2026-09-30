@@ -44,7 +44,10 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
       setFeedback({ message: 'Seleção salva.', ok: true });
       await refetch();
     } catch (err) {
-      setFeedback({ message: err instanceof Error ? err.message : 'Falha ao salvar seleção.', ok: false });
+      setFeedback({
+        message: err instanceof Error ? err.message : 'Falha ao salvar seleção.',
+        ok: false,
+      });
     } finally {
       setSaving(false);
     }
@@ -65,7 +68,10 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
         failedCount?: number;
       }>('/marketplaces/awin/import', { method: 'POST' });
       if (res.queued) {
-        setFeedback({ message: 'Import solicitado — os produtos aparecem em alguns minutos.', ok: true });
+        setFeedback({
+          message: 'Import solicitado — os produtos aparecem em alguns minutos.',
+          ok: true,
+        });
       } else if (res.totalImported === 0) {
         setFeedback({
           message:
@@ -81,7 +87,10 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
       }
       onImported?.();
     } catch (err) {
-      setFeedback({ message: err instanceof Error ? err.message : 'Falha ao solicitar import.', ok: false });
+      setFeedback({
+        message: err instanceof Error ? err.message : 'Falha ao solicitar import.',
+        ok: false,
+      });
     } finally {
       setImporting(false);
     }
@@ -92,7 +101,9 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
       <p className="mb-2 text-sm font-medium">Programas da Awin</p>
 
       {isLoading && <p className="text-xs text-muted-foreground">Carregando programas...</p>}
-      {isError && <p className="text-xs text-red-400">Falha ao carregar os programas da sua conta Awin.</p>}
+      {isError && (
+        <p className="text-xs text-red-400">Falha ao carregar os programas da sua conta Awin.</p>
+      )}
 
       {!isLoading && !isError && (
         <>
@@ -121,7 +132,9 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
               </label>
             ))}
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">{effectiveSelected.size} selecionados</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {effectiveSelected.size} selecionados
+          </p>
 
           <div className="mt-3 flex gap-2">
             <Button type="button" variant="outline" disabled={saving} onClick={handleSave}>

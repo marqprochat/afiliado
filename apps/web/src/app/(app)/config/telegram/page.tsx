@@ -18,10 +18,10 @@ function BotCard({ bot }: { bot: TelegramBot }) {
     () => apiFetch(`/telegram/bots/${bot.id}/check`, { method: 'POST' }),
     { invalidate: [['telegram']], success: 'Verificado' },
   );
-  const remove = useApiMutation(
-    () => apiFetch(`/telegram/bots/${bot.id}`, { method: 'DELETE' }),
-    { invalidate: [['telegram']], success: 'Bot removido' },
-  );
+  const remove = useApiMutation(() => apiFetch(`/telegram/bots/${bot.id}`, { method: 'DELETE' }), {
+    invalidate: [['telegram']],
+    success: 'Bot removido',
+  });
 
   const statusVariant =
     bot.status === 'OK' ? 'default' : bot.status === 'ERROR' ? 'destructive' : 'secondary';
@@ -48,7 +48,12 @@ function BotCard({ bot }: { bot: TelegramBot }) {
           </div>
         </button>
         <Badge variant={statusVariant}>{bot.status}</Badge>
-        <Button size="sm" variant="outline" disabled={check.isPending} onClick={() => check.mutate(undefined)}>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={check.isPending}
+          onClick={() => check.mutate(undefined)}
+        >
           Testar
         </Button>
         <Button
@@ -57,7 +62,11 @@ function BotCard({ bot }: { bot: TelegramBot }) {
           aria-label="Remover bot"
           disabled={remove.isPending}
           onClick={() => {
-            if (confirm(`Remover o bot "${bot.label}"? Automações que usam os chats dele param de enviar.`)) {
+            if (
+              confirm(
+                `Remover o bot "${bot.label}"? Automações que usam os chats dele param de enviar.`,
+              )
+            ) {
               remove.mutate(undefined);
             }
           }}
@@ -69,9 +78,9 @@ function BotCard({ bot }: { bot: TelegramBot }) {
         <div className="space-y-2 border-t border-border p-3 pt-3">
           {bot.lastError && <p className="text-xs text-red-400">Último erro: {bot.lastError}</p>}
           <p className="text-xs text-muted-foreground">
-            Grupos e canais aparecem aqui automaticamente assim que você adicionar este bot
-            neles como administrador — não existe um botão de "sincronizar", o Telegram não tem
-            como listar isso sob demanda.
+            Grupos e canais aparecem aqui automaticamente assim que você adicionar este bot neles
+            como administrador — não existe um botão de "sincronizar", o Telegram não tem como
+            listar isso sob demanda.
           </p>
           <ul className="space-y-1">
             {chats?.map((c) => (
@@ -121,9 +130,8 @@ export default function TelegramPage() {
       <div>
         <h1 className="text-xl font-semibold">Telegram</h1>
         <p className="text-sm text-muted-foreground">
-          Conecte um bot (crie um em{' '}
-          <span className="font-mono">@BotFather</span>) para enviar ofertas também em grupos e
-          canais do Telegram.
+          Conecte um bot (crie um em <span className="font-mono">@BotFather</span>) para enviar
+          ofertas também em grupos e canais do Telegram.
         </p>
       </div>
 

@@ -22,7 +22,8 @@ function tokenFetch(status: number, body: unknown): typeof fetch {
 }
 
 function sentForm(fetchImpl: typeof fetch): URLSearchParams {
-  const init = (fetchImpl as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls[0]![1];
+  const init = (fetchImpl as unknown as { mock: { calls: [string, RequestInit][] } }).mock
+    .calls[0]![1];
   return init.body as URLSearchParams;
 }
 
@@ -70,7 +71,11 @@ describe('exchangeMlCode', () => {
     });
     const tokens = await exchangeMlCode(
       cfg,
-      { code: 'TG-abc', redirectUri: 'https://painel.exemplo.com.br/callbackml', verifier: 'ver-1' },
+      {
+        code: 'TG-abc',
+        redirectUri: 'https://painel.exemplo.com.br/callbackml',
+        verifier: 'ver-1',
+      },
       { fetchImpl, now: () => NOW },
     );
     const form = sentForm(fetchImpl);
@@ -90,7 +95,10 @@ describe('exchangeMlCode', () => {
   });
 
   it('código recusado vira ML_API_UNAUTHORIZED sem vazar o segredo na mensagem', async () => {
-    const fetchImpl = tokenFetch(400, { error: 'invalid_grant', message: 'Error validating grant' });
+    const fetchImpl = tokenFetch(400, {
+      error: 'invalid_grant',
+      message: 'Error validating grant',
+    });
     const err = await exchangeMlCode(
       cfg,
       { code: 'ruim', redirectUri: 'https://x/callbackml', verifier: 'v' },
@@ -104,7 +112,11 @@ describe('exchangeMlCode', () => {
 
 describe('refreshMlTokens', () => {
   it('renova com o refresh_token e devolve o novo refresh_token', async () => {
-    const fetchImpl = tokenFetch(200, { access_token: 'acc-2', refresh_token: 'ref-2', expires_in: 21600 });
+    const fetchImpl = tokenFetch(200, {
+      access_token: 'acc-2',
+      refresh_token: 'ref-2',
+      expires_in: 21600,
+    });
     const tokens = await refreshMlTokens(cfg, 'ref-1', { fetchImpl, now: () => NOW });
     const form = sentForm(fetchImpl);
     expect(form.get('grant_type')).toBe('refresh_token');
@@ -140,7 +152,11 @@ describe('ensureMlAccessToken', () => {
   });
 
   it('renova quando faltam menos de 5 minutos para vencer', async () => {
-    const fetchImpl = tokenFetch(200, { access_token: 'acc-2', refresh_token: 'ref-2', expires_in: 21600 });
+    const fetchImpl = tokenFetch(200, {
+      access_token: 'acc-2',
+      refresh_token: 'ref-2',
+      expires_in: 21600,
+    });
     const save = vi.fn(async () => {});
     const almostExpired = { ...base, expiresAt: '2026-09-29T12:04:00.000Z' };
     const res = await ensureMlAccessToken(almostExpired, cfg, save, { fetchImpl, now: () => NOW });
@@ -149,7 +165,11 @@ describe('ensureMlAccessToken', () => {
 
   it('grava o novo refresh_token ANTES de devolver o access token', async () => {
     const order: string[] = [];
-    const fetchImpl = tokenFetch(200, { access_token: 'acc-2', refresh_token: 'ref-2', expires_in: 21600 });
+    const fetchImpl = tokenFetch(200, {
+      access_token: 'acc-2',
+      refresh_token: 'ref-2',
+      expires_in: 21600,
+    });
     const save = vi.fn(async (t: MlApiTokens) => {
       order.push(`save:${t.refreshToken}`);
     });
@@ -169,7 +189,9 @@ describe('ensureMlAccessToken', () => {
     const fetchImpl = tokenFetch(400, { error: 'invalid_grant', message: 'refresh usado' });
     const save = vi.fn(async () => {});
     const expired = { ...base, accessToken: undefined, expiresAt: undefined };
-    await expect(ensureMlAccessToken(expired, cfg, save, { fetchImpl, now: () => NOW })).rejects.toMatchObject({
+    await expect(
+      ensureMlAccessToken(expired, cfg, save, { fetchImpl, now: () => NOW }),
+    ).rejects.toMatchObject({
       code: 'ML_API_UNAUTHORIZED',
     });
     expect(save).not.toHaveBeenCalled();

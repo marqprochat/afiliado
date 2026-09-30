@@ -28,9 +28,14 @@ function parsePastedText(text: string): {
 } {
   try {
     const parsed: unknown = JSON.parse(text);
-    if (Array.isArray(parsed) && parsed.every((p) => p && typeof p === 'object' && typeof p.url === 'string')) {
+    if (
+      Array.isArray(parsed) &&
+      parsed.every((p) => p && typeof p === 'object' && typeof p.url === 'string')
+    ) {
       const all = parsed as ProductsImportItem[];
-      const items = all.filter((p) => typeof p.price === 'number' && !isNaN(p.price) && p.price > 0);
+      const items = all.filter(
+        (p) => typeof p.price === 'number' && !isNaN(p.price) && p.price > 0,
+      );
       return { items, droppedNoPrice: all.length - items.length };
     }
   } catch {

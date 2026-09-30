@@ -1,5 +1,10 @@
 import type { MarketplaceKind, TagCredentials } from '@afilados/shared';
-import type { AliexpressCredentials, AwinCredentials, MarketplaceAdapter, ShopeeCredentials } from './adapter';
+import type {
+  AliexpressCredentials,
+  AwinCredentials,
+  MarketplaceAdapter,
+  ShopeeCredentials,
+} from './adapter';
 import { createShopeeAdapter } from './shopee/adapter';
 import { createTagAdapter, type TagKind } from './tag-adapter';
 import { createAwinAdapter } from './awin/adapter';
@@ -51,4 +56,3 @@ export function getAdapter(
   }
   return a;
 }
-

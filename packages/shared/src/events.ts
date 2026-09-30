@@ -45,6 +45,10 @@ export type RealtimeEvent =
   | { type: 'telegram.bots.changed' }
   | { type: 'telegram.chats.synced'; botId: string; count: number }
   | { type: 'coupons.updated' }
+  | { type: 'group-links.changed'; tenantId?: string }
+  | { type: 'group-link.rotated'; groupLinkId: string; newGroupId: string; sequence: number }
+  | { type: 'group-link.updated'; groupLinkId: string }
+  | { type: 'group-link.error'; groupLinkId: string; error: string }
   | { type: 'error'; code: string; message: string };
 
 export const REDIS_EVENTS_CHANNEL = 'afilados:events';

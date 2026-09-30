@@ -14,10 +14,10 @@ export function RuleCard({ rule }: { rule: AutomationRule }) {
       apiFetch(`/automations/${rule.id}/toggle`, { method: 'POST', json: { enabled } }),
     { invalidate: [['automations']] },
   );
-  const remove = useApiMutation(
-    () => apiFetch(`/automations/${rule.id}`, { method: 'DELETE' }),
-    { invalidate: [['automations']], success: 'Automação excluída' },
-  );
+  const remove = useApiMutation(() => apiFetch(`/automations/${rule.id}`, { method: 'DELETE' }), {
+    invalidate: [['automations']],
+    success: 'Automação excluída',
+  });
 
   return (
     <div className="rounded-lg border border-border bg-surface">

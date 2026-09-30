@@ -172,7 +172,10 @@ export async function sendOffer(
       try {
         affiliateLink = await deps.awin.toAffiliateLink(creds, product.originalUrl, subId);
       } catch (err) {
-        log.warn({ batchItemId: item.id, err }, 'falha ao gerar link de afiliado da Awin; usando link original');
+        log.warn(
+          { batchItemId: item.id, err },
+          'falha ao gerar link de afiliado da Awin; usando link original',
+        );
       }
     } else if (product.source === 'ALIEXPRESS' && conn?.encryptedCredentials) {
       const creds = decryptJson<AliexpressCredentials>(Buffer.from(conn.encryptedCredentials));
@@ -185,7 +188,10 @@ export async function sendOffer(
         const adapter = deps.aliexpress ?? getAliexpressAdapter();
         affiliateLink = await adapter.toAffiliateLink(creds, product.originalUrl, subId);
       } catch (err) {
-        log.warn({ batchItemId: item.id, err }, 'falha ao gerar link de afiliado do AliExpress; usando link original');
+        log.warn(
+          { batchItemId: item.id, err },
+          'falha ao gerar link de afiliado do AliExpress; usando link original',
+        );
       }
     } else if (
       product.source !== 'SHOPEE' &&
@@ -309,7 +315,9 @@ async function sendPlainMessages(
       templateId: batch.templateId,
       ...(item.productId ? { productId: item.productId } : {}),
       ...(item.couponId ? { couponId: item.couponId } : {}),
-    }).catch((e) => log.warn({ batchId: batch.id, chatId, err: e }, 'falha ao enfileirar envio no telegram'));
+    }).catch((e) =>
+      log.warn({ batchId: batch.id, chatId, err: e }, 'falha ao enfileirar envio no telegram'),
+    );
   }
 
   const existing = await prisma.sendLog.findMany({

@@ -64,7 +64,9 @@ describe('listDatafeeds', () => {
 
   it('lança AWIN_UNAUTHORIZED em 401, sem incluir a URL na mensagem', async () => {
     const fetchImpl = fetchReturningText(401, '');
-    await expect(listDatafeeds('https://ui.awin.com/secret-key/feedList', { fetchImpl })).rejects.toMatchObject({
+    await expect(
+      listDatafeeds('https://ui.awin.com/secret-key/feedList', { fetchImpl }),
+    ).rejects.toMatchObject({
       code: 'AWIN_UNAUTHORIZED',
     });
     try {
@@ -76,7 +78,9 @@ describe('listDatafeeds', () => {
 
   it('lança AWIN_ERROR em outro status não-2xx', async () => {
     const fetchImpl = fetchReturningText(500, '');
-    await expect(listDatafeeds('https://x', { fetchImpl })).rejects.toMatchObject({ code: 'AWIN_ERROR' });
+    await expect(listDatafeeds('https://x', { fetchImpl })).rejects.toMatchObject({
+      code: 'AWIN_ERROR',
+    });
   });
 });
 
@@ -97,21 +101,29 @@ describe('downloadFeed', () => {
     const fetchImpl = fetchReturningBody(200, Buffer.from(csv));
     const iter = await downloadFeed('https://productdata.awin.com/download/222.csv', { fetchImpl });
     const rows = await collect(iter);
-    expect(rows).toEqual([{ aw_product_id: 'p1', product_name: 'Produto 1', search_price: '10.50' }]);
+    expect(rows).toEqual([
+      { aw_product_id: 'p1', product_name: 'Produto 1', search_price: '10.50' },
+    ]);
   });
 
   it('detecta e descomprime um arquivo gzip pelos bytes mágicos, não pela URL', async () => {
     const csv = 'aw_product_id,product_name,search_price\np1,Produto Gz,20.00\n';
     const gzipped = gzipSync(Buffer.from(csv));
     const fetchImpl = fetchReturningBody(200, gzipped);
-    const iter = await downloadFeed('https://productdata.awin.com/compression/gzip/222', { fetchImpl });
+    const iter = await downloadFeed('https://productdata.awin.com/compression/gzip/222', {
+      fetchImpl,
+    });
     const rows = await collect(iter);
-    expect(rows).toEqual([{ aw_product_id: 'p1', product_name: 'Produto Gz', search_price: '20.00' }]);
+    expect(rows).toEqual([
+      { aw_product_id: 'p1', product_name: 'Produto Gz', search_price: '20.00' },
+    ]);
   });
 
   it('lança AwinApiError em resposta não-2xx, sem incluir a URL na mensagem', async () => {
     const fetchImpl = vi.fn(async () => ({ ok: false, status: 500 })) as unknown as typeof fetch;
-    await expect(downloadFeed('https://secret-url/x', { fetchImpl })).rejects.toBeInstanceOf(AwinApiError);
+    await expect(downloadFeed('https://secret-url/x', { fetchImpl })).rejects.toBeInstanceOf(
+      AwinApiError,
+    );
     try {
       await downloadFeed('https://secret-url/x', { fetchImpl });
     } catch (e) {

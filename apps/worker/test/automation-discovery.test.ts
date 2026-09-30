@@ -85,7 +85,8 @@ describe('discoverForRule (Shopee)', () => {
         blockedKeywords: [],
         sessionId: (await prisma.waSession.create({ data: { tenantId, label: 'skw' } })).id,
         groupJids: ['g@g.us'],
-        templateId: (await prisma.template.create({ data: { tenantId, name: 'tkw', body: 'x' } })).id,
+        templateId: (await prisma.template.create({ data: { tenantId, name: 'tkw', body: 'x' } }))
+          .id,
       },
     });
 
@@ -132,7 +133,8 @@ describe('discoverForRule (Shopee)', () => {
         blockedKeywords: [],
         sessionId: (await prisma.waSession.create({ data: { tenantId, label: 'sac' } })).id,
         groupJids: ['g@g.us'],
-        templateId: (await prisma.template.create({ data: { tenantId, name: 'tac', body: 'x' } })).id,
+        templateId: (await prisma.template.create({ data: { tenantId, name: 'tac', body: 'x' } }))
+          .id,
       },
     });
 
@@ -165,7 +167,8 @@ describe('discoverForRule (Shopee)', () => {
         blockedKeywords: [],
         sessionId: (await prisma.waSession.create({ data: { tenantId, label: 's2' } })).id,
         groupJids: ['g@g.us'],
-        templateId: (await prisma.template.create({ data: { tenantId, name: 't2', body: 'x' } })).id,
+        templateId: (await prisma.template.create({ data: { tenantId, name: 't2', body: 'x' } }))
+          .id,
       },
     });
     const sameResult = {
@@ -195,7 +198,8 @@ describe('discoverForRule (Shopee)', () => {
         blockedKeywords: [],
         sessionId: (await prisma.waSession.create({ data: { tenantId, label: 's3' } })).id,
         groupJids: ['g@g.us'],
-        templateId: (await prisma.template.create({ data: { tenantId, name: 't3', body: 'x' } })).id,
+        templateId: (await prisma.template.create({ data: { tenantId, name: 't3', body: 'x' } }))
+          .id,
       },
     });
 
@@ -207,7 +211,9 @@ describe('discoverForRule (Shopee)', () => {
       }),
     ).resolves.not.toThrow();
 
-    const logs = await prisma.automationLog.findMany({ where: { ruleId: rule.id, action: 'ERROR' } });
+    const logs = await prisma.automationLog.findMany({
+      where: { ruleId: rule.id, action: 'ERROR' },
+    });
     expect(logs.length).toBe(1);
     expect(logs[0]!.reason).toBe('falha de rede na Shopee');
     expect(logs[0]!.marketplace).toBe('SHOPEE');
@@ -225,7 +231,8 @@ describe('discoverForRule (Mercado Livre / Amazon / Magalu)', () => {
         blockedKeywords: [],
         sessionId: (await prisma.waSession.create({ data: { tenantId, label: 'sml' } })).id,
         groupJids: ['g@g.us'],
-        templateId: (await prisma.template.create({ data: { tenantId, name: 'tml', body: 'x' } })).id,
+        templateId: (await prisma.template.create({ data: { tenantId, name: 'tml', body: 'x' } }))
+          .id,
       },
     });
 
@@ -264,7 +271,8 @@ describe('discoverForRule (Mercado Livre / Amazon / Magalu)', () => {
         blockedKeywords: [],
         sessionId: (await prisma.waSession.create({ data: { tenantId, label: 'sam' } })).id,
         groupJids: ['g@g.us'],
-        templateId: (await prisma.template.create({ data: { tenantId, name: 'tam', body: 'x' } })).id,
+        templateId: (await prisma.template.create({ data: { tenantId, name: 'tam', body: 'x' } }))
+          .id,
       },
     });
 
@@ -293,7 +301,8 @@ describe('discoverForRule (Mercado Livre / Amazon / Magalu)', () => {
         blockedKeywords: [],
         sessionId: (await prisma.waSession.create({ data: { tenantId, label: 'sml3' } })).id,
         groupJids: ['g@g.us'],
-        templateId: (await prisma.template.create({ data: { tenantId, name: 'tml3', body: 'x' } })).id,
+        templateId: (await prisma.template.create({ data: { tenantId, name: 'tml3', body: 'x' } }))
+          .id,
       },
     });
 
@@ -315,7 +324,15 @@ describe('discoverForRule (Mercado Livre / Amazon / Magalu)', () => {
 describe('discoverForRule (Awin)', () => {
   it('busca no cache local por palavra-chave e enfileira os elegíveis', async () => {
     await prisma.marketplaceConnection.create({
-      data: { tenantId, kind: 'AWIN', status: 'OK', encryptedCredentials: encryptJson({ feedListUrl: 'https://ui.awin.com/feedList/secret', feedIds: ['f1'] }) },
+      data: {
+        tenantId,
+        kind: 'AWIN',
+        status: 'OK',
+        encryptedCredentials: encryptJson({
+          feedListUrl: 'https://ui.awin.com/feedList/secret',
+          feedIds: ['f1'],
+        }),
+      },
     });
     await prisma.awinCatalogProduct.create({
       data: {
@@ -338,13 +355,18 @@ describe('discoverForRule (Awin)', () => {
         blockedKeywords: [],
         sessionId: (await prisma.waSession.create({ data: { tenantId, label: 's-awin' } })).id,
         groupJids: ['g@g.us'],
-        templateId: (await prisma.template.create({ data: { tenantId, name: 't-awin', body: 'x' } })).id,
+        templateId: (
+          await prisma.template.create({ data: { tenantId, name: 't-awin', body: 'x' } })
+        ).id,
       },
     });
 
     await discoverForRule(rule);
 
-    const items = await prisma.automationQueueItem.findMany({ where: { ruleId: rule.id }, include: { product: true } });
+    const items = await prisma.automationQueueItem.findMany({
+      where: { ruleId: rule.id },
+      include: { product: true },
+    });
     expect(items).toHaveLength(1);
     expect(items[0]!.product!.title).toBe('Fone de Ouvido Bluetooth');
     expect(items[0]!.product!.source).toBe('AWIN');
@@ -371,7 +393,8 @@ describe('discoverForRule (AliExpress)', () => {
         blockedKeywords: ['quebrado'],
         sessionId: (await prisma.waSession.create({ data: { tenantId, label: 's-ali' } })).id,
         groupJids: ['g@g.us'],
-        templateId: (await prisma.template.create({ data: { tenantId, name: 't-ali', body: 'x' } })).id,
+        templateId: (await prisma.template.create({ data: { tenantId, name: 't-ali', body: 'x' } }))
+          .id,
       },
     });
 
@@ -392,7 +415,10 @@ describe('discoverForRule (AliExpress)', () => {
       searchAliexpress: async () => searchResults,
     });
 
-    const items = await prisma.automationQueueItem.findMany({ where: { ruleId: rule.id }, include: { product: true } });
+    const items = await prisma.automationQueueItem.findMany({
+      where: { ruleId: rule.id },
+      include: { product: true },
+    });
     expect(items).toHaveLength(1);
     expect(items[0]!.product!.title).toBe('Mouse Sem Fio Gamer');
     expect(items[0]!.product!.source).toBe('ALIEXPRESS');
@@ -413,9 +439,15 @@ describe('discoverForRule (cota balanceada entre marketplaces)', () => {
         keywords: overrides.keywords ?? ['fone'],
         blockedKeywords: [],
         maxOffersPerDay: overrides.maxOffersPerDay,
-        sessionId: (await prisma.waSession.create({ data: { tenantId, label: `sq${Math.random()}` } })).id,
+        sessionId: (
+          await prisma.waSession.create({ data: { tenantId, label: `sq${Math.random()}` } })
+        ).id,
         groupJids: ['g@g.us'],
-        templateId: (await prisma.template.create({ data: { tenantId, name: `tq${Math.random()}`, body: 'x' } })).id,
+        templateId: (
+          await prisma.template.create({
+            data: { tenantId, name: `tq${Math.random()}`, body: 'x' },
+          })
+        ).id,
       },
     });
   }
@@ -561,4 +593,3 @@ describe('discoverForRule (cota balanceada entre marketplaces)', () => {
     expect(await getRedis().exists(key)).toBe(0);
   });
 });
-

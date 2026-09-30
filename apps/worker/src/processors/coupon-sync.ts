@@ -67,7 +67,8 @@ export function createCouponSyncProcessor(deps: CouponSyncProcessorDeps = {}) {
           }
 
           const kwList = Array.from(aliKeywords).slice(0, 5);
-          const keywords = kwList.length > 0 ? kwList : ['promo', 'cupom', 'desconto', 'oferta', 'fones'];
+          const keywords =
+            kwList.length > 0 ? kwList : ['promo', 'cupom', 'desconto', 'oferta', 'fones'];
 
           const aliCoupons = await fetchAli(aliCreds, { keywords });
           let created = 0;
@@ -84,7 +85,14 @@ export function createCouponSyncProcessor(deps: CouponSyncProcessorDeps = {}) {
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         log.error({ tenantId, err: errorMsg }, 'falha ao sincronizar cupons do AliExpress');
-        results.push({ source: 'ALIEXPRESS', ok: false, created: 0, updated: 0, expired: 0, error: errorMsg });
+        results.push({
+          source: 'ALIEXPRESS',
+          ok: false,
+          created: 0,
+          updated: 0,
+          expired: 0,
+          error: errorMsg,
+        });
       }
     }
 
@@ -95,14 +103,13 @@ export function createCouponSyncProcessor(deps: CouponSyncProcessorDeps = {}) {
 
     if (awinConn?.encryptedCredentials) {
       try {
-        const awinCreds = decryptJson<AwinCredentials>(
-          Buffer.from(awinConn.encryptedCredentials),
-        );
+        const awinCreds = decryptJson<AwinCredentials>(Buffer.from(awinConn.encryptedCredentials));
 
         if (awinCreds.publisherId && awinCreds.offersApiToken) {
-          const vouchers = await listAwin(
-            { publisherId: awinCreds.publisherId, offersApiToken: awinCreds.offersApiToken },
-          );
+          const vouchers = await listAwin({
+            publisherId: awinCreds.publisherId,
+            offersApiToken: awinCreds.offersApiToken,
+          });
 
           let created = 0;
           let updated = 0;
@@ -147,7 +154,14 @@ export function createCouponSyncProcessor(deps: CouponSyncProcessorDeps = {}) {
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         log.error({ tenantId, err: errorMsg }, 'falha ao sincronizar cupons da Awin');
-        results.push({ source: 'AWIN', ok: false, created: 0, updated: 0, expired: 0, error: errorMsg });
+        results.push({
+          source: 'AWIN',
+          ok: false,
+          created: 0,
+          updated: 0,
+          expired: 0,
+          error: errorMsg,
+        });
       }
     }
 

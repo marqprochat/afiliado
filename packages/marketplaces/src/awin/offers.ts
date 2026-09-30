@@ -82,11 +82,17 @@ export async function listAwinVouchers(
     });
 
     if (res.status === 401 || res.status === 403) {
-      throw new AwinApiError('Token da API de Ofertas da Awin inválido ou não autorizado', 'AWIN_UNAUTHORIZED');
+      throw new AwinApiError(
+        'Token da API de Ofertas da Awin inválido ou não autorizado',
+        'AWIN_UNAUTHORIZED',
+      );
     }
 
     if (!res.ok) {
-      throw new AwinApiError(`Listagem de promoções da Awin respondeu HTTP ${res.status}`, 'AWIN_ERROR');
+      throw new AwinApiError(
+        `Listagem de promoções da Awin respondeu HTTP ${res.status}`,
+        'AWIN_ERROR',
+      );
     }
 
     const json = await res.json();

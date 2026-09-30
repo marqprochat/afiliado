@@ -71,14 +71,22 @@ describe('TelegramClient', () => {
   });
 
   it('sendMessage e sendPhoto retornam o messageId', async () => {
-    const f = fakeFetch([{ ok: true, result: { message_id: 55 } }, { ok: true, result: { message_id: 56 } }]);
+    const f = fakeFetch([
+      { ok: true, result: { message_id: 55 } },
+      { ok: true, result: { message_id: 56 } },
+    ]);
     const client = new TelegramClient('TOKEN', f as unknown as typeof fetch);
     expect(await client.sendMessage('-100123', 'oi')).toEqual({ messageId: 55 });
-    expect(await client.sendPhoto('-100123', 'https://x/img.jpg', 'legenda')).toEqual({ messageId: 56 });
+    expect(await client.sendPhoto('-100123', 'https://x/img.jpg', 'legenda')).toEqual({
+      messageId: 56,
+    });
   });
 
   it('sendMessage e sendPhoto (com legenda) enviam parse_mode HTML', async () => {
-    const f = fakeFetch([{ ok: true, result: { message_id: 1 } }, { ok: true, result: { message_id: 2 } }]);
+    const f = fakeFetch([
+      { ok: true, result: { message_id: 1 } },
+      { ok: true, result: { message_id: 2 } },
+    ]);
     const client = new TelegramClient('TOKEN', f as unknown as typeof fetch);
     await client.sendMessage('-100123', '<b>oi</b>');
     await client.sendPhoto('-100123', 'https://x/img.jpg', '<b>legenda</b>');

@@ -67,7 +67,10 @@ afterAll(async () => {
 describe('importAwinCatalog', () => {
   it('faz upsert dos produtos do feed e remove os que saíram (poda por feed)', async () => {
     const deps = {
-      listDatafeeds: async () => [activeEntry('f1', 'https://x/f1'), activeEntry('f2', 'https://x/f2')],
+      listDatafeeds: async () => [
+        activeEntry('f1', 'https://x/f1'),
+        activeEntry('f2', 'https://x/f2'),
+      ],
       downloadFeed: async (url: string) =>
         url === 'https://x/f1' ? rowsOf([awinRow('p1', '50.00')]) : rowsOf([]),
     };
@@ -210,8 +213,20 @@ describe('importAwinCatalog', () => {
     };
     const results = await importAwinCatalog(deps, tenant2);
     expect(results).toEqual([
-      { feedId: 'f1', ok: false, imported: 0, removed: 0, error: 'Link da lista de feeds da Awin inválido ou não autorizado' },
-      { feedId: 'f2', ok: false, imported: 0, removed: 0, error: 'Link da lista de feeds da Awin inválido ou não autorizado' },
+      {
+        feedId: 'f1',
+        ok: false,
+        imported: 0,
+        removed: 0,
+        error: 'Link da lista de feeds da Awin inválido ou não autorizado',
+      },
+      {
+        feedId: 'f2',
+        ok: false,
+        imported: 0,
+        removed: 0,
+        error: 'Link da lista de feeds da Awin inválido ou não autorizado',
+      },
     ]);
     await prisma.tenant.deleteMany({ where: { id: tenant2 } });
   });
@@ -227,9 +242,14 @@ describe('importAwinCatalog', () => {
       },
     });
     const deps = {
-      listDatafeeds: async () => [activeEntry('f1', 'https://x/f1'), activeEntry('fnotselected', 'https://x/other')],
+      listDatafeeds: async () => [
+        activeEntry('f1', 'https://x/f1'),
+        activeEntry('fnotselected', 'https://x/other'),
+      ],
       downloadFeed: async (url: string) =>
-        url === 'https://x/f1' ? rowsOf([awinRow('p1', '10.00')]) : rowsOf([awinRow('pOther', '10.00')]),
+        url === 'https://x/f1'
+          ? rowsOf([awinRow('p1', '10.00')])
+          : rowsOf([awinRow('pOther', '10.00')]),
     };
     const results = await importAwinCatalog(deps, tenant2);
     expect(results).toEqual([{ feedId: 'f1', ok: true, imported: 1, removed: 0 }]);

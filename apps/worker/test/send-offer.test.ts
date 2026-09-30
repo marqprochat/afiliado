@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { prisma, encryptJson } from '@afilados/db';
-import { createShopeeAdapter, createAwinAdapter, type AwinCredentials } from '@afilados/marketplaces';
+import {
+  createShopeeAdapter,
+  createAwinAdapter,
+  type AwinCredentials,
+} from '@afilados/marketplaces';
 import { sendOffer, type SendOfferDeps } from '../src/processors/send-offer';
 import type { OutgoingMessage, WhatsAppGateway } from '../src/wa/gateway';
 import { closeRedis } from '../src/lib/redis';
@@ -42,6 +46,16 @@ class FakeGateway implements WhatsAppGateway {
       participants: [],
     };
   }
+  onGroupParticipants() {}
+  async getGroupSnapshot(_s: string, jid: string) {
+    return {
+      jid,
+      subject: 'Grupo',
+      memberCount: 1,
+      inviteCode: null,
+    };
+  }
+  async updateGroupPicture() {}
 }
 
 let tenantId: string;
@@ -197,10 +211,7 @@ describe('sendOffer', () => {
     });
     const enqueued: unknown[] = [];
     const { item } = await makeBatch({ telegramChatIds: ['-100999', '-desconhecido'] });
-    await sendOffer(
-      { ...deps, enqueueTelegram: async (job) => void enqueued.push(job) },
-      item.id,
-    );
+    await sendOffer({ ...deps, enqueueTelegram: async (job) => void enqueued.push(job) }, item.id);
     expect(enqueued).toEqual([
       {
         jobId: `${item.id}--100999`,

@@ -1,8 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { mapAwinRow, parseAwinPrice } from '../src/awin/mapper';
 
-const awinFeed = { feedId: 'f1', advertiserId: '111', advertiserName: 'Loja X', format: 'Awin' as const };
-const googleFeed = { feedId: 'f2', advertiserId: '222', advertiserName: 'Loja Y', format: 'Google' as const };
+const awinFeed = {
+  feedId: 'f1',
+  advertiserId: '111',
+  advertiserName: 'Loja X',
+  format: 'Awin' as const,
+};
+const googleFeed = {
+  feedId: 'f2',
+  advertiserId: '222',
+  advertiserName: 'Loja Y',
+  format: 'Google' as const,
+};
 
 describe('parseAwinPrice', () => {
   it('extrai o primeiro número da string', () => {
@@ -81,12 +91,20 @@ describe('mapAwinRow — formato Awin', () => {
   it('retorna null quando falta um campo obrigatório ou preço não numérico', () => {
     expect(mapAwinRow({ aw_product_id: 'p3' }, awinFeed)).toBeNull();
     expect(
-      mapAwinRow({ aw_product_id: 'p3', aw_deep_link: 'x', product_name: 'n', search_price: 'abc' }, awinFeed),
+      mapAwinRow(
+        { aw_product_id: 'p3', aw_deep_link: 'x', product_name: 'n', search_price: 'abc' },
+        awinFeed,
+      ),
     ).toBeNull();
   });
 
   it('retorna null quando fora de estoque ou não à venda', () => {
-    const base = { aw_product_id: 'p1', aw_deep_link: 'https://x', product_name: 'n', search_price: '10' };
+    const base = {
+      aw_product_id: 'p1',
+      aw_deep_link: 'https://x',
+      product_name: 'n',
+      search_price: '10',
+    };
     expect(mapAwinRow({ ...base, in_stock: '0' }, awinFeed)).toBeNull();
     expect(mapAwinRow({ ...base, is_for_sale: '0' }, awinFeed)).toBeNull();
   });

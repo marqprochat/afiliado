@@ -256,10 +256,7 @@ export default function CuponsPage() {
         </div>
 
         <div>
-          <Select
-            value={statusFilter}
-            onValueChange={(v) => setStatusFilter(v ?? 'ALL')}
-          >
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v ?? 'ALL')}>
             <SelectTrigger className="h-9 text-xs">
               <SelectValue placeholder="Todos os Status" />
             </SelectTrigger>
@@ -275,10 +272,7 @@ export default function CuponsPage() {
         </div>
 
         <div>
-          <Select
-            value={originFilter}
-            onValueChange={(v) => setOriginFilter(v ?? 'ALL')}
-          >
+          <Select value={originFilter} onValueChange={(v) => setOriginFilter(v ?? 'ALL')}>
             <SelectTrigger className="h-9 text-xs">
               <SelectValue placeholder="Todas as Origens" />
             </SelectTrigger>
@@ -372,9 +366,7 @@ export default function CuponsPage() {
                       )}
                     </div>
                     {c.minSpend && (
-                      <div className="text-muted-foreground text-[11px]">
-                        Mín. R$ {c.minSpend}
-                      </div>
+                      <div className="text-muted-foreground text-[11px]">Mín. R$ {c.minSpend}</div>
                     )}
                   </TableCell>
 
@@ -393,7 +385,11 @@ export default function CuponsPage() {
 
                   <TableCell className="text-xs whitespace-nowrap">
                     {c.expiresAt ? (
-                      <span className={isExpired ? 'text-rose-500 font-medium' : 'text-muted-foreground'}>
+                      <span
+                        className={
+                          isExpired ? 'text-rose-500 font-medium' : 'text-muted-foreground'
+                        }
+                      >
                         {new Date(c.expiresAt).toLocaleDateString('pt-BR')}
                       </span>
                     ) : (
@@ -467,10 +463,7 @@ export default function CuponsPage() {
         }}
       />
 
-      <CouponParseModal
-        open={parseOpen}
-        onClose={() => setParseOpen(false)}
-      />
+      <CouponParseModal open={parseOpen} onClose={() => setParseOpen(false)} />
 
       <CouponChecksDrawer
         coupon={selectedCouponForChecks}

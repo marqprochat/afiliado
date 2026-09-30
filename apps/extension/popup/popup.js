@@ -18,6 +18,45 @@ document.addEventListener('DOMContentLoaded', async () => {
   const mlPill = document.getElementById('ml-session-pill');
   const mlMsg = document.getElementById('ml-session-msg');
   const btnSyncMl = document.getElementById('btn-sync-ml');
+  const discoverSection = document.getElementById('discover-section');
+  const btnDiscover = document.getElementById('btn-discover');
+  const discoverMsg = document.getElementById('discover-msg');
+
+  function renderDiscovery(results) {
+    if (!results || results.length === 0) {
+      discoverMsg.textContent = 'Nenhuma palavra-chave de ML/Magalu nas automações ativas.';
+      discoverMsg.className = 'msg';
+      return;
+    }
+    const failed = results.filter((r) => r.error);
+    const queued = results.reduce((n, r) => n + (r.queued || 0), 0);
+    const lines = results.map((r) =>
+      r.error
+        ? `❌ ${r.marketplace} "${r.keyword}": ${r.error}`
+        : `✅ ${r.marketplace} "${r.keyword}": ${r.found} lidos, ${r.queued} novos na fila`,
+    );
+    discoverMsg.textContent = `${queued} novos na fila\n${lines.join('\n')}`;
+    discoverMsg.style.whiteSpace = 'pre-line';
+    discoverMsg.className = failed.length ? 'msg msg-error' : 'msg msg-success';
+  }
+
+  btnDiscover.addEventListener('click', async () => {
+    btnDiscover.disabled = true;
+    discoverMsg.textContent = 'Buscando… abre abas em segundo plano, pode levar alguns minutos.';
+    discoverMsg.className = 'msg';
+    try {
+      const res = await chrome.runtime.sendMessage({ action: 'DISCOVER_NOW' });
+      if (res && res.ok) renderDiscovery(res.results);
+      else {
+        discoverMsg.textContent = `❌ ${(res && res.error) || 'Falha na descoberta'}`;
+        discoverMsg.className = 'msg msg-error';
+      }
+    } catch {
+      discoverMsg.textContent = '❌ Falha ao falar com a extensão';
+      discoverMsg.className = 'msg msg-error';
+    }
+    btnDiscover.disabled = false;
+  });
 
   function normalizeApiUrl(url) {
     let clean = (url || '').trim().replace(/\/+$/, '');
@@ -94,43 +133,68 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let isAuthed = await checkAuth();
 
-  // --- Destino da captura: Fila de Triagem (padrão) ou uma automação ---
+  // --- Destino da captura: Fila de Triagem (padrão), uma automação ou um lote ativo ---
+  // O valor do <select> carrega o tipo: '' (Triagem), 'rule:<id>' ou 'batch:<id>'. O botão
+  // flutuante da página lê o mesmo destino de `lastCaptureTarget` no chrome.storage.
   let automationRules = [];
+  let activeBatches = [];
 
-  function updateCaptureButtonLabel() {
-    const selected = captureTarget.value;
-    if (!selected) {
-      btnCapture.textContent = '⚡ Enviar para Fila de Triagem';
-      return;
-    }
-    const rule = automationRules.find((r) => r.id === selected);
-    btnCapture.textContent = rule ? `⚡ Enviar para: ${rule.name}` : '⚡ Enviar para Fila de Triagem';
+  const BATCH_STATUS_LABEL = { SCHEDULED: 'agendado', RUNNING: 'rodando', PAUSED: 'pausado' };
+
+  function parseTarget(value) {
+    if (value && value.startsWith('batch:')) return { kind: 'batch', id: value.slice(6) };
+    if (value && value.startsWith('rule:')) return { kind: 'rule', id: value.slice(5) };
+    return { kind: 'triage', id: null };
   }
 
-  async function loadAutomationTargets() {
+  function findTargetName(value) {
+    const t = parseTarget(value);
+    if (t.kind === 'rule') return automationRules.find((r) => r.id === t.id)?.name;
+    if (t.kind === 'batch') return activeBatches.find((b) => b.id === t.id)?.name;
+    return undefined;
+  }
+
+  function updateCaptureButtonLabel() {
+    const t = parseTarget(captureTarget.value);
+    const name = findTargetName(captureTarget.value);
+    if (t.kind === 'batch' && name) btnCapture.textContent = `⚡ Enviar para lote: ${name}`;
+    else if (t.kind === 'rule' && name) btnCapture.textContent = `⚡ Enviar para: ${name}`;
+    else btnCapture.textContent = '⚡ Enviar para Fila de Triagem';
+  }
+
+  async function fetchJsonList(path) {
+    try {
+      const res = await fetch(`${normalizeApiUrl(config.apiUrl)}/api/v1/extension/${path}`, {
+        headers: { Authorization: `Bearer ${config.apiToken}` },
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async function saveCaptureTarget() {
+    if (typeof chrome === 'undefined' || !chrome.storage) return;
+    const value = captureTarget.value;
+    await chrome.storage.local.set({
+      lastCaptureTarget: { value, label: findTargetName(value) || '' },
+    });
+  }
+
+  async function loadCaptureTargets() {
     if (!isAuthed) {
       captureTargetLabel.classList.add('hidden');
       captureTarget.classList.add('hidden');
       return;
     }
-    let fetchFailed = false;
-    try {
-      const url = `${normalizeApiUrl(config.apiUrl)}/api/v1/extension/automations`;
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${config.apiToken}` },
-      });
-      if (!res.ok) {
-        fetchFailed = true;
-        automationRules = [];
-      } else {
-        automationRules = await res.json();
-      }
-    } catch {
-      fetchFailed = true;
-      automationRules = [];
-    }
+    [automationRules, activeBatches] = await Promise.all([
+      fetchJsonList('automations'),
+      fetchJsonList('batches'),
+    ]);
 
-    if (fetchFailed || automationRules.length === 0) {
+    if (automationRules.length === 0 && activeBatches.length === 0) {
       captureTargetLabel.classList.add('hidden');
       captureTarget.classList.add('hidden');
       captureTarget.innerHTML = '';
@@ -145,30 +209,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     defaultOpt.value = '';
     defaultOpt.textContent = 'Fila de Triagem';
     captureTarget.appendChild(defaultOpt);
-    for (const rule of automationRules) {
-      const opt = document.createElement('option');
-      opt.value = rule.id;
-      opt.textContent = rule.name;
-      captureTarget.appendChild(opt);
+
+    function addGroup(label, items, toOption) {
+      if (items.length === 0) return;
+      const group = document.createElement('optgroup');
+      group.label = label;
+      for (const item of items) {
+        const opt = document.createElement('option');
+        const { value, text } = toOption(item);
+        opt.value = value;
+        opt.textContent = text;
+        group.appendChild(opt);
+      }
+      captureTarget.appendChild(group);
     }
+    addGroup('Automações', automationRules, (r) => ({ value: `rule:${r.id}`, text: r.name }));
+    addGroup('Lotes', activeBatches, (b) => ({
+      value: `batch:${b.id}`,
+      text: `${b.name} (${BATCH_STATUS_LABEL[b.status] || b.status} · ${b.pending} pendentes)`,
+    }));
 
     if (typeof chrome !== 'undefined' && chrome.storage) {
       const { lastCaptureTarget } = await chrome.storage.local.get(['lastCaptureTarget']);
-      if (lastCaptureTarget && automationRules.some((r) => r.id === lastCaptureTarget)) {
-        captureTarget.value = lastCaptureTarget;
-      }
+      // Formato antigo: string com o id da automação (sem prefixo).
+      const saved =
+        typeof lastCaptureTarget === 'string'
+          ? lastCaptureTarget && `rule:${lastCaptureTarget}`
+          : lastCaptureTarget && lastCaptureTarget.value;
+      if (saved && findTargetName(saved) !== undefined) captureTarget.value = saved;
+      // O destino salvo sumiu (lote concluído, automação desativada): volta para a Triagem.
+      else if (saved) await saveCaptureTarget();
     }
     updateCaptureButtonLabel();
   }
 
   captureTarget.addEventListener('change', async () => {
     updateCaptureButtonLabel();
-    if (typeof chrome !== 'undefined' && chrome.storage) {
-      await chrome.storage.local.set({ lastCaptureTarget: captureTarget.value });
-    }
+    await saveCaptureTarget();
   });
 
-  await loadAutomationTargets();
+  await loadCaptureTargets();
 
   // --- Sessão do Mercado Livre (cookies → link oficial meli.la) ---
   function fmtDate(iso) {
@@ -183,6 +263,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof chrome === 'undefined' || !chrome.storage) return;
     const { mlSessionSync } = await chrome.storage.local.get(['mlSessionSync']);
     mlSection.classList.remove('hidden');
+    discoverSection.classList.remove('hidden');
     if (mlSessionSync && mlSessionSync.ok) {
       mlPill.textContent = `Sincronizada ${fmtDate(mlSessionSync.syncedAt || mlSessionSync.at)}`;
       mlPill.className = 'pill pill-on';
@@ -241,7 +322,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         .then(renderMlSession)
         .catch(() => {});
       setTimeout(() => inspectCurrentTab(), 500);
-      void loadAutomationTargets();
+      void loadCaptureTargets();
     }
   });
 
@@ -340,17 +421,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     captureStatus.textContent = 'Enviando oferta para o Afilados...';
     captureStatus.className = 'msg';
 
+    const target = parseTarget(captureTarget.value);
     const payload = {
       url: currentProduct.url,
       marketplaceKind: currentProduct.marketplaceKind,
       ...(currentProduct.title ? { title: currentProduct.title } : {}),
-      ...(currentProduct.price !== null && currentProduct.price !== undefined ? { price: currentProduct.price } : {}),
+      ...(currentProduct.price !== null && currentProduct.price !== undefined
+        ? { price: currentProduct.price }
+        : {}),
       ...(currentProduct.originalPrice ? { originalPrice: currentProduct.originalPrice } : {}),
       ...(currentProduct.discountPct ? { discountPct: currentProduct.discountPct } : {}),
-      ...(currentProduct.images && currentProduct.images.length > 0 ? { images: currentProduct.images } : {}),
-      ...(currentProduct.shipping && currentProduct.shipping !== 'UNKNOWN' ? { shipping: currentProduct.shipping } : {}),
+      ...(currentProduct.images && currentProduct.images.length > 0
+        ? { images: currentProduct.images }
+        : {}),
+      ...(currentProduct.shipping && currentProduct.shipping !== 'UNKNOWN'
+        ? { shipping: currentProduct.shipping }
+        : {}),
       ...(currentProduct.couponCode ? { couponCode: currentProduct.couponCode } : {}),
-      ...(captureTarget.value ? { automationRuleId: captureTarget.value } : {}),
+      ...(target.kind === 'rule' ? { automationRuleId: target.id } : {}),
+      ...(target.kind === 'batch' ? { batchId: target.id } : {}),
     };
 
     try {
@@ -365,10 +454,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
 
       if (res.ok) {
-        const destino = captureTarget.value
-          ? `automação "${automationRules.find((r) => r.id === captureTarget.value)?.name ?? ''}"`
-          : 'Fila de Triagem';
-        captureStatus.textContent = `✅ Oferta adicionada em ${destino}!`;
+        const data = await res.json().catch(() => null);
+        const name = findTargetName(captureTarget.value) ?? '';
+        if (target.kind === 'batch') {
+          captureStatus.textContent = data?.batchItem?.runAt
+            ? `✅ Adicionado como próximo envio do lote "${name}"!`
+            : `✅ Adicionado ao lote "${name}" (pausado): sai primeiro quando for retomado.`;
+        } else {
+          const destino = target.kind === 'rule' ? `automação "${name}"` : 'Fila de Triagem';
+          captureStatus.textContent = `✅ Oferta adicionada em ${destino}!`;
+        }
         captureStatus.className = 'msg msg-success';
         btnCapture.textContent = '✓ Adicionado';
       } else {
@@ -376,6 +471,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         captureStatus.textContent = `❌ ${err?.error?.message || 'Falha ao capturar oferta'}`;
         captureStatus.className = 'msg msg-error';
         btnCapture.disabled = false;
+        // Lote concluído/cancelado ou removido: atualiza a lista para ele sair do seletor.
+        if (err?.error?.code === 'BATCH_INACTIVE' || res.status === 404) void loadCaptureTargets();
       }
     } catch (e) {
       captureStatus.textContent = '❌ Erro de conexão com a API';

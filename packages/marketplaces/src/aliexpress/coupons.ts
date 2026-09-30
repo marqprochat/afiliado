@@ -89,11 +89,13 @@ export async function fetchAliexpressPromoCodes(
           target_currency: 'BRL',
           target_language: 'PT',
           ship_to_country: 'BR',
-          fields: 'commission_rate,sale_price,product_id,product_title,product_detail_url,target_sale_price,promo_code_info',
+          fields:
+            'commission_rate,sale_price,product_id,product_title,product_detail_url,target_sale_price,promo_code_info',
         });
 
         const products =
-          res?.aliexpress_affiliate_product_query_response?.resp_result?.result?.products?.product ??
+          res?.aliexpress_affiliate_product_query_response?.resp_result?.result?.products
+            ?.product ??
           res?.resp_result?.result?.products?.product ??
           [];
 

@@ -26,15 +26,19 @@ export function mapAliexpressProduct(raw: AliexpressRawProduct): ProductData {
 
   // Preço atual
   const priceRaw = raw.target_sale_price ?? raw.sale_price ?? '0';
-  const price = typeof priceRaw === 'number' ? priceRaw : parseFloat(String(priceRaw).replace(/[^0-9.]/g, '')) || 0;
+  const price =
+    typeof priceRaw === 'number'
+      ? priceRaw
+      : parseFloat(String(priceRaw).replace(/[^0-9.]/g, '')) || 0;
 
   // Preço original
   const origRaw = raw.target_original_price ?? raw.original_price;
-  const originalPrice = origRaw != null
-    ? typeof origRaw === 'number'
-      ? origRaw
-      : parseFloat(String(origRaw).replace(/[^0-9.]/g, '')) || undefined
-    : undefined;
+  const originalPrice =
+    origRaw != null
+      ? typeof origRaw === 'number'
+        ? origRaw
+        : parseFloat(String(origRaw).replace(/[^0-9.]/g, '')) || undefined
+      : undefined;
 
   // Desconto em porcentagem
   let discountPct: number | undefined;
@@ -65,7 +69,10 @@ export function mapAliexpressProduct(raw: AliexpressRawProduct): ProductData {
   // Prioriza a página canônica do produto: originalUrl é reenviado depois como source_values de
   // aliexpress.affiliate.link.generate (toAffiliateLink), e passar um promotion_link já encurtado
   // ali gera um link de afiliado em cima de outro — suspeito de causar o "page not found" no app.
-  const originalUrl = raw.product_detail_url || raw.promotion_link || `https://pt.aliexpress.com/item/${externalId}.html`;
+  const originalUrl =
+    raw.product_detail_url ||
+    raw.promotion_link ||
+    `https://pt.aliexpress.com/item/${externalId}.html`;
 
   // Comissão em %
   let commissionPct: number | undefined;
@@ -89,7 +96,9 @@ export function mapAliexpressProduct(raw: AliexpressRawProduct): ProductData {
     ...(raw.lastest_volume != null ? { salesCount: raw.lastest_volume } : {}),
     ...(commissionPct != null ? { commissionPct } : {}),
     ...(raw.shop_id != null ? { shopId: String(raw.shop_id) } : {}),
-    ...(raw.shop_title || raw.shop_name ? { shopName: String(raw.shop_title || raw.shop_name) } : {}),
+    ...(raw.shop_title || raw.shop_name
+      ? { shopName: String(raw.shop_title || raw.shop_name) }
+      : {}),
     raw: raw as unknown as object,
   };
 }

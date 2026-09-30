@@ -52,7 +52,11 @@ describe('automations routes', () => {
   });
 
   it('lista regras com estatísticas derivadas do log', async () => {
-    const res = await app.inject({ method: 'GET', url: '/api/v1/automations', headers: { cookie } });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/automations',
+      headers: { cookie },
+    });
     expect(res.statusCode).toBe(200);
     const rule = res.json().find((r: { id: string }) => r.id === ruleId);
     expect(rule.stats).toEqual({
@@ -69,17 +73,29 @@ describe('automations routes', () => {
     const { automationDiscoveringKey } = await import('@afilados/shared');
     const key = automationDiscoveringKey(ruleId);
 
-    const before = await app.inject({ method: 'GET', url: '/api/v1/automations', headers: { cookie } });
+    const before = await app.inject({
+      method: 'GET',
+      url: '/api/v1/automations',
+      headers: { cookie },
+    });
     const ruleBefore = before.json().find((r: { id: string }) => r.id === ruleId);
     expect(ruleBefore.stats.isDiscovering).toBe(false);
 
     await getRedis().set(key, '1', 'EX', 60);
-    const during = await app.inject({ method: 'GET', url: '/api/v1/automations', headers: { cookie } });
+    const during = await app.inject({
+      method: 'GET',
+      url: '/api/v1/automations',
+      headers: { cookie },
+    });
     const ruleDuring = during.json().find((r: { id: string }) => r.id === ruleId);
     expect(ruleDuring.stats.isDiscovering).toBe(true);
 
     await getRedis().del(key);
-    const after = await app.inject({ method: 'GET', url: '/api/v1/automations', headers: { cookie } });
+    const after = await app.inject({
+      method: 'GET',
+      url: '/api/v1/automations',
+      headers: { cookie },
+    });
     const ruleAfter = after.json().find((r: { id: string }) => r.id === ruleId);
     expect(ruleAfter.stats.isDiscovering).toBe(false);
   });
@@ -141,7 +157,12 @@ describe('automations routes', () => {
 
   it('rejeita couponId de outro tenant (IDOR) → 404', async () => {
     const foreignCoupon = await prisma.coupon.create({
-      data: { tenantId: other.tenantId, store: 'AMAZON', code: 'FOREIGN10', description: 'de outro tenant' },
+      data: {
+        tenantId: other.tenantId,
+        store: 'AMAZON',
+        code: 'FOREIGN10',
+        description: 'de outro tenant',
+      },
     });
     const res = await app.inject({
       method: 'POST',
@@ -157,7 +178,9 @@ describe('automations routes', () => {
       headers: { cookie },
     });
     const items = listRes.json();
-    expect(items.some((i: { couponId: string | null }) => i.couponId === foreignCoupon.id)).toBe(false);
+    expect(items.some((i: { couponId: string | null }) => i.couponId === foreignCoupon.id)).toBe(
+      false,
+    );
   });
 
   it('rejeita templateId de outro tenant no cupom manual (IDOR) → 404', async () => {
@@ -223,7 +246,14 @@ describe('automations routes', () => {
       data: { tenantId: t.tenantId, store: 'SHOPEE', code: 'PROMO30', description: '30% off' },
     });
     await prisma.automationQueueItem.create({
-      data: { tenantId: t.tenantId, ruleId, kind: 'COUPON', couponId: extraCoupon.id, templateId, manual: true },
+      data: {
+        tenantId: t.tenantId,
+        ruleId,
+        kind: 'COUPON',
+        couponId: extraCoupon.id,
+        templateId,
+        manual: true,
+      },
     });
 
     const items = await prisma.automationQueueItem.findMany({
@@ -280,9 +310,18 @@ describe('automations routes', () => {
       data: { tenantId: t.tenantId, store: 'AMAZON', code: 'OUTRAREGRA', description: 'x' },
     });
     const foreignItem = await prisma.automationQueueItem.create({
-      data: { tenantId: t.tenantId, ruleId: otherRule.id, kind: 'COUPON', couponId: otherCoupon.id, templateId, manual: true },
+      data: {
+        tenantId: t.tenantId,
+        ruleId: otherRule.id,
+        kind: 'COUPON',
+        couponId: otherCoupon.id,
+        templateId,
+        manual: true,
+      },
     });
-    const own = await prisma.automationQueueItem.findFirst({ where: { ruleId, status: 'PENDING' } });
+    const own = await prisma.automationQueueItem.findFirst({
+      where: { ruleId, status: 'PENDING' },
+    });
 
     const res = await app.inject({
       method: 'PATCH',

@@ -12,10 +12,7 @@ const SERVER_ERROR_RETRY_MS = 1000;
 const MAX_IMAGES = 6;
 
 export type MlApiErrorCode =
-  | 'ML_API_UNAUTHORIZED'
-  | 'ML_API_RATE_LIMITED'
-  | 'ML_API_NOT_FOUND'
-  | 'ML_API_ERROR';
+  'ML_API_UNAUTHORIZED' | 'ML_API_RATE_LIMITED' | 'ML_API_NOT_FOUND' | 'ML_API_ERROR';
 
 export class MlApiError extends Error {
   constructor(
@@ -91,14 +88,26 @@ async function mlApiGet<T>(path: string, accessToken: string, opts: MlApiOptions
     if (res.ok) return (await res.json()) as T;
 
     if (res.status === 401 || res.status === 403) {
-      throw new MlApiError('API do Mercado Livre recusou o acesso (token inválido ou sem permissão)', 'ML_API_UNAUTHORIZED', res.status);
+      throw new MlApiError(
+        'API do Mercado Livre recusou o acesso (token inválido ou sem permissão)',
+        'ML_API_UNAUTHORIZED',
+        res.status,
+      );
     }
     if (res.status === 404) {
-      throw new MlApiError('Recurso não encontrado na API do Mercado Livre', 'ML_API_NOT_FOUND', 404);
+      throw new MlApiError(
+        'Recurso não encontrado na API do Mercado Livre',
+        'ML_API_NOT_FOUND',
+        404,
+      );
     }
     if (res.status === 429) {
       if (rateLimitAttempts >= RATE_LIMIT_BACKOFF_MS.length) {
-        throw new MlApiError('Limite de requisições da API do Mercado Livre excedido', 'ML_API_RATE_LIMITED', 429);
+        throw new MlApiError(
+          'Limite de requisições da API do Mercado Livre excedido',
+          'ML_API_RATE_LIMITED',
+          429,
+        );
       }
       await sleep(RATE_LIMIT_BACKOFF_MS[rateLimitAttempts]!);
       rateLimitAttempts++;
@@ -109,7 +118,11 @@ async function mlApiGet<T>(path: string, accessToken: string, opts: MlApiOptions
       await sleep(SERVER_ERROR_RETRY_MS);
       continue;
     }
-    throw new MlApiError(`API do Mercado Livre respondeu HTTP ${res.status}`, 'ML_API_ERROR', res.status);
+    throw new MlApiError(
+      `API do Mercado Livre respondeu HTTP ${res.status}`,
+      'ML_API_ERROR',
+      res.status,
+    );
   }
 }
 
@@ -119,7 +132,9 @@ async function mlApiGet<T>(path: string, accessToken: string, opts: MlApiOptions
  * Links de anúncio individual (`MLB-123-…`) e listagens não resolvem: dependem de endpoints que
  * respondem 403 para este app.
  */
-export function extractMlCatalogRef(rawUrl: string): { productId: string; offerId?: string } | undefined {
+export function extractMlCatalogRef(
+  rawUrl: string,
+): { productId: string; offerId?: string } | undefined {
   let u: URL;
   try {
     u = new URL(rawUrl);

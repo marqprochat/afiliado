@@ -76,7 +76,8 @@ describe('AliexpressClient', () => {
     expect(calledUrl).toContain('method=aliexpress.affiliate.link.generate');
 
     expect(
-      res.aliexpress_affiliate_link_generate_response.resp_result.result.promotion_links.promotion_link[0].promotion_link,
+      res.aliexpress_affiliate_link_generate_response.resp_result.result.promotion_links
+        .promotion_link[0].promotion_link,
     ).toBe('https://s.click.aliexpress.com/e/_test');
   });
 

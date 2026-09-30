@@ -40,6 +40,20 @@ export interface GroupDetails {
   inviteCode: string | null;
   participants: { jid: string; admin: 'admin' | 'superadmin' | null }[];
 }
+export interface GroupParticipantsUpdateEvent {
+  sessionId: string;
+  jid: string;
+  participants: string[];
+  action: GroupParticipantAction;
+}
+
+export interface GroupSnapshot {
+  jid: string;
+  subject: string;
+  memberCount: number;
+  inviteCode: string | null;
+}
+
 export interface WhatsAppGateway {
   isConnected(sessionId: string): boolean;
   sendMessage(
@@ -50,8 +64,13 @@ export interface WhatsAppGateway {
   ): Promise<{ messageId: string }>;
   fetchGroups(sessionId: string): Promise<GroupInfo[]>;
   onMessage(handler: (msg: IncomingGroupMessage) => void): void;
+  onGroupParticipants(handler: (event: GroupParticipantsUpdateEvent) => void): void;
   downloadMedia(sessionId: string, message: unknown): Promise<Buffer>;
-  createGroup(sessionId: string, subject: string, participantPhones: string[]): Promise<{ jid: string }>;
+  createGroup(
+    sessionId: string,
+    subject: string,
+    participantPhones: string[],
+  ): Promise<{ jid: string }>;
   updateGroupParticipants(
     sessionId: string,
     jid: string,
@@ -65,4 +84,6 @@ export interface WhatsAppGateway {
   ): Promise<void>;
   getInviteCode(sessionId: string, jid: string, revoke?: boolean): Promise<string>;
   getGroupDetails(sessionId: string, jid: string): Promise<GroupDetails>;
+  getGroupSnapshot(sessionId: string, jid: string): Promise<GroupSnapshot>;
+  updateGroupPicture(sessionId: string, jid: string, image: Buffer): Promise<void>;
 }

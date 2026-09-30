@@ -39,7 +39,10 @@ export function createAliexpressAdapter(
 
     async checkConnection(creds: AliexpressCredentials): Promise<ConnectionStatus> {
       if (!creds.appKey || !creds.appSecret || !creds.trackingId) {
-        return { ok: false, error: 'Credenciais incompletas (appKey, appSecret ou trackingId ausente)' };
+        return {
+          ok: false,
+          error: 'Credenciais incompletas (appKey, appSecret ou trackingId ausente)',
+        };
       }
       try {
         const client = getClient(creds);
@@ -56,7 +59,7 @@ export function createAliexpressAdapter(
 
     async search(creds: AliexpressCredentials, query: SearchQuery): Promise<ProductData[]> {
       const client = getClient(creds);
-      const sort = query.sort ? SORT_MAP[query.sort] ?? 'last_volume_desc' : 'last_volume_desc';
+      const sort = query.sort ? (SORT_MAP[query.sort] ?? 'last_volume_desc') : 'last_volume_desc';
       const pageSize = query.limit ? Math.min(query.limit, 50) : 20;
 
       const method =
@@ -122,7 +125,11 @@ export function createAliexpressAdapter(
       return rawList.map(mapAliexpressProduct);
     },
 
-    async toAffiliateLink(creds: AliexpressCredentials, url: string, subId?: string): Promise<string> {
+    async toAffiliateLink(
+      creds: AliexpressCredentials,
+      url: string,
+      subId?: string,
+    ): Promise<string> {
       const client = getClient(creds);
       const businessParams: Record<string, unknown> = {
         promotion_link_type: 0,

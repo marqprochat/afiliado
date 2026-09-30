@@ -8,8 +8,12 @@ let templateId: string;
 
 beforeAll(async () => {
   tenantId = (await prisma.tenant.create({ data: { name: 'automation-scheduler-test' } })).id;
-  sessionId = (await prisma.waSession.create({ data: { tenantId, label: 's', status: 'CONNECTED' } })).id;
-  templateId = (await prisma.template.create({ data: { tenantId, name: 't', body: '{titulo} {link}' } })).id;
+  sessionId = (
+    await prisma.waSession.create({ data: { tenantId, label: 's', status: 'CONNECTED' } })
+  ).id;
+  templateId = (
+    await prisma.template.create({ data: { tenantId, name: 't', body: '{titulo} {link}' } })
+  ).id;
 });
 afterAll(async () => {
   await prisma.tenant.deleteMany({ where: { id: tenantId } });
@@ -63,7 +67,9 @@ describe('AutomationScheduler', () => {
 
     expect(enqueued.length).toBe(1);
     expect(discoverCalls.length).toBe(0); // item manual pulou a descoberta
-    const queueItem = await prisma.automationQueueItem.findFirstOrThrow({ where: { ruleId: rule.id } });
+    const queueItem = await prisma.automationQueueItem.findFirstOrThrow({
+      where: { ruleId: rule.id },
+    });
     expect(queueItem.status).toBe('DISPATCHED');
     const log = await prisma.automationLog.findFirstOrThrow({ where: { ruleId: rule.id } });
     expect(log.action).toBe('DISPATCHED');
@@ -110,7 +116,9 @@ describe('AutomationScheduler', () => {
     await scheduler.tick();
 
     expect(enqueued.length).toBe(0);
-    const queueItem = await prisma.automationQueueItem.findFirstOrThrow({ where: { ruleId: rule.id } });
+    const queueItem = await prisma.automationQueueItem.findFirstOrThrow({
+      where: { ruleId: rule.id },
+    });
     // item inelegível é removido da fila (não fica travando o topo indefinidamente)
     expect(queueItem.status).toBe('REMOVED');
     const log = await prisma.automationLog.findFirstOrThrow({ where: { ruleId: rule.id } });
@@ -175,12 +183,19 @@ describe('AutomationScheduler', () => {
 
     expect(enqueued.length).toBe(1);
 
-    const first = await prisma.automationQueueItem.findUniqueOrThrow({ where: { id: firstItem.id } });
+    const first = await prisma.automationQueueItem.findUniqueOrThrow({
+      where: { id: firstItem.id },
+    });
     expect(first.status).toBe('REMOVED');
-    const second = await prisma.automationQueueItem.findUniqueOrThrow({ where: { id: secondItem.id } });
+    const second = await prisma.automationQueueItem.findUniqueOrThrow({
+      where: { id: secondItem.id },
+    });
     expect(second.status).toBe('DISPATCHED');
 
-    const logs = await prisma.automationLog.findMany({ where: { ruleId: rule.id }, orderBy: { createdAt: 'asc' } });
+    const logs = await prisma.automationLog.findMany({
+      where: { ruleId: rule.id },
+      orderBy: { createdAt: 'asc' },
+    });
     expect(logs.map((l) => l.action)).toEqual(['SKIPPED', 'DISPATCHED']);
   });
 
@@ -232,8 +247,12 @@ describe('AutomationScheduler', () => {
     await scheduler.tick();
 
     expect(enqueued.length).toBe(1);
-    const dispatchedAuto = await prisma.automationQueueItem.findUniqueOrThrow({ where: { id: autoItem.id } });
-    const stillPendingManual = await prisma.automationQueueItem.findUniqueOrThrow({ where: { id: manualItem.id } });
+    const dispatchedAuto = await prisma.automationQueueItem.findUniqueOrThrow({
+      where: { id: autoItem.id },
+    });
+    const stillPendingManual = await prisma.automationQueueItem.findUniqueOrThrow({
+      where: { id: manualItem.id },
+    });
     expect(dispatchedAuto.status).toBe('DISPATCHED');
     expect(stillPendingManual.status).toBe('PENDING');
   });

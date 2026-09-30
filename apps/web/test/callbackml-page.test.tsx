@@ -67,7 +67,9 @@ describe('página /callbackml (retorno do OAuth do Mercado Livre)', () => {
   it('erro da API mostra a mensagem e o endereço para uso manual', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => respond(400, { error: { message: 'Autorização expirada ou inválida — refaça a conexão' } })),
+      vi.fn(async () =>
+        respond(400, { error: { message: 'Autorização expirada ou inválida — refaça a conexão' } }),
+      ),
     );
     openAt('?code=TG-abc&state=st-1');
 

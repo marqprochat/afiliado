@@ -177,7 +177,10 @@ describe('MarketplaceDrawer', () => {
         feedback={null}
       />,
     );
-    expect(screen.getByLabelText(/client secret/i)).toHaveAttribute('placeholder', '•••• (já salvo)');
+    expect(screen.getByLabelText(/client secret/i)).toHaveAttribute(
+      'placeholder',
+      '•••• (já salvo)',
+    );
   });
 
   it('permite preencher e enviar Publisher ID e Token de Ofertas da Awin', async () => {

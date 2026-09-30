@@ -90,10 +90,9 @@ describe('BaileysGateway.sendMessage', () => {
     });
 
     expect(result.messageId).toBeTruthy();
-    expect(sock.sendMessage).toHaveBeenCalledWith(
-      '5511999999999@s.whatsapp.net',
-      { text: 'Oi, isso é um teste' },
-    );
+    expect(sock.sendMessage).toHaveBeenCalledWith('5511999999999@s.whatsapp.net', {
+      text: 'Oi, isso é um teste',
+    });
 
     await gw.stopAll();
   });

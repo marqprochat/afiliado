@@ -1,4 +1,11 @@
-export const MARKETPLACE_KINDS = ['SHOPEE', 'MERCADOLIVRE', 'AMAZON', 'MAGALU', 'AWIN', 'ALIEXPRESS'] as const;
+export const MARKETPLACE_KINDS = [
+  'SHOPEE',
+  'MERCADOLIVRE',
+  'AMAZON',
+  'MAGALU',
+  'AWIN',
+  'ALIEXPRESS',
+] as const;
 export type MarketplaceKind = (typeof MARKETPLACE_KINDS)[number];
 
 export const PRODUCT_SOURCES = [...MARKETPLACE_KINDS, 'MANUAL'] as const;
@@ -58,3 +65,17 @@ export type CouponDiscountType = (typeof COUPON_DISCOUNT_TYPES)[number];
 export const COUPON_CHECK_METHODS = ['MANUAL', 'EXTENSION', 'SOURCE', 'EXPIRY'] as const;
 export type CouponCheckMethod = (typeof COUPON_CHECK_METHODS)[number];
 
+export const GROUP_TEXT_POSITIONS = ['PREFIX', 'SUFFIX'] as const;
+export type GroupTextPosition = (typeof GROUP_TEXT_POSITIONS)[number];
+
+export const GROUP_LINK_STATUSES = ['ACTIVE', 'PAUSED', 'ERROR'] as const;
+export type GroupLinkStatus = (typeof GROUP_LINK_STATUSES)[number];
+
+export const MANAGED_GROUP_STATUSES = [
+  'CREATING',
+  'STANDBY',
+  'ACTIVE',
+  'FULL',
+  'ORPHANED',
+] as const;
+export type ManagedGroupStatus = (typeof MANAGED_GROUP_STATUSES)[number];

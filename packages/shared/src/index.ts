@@ -11,3 +11,4 @@ export * from './cookie-parser';
 export * from './automation';
 export * from './awin';
 export * from './coupon';
+export * from './group-links';

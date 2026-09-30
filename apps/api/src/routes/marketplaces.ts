@@ -55,40 +55,44 @@ export async function marketplacesRoutes(app: FastifyInstance) {
                 appSecret: body.appSecret ?? prev.appSecret,
                 trackingId: body.trackingId ?? body.affiliateTag ?? prev.trackingId,
               }
-          : kind === 'AWIN'
-            ? {
-                feedListUrl: body.feedListUrl ?? prev.feedListUrl,
-                // Sem link salvo antes (1ª configuração ou credencial do formato antigo), os
-                // feedIds guardados não vieram da lista real — começa a seleção do zero.
-                feedIds: body.feedIds ?? (prev.feedListUrl ? (prev.feedIds ?? []) : []),
-                publisherId: body.publisherId !== undefined ? body.publisherId : prev.publisherId,
-                offersApiToken: body.offersApiToken !== undefined ? body.offersApiToken : prev.offersApiToken,
-              }
-            : kind === 'MERCADOLIVRE'
+            : kind === 'AWIN'
               ? {
-                  mattWord: body.mattWord ?? prev.mattWord,
-                  mattTool: body.mattTool ?? prev.mattTool,
-                  // sessão sincronizada pela extensão/manualmente não é editável aqui; só preservada
-                  ...(prev.mlSession ? { mlSession: prev.mlSession } : {}),
-                  // conexão OAuth com a API oficial: só muda pelo fluxo /oauth; aqui só é preservada
-                  ...(prev.mlApi ? { mlApi: prev.mlApi } : {}),
+                  feedListUrl: body.feedListUrl ?? prev.feedListUrl,
+                  // Sem link salvo antes (1ª configuração ou credencial do formato antigo), os
+                  // feedIds guardados não vieram da lista real — começa a seleção do zero.
+                  feedIds: body.feedIds ?? (prev.feedListUrl ? (prev.feedIds ?? []) : []),
+                  publisherId: body.publisherId !== undefined ? body.publisherId : prev.publisherId,
+                  offersApiToken:
+                    body.offersApiToken !== undefined ? body.offersApiToken : prev.offersApiToken,
                 }
-              : {
-                  tag: body.affiliateTag ?? prev.tag,
-                  // sessão manual (Amazon/Magalu) não é editável aqui; só preservada
-                  ...(prev.amazonSession ? { amazonSession: prev.amazonSession } : {}),
-                  ...(prev.magaluSession ? { magaluSession: prev.magaluSession } : {}),
-                  // Client ID/Secret da Creators API só são substituídos quando os dois vêm
-                  // juntos no body; caso contrário preserva o que já estava salvo (ou undefined).
-                  ...(kind === 'AMAZON'
-                    ? {
-                        amazonApi:
-                          body.amazonClientId && body.amazonClientSecret
-                            ? { clientId: body.amazonClientId, clientSecret: body.amazonClientSecret }
-                            : prev.amazonApi,
-                      }
-                    : {}),
-                },
+              : kind === 'MERCADOLIVRE'
+                ? {
+                    mattWord: body.mattWord ?? prev.mattWord,
+                    mattTool: body.mattTool ?? prev.mattTool,
+                    // sessão sincronizada pela extensão/manualmente não é editável aqui; só preservada
+                    ...(prev.mlSession ? { mlSession: prev.mlSession } : {}),
+                    // conexão OAuth com a API oficial: só muda pelo fluxo /oauth; aqui só é preservada
+                    ...(prev.mlApi ? { mlApi: prev.mlApi } : {}),
+                  }
+                : {
+                    tag: body.affiliateTag ?? prev.tag,
+                    // sessão manual (Amazon/Magalu) não é editável aqui; só preservada
+                    ...(prev.amazonSession ? { amazonSession: prev.amazonSession } : {}),
+                    ...(prev.magaluSession ? { magaluSession: prev.magaluSession } : {}),
+                    // Client ID/Secret da Creators API só são substituídos quando os dois vêm
+                    // juntos no body; caso contrário preserva o que já estava salvo (ou undefined).
+                    ...(kind === 'AMAZON'
+                      ? {
+                          amazonApi:
+                            body.amazonClientId && body.amazonClientSecret
+                              ? {
+                                  clientId: body.amazonClientId,
+                                  clientSecret: body.amazonClientSecret,
+                                }
+                              : prev.amazonApi,
+                        }
+                      : {}),
+                  },
       (merged, existing) => ({
         status: 'UNCONFIGURED',
         lastError: null,
@@ -222,7 +226,12 @@ export async function marketplacesRoutes(app: FastifyInstance) {
     const job = await q.add(
       'awin-import',
       { tenantId: req.tenantId },
-      { jobId: `awin-import-${req.tenantId}-${Date.now()}`, attempts: 2, removeOnComplete: true, removeOnFail: 50 },
+      {
+        jobId: `awin-import-${req.tenantId}-${Date.now()}`,
+        attempts: 2,
+        removeOnComplete: true,
+        removeOnFail: 50,
+      },
     );
     // Aguarda o job terminar para devolver quantos produtos foram encontrados pelo link do
     // feed — sem isso o usuário só via "os produtos aparecem em alguns minutos" e não tinha
@@ -238,7 +247,13 @@ export async function marketplacesRoutes(app: FastifyInstance) {
       const totalImported = results.reduce((sum, r) => sum + r.imported, 0);
       const totalRemoved = results.reduce((sum, r) => sum + r.removed, 0);
       const failed = results.filter((r) => !r.ok);
-      return { queued: false, totalImported, totalRemoved, failedCount: failed.length, feeds: results };
+      return {
+        queued: false,
+        totalImported,
+        totalRemoved,
+        failedCount: failed.length,
+        feeds: results,
+      };
     } catch {
       // Timeout (feed grande) ou job perdido: cai no fluxo assíncrono anterior — o worker
       // continua processando em background e o catálogo é atualizado de qualquer forma.

@@ -21,6 +21,9 @@ import type {
   IncomingGroupMessage,
   OutgoingMessage,
   WhatsAppGateway,
+  GroupParticipantsUpdateEvent,
+  GroupSnapshot,
+  GroupParticipantAction,
 } from './gateway';
 
 interface Live {
@@ -85,12 +88,17 @@ export class BaileysGateway implements WhatsAppGateway {
   /** reconexões agendadas, mesmo sem socket vivo no mapa `live` */
   private pendingReconnects = new Map<string, NodeJS.Timeout>();
   private messageHandlers: ((m: IncomingGroupMessage) => void)[] = [];
+  private groupParticipantHandlers: ((event: GroupParticipantsUpdateEvent) => void)[] = [];
   /** ids das mensagens enviadas pelo processor de espelhamento, para não reespelhar o próprio eco */
   private dedupedEchoIds = new Set<string>();
   private groupCache = new Map<string, { data: unknown; timestamp: number }>();
 
   onMessage(handler: (m: IncomingGroupMessage) => void) {
     this.messageHandlers.push(handler);
+  }
+
+  onGroupParticipants(handler: (event: GroupParticipantsUpdateEvent) => void) {
+    this.groupParticipantHandlers.push(handler);
   }
 
   async downloadMedia(sessionId: string, message: unknown): Promise<Buffer> {
@@ -218,6 +226,21 @@ export class BaileysGateway implements WhatsAppGateway {
 
     sock.ev.on('group-participants.update', (event) => {
       if (event.id) this.groupCache.delete(event.id);
+      if (event.id && event.participants && event.action) {
+        const payload: GroupParticipantsUpdateEvent = {
+          sessionId,
+          jid: event.id,
+          participants: event.participants,
+          action: event.action as GroupParticipantAction,
+        };
+        for (const h of this.groupParticipantHandlers) {
+          try {
+            h(payload);
+          } catch (err) {
+            log.error({ err, sessionId, jid: event.id }, 'erro no handler de group-participants');
+          }
+        }
+      }
     });
 
     sock.ev.on('creds.update', () => {
@@ -488,7 +511,10 @@ export class BaileysGateway implements WhatsAppGateway {
       const is404 = /404|status code 404/i.test(errMsg);
 
       if (isSessionError && jid.endsWith('@g.us')) {
-        log.warn({ sessionId, jid, errMsg }, 'erro de sessão no grupo; limpando chaves de sender-key e re-obtendo metadados');
+        log.warn(
+          { sessionId, jid, errMsg },
+          'erro de sessão no grupo; limpando chaves de sender-key e re-obtendo metadados',
+        );
         this.groupCache.delete(jid);
         try {
           await prisma.waAuthKey.deleteMany({
@@ -568,7 +594,9 @@ export class BaileysGateway implements WhatsAppGateway {
     participantPhones: string[],
   ): Promise<{ jid: string }> {
     const l = this.liveOrThrow(sessionId);
-    const meta = await l.sock.groupCreate(subject, this.toJids(participantPhones));
+    const jids =
+      participantPhones && participantPhones.length ? this.toJids(participantPhones) : [];
+    const meta = await l.sock.groupCreate(subject, jids);
     return { jid: meta.id };
   }
 
@@ -594,7 +622,10 @@ export class BaileysGateway implements WhatsAppGateway {
       await l.sock.groupUpdateDescription(jid, settings.description);
     }
     if (settings.announceOnly !== undefined) {
-      await l.sock.groupSettingUpdate(jid, settings.announceOnly ? 'announcement' : 'not_announcement');
+      await l.sock.groupSettingUpdate(
+        jid,
+        settings.announceOnly ? 'announcement' : 'not_announcement',
+      );
     }
     this.groupCache.delete(jid);
   }
@@ -623,6 +654,28 @@ export class BaileysGateway implements WhatsAppGateway {
       inviteCode,
       participants: meta.participants.map((p) => ({ jid: p.id, admin: p.admin ?? null })),
     };
+  }
+
+  async getGroupSnapshot(sessionId: string, jid: string): Promise<GroupSnapshot> {
+    const l = this.liveOrThrow(sessionId);
+    const meta = await l.sock.groupMetadata(jid);
+    let inviteCode: string | null = null;
+    try {
+      inviteCode = (await l.sock.groupInviteCode(jid)) ?? null;
+    } catch {
+      // sem permissão
+    }
+    return {
+      jid: meta.id,
+      subject: meta.subject,
+      memberCount: meta.participants.length,
+      inviteCode,
+    };
+  }
+
+  async updateGroupPicture(sessionId: string, jid: string, image: Buffer): Promise<void> {
+    const l = this.liveOrThrow(sessionId);
+    await l.sock.updateProfilePicture(jid, image);
   }
 }
 

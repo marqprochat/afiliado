@@ -52,16 +52,21 @@ export async function listDatafeeds(
   const doFetch = opts.fetchImpl ?? fetch;
   const res = await doFetch(feedListUrl);
   if (res.status === 401 || res.status === 403) {
-    throw new AwinApiError('Link da lista de feeds da Awin inválido ou não autorizado', 'AWIN_UNAUTHORIZED');
+    throw new AwinApiError(
+      'Link da lista de feeds da Awin inválido ou não autorizado',
+      'AWIN_UNAUTHORIZED',
+    );
   }
   if (!res.ok) {
     throw new AwinApiError(`Listagem de feeds da Awin respondeu HTTP ${res.status}`, 'AWIN_ERROR');
   }
   const text = await res.text();
-  const rows = parse(text, { columns: true, skip_empty_lines: true, trim: true, bom: true }) as Record<
-    string,
-    string
-  >[];
+  const rows = parse(text, {
+    columns: true,
+    skip_empty_lines: true,
+    trim: true,
+    bom: true,
+  }) as Record<string, string>[];
   return rows.map((r) => ({
     advertiserId: r['Advertiser ID'] ?? '',
     advertiserName: r['Advertiser Name'] ?? '',

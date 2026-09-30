@@ -100,11 +100,17 @@ export default function CallbackMlPage() {
           <>
             <p className="mb-4 text-sm text-muted-foreground">
               Você não está logado no painel neste navegador. Entre no painel em outra aba e depois
-              clique em “Tentar de novo”. O código de autorização continua válido por alguns minutos.
+              clique em “Tentar de novo”. O código de autorização continua válido por alguns
+              minutos.
             </p>
             <div className="flex gap-2">
               <Button onClick={() => void connect()}>Tentar de novo</Button>
-              <a href="/login" target="_blank" rel="noreferrer" className="self-center text-sm underline">
+              <a
+                href="/login"
+                target="_blank"
+                rel="noreferrer"
+                className="self-center text-sm underline"
+              >
                 Abrir o painel
               </a>
             </div>
@@ -122,8 +128,8 @@ export default function CallbackMlPage() {
 
         {phase === 'no-code' && (
           <p className="text-sm text-muted-foreground">
-            Nenhum código de autorização na URL. Para conectar, abra as configurações do Mercado Livre
-            no painel e use “Conectar API oficial”.
+            Nenhum código de autorização na URL. Para conectar, abra as configurações do Mercado
+            Livre no painel e use “Conectar API oficial”.
           </p>
         )}
 
@@ -142,7 +148,9 @@ export default function CallbackMlPage() {
             <Button type="button" size="sm" variant="outline" className="mt-2" onClick={copy}>
               {copied ? 'Copiado!' : 'Copiar endereço'}
             </Button>
-            <p className="mt-2">Este código é de uso único e só serve com o segredo do seu app. Não o compartilhe.</p>
+            <p className="mt-2">
+              Este código é de uso único e só serve com o segredo do seu app. Não o compartilhe.
+            </p>
           </details>
         )}
       </div>

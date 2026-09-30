@@ -5,6 +5,7 @@ export const QUEUE_PRODUCT_ENRICH = 'product-enrich';
 export const QUEUE_SEND_TELEGRAM = 'send-telegram';
 export const QUEUE_AWIN_IMPORT = 'awin-import';
 export const QUEUE_COUPON_SYNC = 'coupon-sync';
+export const QUEUE_GROUP_LINK_ROTATE = 'group-link-rotate';
 
 export type WaCommand =
   | 'connect'
@@ -78,4 +79,11 @@ export interface AwinImportJob {
 export interface CouponSyncJob {
   tenantId: string;
   trigger: 'schedule' | 'manual';
+}
+
+export interface GroupLinkRotateJob {
+  tenantId: string;
+  groupLinkId: string;
+  fromGroupId: string | null;
+  reason: 'threshold' | 'orphaned' | 'manual' | 'initial';
 }

@@ -145,7 +145,11 @@ export function createTagAdapter(
       if (kind === 'AMAZON' && creds?.amazonSession?.cookies) {
         const storeId = creds.tag ?? '';
         try {
-          await amazonOfficialLink('https://www.amazon.com.br/', creds.amazonSession.cookies, storeId);
+          await amazonOfficialLink(
+            'https://www.amazon.com.br/',
+            creds.amazonSession.cookies,
+            storeId,
+          );
           return { ok: true };
         } catch (err) {
           if (hasTagCredentials(kind, creds)) return { ok: true };

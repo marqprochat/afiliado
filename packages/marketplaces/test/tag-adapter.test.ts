@@ -4,15 +4,13 @@ import type { AmazonApiItem } from '../src/amazon/creators-api';
 
 describe('tag adapters', () => {
   it('amazon busca produtos via Creators API (GetItems) usando tag como partnerTag', async () => {
-    const amazonGetItems = vi.fn(
-      async (): Promise<AmazonApiItem[]> => [
-        {
-          asin: 'B09B8V1LZ3',
-          itemInfo: { title: { displayValue: 'Echo Dot' } },
-          offersV2: { listings: [{ price: { money: { amount: 299 } } }] },
-        },
-      ],
-    );
+    const amazonGetItems = vi.fn(async (): Promise<AmazonApiItem[]> => [
+      {
+        asin: 'B09B8V1LZ3',
+        itemInfo: { title: { displayValue: 'Echo Dot' } },
+        offersV2: { listings: [{ price: { money: { amount: 299 } } }] },
+      },
+    ]);
     const a = createTagAdapter('AMAZON', { amazonGetItems });
     const creds = { tag: 'minha-20', amazonApi: { clientId: 'cid', clientSecret: 'csecret' } };
 
@@ -20,10 +18,11 @@ describe('tag adapters', () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ title: 'Echo Dot', price: 299, externalId: 'B09B8V1LZ3' });
-    expect(amazonGetItems).toHaveBeenCalledWith(
-      ['B09B8V1LZ3'],
-      { clientId: 'cid', clientSecret: 'csecret', partnerTag: 'minha-20' },
-    );
+    expect(amazonGetItems).toHaveBeenCalledWith(['B09B8V1LZ3'], {
+      clientId: 'cid',
+      clientSecret: 'csecret',
+      partnerTag: 'minha-20',
+    });
   });
 
   it('amazon: URL sem ASIN reconhecível é ignorada (sem crash)', async () => {
@@ -59,10 +58,11 @@ describe('tag adapters', () => {
     const a = createTagAdapter('AMAZON', { amazonGetItems });
     const creds = { tag: 'minha-20', amazonApi: { clientId: 'cid', clientSecret: 'csecret' } };
     expect(await a.checkConnection(creds)).toEqual({ ok: true });
-    expect(amazonGetItems).toHaveBeenCalledWith(
-      expect.arrayContaining([expect.any(String)]),
-      { clientId: 'cid', clientSecret: 'csecret', partnerTag: 'minha-20' },
-    );
+    expect(amazonGetItems).toHaveBeenCalledWith(expect.arrayContaining([expect.any(String)]), {
+      clientId: 'cid',
+      clientSecret: 'csecret',
+      partnerTag: 'minha-20',
+    });
   });
 
   it('amazon: checkConnection com amazonApi inválido devolve ok:false com a mensagem do erro', async () => {

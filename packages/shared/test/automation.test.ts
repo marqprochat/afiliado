@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { automationRuleCreateSchema, automationQueueLinkSchema, automationQueueCouponSchema, automationDiscoveringKey } from '../src/automation';
+import {
+  automationRuleCreateSchema,
+  automationQueueLinkSchema,
+  automationQueueCouponSchema,
+  automationDiscoveringKey,
+} from '../src/automation';
 
 describe('automationRuleCreateSchema', () => {
   it('aceita uma regra válida', () => {
@@ -64,9 +69,7 @@ describe('automationQueueLinkSchema', () => {
 
 describe('automationQueueCouponSchema', () => {
   it('exige templateId e ou couponId ou dados de um cupom novo', () => {
-    expect(() =>
-      automationQueueCouponSchema.parse({ templateId: 'tpl-cupom' }),
-    ).toThrow();
+    expect(() => automationQueueCouponSchema.parse({ templateId: 'tpl-cupom' })).toThrow();
     const withExisting = automationQueueCouponSchema.parse({
       templateId: 'tpl-cupom',
       couponId: 'cp1',

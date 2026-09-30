@@ -24,6 +24,8 @@ import type {
   ApiToken,
   ApiCoupon,
   ApiCouponCheck,
+  GroupLink,
+  ManagedGroup,
 } from './types';
 import type { MarketplaceKind } from '@afilados/shared';
 
@@ -158,7 +160,9 @@ export const useCoupons = (params?: {
   return useQuery({
     queryKey: ['coupons', params],
     queryFn: async () => {
-      const res = await apiFetch<{ coupons: ApiCoupon[] }>(`/coupons${queryStr ? `?${queryStr}` : ''}`);
+      const res = await apiFetch<{ coupons: ApiCoupon[] }>(
+        `/coupons${queryStr ? `?${queryStr}` : ''}`,
+      );
       return res.coupons;
     },
   });
@@ -172,4 +176,35 @@ export const useCouponChecks = (couponId: string | null) =>
       const res = await apiFetch<{ checks: ApiCouponCheck[] }>(`/coupons/${couponId}/checks`);
       return res.checks;
     },
+  });
+
+export const useGroupLinks = () =>
+  useQuery({
+    queryKey: ['group-links'],
+    queryFn: () => apiFetch<GroupLink[]>('/group-links'),
+    refetchInterval: 15_000,
+  });
+
+export const useGroupLink = (id: string | null) =>
+  useQuery({
+    queryKey: ['group-links', id],
+    enabled: !!id,
+    queryFn: () => apiFetch<GroupLink>(`/group-links/${id}`),
+  });
+
+export const useGroupLinkHistory = (id: string | null) =>
+  useQuery({
+    queryKey: ['group-links', id, 'groups'],
+    enabled: !!id,
+    queryFn: () => apiFetch<ManagedGroup[]>(`/group-links/${id}/groups`),
+  });
+
+export const useSlugAvailability = (slug: string) =>
+  useQuery({
+    queryKey: ['group-links', 'slug-available', slug],
+    enabled: slug.length >= 3,
+    queryFn: () =>
+      apiFetch<{ available: boolean; reason?: string }>(
+        `/group-links/slug-available?slug=${encodeURIComponent(slug)}`,
+      ),
   });

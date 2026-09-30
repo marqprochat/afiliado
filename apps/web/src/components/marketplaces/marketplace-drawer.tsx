@@ -130,7 +130,8 @@ export function MarketplaceDrawer({
     if (connection === undefined) return;
     initializedKindRef.current = kind;
     const initial: Record<string, string> = {};
-    for (const field of config.fields) initial[field.key] = initialFieldValue(field.key, connection);
+    for (const field of config.fields)
+      initial[field.key] = initialFieldValue(field.key, connection);
     setValues(initial);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, kind, connection]);

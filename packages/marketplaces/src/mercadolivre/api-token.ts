@@ -89,7 +89,10 @@ function toTokens(
 ): MlApiTokens {
   const refreshToken = body.refresh_token ?? fallbackRefresh;
   if (!refreshToken) {
-    throw new MlApiError('Mercado Livre não devolveu refresh_token (falta o escopo offline_access?)', 'ML_API_ERROR');
+    throw new MlApiError(
+      'Mercado Livre não devolveu refresh_token (falta o escopo offline_access?)',
+      'ML_API_ERROR',
+    );
   }
   return {
     refreshToken,
@@ -149,7 +152,11 @@ export async function ensureMlAccessToken(
   opts: MlOAuthOptions = {},
 ): Promise<{ accessToken: string; tokens: MlApiTokens }> {
   const now = (opts.now ?? Date.now)();
-  if (tokens.accessToken && tokens.expiresAt && Date.parse(tokens.expiresAt) - now > RENEW_SKEW_MS) {
+  if (
+    tokens.accessToken &&
+    tokens.expiresAt &&
+    Date.parse(tokens.expiresAt) - now > RENEW_SKEW_MS
+  ) {
     return { accessToken: tokens.accessToken, tokens };
   }
   const refreshed = await refreshMlTokens(cfg, tokens.refreshToken, opts);

@@ -1,8 +1,12 @@
 import type { Job } from 'bullmq';
 import pino from 'pino';
 import { prisma } from '@afilados/db';
-import type { WaCommandJob } from '@afilados/shared';
-import { getRedis } from '../lib/redis';
+import {
+  QUEUE_GROUP_LINK_ROTATE,
+  type GroupLinkRotateJob,
+  type WaCommandJob,
+} from '@afilados/shared';
+import { getRedis, getQueue } from '../lib/redis';
 import { publishEvent } from '../lib/events';
 import type { BaileysGateway } from './baileys-gateway';
 
@@ -210,7 +214,9 @@ export class WaSessionManager {
             data: {
               ...(job.data.subject !== undefined ? { name: job.data.subject } : {}),
               ...(job.data.description !== undefined ? { description: job.data.description } : {}),
-              ...(job.data.announceOnly !== undefined ? { announceOnly: job.data.announceOnly } : {}),
+              ...(job.data.announceOnly !== undefined
+                ? { announceOnly: job.data.announceOnly }
+                : {}),
             },
           });
           await publishEvent(tenantId, {
@@ -326,5 +332,49 @@ export class WaSessionManager {
       ),
     ]);
     await publishEvent(tenantId, { type: 'wa.groups.synced', sessionId, count: groups.length });
+
+    // Verifica ManagedGroups ativos cujo jid não foi retornado pelo WhatsApp
+    try {
+      const currentJids = new Set(groups.map((g) => g.jid));
+      const activeManagedGroups = await prisma.managedGroup.findMany({
+        where: {
+          tenantId,
+          groupLink: { sessionId },
+          status: 'ACTIVE',
+          jid: { not: null },
+        },
+        select: { id: true, jid: true, groupLinkId: true, tenantId: true },
+      });
+
+      for (const mg of activeManagedGroups) {
+        if (mg.jid && !currentJids.has(mg.jid)) {
+          log.warn(
+            { managedGroupId: mg.id, jid: mg.jid, sessionId },
+            'ManagedGroup ACTIVE não encontrado nos grupos da sessão; marcando ORPHANED',
+          );
+          await prisma.managedGroup.updateMany({
+            where: { id: mg.id },
+            data: { status: 'ORPHANED', lastError: 'GROUP_NOT_FOUND_IN_SESSION' },
+          });
+          const rotateQueue = getQueue<GroupLinkRotateJob>(QUEUE_GROUP_LINK_ROTATE);
+          await rotateQueue.add(
+            'rotate',
+            {
+              tenantId: mg.tenantId,
+              groupLinkId: mg.groupLinkId,
+              fromGroupId: mg.id,
+              reason: 'orphaned',
+            },
+            {
+              jobId: `rotate-${mg.groupLinkId}-${mg.id}-orphaned`.replace(/:/g, '-'),
+              attempts: 5,
+              backoff: { type: 'exponential', delay: 10_000 },
+            },
+          );
+        }
+      }
+    } catch (err) {
+      log.error({ err, sessionId }, 'falha ao verificar ManagedGroups órfãos em syncGroups');
+    }
   }
 }

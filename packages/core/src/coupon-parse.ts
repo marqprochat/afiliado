@@ -87,11 +87,7 @@ function detectStoreFromUrl(urlStr: string): MarketplaceKind | null {
     if (host.includes('mercadolivre') || host.includes('mercadolibre') || host.includes('meli.la'))
       return 'MERCADOLIVRE';
     if (host.includes('amazon') || host === 'amzn.to') return 'AMAZON';
-    if (
-      host.includes('magazineluiza') ||
-      host.includes('magazinevoce') ||
-      host.includes('magalu')
-    )
+    if (host.includes('magazineluiza') || host.includes('magazinevoce') || host.includes('magalu'))
       return 'MAGALU';
     if (host.includes('aliexpress')) return 'ALIEXPRESS';
     if (host === 'awin1.com') return 'AWIN';
@@ -120,7 +116,9 @@ function parseExpiresAt(text: string, now: Date): string | null {
     return `${year}-${pad(month)}-${pad(date)}T23:59:59.999-03:00`;
   }
 
-  const match = text.match(/(?:v[áa]lido|at[ée]|expira)\s*(?:em\s*)?(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/i);
+  const match = text.match(
+    /(?:v[áa]lido|at[ée]|expira)\s*(?:em\s*)?(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/i,
+  );
   if (!match) return null;
 
   const day = parseInt(match[1]!, 10);
@@ -246,7 +244,10 @@ export function parseCouponsFromText(
     const expiresAt = parseExpiresAt(block, now);
 
     // 7. Descrição
-    const lines = block.split('\n').map((l) => l.trim()).filter(Boolean);
+    const lines = block
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
     const description = lines.slice(0, 3).join(' — ').slice(0, 500);
 
     for (const code of codes) {

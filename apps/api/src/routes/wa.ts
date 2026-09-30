@@ -68,6 +68,14 @@ export async function waRoutes(app: FastifyInstance) {
         409,
       );
     }
+    const inUseGroupLinks = await req.db.groupLink.count({ where: { sessionId: s.id } });
+    if (inUseGroupLinks > 0) {
+      throw new ApiError(
+        'VALIDATION',
+        `Sessão possui ${inUseGroupLinks} link(s) fixo(s) de grupos vinculado(s). Exclua-os antes de remover a sessão.`,
+        409,
+      );
+    }
     if (s.status !== 'DISCONNECTED' && s.status !== 'LOGGED_OUT') {
       await enqueue({ tenantId: req.tenantId, sessionId: s.id, command: 'logout' });
     }

@@ -45,7 +45,9 @@ describe('discoverMercadoLivreByKeyword', () => {
 
 describe('discoverAmazonByKeyword', () => {
   it('extrai URLs de produto únicas (absolutas) e descarta paginação/login', async () => {
-    const urls = await discoverAmazonByKeyword('fone', { fetchHtml: async () => AMAZON_SEARCH_HTML });
+    const urls = await discoverAmazonByKeyword('fone', {
+      fetchHtml: async () => AMAZON_SEARCH_HTML,
+    });
     expect(urls).toHaveLength(2);
     expect(urls.every((u) => u.startsWith('https://www.amazon.com.br'))).toBe(true);
   });
@@ -53,7 +55,9 @@ describe('discoverAmazonByKeyword', () => {
 
 describe('discoverMagaluByKeyword', () => {
   it('extrai URLs de produto e descarta paginação', async () => {
-    const urls = await discoverMagaluByKeyword('fone', { fetchHtml: async () => MAGALU_SEARCH_HTML });
+    const urls = await discoverMagaluByKeyword('fone', {
+      fetchHtml: async () => MAGALU_SEARCH_HTML,
+    });
     expect(urls).toHaveLength(1);
     expect(urls[0]).toContain('/p/ab12cd3efg/');
   });

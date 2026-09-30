@@ -8,7 +8,25 @@ import type {
   CouponStatus,
   CouponDiscountType,
   CouponCheckMethod,
+  GroupTextPosition,
+  GroupLinkStatus,
+  ManagedGroupStatus,
 } from '@afilados/shared';
+
+export type {
+  MarketplaceKind,
+  MediaMode,
+  WaSessionStatus,
+  BatchStatus,
+  BatchItemStatus,
+  CouponOrigin,
+  CouponStatus,
+  CouponDiscountType,
+  CouponCheckMethod,
+  GroupTextPosition,
+  GroupLinkStatus,
+  ManagedGroupStatus,
+};
 
 export interface Me {
   user: { id: string; email: string; name: string; role: string };
@@ -338,5 +356,63 @@ export interface AutomationQueueItem {
   addedAt: string;
   marketplace: string | null;
   product: ApiProduct | null;
-  coupon: { id: string; store: string; code: string; description: string; expiresAt: string | null; sourceUrl: string | null } | null;
+  coupon: {
+    id: string;
+    store: string;
+    code: string;
+    description: string;
+    expiresAt: string | null;
+    sourceUrl: string | null;
+  } | null;
+}
+
+export interface ManagedGroup {
+  id: string;
+  tenantId: string;
+  groupLinkId: string;
+  sequence: number;
+  number: number;
+  jid: string | null;
+  name: string;
+  inviteLink: string | null;
+  memberCount: number;
+  status: ManagedGroupStatus;
+  countSyncedAt: string | null;
+  inviteSyncedAt: string | null;
+  activatedAt: string | null;
+  filledAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+}
+
+export interface GroupLink {
+  id: string;
+  tenantId: string;
+  sessionId: string;
+  slug: string;
+  label: string;
+  baseName: string;
+  customText: string;
+  textPosition: GroupTextPosition;
+  numberPrefix: string;
+  startNumber: number;
+  nextSequence: number;
+  memberLimit: number;
+  rotateMargin: number;
+  maxRotationsPerHour: number;
+  groupDescription: string | null;
+  announceOnly: boolean;
+  seedParticipants: string[];
+  groupImageBase64?: string | null;
+  fallbackUrl: string | null;
+  enabled: boolean;
+  status: GroupLinkStatus;
+  lastError: string | null;
+  lastRotatedAt: string | null;
+  clickCount: number;
+  createdAt: string;
+  updatedAt: string;
+  session?: { id: string; label: string; phone: string | null; status: WaSessionStatus };
+  groups?: ManagedGroup[];
+  _count?: { groups: number };
 }

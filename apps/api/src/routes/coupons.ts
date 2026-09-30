@@ -80,7 +80,10 @@ export async function couponsRoutes(app: FastifyInstance) {
           description: body.description,
           terms: body.terms ?? null,
           discountType: body.discountType ?? null,
-          discountValue: body.discountValue !== undefined && body.discountValue !== null ? body.discountValue : null,
+          discountValue:
+            body.discountValue !== undefined && body.discountValue !== null
+              ? body.discountValue
+              : null,
           minSpend: body.minSpend !== undefined && body.minSpend !== null ? body.minSpend : null,
           startsAt: body.startsAt ? new Date(body.startsAt) : null,
           expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
@@ -115,7 +118,10 @@ export async function couponsRoutes(app: FastifyInstance) {
           description: body.description,
           terms: body.terms ?? null,
           discountType: body.discountType ?? null,
-          discountValue: body.discountValue !== undefined && body.discountValue !== null ? body.discountValue : null,
+          discountValue:
+            body.discountValue !== undefined && body.discountValue !== null
+              ? body.discountValue
+              : null,
           minSpend: body.minSpend !== undefined && body.minSpend !== null ? body.minSpend : null,
           startsAt: body.startsAt ? new Date(body.startsAt) : null,
           expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
@@ -187,7 +193,8 @@ export async function couponsRoutes(app: FastifyInstance) {
       description: c.description,
       terms: c.terms ?? null,
       discountType: c.discountType ?? null,
-      discountValue: c.discountValue !== undefined && c.discountValue !== null ? c.discountValue : null,
+      discountValue:
+        c.discountValue !== undefined && c.discountValue !== null ? c.discountValue : null,
       minSpend: c.minSpend !== undefined && c.minSpend !== null ? c.minSpend : null,
       startsAt: c.startsAt ? new Date(c.startsAt) : null,
       expiresAt: c.expiresAt ? new Date(c.expiresAt) : null,
@@ -242,7 +249,10 @@ export async function couponsRoutes(app: FastifyInstance) {
     );
 
     try {
-      const results = (await job.waitUntilFinished(getQueueEvents(QUEUE_COUPON_SYNC), 45_000)) as any[];
+      const results = (await job.waitUntilFinished(
+        getQueueEvents(QUEUE_COUPON_SYNC),
+        45_000,
+      )) as any[];
       return { queued: false, results };
     } catch {
       return { queued: true };

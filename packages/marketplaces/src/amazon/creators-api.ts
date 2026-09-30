@@ -98,7 +98,10 @@ async function fetchWithTimeout(
     return await doFetch(url, { ...init, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   } catch (err) {
     if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
-      throw new AmazonApiError(`Chamada à Creators API expirou (timeout de ${FETCH_TIMEOUT_MS}ms)`, 'AMAZON_API_ERROR');
+      throw new AmazonApiError(
+        `Chamada à Creators API expirou (timeout de ${FETCH_TIMEOUT_MS}ms)`,
+        'AMAZON_API_ERROR',
+      );
     }
     throw err;
   }
@@ -132,14 +135,20 @@ export async function getAccessToken(
     );
   }
   if (!res.ok) {
-    throw new AmazonApiError(`Token da Creators API respondeu HTTP ${res.status}`, 'AMAZON_API_ERROR');
+    throw new AmazonApiError(
+      `Token da Creators API respondeu HTTP ${res.status}`,
+      'AMAZON_API_ERROR',
+    );
   }
   const data = (await res.json()) as { access_token?: string; expires_in?: number };
   if (!data.access_token) {
     throw new AmazonApiError('Resposta de token sem access_token', 'AMAZON_API_ERROR');
   }
   const expiresIn = data.expires_in ?? 3600;
-  tokenCache.set(creds.clientId, { token: data.access_token, expiresAt: Date.now() + expiresIn * 1000 });
+  tokenCache.set(creds.clientId, {
+    token: data.access_token,
+    expiresAt: Date.now() + expiresIn * 1000,
+  });
   return data.access_token;
 }
 
@@ -163,7 +172,10 @@ export function waitForRateLimitSlot(clientId: string): Promise<void> {
     lastCallAt.set(clientId, Date.now());
   });
   // Nunca deixa a fila travada por uma rejeição — próxima chamada segue normalmente.
-  rateLimitQueue.set(clientId, next.catch(() => {}));
+  rateLimitQueue.set(
+    clientId,
+    next.catch(() => {}),
+  );
   return next;
 }
 

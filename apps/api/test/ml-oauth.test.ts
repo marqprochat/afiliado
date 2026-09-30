@@ -23,7 +23,12 @@ function tokenResponse(body: unknown, status = 200) {
   }));
 }
 
-const FIRST_TOKENS = { access_token: 'acc-1', refresh_token: 'ref-1', expires_in: 21600, user_id: 229863486 };
+const FIRST_TOKENS = {
+  access_token: 'acc-1',
+  refresh_token: 'ref-1',
+  expires_in: 21600,
+  user_id: 229863486,
+};
 
 describe('OAuth da API oficial do Mercado Livre', () => {
   let app: FastifyInstance;
@@ -75,7 +80,10 @@ describe('OAuth da API oficial do Mercado Livre', () => {
   }
 
   it('exige sessão do painel', async () => {
-    const res = await app.inject({ method: 'POST', url: '/api/v1/marketplaces/mercadolivre/oauth/start' });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/marketplaces/mercadolivre/oauth/start',
+    });
     expect(res.statusCode).toBe(401);
   });
 
@@ -103,7 +111,11 @@ describe('OAuth da API oficial do Mercado Livre', () => {
     for (const secret of ['acc-1', 'ref-1', 'secret-test']) expect(raw).not.toContain(secret);
 
     const creds = await storedCreds();
-    expect(creds.mlApi).toMatchObject({ refreshToken: 'ref-1', accessToken: 'acc-1', userId: '229863486' });
+    expect(creds.mlApi).toMatchObject({
+      refreshToken: 'ref-1',
+      accessToken: 'acc-1',
+      userId: '229863486',
+    });
   });
 
   it('o state é de uso único', async () => {
@@ -141,7 +153,10 @@ describe('OAuth da API oficial do Mercado Livre', () => {
   it('código recusado pelo Mercado Livre vira 400 sem vazar segredo', async () => {
     const started = await start();
     const state = new URL(started.json().authUrl).searchParams.get('state')!;
-    vi.stubGlobal('fetch', tokenResponse({ error: 'invalid_grant', message: 'Error validating grant' }, 400));
+    vi.stubGlobal(
+      'fetch',
+      tokenResponse({ error: 'invalid_grant', message: 'Error validating grant' }, 400),
+    );
     const res = await callback(state);
     expect(res.statusCode).toBe(400);
     expect(res.body).toContain('invalid_grant');
@@ -245,7 +260,12 @@ describe('POST /products/search (Mercado Livre pela API oficial)', () => {
   const routes = {
     '/products/search': {
       status: 200,
-      body: { results: [{ id: 'MLB111', name: 'Fone A' }, { id: 'MLB222', name: 'Fone B' }] },
+      body: {
+        results: [
+          { id: 'MLB111', name: 'Fone A' },
+          { id: 'MLB222', name: 'Fone B' },
+        ],
+      },
     },
     '/products/MLB111/items': {
       status: 200,
@@ -253,7 +273,11 @@ describe('POST /products/search (Mercado Livre pela API oficial)', () => {
     },
     '/products/MLB111': {
       status: 200,
-      body: { id: 'MLB111', name: 'Fone A', pictures: [{ url: 'https://http2.mlstatic.com/D_1.jpg' }] },
+      body: {
+        id: 'MLB111',
+        name: 'Fone A',
+        pictures: [{ url: 'https://http2.mlstatic.com/D_1.jpg' }],
+      },
     },
     // MLB222 sem oferta: 404 "No winners found" (produto indisponível)
   };
@@ -339,13 +363,20 @@ describe('loadFetchCredentials (Mercado Livre)', () => {
       expiresAt: new Date(Date.now() - 3600_000).toISOString(),
       connectedAt: '2026-09-29T10:00:00.000Z',
     });
-    vi.stubGlobal('fetch', tokenResponse({ access_token: 'acc-2', refresh_token: 'ref-2', expires_in: 21600 }));
+    vi.stubGlobal(
+      'fetch',
+      tokenResponse({ access_token: 'acc-2', refresh_token: 'ref-2', expires_in: 21600 }),
+    );
 
     const creds = await loadFetchCredentials(forTenant(t.tenantId), 'MERCADOLIVRE');
 
     expect(creds.mlApi?.accessToken).toBe('acc-2');
     const saved = await stored();
-    expect(saved.mlApi).toMatchObject({ refreshToken: 'ref-2', accessToken: 'acc-2', connectedAt: '2026-09-29T10:00:00.000Z' });
+    expect(saved.mlApi).toMatchObject({
+      refreshToken: 'ref-2',
+      accessToken: 'acc-2',
+      connectedAt: '2026-09-29T10:00:00.000Z',
+    });
     expect(saved.mattWord).toBe('meu-afiliado');
   });
 
@@ -355,7 +386,10 @@ describe('loadFetchCredentials (Mercado Livre)', () => {
       accessToken: 'acc-velho',
       expiresAt: new Date(Date.now() - 3600_000).toISOString(),
     });
-    vi.stubGlobal('fetch', tokenResponse({ error: 'invalid_grant', message: 'refresh usado' }, 400));
+    vi.stubGlobal(
+      'fetch',
+      tokenResponse({ error: 'invalid_grant', message: 'refresh usado' }, 400),
+    );
 
     const creds = await loadFetchCredentials(forTenant(t.tenantId), 'MERCADOLIVRE');
 

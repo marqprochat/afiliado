@@ -30,9 +30,13 @@ export interface DiscoveryDeps {
   searchShopee?: (creds: ShopeeCredentials, keyword: string) => Promise<ProductData[]>;
   searchAliexpress?: (creds: AliexpressCredentials, keyword: string) => Promise<ProductData[]>;
   /** Descoberta por keyword para ML/Amazon/Magalu (injetável em teste). */
-  discoverByKeyword?: Partial<Record<'MERCADOLIVRE' | 'AMAZON' | 'MAGALU', (keyword: string) => Promise<string[]>>>;
+  discoverByKeyword?: Partial<
+    Record<'MERCADOLIVRE' | 'AMAZON' | 'MAGALU', (keyword: string) => Promise<string[]>>
+  >;
   /** Enriquecimento das URLs descobertas (injetável em teste; padrão: getTagAdapter real). */
-  fetchByUrls?: Partial<Record<'MERCADOLIVRE' | 'AMAZON' | 'MAGALU', (urls: string[]) => Promise<ProductData[]>>>;
+  fetchByUrls?: Partial<
+    Record<'MERCADOLIVRE' | 'AMAZON' | 'MAGALU', (urls: string[]) => Promise<ProductData[]>>
+  >;
 }
 
 function normalizeText(value: string): string {
@@ -81,7 +85,9 @@ async function cachedDiscoverUrls(
   opts: { cacheEmpty?: boolean } = {},
 ): Promise<string[]> {
   const key = cacheKey(tenantId, marketplace, keyword);
-  const cached = await getRedis().get(key).catch(() => null);
+  const cached = await getRedis()
+    .get(key)
+    .catch(() => null);
   if (cached) {
     try {
       return JSON.parse(cached) as string[];
@@ -102,7 +108,11 @@ async function cachedDiscoverUrls(
   return urls;
 }
 
-async function queueDiscoveredProduct(rule: AutomationRule, marketplace: MarketplaceKind, p: ProductData) {
+async function queueDiscoveredProduct(
+  rule: AutomationRule,
+  marketplace: MarketplaceKind,
+  p: ProductData,
+) {
   const product = await prisma.product.upsert({
     where: {
       tenantId_source_externalId: {
@@ -139,15 +149,33 @@ async function queueDiscoveredProduct(rule: AutomationRule, marketplace: Marketp
   });
   if (already) return;
   await prisma.automationQueueItem.create({
-    data: { tenantId: rule.tenantId, ruleId: rule.id, kind: 'PRODUCT', productId: product.id, manual: false },
+    data: {
+      tenantId: rule.tenantId,
+      ruleId: rule.id,
+      kind: 'PRODUCT',
+      productId: product.id,
+      manual: false,
+    },
   });
   await prisma.automationLog.create({
-    data: { tenantId: rule.tenantId, ruleId: rule.id, marketplace, action: 'DISCOVERED', productId: product.id },
+    data: {
+      tenantId: rule.tenantId,
+      ruleId: rule.id,
+      marketplace,
+      action: 'DISCOVERED',
+      productId: product.id,
+    },
   });
 }
 
-async function discoverShopee(rule: AutomationRule, keyword: string, deps: DiscoveryDeps): Promise<ProductData[]> {
-  const conn = await prisma.marketplaceConnection.findFirst({ where: { tenantId: rule.tenantId, kind: 'SHOPEE' } });
+async function discoverShopee(
+  rule: AutomationRule,
+  keyword: string,
+  deps: DiscoveryDeps,
+): Promise<ProductData[]> {
+  const conn = await prisma.marketplaceConnection.findFirst({
+    where: { tenantId: rule.tenantId, kind: 'SHOPEE' },
+  });
   if (!conn?.encryptedCredentials) return [];
   const creds = decryptJson<ShopeeCredentials>(Buffer.from(conn.encryptedCredentials));
   const search =
@@ -166,8 +194,14 @@ async function discoverShopee(rule: AutomationRule, keyword: string, deps: Disco
   return search(creds, keyword);
 }
 
-async function discoverAliexpress(rule: AutomationRule, keyword: string, deps: DiscoveryDeps): Promise<ProductData[]> {
-  const conn = await prisma.marketplaceConnection.findFirst({ where: { tenantId: rule.tenantId, kind: 'ALIEXPRESS' } });
+async function discoverAliexpress(
+  rule: AutomationRule,
+  keyword: string,
+  deps: DiscoveryDeps,
+): Promise<ProductData[]> {
+  const conn = await prisma.marketplaceConnection.findFirst({
+    where: { tenantId: rule.tenantId, kind: 'ALIEXPRESS' },
+  });
   if (!conn?.encryptedCredentials) return [];
   const creds = decryptJson<AliexpressCredentials>(Buffer.from(conn.encryptedCredentials));
   const search =
@@ -261,7 +295,9 @@ async function discoverScraped(
     deps.fetchByUrls?.[marketplace] ??
     (async (u: string[]) => {
       const creds =
-        marketplace === 'AMAZON' ? await loadTagCredentials(rule.tenantId, marketplace) : (mlCreds ?? {});
+        marketplace === 'AMAZON'
+          ? await loadTagCredentials(rule.tenantId, marketplace)
+          : (mlCreds ?? {});
       return getTagAdapter(marketplace).fetchByUrls(creds, u);
     });
   return fetchFn(urls);
@@ -346,10 +382,14 @@ export async function discoverForRule(rule: AutomationRule, deps: DiscoveryDeps 
   if (quota <= 0) return;
 
   const discoveringKey = automationDiscoveringKey(rule.id);
-  await getRedis().set(discoveringKey, '1', 'EX', DISCOVERING_TTL_SEC).catch(() => {});
-  await publishEvent(rule.tenantId, { type: 'automation.discovery', ruleId: rule.id, discovering: true }).catch(
-    () => {},
-  );
+  await getRedis()
+    .set(discoveringKey, '1', 'EX', DISCOVERING_TTL_SEC)
+    .catch(() => {});
+  await publishEvent(rule.tenantId, {
+    type: 'automation.discovery',
+    ruleId: rule.id,
+    discovering: true,
+  }).catch(() => {});
 
   try {
     const alreadyQueued = await prisma.automationQueueItem.findMany({
@@ -363,7 +403,9 @@ export async function discoverForRule(rule: AutomationRule, deps: DiscoveryDeps 
     );
 
     const settled = await Promise.allSettled(
-      rule.marketplaces.map((marketplace) => searchOneMarketplace(marketplace, rule, keyword, deps)),
+      rule.marketplaces.map((marketplace) =>
+        searchOneMarketplace(marketplace, rule, keyword, deps),
+      ),
     );
     const resultsByMarketplace = new Map<MarketplaceKind, ProductData[]>();
     for (let i = 0; i < rule.marketplaces.length; i++) {
@@ -387,7 +429,9 @@ export async function discoverForRule(rule: AutomationRule, deps: DiscoveryDeps 
       resultsByMarketplace.set(
         marketplace,
         raw.filter(
-          (p) => matchesFilters(p, rule, keyword) && !alreadyQueuedKeys.has(`${p.source}:${p.externalId ?? ''}`),
+          (p) =>
+            matchesFilters(p, rule, keyword) &&
+            !alreadyQueuedKeys.has(`${p.source}:${p.externalId ?? ''}`),
         ),
       );
     }
@@ -398,9 +442,13 @@ export async function discoverForRule(rule: AutomationRule, deps: DiscoveryDeps 
       await queueDiscoveredProduct(rule, marketplace, product);
     }
   } finally {
-    await getRedis().del(discoveringKey).catch(() => {});
-    await publishEvent(rule.tenantId, { type: 'automation.discovery', ruleId: rule.id, discovering: false }).catch(
-      () => {},
-    );
+    await getRedis()
+      .del(discoveringKey)
+      .catch(() => {});
+    await publishEvent(rule.tenantId, {
+      type: 'automation.discovery',
+      ruleId: rule.id,
+      discovering: false,
+    }).catch(() => {});
   }
 }

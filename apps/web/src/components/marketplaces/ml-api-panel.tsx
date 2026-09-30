@@ -23,9 +23,12 @@ export function MlApiPanel({ connection }: { connection?: MarketplaceConnection 
     setBusy(true);
     setError(null);
     try {
-      const { authUrl } = await apiFetch<{ authUrl: string }>('/marketplaces/mercadolivre/oauth/start', {
-        method: 'POST',
-      });
+      const { authUrl } = await apiFetch<{ authUrl: string }>(
+        '/marketplaces/mercadolivre/oauth/start',
+        {
+          method: 'POST',
+        },
+      );
       window.location.assign(authUrl);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao iniciar a conexão');
@@ -52,7 +55,10 @@ export function MlApiPanel({ connection }: { connection?: MarketplaceConnection 
         <p className="text-sm font-medium">API oficial do Mercado Livre</p>
         {connected ? (
           <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-600">
-            Conectada{connection?.mlApiConnectedAt ? ` em ${formatDateTime(connection.mlApiConnectedAt)}` : ''}
+            Conectada
+            {connection?.mlApiConnectedAt
+              ? ` em ${formatDateTime(connection.mlApiConnectedAt)}`
+              : ''}
           </span>
         ) : (
           <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
@@ -61,13 +67,14 @@ export function MlApiPanel({ connection }: { connection?: MarketplaceConnection 
         )}
       </div>
       <p className="text-xs text-muted-foreground">
-        Preenche título, foto e preço de produtos de catálogo (links <code>/p/MLB…</code>) sem raspar a
-        página, e busca por palavra-chave nas automações. O preço é o de lista: descontos de Pix e
-        cupom da página não vêm pela API.
+        Preenche título, foto e preço de produtos de catálogo (links <code>/p/MLB…</code>) sem
+        raspar a página, e busca por palavra-chave nas automações. O preço é o de lista: descontos
+        de Pix e cupom da página não vêm pela API.
       </p>
       {!available && (
         <p className="mt-2 text-xs text-amber-500">
-          Defina <code>ML_CLIENT_ID</code> e <code>ML_CLIENT_SECRET</code> no servidor para poder conectar.
+          Defina <code>ML_CLIENT_ID</code> e <code>ML_CLIENT_SECRET</code> no servidor para poder
+          conectar.
         </p>
       )}
       <div className="mt-3 flex gap-2">

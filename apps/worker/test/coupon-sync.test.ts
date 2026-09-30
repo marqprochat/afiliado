@@ -45,7 +45,9 @@ describe('upsertCoupon', () => {
     expect(res).toBe('created');
 
     const saved = await prisma.coupon.findUnique({
-      where: { tenantId_store_code_scope: { tenantId, store: 'ALIEXPRESS', code: 'NEWALI10', scope: '' } },
+      where: {
+        tenantId_store_code_scope: { tenantId, store: 'ALIEXPRESS', code: 'NEWALI10', scope: '' },
+      },
     });
     expect(saved).not.toBeNull();
     expect(saved!.status).toBe('UNVERIFIED');
@@ -120,7 +122,9 @@ describe('upsertCoupon', () => {
     expect(res).toBe('created');
 
     const saved = await prisma.coupon.findUnique({
-      where: { tenantId_store_code_scope: { tenantId, store: 'SHOPEE', code: 'EXPIRED10', scope: '' } },
+      where: {
+        tenantId_store_code_scope: { tenantId, store: 'SHOPEE', code: 'EXPIRED10', scope: '' },
+      },
       include: { checks: true },
     });
     expect(saved!.status).toBe('EXPIRED');
@@ -304,7 +308,9 @@ describe('createCouponSyncProcessor', () => {
     expect(checkAliOld!.status).toBe('UNVERIFIED');
 
     // Verifica que o cupom vencido por data virou EXPIRED
-    const checkExpiredDate = await prisma.coupon.findUnique({ where: { id: expiredByDateCoupon.id } });
+    const checkExpiredDate = await prisma.coupon.findUnique({
+      where: { id: expiredByDateCoupon.id },
+    });
     expect(checkExpiredDate!.status).toBe('EXPIRED');
 
     // Verifica que o evento coupons.updated foi publicado

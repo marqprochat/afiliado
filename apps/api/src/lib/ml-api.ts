@@ -63,12 +63,19 @@ function requireOAuthConfig(): MlOAuthConfig {
 }
 
 /** Inicia a autorização: guarda state + verifier PKCE (10 min) e devolve a URL para o navegador. */
-export async function startMlOAuth(tenantId: string): Promise<{ authUrl: string; redirectUri: string }> {
+export async function startMlOAuth(
+  tenantId: string,
+): Promise<{ authUrl: string; redirectUri: string }> {
   const cfg = requireOAuthConfig();
   const redirectUri = mlRedirectUri();
   const { verifier, challenge } = generatePkce();
   const state = randomBytes(16).toString('hex');
-  await getRedis().set(stateKey(state), JSON.stringify({ tenantId, verifier }), 'EX', STATE_TTL_SEC);
+  await getRedis().set(
+    stateKey(state),
+    JSON.stringify({ tenantId, verifier }),
+    'EX',
+    STATE_TTL_SEC,
+  );
   const authUrl = buildMlAuthUrl({
     clientId: cfg.clientId,
     redirectUri,
@@ -89,14 +96,22 @@ export async function completeMlOAuth(
   const redis = getRedis();
   const raw = await redis.get(stateKey(state));
   await redis.del(stateKey(state));
-  const invalid = new ApiError('MARKETPLACE_ERROR', 'Autorização expirada ou inválida — refaça a conexão', 400);
+  const invalid = new ApiError(
+    'MARKETPLACE_ERROR',
+    'Autorização expirada ou inválida — refaça a conexão',
+    400,
+  );
   if (!raw) throw invalid;
   const stored = JSON.parse(raw) as { tenantId: string; verifier: string };
   if (stored.tenantId !== tenantId) throw invalid;
 
   let tokens: MlApiTokens;
   try {
-    tokens = await exchangeMlCode(cfg, { code, redirectUri: mlRedirectUri(), verifier: stored.verifier });
+    tokens = await exchangeMlCode(cfg, {
+      code,
+      redirectUri: mlRedirectUri(),
+      verifier: stored.verifier,
+    });
   } catch (err) {
     if (err instanceof MlApiError) throw new ApiError('MARKETPLACE_ERROR', err.message, 400);
     throw err;
@@ -152,7 +167,11 @@ async function ensureWithLock(
   for (let i = 0; i < WAIT_STEPS; i++) {
     await sleep(WAIT_STEP_MS);
     const latest = (await readCreds(db)).creds.mlApi;
-    if (latest?.accessToken && latest.expiresAt && Date.parse(latest.expiresAt) - Date.now() > 60_000) {
+    if (
+      latest?.accessToken &&
+      latest.expiresAt &&
+      Date.parse(latest.expiresAt) - Date.now() > 60_000
+    ) {
       return { accessToken: latest.accessToken, tokens: latest };
     }
   }
@@ -190,7 +209,10 @@ export async function loadMlApiCredentials(db: TenantClient): Promise<TagCredent
  * Credenciais para `getTagAdapter(kind).fetchByUrls`: Amazon exige as da Creators API, Mercado Livre
  * usa a API oficial quando conectada, Magalu não precisa de nada.
  */
-export async function loadFetchCredentials(db: TenantClient, kind: TagKind): Promise<TagCredentials> {
+export async function loadFetchCredentials(
+  db: TenantClient,
+  kind: TagKind,
+): Promise<TagCredentials> {
   if (kind === 'AMAZON') return loadTagCredentials(db, kind);
   if (kind === 'MERCADOLIVRE') return loadMlApiCredentials(db);
   return {};

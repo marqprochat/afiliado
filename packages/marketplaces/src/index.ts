@@ -16,7 +16,11 @@ export * from './awin/offers';
 export * from './aliexpress';
 export * from './aliexpress/coupons';
 export * from './coupons';
-export { AmazonSessionError, generateOfficialAmazonLink, findFirstUrl } from './amazon/official-link';
+export {
+  AmazonSessionError,
+  generateOfficialAmazonLink,
+  findFirstUrl,
+} from './amazon/official-link';
 export {
   AmazonApiError,
   getAccessToken,

@@ -4,6 +4,7 @@ import { prisma } from '@afilados/db';
 import {
   QUEUE_AWIN_IMPORT,
   QUEUE_COUPON_SYNC,
+  QUEUE_GROUP_LINK_ROTATE,
   QUEUE_MIRROR_MESSAGE,
   QUEUE_PRODUCT_ENRICH,
   QUEUE_SEND_OFFER,
@@ -12,13 +13,18 @@ import {
   REDIS_EVENTS_CHANNEL,
   type AwinImportJob,
   type CouponSyncJob,
+  type GroupLinkRotateJob,
   type MirrorMessageJob,
   type ProductEnrichJob,
   type SendOfferJob,
   type SendTelegramJob,
   type WaCommandJob,
 } from '@afilados/shared';
-import { createShopeeAdapter, createAwinAdapter, createAliexpressAdapter } from '@afilados/marketplaces';
+import {
+  createShopeeAdapter,
+  createAwinAdapter,
+  createAliexpressAdapter,
+} from '@afilados/marketplaces';
 import { config } from './config';
 import { getRedis, closeRedis } from './lib/redis';
 import { BaileysGateway } from './wa/baileys-gateway';
@@ -30,6 +36,8 @@ import { processMirrorMessage } from './processors/mirror-message';
 import { createProductEnrichProcessor } from './processors/product-enrich';
 import { createAwinImportProcessor } from './processors/awin-import';
 import { createCouponSyncProcessor } from './processors/coupon-sync';
+import { createGroupLinkRotateProcessor } from './processors/group-link-rotate';
+import { GroupLinkMonitor } from './group-links/monitor';
 import { MirrorListener } from './mirror/listener';
 import { AutomationScheduler } from './automation/scheduler';
 import { AwinImportScheduler } from './automation/awin-import-scheduler';
@@ -41,6 +49,7 @@ const log = pino({ name: 'worker' });
 const gateway = new BaileysGateway();
 const manager = new WaSessionManager(gateway);
 const mirrorListener = new MirrorListener(gateway);
+const groupLinkMonitor = new GroupLinkMonitor(gateway);
 const automationScheduler = new AutomationScheduler();
 const awinImportScheduler = new AwinImportScheduler();
 const couponSyncScheduler = new CouponSyncScheduler();
@@ -88,6 +97,11 @@ const couponSyncWorker = new Worker<CouponSyncJob>(QUEUE_COUPON_SYNC, createCoup
   connection: getRedis(),
   concurrency: 1,
 });
+const groupLinkRotateWorker = new Worker<GroupLinkRotateJob>(
+  QUEUE_GROUP_LINK_ROTATE,
+  createGroupLinkRotateProcessor({ gateway }),
+  { connection: getRedis(), concurrency: 1 },
+);
 
 for (const w of [
   waWorker,
@@ -97,6 +111,7 @@ for (const w of [
   telegramWorker,
   awinImportWorker,
   couponSyncWorker,
+  groupLinkRotateWorker,
 ]) {
   w.on('failed', (job, err) => log.error({ jobId: job?.id, err: err.message }, 'job falhou'));
 }
@@ -118,7 +133,29 @@ sendWorker.on('failed', (job, err) => {
   }
 });
 
-// Subscriber Redis para mirror.rules.changed
+groupLinkRotateWorker.on('failed', (job, err) => {
+  if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
+    const { groupLinkId, tenantId } = job.data;
+    void (async () => {
+      try {
+        await prisma.groupLink.updateMany({
+          where: { id: groupLinkId },
+          data: { status: 'ERROR', lastError: err.message },
+        });
+        const { publishEvent } = await import('./lib/events');
+        await publishEvent(tenantId, {
+          type: 'group-link.error',
+          groupLinkId,
+          error: err.message,
+        });
+      } catch (e) {
+        log.error({ err: e, groupLinkId }, 'falha ao marcar groupLink como ERROR');
+      }
+    })();
+  }
+});
+
+// Subscriber Redis para eventos do ecossistema
 const redisSub = getRedis().duplicate();
 await redisSub.subscribe(REDIS_EVENTS_CHANNEL);
 redisSub.on('message', (_channel, raw) => {
@@ -133,6 +170,9 @@ redisSub.on('message', (_channel, raw) => {
     if (ev.event?.type === 'telegram.bots.changed') {
       void telegramManager.reload();
     }
+    if (ev.event?.type === 'group-links.changed') {
+      void groupLinkMonitor.reload();
+    }
   } catch {
     // ignore
   }
@@ -141,6 +181,7 @@ redisSub.on('message', (_channel, raw) => {
 const http = startHttp(config.WORKER_PORT, () => manager.sessionCount());
 await manager.start();
 await mirrorListener.start();
+await groupLinkMonitor.start();
 await automationScheduler.start();
 awinImportScheduler.start();
 couponSyncScheduler.start();
@@ -157,6 +198,7 @@ async function shutdown() {
     awinImportScheduler.stop();
     couponSyncScheduler.stop();
     telegramManager.stop();
+    groupLinkMonitor.stop();
     await Promise.all([
       waWorker.close(),
       sendWorker.close(),
@@ -165,6 +207,7 @@ async function shutdown() {
       telegramWorker.close(),
       awinImportWorker.close(),
       couponSyncWorker.close(),
+      groupLinkRotateWorker.close(),
     ]);
     await redisSub.unsubscribe();
     redisSub.disconnect();

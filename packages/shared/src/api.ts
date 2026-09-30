@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { MARKETPLACE_KINDS, MEDIA_MODES, MIRROR_LOG_STATUSES, MIRROR_MODES, SHIPPINGS } from './enums';
+import {
+  MARKETPLACE_KINDS,
+  MEDIA_MODES,
+  MIRROR_LOG_STATUSES,
+  MIRROR_MODES,
+  SHIPPINGS,
+} from './enums';
 
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'formato HH:mm');
 
@@ -48,9 +54,12 @@ export const groupSettingsSchema = z
     description: z.string().trim().max(2048).optional(),
     announceOnly: z.boolean().optional(),
   })
-  .refine((v) => v.subject !== undefined || v.description !== undefined || v.announceOnly !== undefined, {
-    message: 'informe ao menos um campo para atualizar',
-  });
+  .refine(
+    (v) => v.subject !== undefined || v.description !== undefined || v.announceOnly !== undefined,
+    {
+      message: 'informe ao menos um campo para atualizar',
+    },
+  );
 
 export const groupInviteSchema = z.object({ revoke: z.boolean().default(false) });
 
@@ -176,23 +185,31 @@ export const apiTokenCreateSchema = z.object({
 });
 export type ApiTokenCreateBody = z.infer<typeof apiTokenCreateSchema>;
 
-export const extensionCaptureSchema = z.object({
-  url: z.string().url(),
-  marketplaceKind: z.enum(MARKETPLACE_KINDS),
-  title: z.string().min(1).max(500).nullish(),
-  price: z.number().positive().nullish(),
-  originalPrice: z.number().positive().nullish(),
-  discountPct: z.number().int().min(1).max(100).nullish(),
-  images: z.array(z.string().url()).nullish(),
-  couponCode: z.string().max(60).nullish(),
-  couponValue: z.number().positive().nullish(),
-  shipping: z.enum(['NONE', 'FREE', 'FULL', 'UNKNOWN']).nullish(),
-  flashSaleEndsAt: z.string().datetime().nullish(),
-  affiliateUrl: z.string().url().nullish(),
-  // Quando presente, o produto capturado vai direto para a fila desta automação (item manual)
-  // em vez de cair na Fila de Triagem.
-  automationRuleId: z.string().min(1).nullish(),
-});
+export const extensionCaptureSchema = z
+  .object({
+    url: z.string().url(),
+    marketplaceKind: z.enum(MARKETPLACE_KINDS),
+    title: z.string().min(1).max(500).nullish(),
+    price: z.number().positive().nullish(),
+    originalPrice: z.number().positive().nullish(),
+    discountPct: z.number().int().min(1).max(100).nullish(),
+    images: z.array(z.string().url()).nullish(),
+    couponCode: z.string().max(60).nullish(),
+    couponValue: z.number().positive().nullish(),
+    shipping: z.enum(['NONE', 'FREE', 'FULL', 'UNKNOWN']).nullish(),
+    flashSaleEndsAt: z.string().datetime().nullish(),
+    affiliateUrl: z.string().url().nullish(),
+    // Quando presente, o produto capturado vai direto para a fila desta automação (item manual)
+    // em vez de cair na Fila de Triagem.
+    automationRuleId: z.string().min(1).nullish(),
+    // Quando presente, o produto entra como o próximo envio deste lote (ativo) em vez de ir
+    // para a Triagem. Não pode ser combinado com `automationRuleId`.
+    batchId: z.string().min(1).nullish(),
+  })
+  .refine((b) => !(b.batchId && b.automationRuleId), {
+    message: 'Informe apenas um destino: lote ou automação',
+    path: ['batchId'],
+  });
 export type ExtensionCaptureBody = z.infer<typeof extensionCaptureSchema>;
 
 // Descoberta feita pela extensão: ela abre a busca do marketplace no Chrome do usuário (sem

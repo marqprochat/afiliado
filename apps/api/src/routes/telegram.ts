@@ -43,11 +43,7 @@ export async function telegramRoutes(app: FastifyInstance) {
     try {
       me = await new TelegramClient(body.token).getMe();
     } catch (e) {
-      throw new ApiError(
-        'TELEGRAM_ERROR',
-        e instanceof Error ? e.message : 'token inválido',
-        400,
-      );
+      throw new ApiError('TELEGRAM_ERROR', e instanceof Error ? e.message : 'token inválido', 400);
     }
     const row = await req.db.telegramBot.create({
       // @ts-expect-error tenantId é injetado pela extensão forTenant

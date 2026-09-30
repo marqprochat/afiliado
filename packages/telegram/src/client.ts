@@ -64,9 +64,12 @@ export class TelegramClient {
   }
 
   async getMe(): Promise<TelegramMe> {
-    const r = await this.request<{ id: number; is_bot: boolean; username?: string; first_name: string }>(
-      'getMe',
-    );
+    const r = await this.request<{
+      id: number;
+      is_bot: boolean;
+      username?: string;
+      first_name: string;
+    }>('getMe');
     return {
       id: r.id,
       isBot: r.is_bot,
@@ -114,7 +117,11 @@ export class TelegramClient {
     return { messageId: r.message_id };
   }
 
-  async sendPhoto(chatId: string, photoUrl: string, caption?: string): Promise<{ messageId: number }> {
+  async sendPhoto(
+    chatId: string,
+    photoUrl: string,
+    caption?: string,
+  ): Promise<{ messageId: number }> {
     const body: Record<string, unknown> = { chat_id: chatId, photo: photoUrl };
     if (caption) {
       body.caption = caption;

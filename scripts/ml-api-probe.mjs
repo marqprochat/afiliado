@@ -36,13 +36,19 @@ const CATEGORY = categoryArg || 'MLB1000'; // Eletrônicos, Áudio e Vídeo
 const env = (name) => process.env[name] ?? process.env[name.toLowerCase()];
 
 function resolveRedirectUri() {
-  const dev = String(env('DESENVOLVIMENTO') ?? '').trim().toLowerCase();
+  const dev = String(env('DESENVOLVIMENTO') ?? '')
+    .trim()
+    .toLowerCase();
   if (['true', '1', 'sim', 'yes'].includes(dev)) {
     return { uri: 'http://localhost:3000/callback', mode: 'desenvolvimento' };
   }
-  const domain = String(env('DOMAIN') ?? env('DOMINIO') ?? '').trim().replace(/\/+$/, '');
+  const domain = String(env('DOMAIN') ?? env('DOMINIO') ?? '')
+    .trim()
+    .replace(/\/+$/, '');
   if (!domain || domain === 'localhost') {
-    fail('Defina DOMAIN com o domínio público (ex.: painel.seudominio.com.br) ou DESENVOLVIMENTO=true.');
+    fail(
+      'Defina DOMAIN com o domínio público (ex.: painel.seudominio.com.br) ou DESENVOLVIMENTO=true.',
+    );
   }
   const base = /^https?:\/\//i.test(domain) ? domain : `https://${domain}`;
   return { uri: `${base}/callbackml`, mode: 'produção' };
@@ -59,7 +65,8 @@ const short = (value, n = 80) => (value == null ? '—' : String(value).slice(0,
 
 const clientId = env('ML_CLIENT_ID');
 const clientSecret = env('ML_CLIENT_SECRET');
-if (!clientId || !clientSecret) fail('Defina ML_CLIENT_ID e ML_CLIENT_SECRET (variáveis de ambiente ou .env).');
+if (!clientId || !clientSecret)
+  fail('Defina ML_CLIENT_ID e ML_CLIENT_SECRET (variáveis de ambiente ou .env).');
 
 const { uri: redirectUri, mode } = resolveRedirectUri();
 const verifier = randomBytes(48).toString('base64url');
@@ -77,11 +84,19 @@ const authUrl = `${AUTH}?${new URLSearchParams({
 
 console.log(`Modo: ${mode}`);
 console.log(`redirect_uri: ${redirectUri}`);
-console.log('  ↑ precisa estar cadastrado exatamente assim nas configurações do app no DevCenter.\n');
-console.log('1) Abra este endereço no navegador, logado com o usuário ADMINISTRADOR da conta e autorize:\n');
+console.log(
+  '  ↑ precisa estar cadastrado exatamente assim nas configurações do app no DevCenter.\n',
+);
+console.log(
+  '1) Abra este endereço no navegador, logado com o usuário ADMINISTRADOR da conta e autorize:\n',
+);
 console.log(authUrl);
-console.log('\n2) O navegador vai redirecionar para o redirect_uri (a página pode dar erro/404, é normal).');
-console.log('   Copie o endereço COMPLETO da barra do navegador (ou só o valor de code=) e cole abaixo.\n');
+console.log(
+  '\n2) O navegador vai redirecionar para o redirect_uri (a página pode dar erro/404, é normal).',
+);
+console.log(
+  '   Copie o endereço COMPLETO da barra do navegador (ou só o valor de code=) e cole abaixo.\n',
+);
 
 const rl = createInterface({ input: process.stdin, output: process.stdout });
 const pasted = (await rl.question('Cole aqui: ')).trim();
@@ -92,8 +107,10 @@ try {
   const u = new URL(pasted);
   code = u.searchParams.get('code') ?? '';
   const returnedState = u.searchParams.get('state');
-  if (returnedState && returnedState !== state) fail('O parâmetro state não confere — refaça o processo do zero.');
-  if (u.searchParams.get('error')) fail(`O Mercado Livre devolveu erro: ${u.searchParams.get('error')}`);
+  if (returnedState && returnedState !== state)
+    fail('O parâmetro state não confere — refaça o processo do zero.');
+  if (u.searchParams.get('error'))
+    fail(`O Mercado Livre devolveu erro: ${u.searchParams.get('error')}`);
 } catch {
   // colou só o código
 }
@@ -125,7 +142,9 @@ console.log(
 // ---------- sondas ----------
 
 async function get(path, retried = false) {
-  const res = await fetch(`${API}${path}`, { headers: { authorization: `Bearer ${token}`, accept: 'application/json' } });
+  const res = await fetch(`${API}${path}`, {
+    headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+  });
   if (res.status === 429 && !retried) {
     console.log('     ⏳ 429 (limite de requisições) — aguardando 2s e tentando de novo');
     await new Promise((r) => setTimeout(r, 2000));
@@ -161,9 +180,11 @@ let searchResults = [];
   if (r.ok) {
     searchResults = r.json.results ?? [];
     console.log(`     total ${r.json.paging?.total ?? '?'}`);
-    for (const p of (r.json.results ?? []).slice(0, 3)) console.log(`     · ${p.id} — ${short(p.name, 70)}`);
+    for (const p of (r.json.results ?? []).slice(0, 3))
+      console.log(`     · ${p.id} — ${short(p.name, 70)}`);
     const first = (r.json.results ?? [])[0];
-    if (first) console.log(`     campos de um resultado: ${short(Object.keys(first).join(', '), 220)}`);
+    if (first)
+      console.log(`     campos de um resultado: ${short(Object.keys(first).join(', '), 220)}`);
   } else errorLine(r.json);
 }
 
@@ -184,7 +205,12 @@ let searchResults = [];
   const r = await get(`/trends/${SITE}/${CATEGORY}`);
   header(r.status, `/trends/${SITE}/${CATEGORY}`);
   if (r.ok && Array.isArray(r.json)) {
-    console.log(`     ${r.json.length} tendências, ex.: ${r.json.slice(0, 5).map((t) => t.keyword).join(' | ')}`);
+    console.log(
+      `     ${r.json.length} tendências, ex.: ${r.json
+        .slice(0, 5)
+        .map((t) => t.keyword)
+        .join(' | ')}`,
+    );
   } else errorLine(r.json);
 }
 
@@ -206,7 +232,9 @@ if (!highlights.ok) {
       const r = await get(`/items/${el.id}`);
       header(r.status, `/items/${el.id}`);
       if (r.ok) {
-        console.log(`     ${short(r.json.title, 60)} — R$ ${r.json.price} (de ${r.json.original_price ?? '—'})`);
+        console.log(
+          `     ${short(r.json.title, 60)} — R$ ${r.json.price} (de ${r.json.original_price ?? '—'})`,
+        );
         console.log(`     ${short(r.json.permalink, 100)}`);
       } else errorLine(r.json);
     } else if (el.type === 'PRODUCT') {
@@ -240,8 +268,12 @@ if (!highlights.ok) {
       errorLine(offers.json);
       continue;
     }
-    const rows = Array.isArray(offers.json) ? offers.json : (offers.json.results ?? offers.json.items ?? []);
-    console.log(`     formato: ${Array.isArray(offers.json) ? 'array' : `objeto {${short(Object.keys(offers.json).join(', '), 100)}}`}, ${rows.length} ofertas`);
+    const rows = Array.isArray(offers.json)
+      ? offers.json
+      : (offers.json.results ?? offers.json.items ?? []);
+    console.log(
+      `     formato: ${Array.isArray(offers.json) ? 'array' : `objeto {${short(Object.keys(offers.json).join(', '), 100)}}`}, ${rows.length} ofertas`,
+    );
     const row = rows[0];
     if (!row) continue;
     console.log(`     campos de uma oferta: ${short(Object.keys(row).join(', '), 200)}`);
@@ -253,32 +285,46 @@ if (!highlights.ok) {
     if (item.ok) {
       const i = item.json;
       console.log(`     ${short(i.title, 60)}`);
-      console.log(`     R$ ${i.price} (de ${i.original_price ?? '—'}) · frete grátis: ${i.shipping?.free_shipping ?? '?'} · estoque ref.: ${i.available_quantity ?? '?'}`);
+      console.log(
+        `     R$ ${i.price} (de ${i.original_price ?? '—'}) · frete grátis: ${i.shipping?.free_shipping ?? '?'} · estoque ref.: ${i.available_quantity ?? '?'}`,
+      );
       console.log(`     link: ${short(i.permalink, 110)}`);
-      console.log(`     foto: ${short(i.thumbnail, 90)} · catalog_product_id: ${i.catalog_product_id ?? '—'}`);
+      console.log(
+        `     foto: ${short(i.thumbnail, 90)} · catalog_product_id: ${i.catalog_product_id ?? '—'}`,
+      );
     } else errorLine(item.json);
 
     const sale = await get(`/items/${itemId}/sale_price`);
     header(sale.status, `/items/${itemId}/sale_price`);
-    if (sale.ok) console.log(`     amount ${sale.json.amount} · regular ${sale.json.regular_amount ?? '—'}`);
+    if (sale.ok)
+      console.log(`     amount ${sale.json.amount} · regular ${sale.json.regular_amount ?? '—'}`);
     else errorLine(sale.json);
   }
 
   // 7. detalhes em lote de itens (o endpoint que substitui /items?ids=)
   const itemIds = sample.filter((e) => e.type === 'ITEM').map((e) => e.id);
   if (itemIds.length > 0) {
-    const r = await get(`/items/bulk?ids=${itemIds.join(',')}&attributes=body.id,body.price,body.permalink`);
+    const r = await get(
+      `/items/bulk?ids=${itemIds.join(',')}&attributes=body.id,body.price,body.permalink`,
+    );
     header(r.status, `/items/bulk?ids=${itemIds.length} itens`);
     if (r.ok && Array.isArray(r.json)) {
-      for (const row of r.json.slice(0, 3)) console.log(`     · ${row.id ?? row.body?.id} — status ${row.status_code} — R$ ${row.body?.price}`);
+      for (const row of r.json.slice(0, 3))
+        console.log(
+          `     · ${row.id ?? row.body?.id} — status ${row.status_code} — R$ ${row.body?.price}`,
+        );
     } else errorLine(r.json);
   }
 }
 
 // 9. VERIFICAÇÃO DOS DADOS — compare o link e o preço de cada produto com a página do Mercado Livre
 {
-  console.log(`\n=== Verificação de dados: ${searchResults.length} produtos da busca "${QUERY}" ===`);
-  console.log('Abra a "página (montada)" de 3 ou 4 produtos que têm ofertas e compare o preço PRINCIPAL da página com as ofertas abaixo (na ordem da API).\n');
+  console.log(
+    `\n=== Verificação de dados: ${searchResults.length} produtos da busca "${QUERY}" ===`,
+  );
+  console.log(
+    'Abra a "página (montada)" de 3 ou 4 produtos que têm ofertas e compare o preço PRINCIPAL da página com as ofertas abaixo (na ordem da API).\n',
+  );
   const stats = { total: 0, comBuyBox: 0, comOriginal: 0, comOfertas: 0, comDeal: 0 };
   const money = (v) => (v == null ? '—' : `R$ ${Number(v).toFixed(2)}`);
 
@@ -307,12 +353,17 @@ if (!highlights.ok) {
         `    oferta principal: ${money(bb.price)} (de ${money(bb.original_price)}) · frete grátis: ${bb.shipping?.free_shipping ?? '?'} · ${bb.shipping?.logistic_type ?? '?'} · vendedor ${bb.seller?.reputation_level_id ?? '?'} · deals: ${bb.deal_ids?.length ?? 0}`,
       );
     } else {
-      console.log(`    oferta principal: (vazia) · faixa de preço: ${prod.json.buy_box_winner_price_range ? `${money(prod.json.buy_box_winner_price_range.min?.price)} a ${money(prod.json.buy_box_winner_price_range.max?.price)}` : '—'}`);
+      console.log(
+        `    oferta principal: (vazia) · faixa de preço: ${prod.json.buy_box_winner_price_range ? `${money(prod.json.buy_box_winner_price_range.min?.price)} a ${money(prod.json.buy_box_winner_price_range.max?.price)}` : '—'}`,
+      );
     }
     if (offers.ok) {
       const rows = offers.json.results ?? [];
       if (rows.length > 0) stats.comOfertas += 1;
-      const prices = rows.map((o) => Number(o.price)).filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
+      const prices = rows
+        .map((o) => Number(o.price))
+        .filter((n) => Number.isFinite(n))
+        .sort((a, b) => a - b);
       console.log(
         `    ofertas: ${rows.length} (total ${offers.json.paging?.total ?? '?'}) · menor preço: ${money(prices[0])} · maior: ${money(prices[prices.length - 1])} · novas: ${rows.filter((o) => o.condition === 'new').length}`,
       );
@@ -328,11 +379,21 @@ if (!highlights.ok) {
       // hipótese: produto de variação (cor/modelo) não tem oferta própria — o preço fica no pai ou nas irmãs
       const parent = prod.json.parent_id;
       const kids = Array.isArray(prod.json.children_ids) ? prod.json.children_ids : [];
-      const candidates = [...(parent && parent !== s.id ? [parent] : []), ...kids.filter((k) => k !== s.id).slice(0, 3)];
-      console.log(`    variação? parent_id: ${parent ?? '—'} · filhos: ${kids.length} · a testar: ${candidates.join(', ') || 'nenhum'}`);
+      const candidates = [
+        ...(parent && parent !== s.id ? [parent] : []),
+        ...kids.filter((k) => k !== s.id).slice(0, 3),
+      ];
+      console.log(
+        `    variação? parent_id: ${parent ?? '—'} · filhos: ${kids.length} · a testar: ${candidates.join(', ') || 'nenhum'}`,
+      );
       for (const cid of candidates) {
         const r = await get(`/products/${cid}/items?limit=3`);
-        const cp = r.ok ? (r.json.results ?? []).map((o) => Number(o.price)).filter(Number.isFinite).sort((a, b) => a - b) : [];
+        const cp = r.ok
+          ? (r.json.results ?? [])
+              .map((o) => Number(o.price))
+              .filter(Number.isFinite)
+              .sort((a, b) => a - b)
+          : [];
         console.log(
           `      ↳ ofertas de ${cid}: ${r.ok ? `${(r.json.results ?? []).length} · menor ${money(cp[0])}` : `[${r.status}] ${short(r.json?.message, 40)}`}`,
         );
@@ -349,13 +410,21 @@ if (!highlights.ok) {
   const cats = await get(`/sites/${SITE}/categories`);
   header(cats.status, `/sites/${SITE}/categories`);
   if (cats.ok && Array.isArray(cats.json)) {
-    console.log(`     ${cats.json.length} categorias, ex.: ${cats.json.slice(0, 6).map((c) => `${c.id}=${c.name}`).join(' | ')}`);
+    console.log(
+      `     ${cats.json.length} categorias, ex.: ${cats.json
+        .slice(0, 6)
+        .map((c) => `${c.id}=${c.name}`)
+        .join(' | ')}`,
+    );
   } else errorLine(cats.json);
 
-  const dd = await get(`/sites/${SITE}/domain_discovery/search?q=${encodeURIComponent(QUERY)}&limit=3`);
+  const dd = await get(
+    `/sites/${SITE}/domain_discovery/search?q=${encodeURIComponent(QUERY)}&limit=3`,
+  );
   header(dd.status, `/sites/${SITE}/domain_discovery/search?q="${QUERY}"`);
   if (dd.ok && Array.isArray(dd.json)) {
-    for (const d of dd.json.slice(0, 3)) console.log(`     · ${d.category_id} — ${short(d.category_name, 40)} (${d.domain_id})`);
+    for (const d of dd.json.slice(0, 3))
+      console.log(`     · ${d.category_id} — ${short(d.category_name, 40)} (${d.domain_id})`);
   } else errorLine(dd.json);
 }
 

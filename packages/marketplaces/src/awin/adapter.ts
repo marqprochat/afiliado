@@ -2,7 +2,9 @@ import type { AwinCredentials, ConnectionStatus, MarketplaceAdapter } from '../a
 import { UnsupportedError } from '../tag-adapter';
 import { listDatafeeds, type AwinDatafeedOptions } from './datafeed';
 
-export function createAwinAdapter(opts: AwinDatafeedOptions = {}): MarketplaceAdapter<AwinCredentials> {
+export function createAwinAdapter(
+  opts: AwinDatafeedOptions = {},
+): MarketplaceAdapter<AwinCredentials> {
   return {
     kind: 'AWIN',
 
@@ -20,7 +22,10 @@ export function createAwinAdapter(opts: AwinDatafeedOptions = {}): MarketplaceAd
           const available = new Set(active.map((f) => f.feedId));
           const missing = creds.feedIds.filter((id) => !available.has(id));
           if (missing.length > 0) {
-            return { ok: false, error: `Feed ID(s) não encontrado(s) na sua conta Awin: ${missing.join(', ')}` };
+            return {
+              ok: false,
+              error: `Feed ID(s) não encontrado(s) na sua conta Awin: ${missing.join(', ')}`,
+            };
           }
         }
         return { ok: true };

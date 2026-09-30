@@ -102,7 +102,9 @@ export default function GruposPage() {
               value={participantsText}
               onChange={(e) => setParticipantsText(e.target.value)}
               className="mt-1"
-              placeholder={'Um número por linha ou separado por vírgula, com DDI\nEx.: 5511999999999'}
+              placeholder={
+                'Um número por linha ou separado por vírgula, com DDI\nEx.: 5511999999999'
+              }
             />
             <p className="mt-1 text-xs text-muted-foreground">
               O WhatsApp exige pelo menos um participante além de você para criar o grupo.
@@ -124,8 +126,8 @@ export default function GruposPage() {
         ))}
         {groups?.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            Nenhum grupo sincronizado ainda para essa sessão. Conecte e sincronize em
-            “Configurações → WhatsApp”.
+            Nenhum grupo sincronizado ainda para essa sessão. Conecte e sincronize em “Configurações
+            → WhatsApp”.
           </p>
         )}
         {!effectiveSessionId && (

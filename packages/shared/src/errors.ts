@@ -8,6 +8,9 @@ export const API_ERROR_CODES = [
   'SHOPEE_UNCONFIGURED',
   'MARKETPLACE_ERROR',
   'TELEGRAM_ERROR',
+  'BATCH_INACTIVE',
+  'BATCH_DUPLICATE',
+  'SERVICE_UNAVAILABLE',
   'INTERNAL',
 ] as const;
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
@@ -32,5 +35,8 @@ export class ApiError extends Error {
   }
   static conflict(msg: string) {
     return new ApiError('CONFLICT', msg, 409);
+  }
+  static serviceUnavailable(msg = 'Serviço temporariamente indisponível') {
+    return new ApiError('SERVICE_UNAVAILABLE', msg, 503);
   }
 }

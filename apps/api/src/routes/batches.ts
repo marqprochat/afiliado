@@ -71,7 +71,9 @@ async function assertTargets(
 async function retryErrorItems(req: FastifyRequest, onlyItemId?: string) {
   const b = await findBatch(req);
   if (b.status === 'CANCELLED') throw ApiError.validation('Lote cancelado não pode ser reenviado');
-  const failed = b.items.filter((i) => i.status === 'ERROR' && (!onlyItemId || i.id === onlyItemId));
+  const failed = b.items.filter(
+    (i) => i.status === 'ERROR' && (!onlyItemId || i.id === onlyItemId),
+  );
   if (onlyItemId && failed.length === 0) {
     throw ApiError.notFound('Item com erro não encontrado neste lote');
   }
@@ -142,7 +144,9 @@ export async function batchesRoutes(app: FastifyInstance) {
     await assertTargets(req, session.id, body);
 
     // produtos que já estão em um lote (não cancelado) não entram em outro
-    const notBatched = { product: { batchItems: { none: { batch: { status: { not: 'CANCELLED' as const } } } } } };
+    const notBatched = {
+      product: { batchItems: { none: { batch: { status: { not: 'CANCELLED' as const } } } } },
+    };
     const queueItems = body.productIds
       ? await req.db.queueItem.findMany({
           where: { productId: { in: body.productIds }, ...notBatched },
@@ -304,10 +308,17 @@ export async function batchesRoutes(app: FastifyInstance) {
     const b = await findPausedBatch(req);
     const pending = b.items.filter((i) => i.status === 'PENDING');
     const pendingIds = new Set(pending.map((i) => i.id));
-    if (itemIds.length !== pendingIds.size || new Set(itemIds).size !== itemIds.length || !itemIds.every((id) => pendingIds.has(id))) {
-      throw ApiError.validation('A nova ordem precisa conter exatamente os itens pendentes do lote');
+    if (
+      itemIds.length !== pendingIds.size ||
+      new Set(itemIds).size !== itemIds.length ||
+      !itemIds.every((id) => pendingIds.has(id))
+    ) {
+      throw ApiError.validation(
+        'A nova ordem precisa conter exatamente os itens pendentes do lote',
+      );
     }
-    const base = Math.max(-1, ...b.items.filter((i) => i.status !== 'PENDING').map((i) => i.order)) + 1;
+    const base =
+      Math.max(-1, ...b.items.filter((i) => i.status !== 'PENDING').map((i) => i.order)) + 1;
     await req.db.$transaction(
       itemIds.map((id, idx) =>
         req.db.batchItem.updateMany({ where: { id, batchId: b.id }, data: { order: base + idx } }),

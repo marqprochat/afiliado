@@ -17,13 +17,7 @@ import { NativeCheckbox } from '@/components/ui/native-checkbox';
 import { apiFetch } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { useApiMutation } from '@/lib/mutations';
-import {
-  useBatch,
-  useGroups,
-  useQueue,
-  useTelegramAllChats,
-  useTemplates,
-} from '@/lib/queries';
+import { useBatch, useGroups, useQueue, useTelegramAllChats, useTemplates } from '@/lib/queries';
 import type { BatchDetail, BatchItem } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -70,7 +64,10 @@ export function BatchManageDrawer({
           <DrawerTitle className="flex items-center gap-2">
             {batch?.name ?? 'Lote'}
             {batch && (
-              <StatusPill label={BATCH_STATUS_LABEL[batch.status] ?? batch.status} status={batch.status} />
+              <StatusPill
+                label={BATCH_STATUS_LABEL[batch.status] ?? batch.status}
+                status={batch.status}
+              />
             )}
           </DrawerTitle>
           <DrawerDescription>
@@ -97,7 +94,11 @@ export function BatchManageDrawer({
           <p className="text-muted-foreground">Carregando…</p>
         ) : (
           <>
-            <ItemsSection key={`items-${itemsSignature(batch)}`} batch={batch} editable={editable} />
+            <ItemsSection
+              key={`items-${itemsSignature(batch)}`}
+              batch={batch}
+              editable={editable}
+            />
             {editable && <AddProductsSection batch={batch} />}
             <ConfigSection
               key={`cfg-${batch.status}-${batch.name}-${batch.templateId}-${batch.intervalMin}-${batch.mediaMode}`}
@@ -265,7 +266,8 @@ function ItemRow({
   hideRunAt?: boolean;
   children?: React.ReactNode;
 }) {
-  const title = item.product?.title ?? (item.coupon ? `Cupom ${item.coupon.code}` : 'Item removido');
+  const title =
+    item.product?.title ?? (item.coupon ? `Cupom ${item.coupon.code}` : 'Item removido');
   const img = item.product?.images[0];
   const sent = item.sendLogs.filter((l) => l.status === 'SENT').length;
   const failed = item.sendLogs.length - sent;
@@ -282,7 +284,9 @@ function ItemRow({
         <p className="line-clamp-1 text-sm">{title}</p>
         <div className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
           <StatusPill label={ITEM_STATUS_LABEL[item.status] ?? item.status} status={item.status} />
-          {item.status === 'PENDING' && !hideRunAt && <span>previsto {formatDateTime(item.runAt)}</span>}
+          {item.status === 'PENDING' && !hideRunAt && (
+            <span>previsto {formatDateTime(item.runAt)}</span>
+          )}
           {item.sendLogs.length > 0 && (
             <span>
               · {sent} grupo(s) enviado(s)
@@ -503,7 +507,10 @@ function ConfigSection({ batch, editable }: { batch: BatchDetail; editable: bool
                   key={m}
                   type="button"
                   onClick={() => setMediaMode(m)}
-                  className={cn('flex-1 rounded px-2 py-1', mediaMode === m && 'bg-brand text-white')}
+                  className={cn(
+                    'flex-1 rounded px-2 py-1',
+                    mediaMode === m && 'bg-brand text-white',
+                  )}
                 >
                   {m === 'IMAGE' ? 'Imagem' : 'Preview'}
                 </button>

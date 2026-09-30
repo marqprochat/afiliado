@@ -35,7 +35,10 @@ export async function searchAwinCatalog(
   return rows.map((r) => mapAwinCatalogRowToProductData(toRow(r)));
 }
 
-export async function fetchAwinCatalogByUrls(db: TenantClient, urls: string[]): Promise<ProductData[]> {
+export async function fetchAwinCatalogByUrls(
+  db: TenantClient,
+  urls: string[],
+): Promise<ProductData[]> {
   if (urls.length === 0) return [];
   const rows = await db.awinCatalogProduct.findMany({ where: { deepLink: { in: urls } } });
   return rows.map((r) => mapAwinCatalogRowToProductData(toRow(r)));

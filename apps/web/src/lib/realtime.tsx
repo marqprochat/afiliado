@@ -77,6 +77,9 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       if (e.type.startsWith('telegram.')) {
         void qc.invalidateQueries({ queryKey: ['telegram'] });
       }
+      if (e.type.startsWith('group-link')) {
+        void qc.invalidateQueries({ queryKey: ['group-links'] });
+      }
       handlers.current.forEach((h) => h(e));
     });
     return () => client.stop();

@@ -25,6 +25,8 @@ import {
   upsertMarketplaceCredentials,
 } from '../lib/marketplaces';
 import { loadFetchCredentials } from '../lib/ml-api';
+import { insertBatchItemNext } from '../lib/batches';
+import { getOperatingWindow, toCoreWindow } from '../lib/settings';
 
 async function authenticateExtension(
   req: FastifyRequest,
@@ -98,6 +100,23 @@ export async function extensionRoutes(app: FastifyInstance) {
     return rules;
   });
 
+  // 1.6 Lista os lotes ativos do tenant, para a extensão escolher o lote de destino
+  app.get('/extension/batches', async (req) => {
+    const { tenantId } = await authenticateExtension(req);
+    const db = forTenant(tenantId);
+    const batches = await db.batch.findMany({
+      where: { status: { in: ['SCHEDULED', 'RUNNING', 'PAUSED'] } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, name: true, status: true, items: { select: { status: true } } },
+    });
+    return batches.map((b) => ({
+      id: b.id,
+      name: b.name,
+      status: b.status,
+      pending: b.items.filter((i) => i.status === 'PENDING').length,
+    }));
+  });
+
   // 2. Captura de produto da aba ativa diretamente pela extensão
   app.post('/extension/capture', async (req) => {
     const { tenantId } = await authenticateExtension(req);
@@ -109,6 +128,20 @@ export async function extensionRoutes(app: FastifyInstance) {
     if (body.automationRuleId) {
       rule = await tenantDb.automationRule.findFirst({ where: { id: body.automationRuleId } });
       if (!rule) throw ApiError.notFound('Automação não encontrada');
+    }
+
+    // Valida o lote antes de salvar o produto, para um destino inválido não deixar lixo.
+    const targetBatch = body.batchId
+      ? await tenantDb.batch.findFirst({
+          where: { id: body.batchId },
+          include: { items: { orderBy: { order: 'asc' } } },
+        })
+      : null;
+    if (body.batchId) {
+      if (!targetBatch) throw ApiError.notFound('Lote não encontrado');
+      if (targetBatch.status === 'DONE' || targetBatch.status === 'CANCELLED') {
+        throw new ApiError('BATCH_INACTIVE', 'Lote não está ativo', 409);
+      }
     }
 
     let productData: ProductData;
@@ -205,6 +238,32 @@ export async function extensionRoutes(app: FastifyInstance) {
         ok: true,
         product: toApiProduct(savedProduct),
         automationQueueItem: { id: queueItem.id, ruleId: rule.id },
+      };
+    }
+
+    if (targetBatch) {
+      const inserted = await insertBatchItemNext({
+        db: tenantDb,
+        tenantId,
+        batch: targetBatch,
+        productId: savedProduct.id,
+        window: toCoreWindow(await getOperatingWindow(tenantDb, tenantId)),
+      });
+      await app.events.publish(tenantId, {
+        type: 'batch.progress',
+        batchId: targetBatch.id,
+        sent: targetBatch.items.filter((i) => i.status === 'SENT').length,
+        total: inserted.total,
+        estimatedEndAt: (inserted.estimatedEndAt ?? new Date()).toISOString(),
+      });
+      return {
+        ok: true,
+        product: toApiProduct(savedProduct),
+        batchItem: {
+          id: inserted.id,
+          batchId: targetBatch.id,
+          runAt: inserted.runAt ? inserted.runAt.toISOString() : null,
+        },
       };
     }
 

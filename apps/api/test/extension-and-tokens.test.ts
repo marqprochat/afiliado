@@ -235,8 +235,12 @@ describe('API Tokens & Extension Routes (Fase 3)', () => {
     const { token } = tokenRes.json();
 
     const other = await createTenantWithUser('extensao-outro-tenant');
-    const otherSession = await prisma.waSession.create({ data: { tenantId: other.tenantId, label: 's3' } });
-    const otherTemplate = await prisma.template.findFirstOrThrow({ where: { tenantId: other.tenantId } });
+    const otherSession = await prisma.waSession.create({
+      data: { tenantId: other.tenantId, label: 's3' },
+    });
+    const otherTemplate = await prisma.template.findFirstOrThrow({
+      where: { tenantId: other.tenantId },
+    });
     const foreignRule = await prisma.automationRule.create({
       data: {
         tenantId: other.tenantId,
@@ -545,4 +549,3 @@ describe('API Tokens & Extension Routes (Fase 3)', () => {
     expect(coupon?.description).toContain('Produto com Cupom');
   });
 });
-

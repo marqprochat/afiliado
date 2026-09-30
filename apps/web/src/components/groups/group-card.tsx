@@ -166,7 +166,12 @@ export function GroupCard({ sessionId, group }: { sessionId: string; group: WaGr
               <div className="space-y-2 border-t border-border pt-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-medium text-muted-foreground">Participantes</label>
-                  <Button size="sm" variant="outline" disabled={loadingDetails} onClick={fetchDetails}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={loadingDetails}
+                    onClick={fetchDetails}
+                  >
                     {loadingDetails ? 'Carregando…' : details ? 'Atualizar' : 'Ver participantes'}
                   </Button>
                 </div>
@@ -225,7 +230,10 @@ export function GroupCard({ sessionId, group }: { sessionId: string; group: WaGr
                             aria-label="Remover do grupo"
                             disabled={participants.isPending}
                             onClick={() =>
-                              participants.mutate({ action: 'remove', participants: [p.jid.split('@')[0]!] })
+                              participants.mutate({
+                                action: 'remove',
+                                participants: [p.jid.split('@')[0]!],
+                              })
                             }
                           >
                             <UserMinus className="h-3.5 w-3.5" />

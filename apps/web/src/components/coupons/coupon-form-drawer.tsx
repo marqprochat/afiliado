@@ -156,10 +156,7 @@ export function CouponFormDrawer({ open, coupon, onClose }: Props) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="store">Loja / Marketplace *</Label>
-                <Select
-                  value={store}
-                  onValueChange={(val) => setStore(val as MarketplaceKind)}
-                >
+                <Select value={store} onValueChange={(val) => setStore(val as MarketplaceKind)}>
                   <SelectTrigger id="store" className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
@@ -216,9 +213,7 @@ export function CouponFormDrawer({ open, coupon, onClose }: Props) {
                 <Label htmlFor="discountType">Tipo de Desconto</Label>
                 <Select
                   value={discountType}
-                  onValueChange={(val) =>
-                    setDiscountType(val as CouponDiscountType | 'NONE')
-                  }
+                  onValueChange={(val) => setDiscountType(val as CouponDiscountType | 'NONE')}
                 >
                   <SelectTrigger id="discountType" className="mt-1">
                     <SelectValue />
@@ -308,12 +303,7 @@ export function CouponFormDrawer({ open, coupon, onClose }: Props) {
           </div>
 
           <DrawerFooter className="px-0 pb-0 pt-4 flex-row justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              disabled={mutation.isPending}
-            >
+            <Button type="button" variant="outline" onClick={onClose} disabled={mutation.isPending}>
               Cancelar
             </Button>
             <Button type="submit" disabled={mutation.isPending}>

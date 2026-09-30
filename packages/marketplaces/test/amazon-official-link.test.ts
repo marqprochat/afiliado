@@ -46,7 +46,9 @@ describe('Gerador oficial de links da Amazon (SiteStripe)', () => {
   it('lança AmazonSessionError sem cookies', async () => {
     await expect(
       generateOfficialAmazonLink('https://www.amazon.com.br/dp/X', {}, 'tag-20'),
-    ).rejects.toMatchObject({ code: 'AMAZON_SESSION_EXPIRED' } satisfies Partial<AmazonSessionError>);
+    ).rejects.toMatchObject({
+      code: 'AMAZON_SESSION_EXPIRED',
+    } satisfies Partial<AmazonSessionError>);
   });
 
   it('detecta sessão expirada quando a resposta redireciona para o login', async () => {
@@ -57,7 +59,9 @@ describe('Gerador oficial de links da Amazon (SiteStripe)', () => {
       generateOfficialAmazonLink('https://www.amazon.com.br/dp/X', cookies, 'tag-20', {
         fetchImpl: fetchImpl as unknown as typeof fetch,
       }),
-    ).rejects.toMatchObject({ code: 'AMAZON_SESSION_EXPIRED' } satisfies Partial<AmazonSessionError>);
+    ).rejects.toMatchObject({
+      code: 'AMAZON_SESSION_EXPIRED',
+    } satisfies Partial<AmazonSessionError>);
   });
 
   it('lança AMAZON_SITESTRIPE_ERROR quando a resposta não contém uma URL', async () => {
@@ -96,10 +100,7 @@ describe('Gerador oficial de links da Amazon (SiteStripe)', () => {
         .fn()
         .mockRejectedValue(new AmazonSessionError('x', 'AMAZON_SESSION_EXPIRED')),
     });
-    const fallback = await failing.toAffiliateLink(
-      creds,
-      'https://www.amazon.com.br/dp/OUTRO123',
-    );
+    const fallback = await failing.toAffiliateLink(creds, 'https://www.amazon.com.br/dp/OUTRO123');
     expect(fallback).toContain('tag=minha-20');
 
     // sem tag e com sessão inválida, o erro sobe

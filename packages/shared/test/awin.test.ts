@@ -10,7 +10,8 @@ describe('mapAwinCatalogRowToProductData', () => {
       price: 99.9,
       originalPrice: 129.9,
       imageUrl: 'https://x/img.png',
-      deepLink: 'https://www.awin1.com/cread.php?awinmid=123&awinaffid=456&ued=https%3A%2F%2Floja.com%2Fp1',
+      deepLink:
+        'https://www.awin1.com/cread.php?awinmid=123&awinaffid=456&ued=https%3A%2F%2Floja.com%2Fp1',
       raw: { foo: 'bar' },
     });
     expect(result).toEqual({
@@ -21,7 +22,8 @@ describe('mapAwinCatalogRowToProductData', () => {
       originalPrice: 129.9,
       images: ['https://x/img.png'],
       shipping: 'UNKNOWN',
-      originalUrl: 'https://www.awin1.com/cread.php?awinmid=123&awinaffid=456&ued=https%3A%2F%2Floja.com%2Fp1',
+      originalUrl:
+        'https://www.awin1.com/cread.php?awinmid=123&awinaffid=456&ued=https%3A%2F%2Floja.com%2Fp1',
       raw: { foo: 'bar' },
     });
   });

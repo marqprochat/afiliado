@@ -147,7 +147,9 @@ export function SearchFilters({
         )}
         {mode === 'trending' && (
           <p className="flex-1 self-center text-sm text-muted-foreground">
-            {isShopee ? 'Itens em alta segundo a API da Shopee.' : 'Itens em alta / promoções segundo a API do AliExpress.'}
+            {isShopee
+              ? 'Itens em alta segundo a API da Shopee.'
+              : 'Itens em alta / promoções segundo a API do AliExpress.'}
           </p>
         )}
         <Button
@@ -271,18 +273,19 @@ export function SearchFilters({
             </label>
           </>
         )}
-        {!supportsAdvancedModes && (mode === 'category' || mode === 'shop' || mode === 'trending') && (
-          <p className="text-xs text-muted-foreground">
-            {source === 'MERCADOLIVRE'
-              ? 'Mercado Livre'
-              : source === 'AMAZON'
-                ? 'Amazon'
-                : source === 'AWIN'
-                  ? 'Awin'
-                  : 'Magalu'}
-            : só busca por palavra-chave está disponível.
-          </p>
-        )}
+        {!supportsAdvancedModes &&
+          (mode === 'category' || mode === 'shop' || mode === 'trending') && (
+            <p className="text-xs text-muted-foreground">
+              {source === 'MERCADOLIVRE'
+                ? 'Mercado Livre'
+                : source === 'AMAZON'
+                  ? 'Amazon'
+                  : source === 'AWIN'
+                    ? 'Awin'
+                    : 'Magalu'}
+              : só busca por palavra-chave está disponível.
+            </p>
+          )}
       </div>
     </form>
   );

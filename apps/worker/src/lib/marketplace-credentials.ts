@@ -48,7 +48,9 @@ export async function loadAwinCredentials(tenantId: string): Promise<AwinCredent
 }
 
 export async function loadAliexpressCredentials(tenantId: string): Promise<AliexpressCredentials> {
-  const row = await prisma.marketplaceConnection.findFirst({ where: { tenantId, kind: 'ALIEXPRESS' } });
+  const row = await prisma.marketplaceConnection.findFirst({
+    where: { tenantId, kind: 'ALIEXPRESS' },
+  });
   const creds = row?.encryptedCredentials
     ? decryptJson<AliexpressCredentials>(Buffer.from(row.encryptedCredentials))
     : ({} as Partial<AliexpressCredentials>);
@@ -73,7 +75,9 @@ function mlOAuthConfig(): MlOAuthConfig | null {
 }
 
 async function readMlRow(tenantId: string) {
-  const row = await prisma.marketplaceConnection.findFirst({ where: { tenantId, kind: 'MERCADOLIVRE' } });
+  const row = await prisma.marketplaceConnection.findFirst({
+    where: { tenantId, kind: 'MERCADOLIVRE' },
+  });
   const creds = row?.encryptedCredentials
     ? decryptJson<TagCredentials>(Buffer.from(row.encryptedCredentials))
     : {};
@@ -109,7 +113,11 @@ async function ensureMlTokenWithLock(
   for (let i = 0; i < WAIT_STEPS; i++) {
     await sleep(WAIT_STEP_MS);
     const latest = (await readMlRow(tenantId)).creds.mlApi;
-    if (latest?.accessToken && latest.expiresAt && Date.parse(latest.expiresAt) - Date.now() > 60_000) {
+    if (
+      latest?.accessToken &&
+      latest.expiresAt &&
+      Date.parse(latest.expiresAt) - Date.now() > 60_000
+    ) {
       return { accessToken: latest.accessToken, tokens: latest };
     }
   }
@@ -143,7 +151,10 @@ export async function loadMlApiCredentials(tenantId: string): Promise<TagCredent
 }
 
 /** Credenciais para `getTagAdapter(kind).fetchByUrls`: Amazon (Creators API), ML (API oficial) ou nada. */
-export async function loadFetchCredentials(tenantId: string, kind: TagKind): Promise<TagCredentials> {
+export async function loadFetchCredentials(
+  tenantId: string,
+  kind: TagKind,
+): Promise<TagCredentials> {
   if (kind === 'AMAZON') return loadTagCredentials(tenantId, kind);
   if (kind === 'MERCADOLIVRE') return loadMlApiCredentials(tenantId);
   return {};

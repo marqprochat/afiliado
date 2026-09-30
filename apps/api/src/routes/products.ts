@@ -157,7 +157,10 @@ export async function productsRoutes(app: FastifyInstance) {
       // em bloqueio anti-bot e não retorna dados reais. Itens sem título caem no fluxo normal.
       const metaItems = body.items ?? [];
       itemsWithMeta = metaItems.filter((i) => i.title !== undefined);
-      urls = [...(body.urls ?? []), ...metaItems.filter((i) => i.title === undefined).map((i) => i.url)];
+      urls = [
+        ...(body.urls ?? []),
+        ...metaItems.filter((i) => i.title === undefined).map((i) => i.url),
+      ];
     }
 
     const unsupported: { url: string; reason: string }[] = [];
@@ -175,7 +178,10 @@ export async function productsRoutes(app: FastifyInstance) {
     }
 
     const allFound: ProductData[] = [];
-    const queuedUrls: { kind: Exclude<MarketplaceKind, 'SHOPEE' | 'AWIN' | 'ALIEXPRESS'>; url: string }[] = [];
+    const queuedUrls: {
+      kind: Exclude<MarketplaceKind, 'SHOPEE' | 'AWIN' | 'ALIEXPRESS'>;
+      url: string;
+    }[] = [];
     let lastError: Error | null = null;
 
     for (const item of itemsWithMeta) {
@@ -220,7 +226,10 @@ export async function productsRoutes(app: FastifyInstance) {
           const foundUrls = new Set(found.map((f) => f.originalUrl));
           for (const u of kindUrls) {
             if (!foundUrls.has(u)) {
-              unsupported.push({ url: u, reason: 'Produto Awin não encontrado no catálogo importado' });
+              unsupported.push({
+                url: u,
+                reason: 'Produto Awin não encontrado no catálogo importado',
+              });
             }
           }
         } else if (scrapeInline) {

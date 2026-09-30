@@ -208,9 +208,7 @@ export function CouponParseModal({ open, onClose }: Props) {
                 onClick={selectAll}
                 className="h-7 text-xs px-2"
               >
-                {selectedIdxs.size === candidates.length
-                  ? 'Desmarcar Todos'
-                  : 'Selecionar Todos'}
+                {selectedIdxs.size === candidates.length ? 'Desmarcar Todos' : 'Selecionar Todos'}
               </Button>
               <span>
                 {selectedIdxs.size} de {candidates.length} selecionados
@@ -303,9 +301,7 @@ export function CouponParseModal({ open, onClose }: Props) {
               onClick={() => importMutation.mutate()}
               disabled={selectedIdxs.size === 0 || importMutation.isPending}
             >
-              {importMutation.isPending
-                ? 'Importando…'
-                : `Importar (${selectedIdxs.size})`}
+              {importMutation.isPending ? 'Importando…' : `Importar (${selectedIdxs.size})`}
             </Button>
           )}
         </DialogFooter>

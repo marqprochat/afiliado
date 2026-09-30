@@ -63,7 +63,9 @@ describe('extractMlCatalogRef', () => {
   });
 
   it('devolve undefined para anúncio individual, listagem e outros domínios', () => {
-    expect(extractMlCatalogRef('https://produto.mercadolivre.com.br/MLB-3790915517-fone-_JM')).toBeUndefined();
+    expect(
+      extractMlCatalogRef('https://produto.mercadolivre.com.br/MLB-3790915517-fone-_JM'),
+    ).toBeUndefined();
     expect(extractMlCatalogRef('https://lista.mercadolivre.com.br/fone-bluetooth')).toBeUndefined();
     expect(extractMlCatalogRef('https://www.amazon.com.br/dp/B08N5WRWNW')).toBeUndefined();
     expect(extractMlCatalogRef('não é url')).toBeUndefined();
@@ -93,7 +95,9 @@ describe('chamadas à API', () => {
 
   it('404 vira ML_API_NOT_FOUND no produto', async () => {
     const fetchImpl = fetchSequence({ status: 404, body: { message: 'not found' } });
-    await expect(fetchCatalogProduct('MLB1', 't', { fetchImpl, sleep: noSleep })).rejects.toMatchObject({
+    await expect(
+      fetchCatalogProduct('MLB1', 't', { fetchImpl, sleep: noSleep }),
+    ).rejects.toMatchObject({
       code: 'ML_API_NOT_FOUND',
     });
   });
@@ -124,27 +128,43 @@ describe('chamadas à API', () => {
   it('5xx repete uma vez; se persistir vira ML_API_ERROR', async () => {
     const sleep = vi.fn(async (_ms: number) => {});
     const fetchImpl = fetchSequence({ status: 502 });
-    await expect(fetchCatalogProduct('MLB1', 't', { fetchImpl, sleep })).rejects.toBeInstanceOf(MlApiError);
+    await expect(fetchCatalogProduct('MLB1', 't', { fetchImpl, sleep })).rejects.toBeInstanceOf(
+      MlApiError,
+    );
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it('ofertas: 404 "No winners found" vira lista vazia', async () => {
     const fetchImpl = fetchSequence({ status: 404, body: { message: 'No winners found' } });
-    await expect(fetchProductOffers('MLB1', 't', { fetchImpl, sleep: noSleep })).resolves.toEqual([]);
+    await expect(fetchProductOffers('MLB1', 't', { fetchImpl, sleep: noSleep })).resolves.toEqual(
+      [],
+    );
   });
 
   it('ofertas: devolve results na ordem da API', async () => {
     const fetchImpl = fetchSequence({
       status: 200,
-      body: { results: [{ item_id: 'A', price: 44.55 }, { item_id: 'B', price: 27 }] },
+      body: {
+        results: [
+          { item_id: 'A', price: 44.55 },
+          { item_id: 'B', price: 27 },
+        ],
+      },
     });
     const offers = await fetchProductOffers('MLB1', 't', { fetchImpl, sleep: noSleep });
     expect(offers.map((o) => o.item_id)).toEqual(['A', 'B']);
   });
 
   it('busca monta a query de catálogo ativo do site MLB', async () => {
-    const fetchImpl = fetchSequence({ status: 200, body: { results: [{ id: 'MLB1', name: 'Fone' }] } });
-    const found = await searchCatalogProducts('fone bluetooth', 't', { fetchImpl, sleep: noSleep, limit: 15 });
+    const fetchImpl = fetchSequence({
+      status: 200,
+      body: { results: [{ id: 'MLB1', name: 'Fone' }] },
+    });
+    const found = await searchCatalogProducts('fone bluetooth', 't', {
+      fetchImpl,
+      sleep: noSleep,
+      limit: 15,
+    });
     expect(found).toHaveLength(1);
     expect(fetchImpl).toHaveBeenCalledWith(
       'https://api.mercadolibre.com/products/search?status=active&site_id=MLB&q=fone%20bluetooth&limit=15',
@@ -157,15 +177,25 @@ describe('discoverMlCatalogUrls', () => {
   it('busca no catálogo e devolve a URL /p/ de cada produto encontrado', async () => {
     const fetchImpl = fetchSequence({
       status: 200,
-      body: { results: [{ id: 'MLB62010143', name: 'A' }, { id: 'MLB22239330', name: 'B' }] },
+      body: {
+        results: [
+          { id: 'MLB62010143', name: 'A' },
+          { id: 'MLB22239330', name: 'B' },
+        ],
+      },
     });
-    const urls = await discoverMlCatalogUrls('fone bluetooth', 'tok', { fetchImpl, sleep: noSleep });
+    const urls = await discoverMlCatalogUrls('fone bluetooth', 'tok', {
+      fetchImpl,
+      sleep: noSleep,
+    });
     expect(urls).toEqual([
       'https://www.mercadolivre.com.br/p/MLB62010143',
       'https://www.mercadolivre.com.br/p/MLB22239330',
     ]);
     expect(fetchImpl).toHaveBeenCalledWith(
-      expect.stringContaining('/products/search?status=active&site_id=MLB&q=fone%20bluetooth&limit=30'),
+      expect.stringContaining(
+        '/products/search?status=active&site_id=MLB&q=fone%20bluetooth&limit=30',
+      ),
       expect.anything(),
     );
   });
@@ -233,7 +263,9 @@ describe('mapMlCatalogProduct', () => {
 
   it('preço inválido devolve undefined', () => {
     expect(mapMlCatalogProduct(product, [{ item_id: 'X', price: 0 }], url)).toBeUndefined();
-    expect(mapMlCatalogProduct(product, [{ item_id: 'X', price: Number.NaN }], url)).toBeUndefined();
+    expect(
+      mapMlCatalogProduct(product, [{ item_id: 'X', price: Number.NaN }], url),
+    ).toBeUndefined();
   });
 
   it('sem título devolve undefined', () => {
@@ -254,8 +286,16 @@ describe('mapMlCatalogProduct', () => {
   });
 
   it('inventory_id preenchido indica Full; ausente fica UNKNOWN', () => {
-    const full = mapMlCatalogProduct(product, [{ item_id: 'F', price: 30, condition: 'new', inventory_id: 'ABC123' }], url);
-    const other = mapMlCatalogProduct(product, [{ item_id: 'O', price: 30, condition: 'new', inventory_id: null }], url);
+    const full = mapMlCatalogProduct(
+      product,
+      [{ item_id: 'F', price: 30, condition: 'new', inventory_id: 'ABC123' }],
+      url,
+    );
+    const other = mapMlCatalogProduct(
+      product,
+      [{ item_id: 'O', price: 30, condition: 'new', inventory_id: null }],
+      url,
+    );
     expect(full?.shipping).toBe('FULL');
     expect(other?.shipping).toBe('UNKNOWN');
   });

@@ -153,7 +153,6 @@ export async function loadAliexpressCredentials(db: TenantClient): Promise<Aliex
   return creds as AliexpressCredentials;
 }
 
-
 /**
  * Decripta as credenciais atuais de um marketplace, aplica `mutate` para produzir as
  * novas credenciais, criptografa e faz upsert da linha (create se ainda não existir,

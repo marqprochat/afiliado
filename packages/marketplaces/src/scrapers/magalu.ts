@@ -2,6 +2,12 @@ import * as cheerio from 'cheerio';
 import type { ProductData } from '@afilados/shared';
 import { fetchHtml, parseMoney } from './fetcher';
 
+// O CDN do Magalu serve a mesma imagem em vários tamanhos pelo trecho "/LxA/" do caminho;
+// miniaturas (ex.: 200x200) ficam embaçadas, então pedimos o tamanho grande.
+export function upgradeMagaluImage(url: string): string {
+  return url.replace(/(\.mlcdn\.com\.br\/)\d+x\d+\//, '$11500x1500/');
+}
+
 export function parseMagaluHtml(html: string, originalUrl: string): ProductData {
   const $ = cheerio.load(html);
 
@@ -79,14 +85,15 @@ export function parseMagaluHtml(html: string, originalUrl: string): ProductData 
     '[data-testid="image-selected-thumbnail"], img.image-gallery-image, [data-testid="main-image"]',
   ).each((_, el) => {
     const src = $(el).attr('src');
-    if (src && src.startsWith('http') && !images.includes(src)) {
-      images.push(src);
+    if (src && src.startsWith('http')) {
+      const hires = upgradeMagaluImage(src);
+      if (!images.includes(hires)) images.push(hires);
     }
   });
   if (images.length === 0) {
     const ogImage = $('meta[property="og:image"]').attr('content');
     if (ogImage && ogImage.startsWith('http')) {
-      images.push(ogImage);
+      images.push(upgradeMagaluImage(ogImage));
     }
   }
 

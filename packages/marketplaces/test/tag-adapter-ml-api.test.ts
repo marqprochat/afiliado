@@ -75,7 +75,10 @@ describe('Mercado Livre por API oficial no tag adapter', () => {
       .mockImplementationOnce(async (_ref, url: string) => product('MLB22239330', url));
     const a = createTagAdapter('MERCADOLIVRE', { mlCatalogFetch });
 
-    const result = await a.fetchByUrls(withApi, [CATALOG, 'https://www.mercadolivre.com.br/p/MLB22239330']);
+    const result = await a.fetchByUrls(withApi, [
+      CATALOG,
+      'https://www.mercadolivre.com.br/p/MLB22239330',
+    ]);
 
     expect(result.map((p) => p.externalId)).toEqual(['MLB22239330']);
   });
@@ -126,7 +129,9 @@ describe('Mercado Livre por API oficial no tag adapter', () => {
     });
 
     it('produto sem oferta: consulta só as ofertas, sem buscar o cadastro', async () => {
-      const calls = stubMlFetch({ '/products/MLB62010143/items': { status: 404, body: { message: 'No winners found' } } });
+      const calls = stubMlFetch({
+        '/products/MLB62010143/items': { status: 404, body: { message: 'No winners found' } },
+      });
       const a = createTagAdapter('MERCADOLIVRE');
 
       expect(await a.fetchByUrls(withApi, [CATALOG])).toEqual([]);
@@ -141,7 +146,11 @@ describe('Mercado Livre por API oficial no tag adapter', () => {
         },
         '/products/MLB62010143': {
           status: 200,
-          body: { id: 'MLB62010143', name: 'Fone Bluetooth Redmi', pictures: [{ url: 'https://http2.mlstatic.com/D_1.jpg' }] },
+          body: {
+            id: 'MLB62010143',
+            name: 'Fone Bluetooth Redmi',
+            pictures: [{ url: 'https://http2.mlstatic.com/D_1.jpg' }],
+          },
         },
       });
       const a = createTagAdapter('MERCADOLIVRE');

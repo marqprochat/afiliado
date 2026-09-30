@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { buildAffiliateUrl, extractStoreLinks, extractUrls, productKey, rewriteLinks } from '../src/links';
+import {
+  buildAffiliateUrl,
+  extractStoreLinks,
+  extractUrls,
+  productKey,
+  rewriteLinks,
+} from '../src/links';
 
 describe('extractStoreLinks', () => {
   it('pega só links oficiais, sem duplicar, na ordem', () => {
@@ -88,9 +94,9 @@ describe('rewriteLinks', () => {
 
 describe('productKey', () => {
   it('formata', () =>
-    expect(productKey({ source: 'AMAZON', externalId: 'B0X' }, 'https://amazon.com.br/dp/B0X')).toBe(
-      'AMAZON:B0X',
-    ));
+    expect(
+      productKey({ source: 'AMAZON', externalId: 'B0X' }, 'https://amazon.com.br/dp/B0X'),
+    ).toBe('AMAZON:B0X'));
 
   it('com externalId presente, ignora a URL (mesma chave independente da URL)', () => {
     const withUrlA = productKey(

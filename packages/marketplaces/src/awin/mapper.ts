@@ -69,7 +69,11 @@ function mapGoogleRow(
     originalPrice,
     imageUrl: row.image_link || null,
     deepLink,
-    raw: { format: 'Google', brand: row.brand || null, category: row.google_product_category || null },
+    raw: {
+      format: 'Google',
+      brand: row.brand || null,
+      category: row.google_product_category || null,
+    },
   };
 }
 
@@ -89,7 +93,8 @@ function mapAwinFormatRow(
 
   const rrp = parseAwinPrice(row.rrp_price);
   const oldPrice = parseAwinPrice(row.product_price_old);
-  const originalPrice = rrp !== null && rrp > price ? rrp : oldPrice !== null && oldPrice > price ? oldPrice : null;
+  const originalPrice =
+    rrp !== null && rrp > price ? rrp : oldPrice !== null && oldPrice > price ? oldPrice : null;
 
   return {
     feedId: feed.feedId,

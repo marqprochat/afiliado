@@ -77,7 +77,12 @@ describe('getAccessToken', () => {
   });
 });
 
-import { extractAsin, getItems, mapCreatorsApiItem, type AmazonApiItem } from '../src/amazon/creators-api';
+import {
+  extractAsin,
+  getItems,
+  mapCreatorsApiItem,
+  type AmazonApiItem,
+} from '../src/amazon/creators-api';
 
 describe('extractAsin', () => {
   it('extrai o ASIN de /dp/, /gp/product/ e /product/', () => {
@@ -100,7 +105,11 @@ describe('getItems', () => {
     const fetchImpl = vi.fn(async (url: string, init: RequestInit) => {
       calls.push({ url: String(url), init });
       if (String(url).includes('/auth/o2/token')) {
-        return { ok: true, status: 200, json: async () => ({ access_token: 'tok', expires_in: 3600 }) };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ access_token: 'tok', expires_in: 3600 }),
+        };
       }
       return {
         ok: true,
@@ -125,7 +134,12 @@ describe('getItems', () => {
       marketplace: 'www.amazon.com.br',
     });
     expect(body.resources).toEqual(
-      expect.arrayContaining(['itemInfo.title', 'images.primary.large', 'offersV2.listings.price', 'parentASIN']),
+      expect.arrayContaining([
+        'itemInfo.title',
+        'images.primary.large',
+        'offersV2.listings.price',
+        'parentASIN',
+      ]),
     );
     expect(getItemsCall.init.headers).toMatchObject({ Authorization: 'Bearer tok' });
   });
@@ -134,7 +148,11 @@ describe('getItems', () => {
     const bodies: unknown[] = [];
     const fetchImpl = vi.fn(async (url: string, init: RequestInit) => {
       if (String(url).includes('/auth/o2/token')) {
-        return { ok: true, status: 200, json: async () => ({ access_token: 'tok', expires_in: 3600 }) };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ access_token: 'tok', expires_in: 3600 }),
+        };
       }
       bodies.push(JSON.parse(init.body as string));
       return { ok: true, status: 200, json: async () => ({ itemResults: { items: [] } }) };
@@ -151,7 +169,11 @@ describe('getItems', () => {
   it('lança AmazonApiError(AMAZON_API_RATE_LIMITED) em 429', async () => {
     const fetchImpl = vi.fn(async (url: string) => {
       if (String(url).includes('/auth/o2/token')) {
-        return { ok: true, status: 200, json: async () => ({ access_token: 'tok', expires_in: 3600 }) };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ access_token: 'tok', expires_in: 3600 }),
+        };
       }
       return { ok: false, status: 429, json: async () => ({}) };
     }) as unknown as typeof fetch;
@@ -165,7 +187,11 @@ describe('getItems', () => {
     const getItemsCallTimes: number[] = [];
     const fetchImpl = vi.fn(async (url: string) => {
       if (String(url).includes('/auth/o2/token')) {
-        return { ok: true, status: 200, json: async () => ({ access_token: 'tok', expires_in: 3600 }) };
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ access_token: 'tok', expires_in: 3600 }),
+        };
       }
       getItemsCallTimes.push(Date.now());
       return { ok: true, status: 200, json: async () => ({ itemResults: { items: [] } }) };
@@ -190,7 +216,12 @@ describe('mapCreatorsApiItem', () => {
       images: { primary: { large: { url: 'https://m.media-amazon.com/images/I/x.jpg' } } },
       offersV2: {
         listings: [
-          { price: { money: { amount: 299, currency: 'BRL' }, savings: { percentage: 30, money: { amount: 130 } } } },
+          {
+            price: {
+              money: { amount: 299, currency: 'BRL' },
+              savings: { percentage: 30, money: { amount: 130 } },
+            },
+          },
         ],
       },
     };

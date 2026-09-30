@@ -274,7 +274,9 @@ describe('coupons routes', () => {
         groupJids: ['g@g.us'],
         intervalMin: 5,
         items: {
-          create: [{ productId: product.id, couponId: createdCouponId, order: 0, runAt: new Date() }],
+          create: [
+            { productId: product.id, couponId: createdCouponId, order: 0, runAt: new Date() },
+          ],
         },
       },
     });

@@ -41,7 +41,9 @@
       const els = scope.querySelectorAll(sel);
       for (const el of els) {
         const text = el.textContent || '';
-        const keywordMatch = text.match(/(?:cupom|c[oó]digo|voucher|promo(?:code)?|claim\s*code)[\s:]+([A-Za-z0-9_\-]{3,20})/i);
+        const keywordMatch = text.match(
+          /(?:cupom|c[oó]digo|voucher|promo(?:code)?|claim\s*code)[\s:]+([A-Za-z0-9_\-]{3,20})/i,
+        );
         if (keywordMatch && !isCouponStopword(keywordMatch[1])) {
           return keywordMatch[1].toUpperCase();
         }
@@ -57,7 +59,9 @@
       '.ui-pdp-price, #corePrice_feature_div, [data-testid*="price"], [class*="price-default"], .product-price',
     );
     if (priceContainer) {
-      const match = priceContainer.textContent.match(/(?:cupom|c[oó]digo|voucher)[\s:]+([A-Za-z0-9_\-]{3,20})/i);
+      const match = priceContainer.textContent.match(
+        /(?:cupom|c[oó]digo|voucher)[\s:]+([A-Za-z0-9_\-]{3,20})/i,
+      );
       if (match && !isCouponStopword(match[1])) {
         return match[1].toUpperCase();
       }
@@ -97,7 +101,8 @@
             '.ui-pdp-price__price .andes-money-amount:not(.andes-money-amount--previous), .ui-pdp-price__main-container .andes-money-amount:not(.andes-money-amount--previous):not(s *):not(del *)',
           ) ||
           Array.from(document.querySelectorAll('.andes-money-amount')).find(
-            (el) => !el.closest('s, del, .ui-pdp-price__original-value, .andes-money-amount--previous'),
+            (el) =>
+              !el.closest('s, del, .ui-pdp-price__original-value, .andes-money-amount--previous'),
           );
       }
 
@@ -155,12 +160,18 @@
       });
       images = zoomImages.length > 0 ? zoomImages : srcImages;
       if (images.length === 0) {
-        const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content');
+        const ogImage = document
+          .querySelector('meta[property="og:image"]')
+          ?.getAttribute('content');
         if (ogImage && ogImage.startsWith('http')) images.push(ogImage);
       }
 
       // 5. Frete e FULL
-      if (document.querySelector('svg.ui-pdp-icon--full, [class*="ui-pdp-icon--full"], [class*="full"]')) {
+      if (
+        document.querySelector(
+          'svg.ui-pdp-icon--full, [class*="ui-pdp-icon--full"], [class*="full"]',
+        )
+      ) {
         shipping = 'FULL';
       } else if (/frete grátis/i.test(document.body.innerText)) {
         shipping = 'FREE';
@@ -193,7 +204,9 @@
         if (!isNaN(parsed)) originalPrice = parsed;
       }
 
-      const discountEl = document.querySelector('.savingPriceOverride, .reinventPriceSavingsPercentageMargin');
+      const discountEl = document.querySelector(
+        '.savingPriceOverride, .reinventPriceSavingsPercentageMargin',
+      );
       if (discountEl) {
         const m = discountEl.textContent.match(/(\d+)%/);
         if (m) discountPct = parseInt(m[1], 10);
@@ -223,7 +236,9 @@
         if (src && src.startsWith('http')) images.push(src);
       }
       if (images.length === 0) {
-        const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content');
+        const ogImage = document
+          .querySelector('meta[property="og:image"]')
+          ?.getAttribute('content');
         if (ogImage && ogImage.startsWith('http')) images.push(ogImage);
       }
 
@@ -274,14 +289,17 @@
       );
       if (imgEl) {
         const src = imgEl.getAttribute('src');
-        if (src && src.startsWith('http')) images.push(src);
+        if (src && src.startsWith('http')) images.push(upgradeMagaluImage(src));
       }
       if (images.length === 0) {
-        const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content');
-        if (ogImage && ogImage.startsWith('http')) images.push(ogImage);
+        const ogImage = document
+          .querySelector('meta[property="og:image"]')
+          ?.getAttribute('content');
+        if (ogImage && ogImage.startsWith('http')) images.push(upgradeMagaluImage(ogImage));
       }
 
-      if (/frete grátis|retira rápido|retira grátis/i.test(document.body.innerText)) shipping = 'FREE';
+      if (/frete grátis|retira rápido|retira grátis/i.test(document.body.innerText))
+        shipping = 'FREE';
 
       // 6. Cupom Magalu
       couponCode = extractCouponFromScope(document, 'MAGALU');
@@ -306,7 +324,9 @@
         if (!isNaN(parsed)) originalPrice = parsed;
       }
 
-      const imgEl = document.querySelector('img._11-H3t, img.pointer, [class*="product-image"] img');
+      const imgEl = document.querySelector(
+        'img._11-H3t, img.pointer, [class*="product-image"] img',
+      );
       if (imgEl) {
         const src = imgEl.getAttribute('src');
         if (src && src.startsWith('http')) images.push(src);
@@ -351,7 +371,9 @@
       if (titleEl) {
         title = titleEl.textContent.trim();
       } else if (!activeModal) {
-        const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute('content');
+        const ogTitle = document
+          .querySelector('meta[property="og:title"]')
+          ?.getAttribute('content');
         if (ogTitle) title = ogTitle.replace(/\s*-\s*AliExpress.*$/i, '').trim();
       }
 
@@ -384,7 +406,8 @@
         '[class*="magnifier--image"], [class*="slider--active"] img, [class*="slider--img"] img, [class*="image-view"] img, [class*="gallery"] img, [class*="pdp-mini-info-left"] img, [class*="pdp-info-left"] img, [class*="main-image"] img',
       );
       if (galleryImg) {
-        let src = galleryImg.getAttribute('src') || galleryImg.getAttribute('data-src') || galleryImg.src;
+        let src =
+          galleryImg.getAttribute('src') || galleryImg.getAttribute('data-src') || galleryImg.src;
         if (src) {
           if (src.startsWith('//')) src = `https:${src}`;
           if (
@@ -414,7 +437,9 @@
 
       // Prioridade 3: Meta tag og:image (apenas se não for modal e se não for ícone genérico)
       if (images.length === 0 && !activeModal) {
-        const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content');
+        const ogImage = document
+          .querySelector('meta[property="og:image"]')
+          ?.getAttribute('content');
         const isGenericOgImage =
           ogImage &&
           (ogImage.includes('HTB18eCBQXXXXXXfXXXX760XFXXXa') ||
@@ -493,6 +518,14 @@
     return false;
   }
 
+  // O CDN do Magalu (mlcdn) serve a mesma imagem em vários tamanhos pelo trecho "/LxA/" do
+  // caminho; a página usa miniaturas (ex.: 200x200) e guardar essa URL deixa a foto embaçada.
+  // Trocar o trecho por um tamanho grande devolve a imagem em alta resolução.
+  function upgradeMagaluImage(url) {
+    if (typeof url !== 'string' || !/\.mlcdn\.com\.br\//.test(url)) return url;
+    return url.replace(/(\.mlcdn\.com\.br\/)\d+x\d+\//, '$11500x1500/');
+  }
+
   // Helper para extrair imagem de um container/card de produto em listagens de busca,
   // com suporte a lazy-load (data-src, data-original, data-lazy-src, data-zoom, srcset etc.)
   // e descarte de placeholders vazios / pixels data:.
@@ -524,7 +557,7 @@
         if (url.startsWith('//')) url = `https:${url}`;
         if (url.startsWith('http://') || url.startsWith('https://')) {
           if (url.includes('evaluate') || url.includes('avatar') || url.includes('stars')) continue;
-          return url;
+          return upgradeMagaluImage(url);
         }
       }
     }
@@ -540,11 +573,13 @@
 
     if (url.includes('amazon.com.br')) {
       // Preço atual: qualquer .a-price que NÃO seja o preço de lista/tachado (a-text-price)
-      const currentEl = Array.from(container.querySelectorAll('.a-price:not(.a-text-price) .a-offscreen')).find(
-        (el) => !el.closest('.a-text-price'),
-      );
+      const currentEl = Array.from(
+        container.querySelectorAll('.a-price:not(.a-text-price) .a-offscreen'),
+      ).find((el) => !el.closest('.a-text-price'));
       // Preço original: preço de lista/tachado
-      const origEl = container.querySelector('.a-price.a-text-price .a-offscreen, .basisPrice .a-offscreen');
+      const origEl = container.querySelector(
+        '.a-price.a-text-price .a-offscreen, .basisPrice .a-offscreen',
+      );
 
       let price;
       let originalPrice;
@@ -564,8 +599,12 @@
     if (url.includes('mercadolivre.com.br')) {
       // Preço atual: dentro de .poly-price__current (exclui parcelamento e cupom, que ficam
       // em containers irmãos fora dele)
-      const currentFracEl = container.querySelector('.poly-price__current .andes-money-amount__fraction');
-      const currentCentsEl = container.querySelector('.poly-price__current .andes-money-amount__cents');
+      const currentFracEl = container.querySelector(
+        '.poly-price__current .andes-money-amount__fraction',
+      );
+      const currentCentsEl = container.querySelector(
+        '.poly-price__current .andes-money-amount__cents',
+      );
       // Preço original ("De:"): dentro de .poly-price__labels, sempre marcado com --previous
       const origFracEl = container.querySelector(
         '.poly-price__labels .andes-money-amount--previous .andes-money-amount__fraction',
@@ -599,7 +638,9 @@
       // parcelamento ("Ou R$ 3.999,00 em 10x de R$ 399,90 sem juros") — extraído por
       // posição textual ("Ou R$X em"), não pela parcela em si.
       const finalEl = container.querySelector('[data-testid="product-card-price-final"]');
-      const installmentEl = container.querySelector('[data-testid="product-card-price-installment"]');
+      const installmentEl = container.querySelector(
+        '[data-testid="product-card-price-installment"]',
+      );
 
       let price;
       let originalPrice;
@@ -719,8 +760,13 @@
         originalPrice = structuredPrice.originalPrice;
       } else {
         // Fallback: regex genérica sobre o texto do card (marketplaces sem seletores
-        // estruturados mapeados ainda). Pode confundir parcelamento com preço original.
-        const priceMatches = Array.from((container.textContent || '').matchAll(/R\$\s?([\d.,]+)/g))
+        // estruturados mapeados ainda, ex.: carrosséis de recomendação do Magalu). Antes de
+        // escolher o menor valor como preço, remove o valor da parcela ("10x de R$ 55,44") e
+        // de cupons ("R$ 300 OFF") — senão a parcela vira o preço e o preço vira o "original".
+        const priceText = (container.textContent || '')
+          .replace(/\d+\s*x\s*(?:de\s*)?R\$\s?[\d.,]+/gi, ' ')
+          .replace(/R\$\s?[\d.,]+\s*(?:OFF|de\s+desconto)/gi, ' ');
+        const priceMatches = Array.from(priceText.matchAll(/R\$\s?([\d.,]+)/g))
           .map((m) => parseFloat(m[1].replace(/\./g, '').replace(',', '.')))
           .filter((n) => !isNaN(n) && n > 0);
         if (priceMatches.length === 1) {
@@ -745,7 +791,12 @@
         titleEl?.textContent?.trim() ||
         primaryImg?.getAttribute('alt') ||
         (a.textContent || '').trim();
-      if (title) title = title.replace(/R\$\s?[\d.,]+/g, '').trim().slice(0, 200) || undefined;
+      if (title)
+        title =
+          title
+            .replace(/R\$\s?[\d.,]+/g, '')
+            .trim()
+            .slice(0, 200) || undefined;
 
       items.push({
         url: absolute,
@@ -808,7 +859,50 @@
         const product = extractProductFromPage();
         sendResponse({ product });
       }
+      // Descoberta em segundo plano: o background abre a busca numa aba, e aqui rolamos a
+      // página para o lazy-load carregar os cards antes de ler título/preço/imagem de cada um.
+      if (req.action === 'EXTRACT_PRODUCTS') {
+        (async () => {
+          for (let i = 0; i < 6; i++) {
+            window.scrollBy(0, window.innerHeight);
+            await new Promise((r) => setTimeout(r, 400));
+          }
+          window.scrollTo(0, 0);
+          const items = extractProductsFromPage();
+          const bodyText = document.body ? document.body.innerText : '';
+          const html = document.documentElement.outerHTML;
+          let diagnosis;
+          if (items.length === 0) {
+            if (/negative_traffic|account-verification|captcha|unusual traffic/i.test(html)) {
+              diagnosis = 'verificação anti-bot detectada na página';
+            } else if (bodyText.length < 1500) {
+              diagnosis = `página não terminou de carregar (${bodyText.length} caracteres, aba ${document.visibilityState})`;
+            } else {
+              diagnosis = `página carregou (${bodyText.length} caracteres) mas nenhum card de produto foi reconhecido`;
+            }
+          }
+          sendResponse({ items, title: document.title, diagnosis });
+        })();
+        return true; // resposta assíncrona
+      }
     });
+  }
+
+  // Destino da captura escolhido no popup (`lastCaptureTarget` no chrome.storage):
+  // { value: '' | 'rule:<id>' | 'batch:<id>', label }. Formato antigo: string com o id da automação.
+  function parseCaptureTarget(saved) {
+    const value =
+      typeof saved === 'string' ? (saved ? `rule:${saved}` : '') : (saved && saved.value) || '';
+    const label = (saved && typeof saved === 'object' && saved.label) || '';
+    if (value.startsWith('batch:')) return { kind: 'batch', id: value.slice(6), label };
+    if (value.startsWith('rule:')) return { kind: 'rule', id: value.slice(5), label };
+    return { kind: 'triage', id: null, label: '' };
+  }
+
+  function captureTargetPayload(target) {
+    if (target.kind === 'batch') return { batchId: target.id };
+    if (target.kind === 'rule') return { automationRuleId: target.id };
+    return {};
   }
 
   // Injeta botão flutuante na página
@@ -818,20 +912,49 @@
     const btn = document.createElement('button');
     btn.id = 'afilados-floating-btn';
     btn.className = 'afilados-float-btn';
-    btn.innerHTML = '<span>⚡</span> Enviar Produto';
     btn.title = 'Capturar oferta para o Afilados';
+
+    // O rótulo mostra o destino escolhido no popup quando ele não é a Triagem. O nome do
+    // lote/automação vem do usuário, então entra por textContent (nunca innerHTML).
+    let currentTarget = { kind: 'triage', id: null, label: '' };
+    function setIdleLabel() {
+      const icon = document.createElement('span');
+      icon.textContent = '⚡';
+      let text = ' Enviar Produto';
+      if (currentTarget.kind !== 'triage' && currentTarget.label) {
+        const name =
+          currentTarget.label.length > 22
+            ? `${currentTarget.label.slice(0, 21)}…`
+            : currentTarget.label;
+        text = ` Enviar → ${currentTarget.kind === 'batch' ? 'Lote ' : ''}${name}`;
+      }
+      btn.replaceChildren(icon, document.createTextNode(text));
+    }
+    setIdleLabel();
+    if (chrome.storage) {
+      chrome.storage.local.get(['lastCaptureTarget']).then((s) => {
+        currentTarget = parseCaptureTarget(s.lastCaptureTarget);
+        if (!btn.classList.contains('loading')) setIdleLabel();
+      });
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area !== 'local' || !changes.lastCaptureTarget) return;
+        currentTarget = parseCaptureTarget(changes.lastCaptureTarget.newValue);
+        if (!btn.classList.contains('loading')) setIdleLabel();
+      });
+    }
 
     btn.addEventListener('click', async () => {
       btn.innerHTML = '<span>⏳</span> Enviando...';
       btn.classList.add('loading');
 
-      const saved = await chrome.storage.local.get(['apiUrl', 'apiToken']);
+      const saved = await chrome.storage.local.get(['apiUrl', 'apiToken', 'lastCaptureTarget']);
+      currentTarget = parseCaptureTarget(saved.lastCaptureTarget);
       const apiUrl = (saved.apiUrl || 'http://localhost:3011').replace(/\/+$/, '');
       const apiToken = saved.apiToken;
 
       if (!apiToken) {
         alert('Afilados Connect: Configure seu Token de API abrindo o popup da extensão.');
-        btn.innerHTML = '<span>⚡</span> Enviar Produto';
+        setIdleLabel();
         btn.classList.remove('loading');
         return;
       }
@@ -853,22 +976,55 @@
         ...(product.originalPrice ? { originalPrice: product.originalPrice } : {}),
         ...(product.discountPct ? { discountPct: product.discountPct } : {}),
         ...(product.images && product.images.length > 0 ? { images: product.images } : {}),
-        ...(product.shipping && product.shipping !== 'UNKNOWN' ? { shipping: product.shipping } : {}),
+        ...(product.shipping && product.shipping !== 'UNKNOWN'
+          ? { shipping: product.shipping }
+          : {}),
         ...(product.couponCode ? { couponCode: product.couponCode } : {}),
       };
 
-      try {
-        const res = await fetch(`${apiUrl}/api/v1/extension/capture`, {
+      const post = (extra) =>
+        fetch(`${apiUrl}/api/v1/extension/capture`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${apiToken}`,
           },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ ...payload, ...extra }),
         });
 
+      try {
+        const target = currentTarget;
+        let res = await post(captureTargetPayload(target));
+        let fellBack = false;
+        if (!res.ok && target.kind !== 'triage') {
+          const err = await res
+            .clone()
+            .json()
+            .catch(() => null);
+          const code = err && err.error && err.error.code;
+          if (code === 'BATCH_DUPLICATE') {
+            btn.innerHTML = '<span>ℹ️</span> Já está no lote';
+            setTimeout(() => {
+              setIdleLabel();
+              btn.classList.remove('loading');
+            }, 2500);
+            return;
+          }
+          // Lote concluído/cancelado/removido (ou automação apagada): manda para a Triagem e
+          // esquece o destino salvo, para o próximo clique não repetir o erro.
+          if (res.status === 404 || code === 'BATCH_INACTIVE') {
+            res = await post({});
+            fellBack = true;
+            chrome.storage.local
+              .set({ lastCaptureTarget: { value: '', label: '' } })
+              .catch(() => {});
+          }
+        }
+
         if (res.ok) {
-          btn.innerHTML = '<span>✓</span> Capturado!';
+          btn.innerHTML = fellBack
+            ? '<span>✓</span> Destino indisponível: enviado à Triagem'
+            : '<span>✓</span> Capturado!';
           btn.classList.add('success');
           // Envia o cupom explicitamente para a Central de Cupons se detectado
           if (product.couponCode) {
@@ -886,20 +1042,20 @@
             }).catch(() => {});
           }
           setTimeout(() => {
-            btn.innerHTML = '<span>⚡</span> Enviar Produto';
+            setIdleLabel();
             btn.classList.remove('loading', 'success');
           }, 3000);
         } else {
           btn.innerHTML = '<span>❌</span> Erro';
           setTimeout(() => {
-            btn.innerHTML = '<span>⚡</span> Enviar Produto';
+            setIdleLabel();
             btn.classList.remove('loading');
           }, 2500);
         }
       } catch {
         btn.innerHTML = '<span>❌</span> Offline';
         setTimeout(() => {
-          btn.innerHTML = '<span>⚡</span> Enviar Produto';
+          setIdleLabel();
           btn.classList.remove('loading');
         }, 2500);
       }
@@ -1153,4 +1309,3 @@
     window.addEventListener('DOMContentLoaded', injectButtons);
   }
 })();
-

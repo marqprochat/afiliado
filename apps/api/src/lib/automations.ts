@@ -10,17 +10,30 @@ export interface AutomationStats {
   isDiscovering: boolean;
 }
 
-export async function getAutomationStats(db: TenantClient, ruleId: string): Promise<AutomationStats> {
+export async function getAutomationStats(
+  db: TenantClient,
+  ruleId: string,
+): Promise<AutomationStats> {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
-  const [freshCount, discoveredToday, dispatchedToday, lastDispatch, discoveringFlag] = await Promise.all([
-    db.automationQueueItem.count({ where: { ruleId, status: 'PENDING' } }),
-    db.automationLog.count({ where: { ruleId, action: 'DISCOVERED', createdAt: { gte: startOfDay } } }),
-    db.automationLog.count({ where: { ruleId, action: 'DISPATCHED', createdAt: { gte: startOfDay } } }),
-    db.automationLog.findFirst({ where: { ruleId, action: 'DISPATCHED' }, orderBy: { createdAt: 'desc' } }),
-    getRedis().exists(automationDiscoveringKey(ruleId)).catch(() => 0),
-  ]);
+  const [freshCount, discoveredToday, dispatchedToday, lastDispatch, discoveringFlag] =
+    await Promise.all([
+      db.automationQueueItem.count({ where: { ruleId, status: 'PENDING' } }),
+      db.automationLog.count({
+        where: { ruleId, action: 'DISCOVERED', createdAt: { gte: startOfDay } },
+      }),
+      db.automationLog.count({
+        where: { ruleId, action: 'DISPATCHED', createdAt: { gte: startOfDay } },
+      }),
+      db.automationLog.findFirst({
+        where: { ruleId, action: 'DISPATCHED' },
+        orderBy: { createdAt: 'desc' },
+      }),
+      getRedis()
+        .exists(automationDiscoveringKey(ruleId))
+        .catch(() => 0),
+    ]);
 
   return {
     freshCount,

@@ -1,10 +1,7 @@
 import type { AutomationRule } from '@afilados/db';
 
 function normalizeText(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase();
+  return value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 }
 
 // Mesmas regras do worker (apps/worker/src/automation/discovery.ts): a keyword da regra é

@@ -5,10 +5,7 @@ import { createHmac } from 'node:crypto';
  * Concatena as chaves e valores ordenados lexicograficamente e gera hash HMAC-SHA256
  * com a appSecret, retornando em formato hexadecimal maiúsculo.
  */
-export function signAliexpressRequest(
-  params: Record<string, unknown>,
-  appSecret: string,
-): string {
+export function signAliexpressRequest(params: Record<string, unknown>, appSecret: string): string {
   const p = { ...params };
   delete p.sign;
 
@@ -23,8 +20,5 @@ export function signAliexpressRequest(
     .sort(([a], [b]) => a.localeCompare(b))
     .reduce((acc, [key, value]) => acc + key + String(value), '');
 
-  return createHmac('sha256', appSecret)
-    .update(basestring, 'utf8')
-    .digest('hex')
-    .toUpperCase();
+  return createHmac('sha256', appSecret).update(basestring, 'utf8').digest('hex').toUpperCase();
 }

@@ -125,9 +125,7 @@ describe('MarketplacesClient handleSubmit', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /testar e salvar/i }));
 
-    await waitFor(() =>
-      expect(getCalls('/marketplaces').length).toBeGreaterThan(initialGetCount),
-    );
+    await waitFor(() => expect(getCalls('/marketplaces').length).toBeGreaterThan(initialGetCount));
     // A sessão foi salva com sucesso mesmo com o check falhando depois.
     expect(calls('POST', '/marketplaces/AMAZON/session')).toHaveLength(1);
   });

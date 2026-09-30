@@ -4,7 +4,9 @@ import { enqueueAwinImport } from '../lib/queue-helpers';
 
 const log = pino({ name: 'awin-import-scheduler' });
 const DEFAULT_INTERVAL_HOURS = 12;
-const parsedIntervalHours = Number(process.env.AWIN_IMPORT_INTERVAL_HOURS ?? DEFAULT_INTERVAL_HOURS);
+const parsedIntervalHours = Number(
+  process.env.AWIN_IMPORT_INTERVAL_HOURS ?? DEFAULT_INTERVAL_HOURS,
+);
 // Um valor não numérico (ou <= 0) vira NaN/0 e faria setInterval disparar quase imediatamente
 // em loop apertado — cai para o default de 12h nesse caso.
 const INTERVAL_MS =

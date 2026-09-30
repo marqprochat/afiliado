@@ -79,7 +79,9 @@ describe('Scrapers de Marketplaces (Fase 3)', () => {
     );
 
     expect(product.source).toBe('MERCADOLIVRE');
-    expect(product.title).toBe('Cafeteira Espresso Dolce Crema 20 Bar Mondial Preto/Inox 1200W C-21-E-CNP');
+    expect(product.title).toBe(
+      'Cafeteira Espresso Dolce Crema 20 Bar Mondial Preto/Inox 1200W C-21-E-CNP',
+    );
     expect(product.price).toBe(521.93);
     expect(product.originalPrice).toBe(967.0);
     expect(product.discountPct).toBe(46);

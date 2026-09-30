@@ -54,7 +54,10 @@ describe('searchAwinCatalog', () => {
 describe('fetchAwinCatalogByUrls', () => {
   it('resolve produtos por deep link exato', async () => {
     const db = forTenant(tenantId);
-    const found = await fetchAwinCatalogByUrls(db, ['https://www.awin1.com/cread.php?x=1', 'https://naoexiste']);
+    const found = await fetchAwinCatalogByUrls(db, [
+      'https://www.awin1.com/cread.php?x=1',
+      'https://naoexiste',
+    ]);
     expect(found).toHaveLength(1);
     expect(found[0]!.externalId).toBe('f1:p1');
   });

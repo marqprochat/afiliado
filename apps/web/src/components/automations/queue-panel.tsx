@@ -29,7 +29,8 @@ function marketplaceLabel(marketplace: string | null): string {
 
 /** Link original do item, para teste manual — produto usa originalUrl, cupom usa sourceUrl (pode não existir). Só aceita http(s) — nunca abre um esquema arbitrário (ex: javascript:) num window.open. */
 function itemUrl(it: AutomationQueueItem): string | null {
-  const url = it.kind === 'PRODUCT' ? (it.product?.originalUrl ?? null) : (it.coupon?.sourceUrl ?? null);
+  const url =
+    it.kind === 'PRODUCT' ? (it.product?.originalUrl ?? null) : (it.coupon?.sourceUrl ?? null);
   if (!url || !/^https?:\/\//i.test(url)) return null;
   return url;
 }

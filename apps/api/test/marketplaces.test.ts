@@ -268,11 +268,15 @@ describe('marketplaces', () => {
     const row = await prisma.marketplaceConnection.findFirstOrThrow({
       where: { tenantId: t.tenantId, kind: 'AMAZON' },
     });
-    const creds = decryptJson<{ tag?: string; amazonSession?: { cookies: Record<string, string> } }>(
-      Buffer.from(row.encryptedCredentials!),
-    );
+    const creds = decryptJson<{
+      tag?: string;
+      amazonSession?: { cookies: Record<string, string> };
+    }>(Buffer.from(row.encryptedCredentials!));
     expect(creds.tag).toBe('nova-tag-20');
-    expect(creds.amazonSession?.cookies).toEqual({ 'session-id': 'preserved', 'ubid-acbbr': 'xyz' });
+    expect(creds.amazonSession?.cookies).toEqual({
+      'session-id': 'preserved',
+      'ubid-acbbr': 'xyz',
+    });
   });
 
   it('cookie manual preserva a tag já salva do mesmo marketplace', async () => {
@@ -291,15 +295,17 @@ describe('marketplaces', () => {
     const row = await prisma.marketplaceConnection.findFirstOrThrow({
       where: { tenantId: t.tenantId, kind: 'MAGALU' },
     });
-    const creds = decryptJson<{ tag?: string; magaluSession?: { cookies: Record<string, string> } }>(
-      Buffer.from(row.encryptedCredentials!),
-    );
+    const creds = decryptJson<{
+      tag?: string;
+      magaluSession?: { cookies: Record<string, string> };
+    }>(Buffer.from(row.encryptedCredentials!));
     expect(creds.tag).toBe('minhaloja');
     expect(creds.magaluSession?.cookies).toEqual({ magalu_session: 'tokenunico' });
   });
 
   it('PUT AWIN salva feedListUrl/feedIds, sem nunca devolver o link (contém a API key)', async () => {
-    const feedListUrl = 'https://ui.awin.com/productdata-darwin-download/publisher/1/segredo123/1/feedList';
+    const feedListUrl =
+      'https://ui.awin.com/productdata-darwin-download/publisher/1/segredo123/1/feedList';
     const r = await app.inject({
       method: 'PUT',
       url: '/api/v1/marketplaces/AWIN',
@@ -327,14 +333,16 @@ describe('marketplaces', () => {
   });
 
   it('PUT AWIN com link novo preserva feedIds já selecionados quando não enviados', async () => {
-    const feedListUrl1 = 'https://ui.awin.com/productdata-darwin-download/publisher/1/k1/1/feedList';
+    const feedListUrl1 =
+      'https://ui.awin.com/productdata-darwin-download/publisher/1/k1/1/feedList';
     await app.inject({
       method: 'PUT',
       url: '/api/v1/marketplaces/AWIN',
       headers: { cookie },
       payload: { feedListUrl: feedListUrl1, feedIds: ['111'] },
     });
-    const feedListUrl2 = 'https://ui.awin.com/productdata-darwin-download/publisher/1/k2/1/feedList';
+    const feedListUrl2 =
+      'https://ui.awin.com/productdata-darwin-download/publisher/1/k2/1/feedList';
     const r = await app.inject({
       method: 'PUT',
       url: '/api/v1/marketplaces/AWIN',
@@ -352,14 +360,20 @@ describe('marketplaces', () => {
       data: {
         tenantId: other.tenantId,
         kind: 'AWIN',
-        encryptedCredentials: encryptJson({ publisherId: '1', datafeedApiKey: 'k', feedIds: ['97', '98'] }),
+        encryptedCredentials: encryptJson({
+          publisherId: '1',
+          datafeedApiKey: 'k',
+          feedIds: ['97', '98'],
+        }),
       },
     });
     const r = await app.inject({
       method: 'PUT',
       url: '/api/v1/marketplaces/AWIN',
       headers: { cookie: otherCookie },
-      payload: { feedListUrl: 'https://ui.awin.com/productdata-darwin-download/publisher/1/k/1/feedList' },
+      payload: {
+        feedListUrl: 'https://ui.awin.com/productdata-darwin-download/publisher/1/k/1/feedList',
+      },
     });
     expect(r.json()).toMatchObject({ hasAwinFeedListUrl: true, awinFeedIds: [] });
     await cleanupTenant(other.tenantId);
@@ -429,7 +443,11 @@ describe('marketplaces', () => {
   });
 
   it('POST /marketplaces/awin/import enfileira o job e devolve quantos produtos foram encontrados pelo link', async () => {
-    const r = await app.inject({ method: 'POST', url: '/api/v1/marketplaces/awin/import', headers: { cookie } });
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/v1/marketplaces/awin/import',
+      headers: { cookie },
+    });
     expect(r.statusCode).toBe(200);
     // A rota aguarda o job terminar (com timeout) para devolver a contagem real de produtos
     // encontrados pelo link do feed, em vez de só "queued: true" sem nenhum retorno útil.

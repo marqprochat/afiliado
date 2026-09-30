@@ -42,18 +42,28 @@ export async function enqueueAwinImport(tenantId: string) {
   await q.add(
     'awin-import',
     { tenantId },
-    { jobId: `awin-import-${tenantId}-${Date.now()}`, attempts: 2, removeOnComplete: true, removeOnFail: 50 },
+    {
+      jobId: `awin-import-${tenantId}-${Date.now()}`,
+      attempts: 2,
+      removeOnComplete: true,
+      removeOnFail: 50,
+    },
   );
 }
 
-export async function enqueueCouponSync(tenantId: string, trigger: 'schedule' | 'manual' = 'schedule') {
+export async function enqueueCouponSync(
+  tenantId: string,
+  trigger: 'schedule' | 'manual' = 'schedule',
+) {
   const q = getQueue<CouponSyncJob>(QUEUE_COUPON_SYNC);
   const hourBucket = Math.floor(Date.now() / (60 * 60 * 1000));
-  const jobId = trigger === 'manual' ? `coupon-sync-${tenantId}-${Date.now()}` : `coupon-sync-${tenantId}-${hourBucket}`;
+  const jobId =
+    trigger === 'manual'
+      ? `coupon-sync-${tenantId}-${Date.now()}`
+      : `coupon-sync-${tenantId}-${hourBucket}`;
   await q.add(
     'coupon-sync',
     { tenantId, trigger },
     { jobId, attempts: 2, removeOnComplete: true, removeOnFail: 50 },
   );
 }
-

@@ -33,7 +33,10 @@ export async function upsertCoupon(
         description: input.description,
         terms: input.terms ?? null,
         discountType: input.discountType ?? null,
-        discountValue: input.discountValue !== null && input.discountValue !== undefined ? input.discountValue : null,
+        discountValue:
+          input.discountValue !== null && input.discountValue !== undefined
+            ? input.discountValue
+            : null,
         minSpend: input.minSpend !== null && input.minSpend !== undefined ? input.minSpend : null,
         startsAt: input.startsAt ?? null,
         expiresAt: input.expiresAt ?? null,
@@ -68,7 +71,11 @@ export async function upsertCoupon(
   const isExpired = Boolean(expiresAt && expiresAt.getTime() < now.getTime());
 
   let statusToSet = existing.status;
-  let checkToCreate: { result: 'EXPIRED' | 'INVALID'; method: 'EXPIRY' | 'SOURCE'; note: string } | null = null;
+  let checkToCreate: {
+    result: 'EXPIRED' | 'INVALID';
+    method: 'EXPIRY' | 'SOURCE';
+    note: string;
+  } | null = null;
 
   if (isExpired && existing.status !== 'EXPIRED') {
     statusToSet = 'EXPIRED';

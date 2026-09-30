@@ -3,7 +3,11 @@ import { createAwinAdapter } from '../src/awin/adapter';
 import { UnsupportedError } from '../src/tag-adapter';
 
 function fetchReturningText(status: number, text: string): typeof fetch {
-  return vi.fn(async () => ({ ok: status >= 200 && status < 300, status, text: async () => text })) as unknown as typeof fetch;
+  return vi.fn(async () => ({
+    ok: status >= 200 && status < 300,
+    status,
+    text: async () => text,
+  })) as unknown as typeof fetch;
 }
 
 const feedListUrl = 'https://ui.awin.com/productdata-darwin-download/publisher/1/key/1/feedList';
@@ -58,14 +62,16 @@ describe('createAwinAdapter', () => {
       'https://www.awin1.com/cread.php?awinmid=1&awinaffid=2&ued=x',
       'batch-1',
     );
-    expect(link).toBe('https://www.awin1.com/cread.php?awinmid=1&awinaffid=2&ued=x&clickref=batch-1');
+    expect(link).toBe(
+      'https://www.awin1.com/cread.php?awinmid=1&awinaffid=2&ued=x&clickref=batch-1',
+    );
   });
 
   it('toAffiliateLink lança UnsupportedError para URL fora do domínio da Awin', async () => {
     const adapter = createAwinAdapter();
-    await expect(adapter.toAffiliateLink(creds, 'https://loja.com/produto', 'sub')).rejects.toBeInstanceOf(
-      UnsupportedError,
-    );
+    await expect(
+      adapter.toAffiliateLink(creds, 'https://loja.com/produto', 'sub'),
+    ).rejects.toBeInstanceOf(UnsupportedError);
   });
 
   it('toAffiliateLink lança UnsupportedError para host que só contém "awin1.com" como texto (ex: query string)', async () => {

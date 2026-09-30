@@ -140,7 +140,13 @@ export async function importAwinCatalog(
   for (const feedId of creds.feedIds) {
     const entry = activeById.get(feedId);
     if (!entry) {
-      results.push({ feedId, ok: false, imported: 0, removed: 0, error: 'Feed ID não encontrado na Awin' });
+      results.push({
+        feedId,
+        ok: false,
+        imported: 0,
+        removed: 0,
+        error: 'Feed ID não encontrado na Awin',
+      });
       continue;
     }
     results.push(await importFeed(tenantId, feedId, entry, downloadFeed));

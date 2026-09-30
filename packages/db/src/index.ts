@@ -33,6 +33,8 @@ const TENANT_MODELS = new Set([
   'TelegramBot',
   'TelegramChat',
   'AwinCatalogProduct',
+  'GroupLink',
+  'ManagedGroup',
 ]);
 
 const FILTERED_OPS = new Set([
