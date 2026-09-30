@@ -298,8 +298,8 @@ export async function batchesRoutes(app: FastifyInstance) {
     await assertTargets(req, b.sessionId, body);
     const data = Object.fromEntries(
       Object.entries(body).filter(([, v]) => v !== undefined),
-    ) as Prisma.BatchUncheckedUpdateInput;
-    await req.db.batch.update({ where: { id: b.id }, data });
+    ) as Prisma.BatchUncheckedUpdateManyInput;
+    await req.db.batch.updateMany({ where: { id: b.id }, data });
     return { ok: true };
   });
 
