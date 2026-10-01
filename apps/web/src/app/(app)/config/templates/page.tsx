@@ -5,24 +5,46 @@ import { Button } from '@/components/ui/button';
 import { TemplateEditor } from '@/components/templates/template-editor';
 import { apiFetch } from '@/lib/api';
 import { useApiMutation } from '@/lib/mutations';
-import { useTemplates } from '@/lib/queries';
+import { useCoupons, useTemplates } from '@/lib/queries';
 import type { Template } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-type TemplateInput = { name: string; body: string; isDefault: boolean };
+type TemplateInput = {
+  name: string;
+  body: string;
+  isDefault: boolean;
+  kind: 'PRODUCT' | 'COUPON';
+};
 const INV = [['templates']];
 
 export default function TemplatesPage() {
   const { data: templates } = useTemplates();
-  const [selected, setSelected] = useState<string | 'new' | null>(null);
-  const current =
-    selected === 'new' ? undefined : (templates?.find((t) => t.id === selected) ?? templates?.[0]);
+  const { data: coupons } = useCoupons({ includeExpired: false });
+  const [selected, setSelected] = useState<string | 'new' | 'new-coupon' | null>(null);
+  const creatingCoupon = selected === 'new-coupon';
+  const creating = selected === 'new' || creatingCoupon;
+  const current = creating
+    ? undefined
+    : (templates?.find((t) => t.id === selected) ?? templates?.[0]);
+  const editorKind: 'PRODUCT' | 'COUPON' = creating
+    ? creatingCoupon
+      ? 'COUPON'
+      : 'PRODUCT'
+    : (current?.kind ?? 'PRODUCT');
 
   const create = useApiMutation(
     (t: TemplateInput) => apiFetch<Template>('/templates', { method: 'POST', json: t }),
     {
       invalidate: INV,
       success: 'Template criado',
+      onSuccess: (out) => setSelected(out.id),
+    },
+  );
+  const createExample = useApiMutation(
+    () => apiFetch<Template>('/templates/coupon-example', { method: 'POST' }),
+    {
+      invalidate: INV,
+      success: 'Template de exemplo pronto',
       onSuccess: (out) => setSelected(out.id),
     },
   );
@@ -40,23 +62,36 @@ export default function TemplatesPage() {
     },
   );
   const preview = useCallback(
-    (body: string) =>
-      apiFetch<{ text: string }>('/templates/preview', { method: 'POST', json: { body } }).then(
-        (r) => r.text,
-      ),
-    [],
+    (body: string, couponId?: string) =>
+      apiFetch<{ text: string }>('/templates/preview', {
+        method: 'POST',
+        json: { body, kind: editorKind, ...(couponId ? { couponId } : {}) },
+      }).then((r) => r.text),
+    [editorKind],
   );
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold">Template das mensagens</h1>
-        <Button
-          onClick={() => setSelected('new')}
-          className="bg-brand text-white hover:bg-brand/90"
-        >
-          Novo template
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() => createExample.mutate(undefined)}
+            disabled={createExample.isPending}
+          >
+            Criar template de exemplo de cupom
+          </Button>
+          <Button variant="outline" onClick={() => setSelected('new-coupon')}>
+            Novo template de cupom
+          </Button>
+          <Button
+            onClick={() => setSelected('new')}
+            className="bg-brand text-white hover:bg-brand/90"
+          >
+            Novo template
+          </Button>
+        </div>
       </div>
       <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
         <ul className="space-y-1">
@@ -70,14 +105,19 @@ export default function TemplatesPage() {
                 )}
               >
                 {t.name}
-                {t.isDefault && <Badge className="bg-brand/20 text-brand">Padrão</Badge>}
+                <span className="flex gap-1">
+                  {t.kind === 'COUPON' && <Badge className="bg-amber-500/20 text-amber-500">Cupom</Badge>}
+                  {t.isDefault && <Badge className="bg-brand/20 text-brand">Padrão</Badge>}
+                </span>
               </button>
             </li>
           ))}
         </ul>
         <TemplateEditor
-          key={current?.id ?? 'new'}
+          key={`${current?.id ?? selected ?? 'new'}`}
           initial={current}
+          kind={editorKind}
+          coupons={(coupons ?? []).map((c) => ({ id: c.id, code: c.code }))}
           preview={preview}
           saving={create.isPending || update.isPending}
           onSave={(t) => (current ? update.mutate({ id: current.id, t }) : create.mutate(t))}

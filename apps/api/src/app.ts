@@ -23,6 +23,7 @@ import { extensionRoutes } from './routes/extension';
 import { automationsRoutes } from './routes/automations';
 import { telegramRoutes } from './routes/telegram';
 import { couponsRoutes } from './routes/coupons';
+import { manualSendRoutes } from './routes/manual-send';
 import { groupLinksRoutes } from './routes/group-links';
 import { publicGroupLinksRoutes } from './routes/public-group-links';
 
@@ -78,6 +79,7 @@ export async function buildApp(opts: BuildAppOptions = {}) {
       await api.register(automationsRoutes);
       await api.register(telegramRoutes);
       await api.register(couponsRoutes);
+      await api.register(manualSendRoutes);
       await api.register(groupLinksRoutes);
       await api.register(publicGroupLinksRoutes);
     },

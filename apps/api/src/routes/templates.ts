@@ -1,11 +1,15 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { renderTemplate } from '@afilados/core';
+import { renderCouponTemplate, renderTemplate, type CouponData } from '@afilados/core';
 import { ApiError, templatePreviewSchema, templateSchema } from '@afilados/shared';
 import { requireAuth } from '../plugins/auth';
-import { SAMPLE_PRODUCT } from '../lib/batches';
+import { SAMPLE_COUPON, SAMPLE_PRODUCT } from '../lib/batches';
 
 const idParam = z.object({ id: z.string().min(1) });
+
+export const COUPON_EXAMPLE_NAME = 'Cupom (exemplo)';
+export const COUPON_EXAMPLE_BODY =
+  '🎟️ *CUPOM {loja}*\n\nUse o código: *{codigo}*\n{descricao}\n\n⏰ Válido até {validade}';
 
 export async function templatesRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireAuth);
@@ -17,7 +21,12 @@ export async function templatesRoutes(app: FastifyInstance) {
     if (body.isDefault) await req.db.template.updateMany({ where: {}, data: { isDefault: false } });
     const t = await req.db.template.create({
       // @ts-expect-error tenantId é injetado pela extensão forTenant
-      data: { name: body.name, body: body.body, isDefault: body.isDefault ?? false },
+      data: {
+        name: body.name,
+        body: body.body,
+        isDefault: body.isDefault ?? false,
+        kind: body.kind ?? 'PRODUCT',
+      },
     });
     return reply.status(201).send(t);
   });
@@ -30,7 +39,12 @@ export async function templatesRoutes(app: FastifyInstance) {
     if (body.isDefault) await req.db.template.updateMany({ where: {}, data: { isDefault: false } });
     await req.db.template.updateMany({
       where: { id },
-      data: { name: body.name, body: body.body, isDefault: body.isDefault ?? existing.isDefault },
+      data: {
+        name: body.name,
+        body: body.body,
+        isDefault: body.isDefault ?? existing.isDefault,
+        kind: body.kind ?? existing.kind,
+      },
     });
     return req.db.template.findFirst({ where: { id } });
   });
@@ -49,12 +63,39 @@ export async function templatesRoutes(app: FastifyInstance) {
   });
 
   app.post('/templates/preview', async (req) => {
-    const { body } = templatePreviewSchema.parse(req.body);
+    const { body, kind, couponId } = templatePreviewSchema.parse(req.body);
+    const now = new Date().toISOString();
+    if (kind === 'COUPON') {
+      let data: CouponData = SAMPLE_COUPON;
+      if (couponId) {
+        const coupon = await req.db.coupon.findFirst({ where: { id: couponId } });
+        if (!coupon) throw ApiError.notFound('Cupom não encontrado');
+        data = {
+          store: coupon.store,
+          code: coupon.code,
+          description: coupon.description,
+          expiresAt: coupon.expiresAt?.toISOString() ?? null,
+        };
+      }
+      return { text: renderCouponTemplate(body, data, { now }) };
+    }
     return {
       text: renderTemplate(body, SAMPLE_PRODUCT, {
         affiliateLink: 'https://s.shopee.com.br/exemplo',
-        now: new Date().toISOString(),
+        now,
       }),
     };
+  });
+
+  app.post('/templates/coupon-example', async (req, reply) => {
+    const existing = await req.db.template.findFirst({
+      where: { name: COUPON_EXAMPLE_NAME, kind: 'COUPON' },
+    });
+    if (existing) return reply.status(200).send(existing);
+    const t = await req.db.template.create({
+      // @ts-expect-error tenantId é injetado pela extensão forTenant
+      data: { name: COUPON_EXAMPLE_NAME, body: COUPON_EXAMPLE_BODY, isDefault: false, kind: 'COUPON' },
+    });
+    return reply.status(201).send(t);
   });
 }

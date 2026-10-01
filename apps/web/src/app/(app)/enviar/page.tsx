@@ -21,7 +21,7 @@ const INV = [['queue'], ['batches'], ['overview']];
 export default function EnviarPage() {
   const { data: queue } = useQueue();
   const { data: sessions } = useSessions();
-  const { data: templates } = useTemplates();
+  const { data: templates } = useTemplates('PRODUCT');
   const { data: settings } = useSettings();
   const { data: batches } = useBatches();
   const [sessionId, setSessionId] = useState<string | null>(null);

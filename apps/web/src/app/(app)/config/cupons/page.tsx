@@ -27,7 +27,11 @@ import { CouponStatusBadge } from '@/components/coupons/coupon-status-badge';
 import { CouponFormDrawer } from '@/components/coupons/coupon-form-drawer';
 import { CouponParseModal } from '@/components/coupons/coupon-parse-modal';
 import { CouponChecksDrawer } from '@/components/coupons/coupon-checks-drawer';
+import { CouponDispatchBar, isSelectableCoupon, SKIP_LABEL } from '@/components/coupons/coupon-dispatch-bar';
+import { formatSyncResults, type SyncResult } from '@/components/coupons/sync-feedback';
+import { NativeCheckbox } from '@/components/ui/native-checkbox';
 import {
+  type DispatchResult,
   MARKETPLACE_KINDS,
   type MarketplaceKind,
   COUPON_STATUSES,
@@ -66,6 +70,8 @@ export default function CuponsPage() {
   const [selectedCouponForChecks, setSelectedCouponForChecks] = useState<ApiCoupon | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+  const [dispatchNotice, setDispatchNotice] = useState<DispatchResult | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const { data: coupons, isLoading } = useCoupons({
     store: storeFilter !== 'ALL' ? storeFilter : undefined,
@@ -78,7 +84,7 @@ export default function CuponsPage() {
   const syncMutation = useMutation({
     mutationFn: async () => {
       setSyncFeedback(null);
-      return apiFetch<{ queued: boolean; results?: any[] }>('/coupons/sync', {
+      return apiFetch<{ queued: boolean; results?: SyncResult[] }>('/coupons/sync', {
         method: 'POST',
       });
     },
@@ -87,7 +93,7 @@ export default function CuponsPage() {
       if (res.queued) {
         setSyncFeedback('Sincronização em segundo plano iniciada.');
       } else {
-        setSyncFeedback('Cupons sincronizados com sucesso!');
+        setSyncFeedback(formatSyncResults(res.results));
       }
       setTimeout(() => setSyncFeedback(null), 5000);
     },
@@ -142,6 +148,20 @@ export default function CuponsPage() {
     }
   };
 
+  const selectable = (coupons ?? []).filter(isSelectableCoupon);
+  const selectedCoupons = selectable.filter((c) => selectedIds.has(c.id));
+  const allSelected = selectable.length > 0 && selectedCoupons.length === selectable.length;
+
+  const toggleOne = (id: string, on: boolean) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  const toggleAll = (on: boolean) =>
+    setSelectedIds(on ? new Set(selectable.map((c) => c.id)) : new Set());
+
   const validCount = coupons?.filter((c) => c.status === 'VALID').length ?? 0;
   const unverifiedCount = coupons?.filter((c) => c.status === 'UNVERIFIED').length ?? 0;
 
@@ -182,6 +202,31 @@ export default function CuponsPage() {
           <button
             type="button"
             onClick={() => setSyncFeedback(null)}
+            className="text-muted-foreground hover:text-foreground font-bold"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {dispatchNotice && (
+        <div className="p-3 text-xs bg-muted text-foreground rounded-lg border border-border flex items-center justify-between">
+          <div className="space-y-1">
+            <p>
+              {dispatchNotice.itemCount} cupom(ns) no lote "{dispatchNotice.name}"
+            </p>
+            {dispatchNotice.skipped.length > 0 && (
+              <p className="text-amber-600 dark:text-amber-400">
+                Ignorados:{' '}
+                {dispatchNotice.skipped
+                  .map((s) => `${s.code ?? s.id} (${SKIP_LABEL[s.reason] ?? s.reason})`)
+                  .join(', ')}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setDispatchNotice(null)}
             className="text-muted-foreground hover:text-foreground font-bold"
           >
             ✕
@@ -293,6 +338,13 @@ export default function CuponsPage() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-8">
+                <NativeCheckbox
+                  checked={allSelected}
+                  onChange={(e) => toggleAll(e.target.checked)}
+                  aria-label="Selecionar todos os cupons"
+                />
+              </TableHead>
               <TableHead>Loja</TableHead>
               <TableHead>Código</TableHead>
               <TableHead>Desconto / Mínimo</TableHead>
@@ -306,7 +358,7 @@ export default function CuponsPage() {
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
                   Carregando cupons…
                 </TableCell>
               </TableRow>
@@ -314,7 +366,7 @@ export default function CuponsPage() {
 
             {!isLoading && (!coupons || coupons.length === 0) && (
               <TableRow>
-                <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
                   Nenhum cupom encontrado para os filtros selecionados.
                 </TableCell>
               </TableRow>
@@ -326,6 +378,14 @@ export default function CuponsPage() {
 
               return (
                 <TableRow key={c.id}>
+                  <TableCell className="w-8">
+                    <NativeCheckbox
+                      checked={selectedIds.has(c.id)}
+                      disabled={!isSelectableCoupon(c)}
+                      onChange={(e) => toggleOne(c.id, e.target.checked)}
+                      aria-label={`Selecionar cupom ${c.code}`}
+                    />
+                  </TableCell>
                   <TableCell className="font-medium whitespace-nowrap">
                     <div>
                       <span>{STORE_LABELS[c.store] ?? c.store}</span>
@@ -452,6 +512,14 @@ export default function CuponsPage() {
           </TableBody>
         </Table>
       </div>
+
+      {selectedCoupons.length > 0 && (
+        <CouponDispatchBar
+          couponIds={selectedCoupons.map((c) => c.id)}
+          onClear={() => setSelectedIds(new Set())}
+          onResult={setDispatchNotice}
+        />
+      )}
 
       {/* Drawers e Modais */}
       <CouponFormDrawer

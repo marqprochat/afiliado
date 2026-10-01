@@ -83,8 +83,14 @@ export const useTelegramChats = (botId: string | null) =>
   });
 export const useQueue = () =>
   useQuery({ queryKey: ['queue'], queryFn: () => apiFetch<QueueResponse>('/queue') });
-export const useTemplates = () =>
-  useQuery({ queryKey: ['templates'], queryFn: () => apiFetch<Template[]>('/templates') });
+export const useTemplates = (kind?: 'PRODUCT' | 'COUPON') =>
+  useQuery({
+    queryKey: ['templates'],
+    queryFn: () => apiFetch<Template[]>('/templates'),
+    select: kind
+      ? (all: Template[]) => all.filter((t) => (t.kind ?? 'PRODUCT') === kind)
+      : undefined,
+  });
 export const useBatches = () =>
   useQuery({
     queryKey: ['batches'],

@@ -121,6 +121,29 @@ export async function sendOffer(
     await prisma.batch.update({ where: { id: batch.id }, data: { status: 'RUNNING' } });
 
   try {
+    if (item.customText) {
+      const message: OutgoingMessage = item.customImageUrl
+        ? { kind: 'image', imageUrl: item.customImageUrl, caption: item.customText }
+        : { kind: 'text', text: item.customText };
+      return sendPlainMessages(
+        deps,
+        {
+          id: item.id,
+          productId: null,
+          couponId: null,
+          customText: item.customText,
+          customImageUrl: item.customImageUrl,
+        },
+        batch,
+        tenantId,
+        message,
+        now,
+        sleep,
+        rng,
+        bucketFor(batch.sessionId, ratePerMin),
+        enqueueTelegram,
+      );
+    }
     if (item.couponId && coupon) {
       const elig = isEligibleCoupon({
         code: coupon.code,
@@ -286,7 +309,13 @@ export async function sendOffer(
 
 async function sendPlainMessages(
   deps: SendOfferDeps,
-  item: { id: string; productId: string | null; couponId: string | null },
+  item: {
+    id: string;
+    productId: string | null;
+    couponId: string | null;
+    customText?: string | null;
+    customImageUrl?: string | null;
+  },
   batch: {
     id: string;
     sessionId: string;
@@ -304,7 +333,7 @@ async function sendPlainMessages(
 ): Promise<SendOfferResult> {
   for (const chatId of batch.telegramChatIds) {
     const chat = await prisma.telegramChat
-      .findFirst({ where: { chatId }, select: { botId: true } })
+      .findFirst({ where: { tenantId, chatId }, select: { botId: true } })
       .catch(() => null);
     if (!chat) continue;
     await enqueueTelegram({
@@ -315,6 +344,8 @@ async function sendPlainMessages(
       templateId: batch.templateId,
       ...(item.productId ? { productId: item.productId } : {}),
       ...(item.couponId ? { couponId: item.couponId } : {}),
+      ...(item.customText ? { customText: item.customText } : {}),
+      ...(item.customImageUrl ? { customImageUrl: item.customImageUrl } : {}),
     }).catch((e) =>
       log.warn({ batchId: batch.id, chatId, err: e }, 'falha ao enfileirar envio no telegram'),
     );

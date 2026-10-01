@@ -21,6 +21,9 @@ import type { ProductData, SendTelegramJob, TagCredentials } from '@afilados/sha
 
 const log = pino({ name: 'send-telegram' });
 
+/** Limite de legenda de foto da Bot API do Telegram. */
+const TELEGRAM_CAPTION_MAX = 1024;
+
 export interface SendTelegramDeps {
   shopee: MarketplaceAdapter<ShopeeCredentials>;
   awin: MarketplaceAdapter<AwinCredentials>;
@@ -41,6 +44,13 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
     prisma.setting.findMany({ where: { tenantId: job.tenantId } }),
   ]);
   if (!bot || !template) return;
+  if (bot.tenantId !== job.tenantId || template.tenantId !== job.tenantId) {
+    log.warn(
+      { botId: job.botId, templateId: job.templateId, tenantId: job.tenantId },
+      'bot ou template não pertence ao tenant do job; envio ignorado',
+    );
+    return;
+  }
   const settings = Object.fromEntries(settingsRows.map((s) => [s.key, s.value])) as Record<
     string,
     unknown
@@ -150,14 +160,24 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
       };
       text = renderTemplate(template.body, pd, { affiliateLink, now: t.toISOString() });
       imageUrl = product.images[0];
+    } else if (job.customText) {
+      text = job.customText;
+      imageUrl = job.customImageUrl;
     } else {
       return;
     }
 
     const html = whatsappToTelegramHtml(text);
-    const result = imageUrl
-      ? await client.sendPhoto(job.chatId, imageUrl, html)
-      : await client.sendMessage(job.chatId, html);
+    // O Telegram rejeita legenda de foto acima de 1024 caracteres: manda a foto sem legenda e o texto depois.
+    let result: { messageId: number };
+    if (imageUrl && html.length > TELEGRAM_CAPTION_MAX) {
+      await client.sendPhoto(job.chatId, imageUrl);
+      result = await client.sendMessage(job.chatId, html);
+    } else if (imageUrl) {
+      result = await client.sendPhoto(job.chatId, imageUrl, html);
+    } else {
+      result = await client.sendMessage(job.chatId, html);
+    }
     log.info(
       { botId: job.botId, chatId: job.chatId, messageId: result.messageId },
       'oferta enviada no telegram',

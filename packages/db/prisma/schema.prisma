@@ -398,6 +398,9 @@ model BatchItem {
   product   Product?        @relation(fields: [productId], references: [id])
   couponId  String?
   coupon    Coupon?         @relation(fields: [couponId], references: [id])
+  /// Mensagem avulsa (envio manual): texto já final, sem template.
+  customText     String?
+  customImageUrl String?
   order     Int
   runAt     DateTime
   status    BatchItemStatus @default(PENDING)

@@ -212,6 +212,7 @@ export interface Template {
   name: string;
   body: string;
   isDefault: boolean;
+  kind?: 'PRODUCT' | 'COUPON';
 }
 export interface BatchSummary {
   id: string;
@@ -243,6 +244,8 @@ export interface BatchItem {
   productId: string | null;
   product: ApiProduct | null;
   coupon: { id: string; code: string } | null;
+  customText: string | null;
+  customImageUrl: string | null;
   sendLogs: BatchItemSendLog[];
 }
 export interface BatchDetail extends Omit<BatchSummary, 'total' | 'sent' | 'errors'> {
