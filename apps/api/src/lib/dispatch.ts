@@ -1,5 +1,10 @@
 import type { TenantClient } from '@afilados/db';
-import { scheduleBatch, type OperatingWindow } from '@afilados/core';
+import {
+  isWithinOperatingWindow,
+  nextWindowOpen,
+  scheduleBatch,
+  type OperatingWindow,
+} from '@afilados/core';
 import { ApiError, type DispatchMode } from '@afilados/shared';
 import { enqueueBatchItems } from './batches';
 
@@ -81,6 +86,8 @@ export interface CreateDispatchBatchArgs {
   intervalMin: number;
   items: DispatchItemInput[];
   window: OperatingWindow;
+  /** Mensagens por minuto (setting `globalRateLimitPerMin`); estima o fim do envio imediato. */
+  ratePerMin?: number;
   now?: Date;
 }
 
@@ -93,7 +100,8 @@ export interface DispatchBatchResult {
 
 /**
  * Cria o lote e enfileira os itens em `send-offer`.
- * `now`: todos os itens com `runAt = agora` (o worker aplica rate limit e janela).
+ * `now`: todos os itens com `runAt = agora` (o worker aplica o rate limit); fora da janela de
+ * operação, `runAt` é a próxima abertura, para a tela mostrar o horário real.
  * `queue`: horários de `scheduleBatch` (janela de operação + intervalo).
  */
 export async function createDispatchBatch(
@@ -101,10 +109,18 @@ export async function createDispatchBatch(
 ): Promise<DispatchBatchResult> {
   const { db, tenantId, items, mode } = args;
   const now = args.now ?? new Date();
-  const schedule =
-    mode === 'now'
-      ? { runAt: items.map(() => now), estimatedEndAt: now as Date | null }
-      : scheduleBatch(items.length, args.intervalMin, args.window, now);
+  let schedule: { runAt: Date[]; estimatedEndAt: Date | null };
+  if (mode === 'now') {
+    const start = isWithinOperatingWindow(now, args.window) ? now : nextWindowOpen(now, args.window);
+    const rate = args.ratePerMin && args.ratePerMin > 0 ? args.ratePerMin : 6;
+    const minutes = Math.ceil((items.length * Math.max(args.groupJids.length, 1)) / rate);
+    schedule = {
+      runAt: items.map(() => start),
+      estimatedEndAt: new Date(start.getTime() + minutes * 60_000),
+    };
+  } else {
+    schedule = scheduleBatch(items.length, args.intervalMin, args.window, now);
+  }
 
   const batch = await db.batch.create({
     data: {

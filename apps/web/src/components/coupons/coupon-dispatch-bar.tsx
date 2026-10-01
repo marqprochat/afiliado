@@ -4,6 +4,7 @@ import type { DispatchMode, DispatchResult } from '@afilados/shared';
 import { Button } from '@/components/ui/button';
 import { DispatchTargetPicker } from '@/components/dispatch/dispatch-target-picker';
 import { apiFetch } from '@/lib/api';
+import { formatRunAt, isScheduledLater } from '@/lib/dispatch-when';
 import { useDispatchTarget } from '@/lib/dispatch-target';
 import { useApiMutation } from '@/lib/mutations';
 import type { ApiCoupon } from '@/lib/types';
@@ -51,10 +52,9 @@ export function CouponDispatchBar({
       invalidate: [['batches'], ['overview']],
       onSuccess: (res) => {
         onResult?.(res);
-        const when =
-          res.mode === 'now'
-            ? 'enviando agora'
-            : `primeiro envio às ${new Date(res.firstRunAt).toLocaleString('pt-BR')}`;
+        const when = isScheduledLater(res.firstRunAt)
+          ? `primeiro envio às ${formatRunAt(res.firstRunAt)}`
+          : 'enviando agora';
         toast.success(`${res.itemCount} cupom(ns) no lote "${res.name}" — ${when}`);
         onClear();
       },

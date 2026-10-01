@@ -19,7 +19,7 @@ import {
 import { requireAuth } from '../plugins/auth';
 import { toApiCoupon, toApiCouponCheck } from '../lib/coupons';
 import { getQueue, getQueueEvents } from '../lib/redis';
-import { getOperatingWindow, toCoreWindow } from '../lib/settings';
+import { getOperatingWindow, getSettings, toCoreWindow } from '../lib/settings';
 import {
   assertDispatchTargets,
   createDispatchBatch,
@@ -315,6 +315,7 @@ export async function couponsRoutes(app: FastifyInstance) {
       intervalMin: body.intervalMin,
       items: eligible.map((couponId) => ({ couponId })),
       window,
+      ratePerMin: (await getSettings(req.db)).globalRateLimitPerMin,
       now,
     });
     const out: DispatchResult = {

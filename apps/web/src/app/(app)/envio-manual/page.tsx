@@ -10,6 +10,7 @@ import { DispatchTargetPicker } from '@/components/dispatch/dispatch-target-pick
 import { isSelectableCoupon } from '@/components/coupons/coupon-dispatch-bar';
 import { apiFetch } from '@/lib/api';
 import { useDispatchTarget } from '@/lib/dispatch-target';
+import { formatRunAt, isScheduledLater } from '@/lib/dispatch-when';
 import { useApiMutation } from '@/lib/mutations';
 import { useCoupons, useTemplates } from '@/lib/queries';
 
@@ -53,9 +54,9 @@ export default function ManualSendPage() {
       invalidate: [['batches'], ['overview']],
       onSuccess: (res, input) => {
         toast.success(
-          res.mode === 'now'
+          res.mode === 'now' && !isScheduledLater(res.firstRunAt)
             ? 'Mensagem enviando agora'
-            : `Mensagem na fila — sai às ${new Date(res.firstRunAt).toLocaleString('pt-BR')}`,
+            : `${res.mode === 'now' ? 'Mensagem reagendada (fora da janela)' : 'Mensagem na fila'} — sai às ${formatRunAt(res.firstRunAt)}`,
         );
         setText((cur) => (cur.trim() === input.sentText ? '' : cur));
         setImageUrl((cur) => (cur.trim() === input.sentImage ? '' : cur));

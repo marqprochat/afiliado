@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ApiError, manualSendSchema, type DispatchResult } from '@afilados/shared';
 import { requireAuth } from '../plugins/auth';
-import { getOperatingWindow, toCoreWindow } from '../lib/settings';
+import { getOperatingWindow, getSettings, toCoreWindow } from '../lib/settings';
 import {
   assertDispatchTargets,
   createDispatchBatch,
@@ -37,6 +37,7 @@ export async function manualSendRoutes(app: FastifyInstance) {
       intervalMin: body.intervalMin,
       items: [{ customText: body.text, ...(body.imageUrl ? { customImageUrl: body.imageUrl } : {}) }],
       window,
+      ratePerMin: (await getSettings(req.db)).globalRateLimitPerMin,
       now,
     });
     const out: DispatchResult = {

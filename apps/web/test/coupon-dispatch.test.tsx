@@ -6,6 +6,7 @@ import { formatSyncResults } from '@/components/coupons/sync-feedback';
 
 vi.mock('@/lib/api', () => ({ apiFetch: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 import { apiFetch } from '@/lib/api';
 const apiFetchMock = vi.mocked(apiFetch);
 
@@ -98,6 +99,35 @@ describe('seleção e despacho de cupons', () => {
         }),
       );
     });
+  });
+
+  async function sendNowWith(firstRunAt: string) {
+    const base = apiFetchMock.getMockImplementation()!;
+    apiFetchMock.mockImplementation(async (url: string, ...rest: never[]) => {
+      if (url === '/coupons/dispatch') {
+        return { batchId: 'b1', name: 'Cupons 30/09 14:00', mode: 'now', itemCount: 1, firstRunAt, skipped: [] } as never;
+      }
+      return (base as (...a: unknown[]) => unknown)(url, ...rest) as never;
+    });
+    renderPage();
+    await screen.findByText('PROMO10');
+    fireEvent.click(screen.getByLabelText('Selecionar cupom PROMO10'));
+    fireEvent.click(await screen.findByLabelText('[GRUPO] Ofertas'));
+    const nowBtn = screen.getByRole('button', { name: 'Enviar agora' });
+    await waitFor(() => expect((nowBtn as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(nowBtn);
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    return vi.mocked(toast.success).mock.calls[0]![0] as string;
+  }
+
+  it('"Enviar agora" dentro da janela diz que está enviando agora', async () => {
+    expect(await sendNowWith(new Date().toISOString())).toContain('enviando agora');
+  });
+
+  it('"Enviar agora" fora da janela mostra o horário reagendado', async () => {
+    const msg = await sendNowWith(new Date(Date.now() + 3 * 3600_000).toISOString());
+    expect(msg).not.toContain('enviando agora');
+    expect(msg).toContain('primeiro envio às');
   });
 
   it('mantém o aviso de ignorados depois que a barra some', async () => {
