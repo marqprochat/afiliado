@@ -28,6 +28,7 @@ export function formatSyncResults(results: SyncResult[] | undefined): string {
         parts.push(plural(r.updated, 'atualizado', 'atualizados'));
       }
       if (r.expired > 0) parts.push(plural(r.expired, 'expirado', 'expirados'));
+      else if (r.source === 'EXPIRY') parts.push('nenhum expirado');
       return `${LABEL[r.source]}: ${parts.join(', ')}`;
     })
     .join(' · ');

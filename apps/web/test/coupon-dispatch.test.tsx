@@ -38,7 +38,7 @@ beforeEach(() => {
   localStorage.clear();
   apiFetchMock.mockImplementation(async (url: string) => {
     if (url === '/coupons/dispatch') {
-      return { batchId: 'b1', name: 'Cupons 30/09 14:00', mode: 'queue', itemCount: 2, firstRunAt: new Date().toISOString(), skipped: [] } as never;
+      return { batchId: 'b1', name: 'Cupons 30/09 14:00', mode: 'queue', itemCount: 2, firstRunAt: new Date().toISOString(), skipped: [{ id: 'c3', code: 'VELHO', reason: 'expired' }] } as never;
     }
     if (url.startsWith('/coupons')) return { coupons } as never;
     if (url === '/wa/sessions') return sessions as never;
@@ -100,6 +100,18 @@ describe('seleção e despacho de cupons', () => {
     });
   });
 
+  it('mantém o aviso de ignorados depois que a barra some', async () => {
+    renderPage();
+    await screen.findByText('PROMO10');
+    fireEvent.click(screen.getByLabelText('Selecionar cupom PROMO10'));
+    fireEvent.click(await screen.findByLabelText('[GRUPO] Ofertas'));
+    const queueBtn = screen.getByRole('button', { name: 'Colocar na fila' });
+    await waitFor(() => expect((queueBtn as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(queueBtn);
+    expect(await screen.findByText(/VELHO \(expirado\)/)).toBeDefined();
+    expect(screen.queryByText(/selecionado/)).toBeNull();
+  });
+
   it('"Enviar agora" usa mode now e fica desabilitado sem grupo', async () => {
     renderPage();
     await screen.findByText('PROMO10');
@@ -119,6 +131,11 @@ describe('seleção e despacho de cupons', () => {
 });
 
 describe('formatSyncResults', () => {
+  it('EXPIRY sem expirados não termina vazio', () => {
+    expect(formatSyncResults([{ source: 'EXPIRY', ok: true, created: 0, updated: 0, expired: 0 }])).toBe(
+      'Expiração: nenhum expirado',
+    );
+  });
   it('resume cada fonte e destaca erro', () => {
     expect(
       formatSyncResults([

@@ -1,5 +1,4 @@
 'use client';
-import { useState } from 'react';
 import { toast } from 'sonner';
 import type { DispatchMode, DispatchResult } from '@afilados/shared';
 import { Button } from '@/components/ui/button';
@@ -16,7 +15,7 @@ export function isSelectableCoupon(c: ApiCoupon): boolean {
   return true;
 }
 
-const SKIP_LABEL: Record<string, string> = {
+export const SKIP_LABEL: Record<string, string> = {
   expired: 'expirado',
   invalid: 'inválido',
   'empty-code': 'sem código',
@@ -26,12 +25,13 @@ const SKIP_LABEL: Record<string, string> = {
 export function CouponDispatchBar({
   couponIds,
   onClear,
+  onResult,
 }: {
   couponIds: string[];
   onClear: () => void;
+  onResult?: (res: DispatchResult) => void;
 }) {
   const { target, update } = useDispatchTarget('cupons');
-  const [lastSkipped, setLastSkipped] = useState<DispatchResult['skipped']>([]);
 
   const dispatch = useApiMutation(
     (mode: DispatchMode) =>
@@ -50,7 +50,7 @@ export function CouponDispatchBar({
     {
       invalidate: [['batches'], ['overview']],
       onSuccess: (res) => {
-        setLastSkipped(res.skipped);
+        onResult?.(res);
         const when =
           res.mode === 'now'
             ? 'enviando agora'
@@ -93,14 +93,6 @@ export function CouponDispatchBar({
           Colocar na fila
         </Button>
       </div>
-      {lastSkipped.length > 0 && (
-        <p className="text-xs text-amber-600 dark:text-amber-400">
-          Ignorados no último envio:{' '}
-          {lastSkipped
-            .map((s) => `${s.code ?? s.id} (${SKIP_LABEL[s.reason] ?? s.reason})`)
-            .join(', ')}
-        </p>
-      )}
     </div>
   );
 }

@@ -27,10 +27,11 @@ import { CouponStatusBadge } from '@/components/coupons/coupon-status-badge';
 import { CouponFormDrawer } from '@/components/coupons/coupon-form-drawer';
 import { CouponParseModal } from '@/components/coupons/coupon-parse-modal';
 import { CouponChecksDrawer } from '@/components/coupons/coupon-checks-drawer';
-import { CouponDispatchBar, isSelectableCoupon } from '@/components/coupons/coupon-dispatch-bar';
+import { CouponDispatchBar, isSelectableCoupon, SKIP_LABEL } from '@/components/coupons/coupon-dispatch-bar';
 import { formatSyncResults, type SyncResult } from '@/components/coupons/sync-feedback';
 import { NativeCheckbox } from '@/components/ui/native-checkbox';
 import {
+  type DispatchResult,
   MARKETPLACE_KINDS,
   type MarketplaceKind,
   COUPON_STATUSES,
@@ -69,6 +70,7 @@ export default function CuponsPage() {
   const [selectedCouponForChecks, setSelectedCouponForChecks] = useState<ApiCoupon | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+  const [dispatchNotice, setDispatchNotice] = useState<DispatchResult | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const { data: coupons, isLoading } = useCoupons({
@@ -200,6 +202,31 @@ export default function CuponsPage() {
           <button
             type="button"
             onClick={() => setSyncFeedback(null)}
+            className="text-muted-foreground hover:text-foreground font-bold"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {dispatchNotice && (
+        <div className="p-3 text-xs bg-muted text-foreground rounded-lg border border-border flex items-center justify-between">
+          <div className="space-y-1">
+            <p>
+              {dispatchNotice.itemCount} cupom(ns) no lote "{dispatchNotice.name}"
+            </p>
+            {dispatchNotice.skipped.length > 0 && (
+              <p className="text-amber-600 dark:text-amber-400">
+                Ignorados:{' '}
+                {dispatchNotice.skipped
+                  .map((s) => `${s.code ?? s.id} (${SKIP_LABEL[s.reason] ?? s.reason})`)
+                  .join(', ')}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setDispatchNotice(null)}
             className="text-muted-foreground hover:text-foreground font-bold"
           >
             ✕
@@ -490,6 +517,7 @@ export default function CuponsPage() {
         <CouponDispatchBar
           couponIds={selectedCoupons.map((c) => c.id)}
           onClear={() => setSelectedIds(new Set())}
+          onResult={setDispatchNotice}
         />
       )}
 
