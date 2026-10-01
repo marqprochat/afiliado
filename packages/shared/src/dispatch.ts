@@ -65,8 +65,13 @@ export function detectImageSignature(bytes: Uint8Array): ManualImageType | null 
   return null;
 }
 
+export const MANUAL_IMAGE_MAX_BASE64_LENGTH = Math.ceil((MANUAL_IMAGE_MAX_BYTES * 4) / 3) + 500;
+
 export function decodeBase64(base64: string): Uint8Array {
   const clean = base64.replace(/^data:image\/[a-zA-Z]+;base64,/, '').trim();
+  if (!clean || !/^[A-Za-z0-9+/=\s]*$/.test(clean) || clean.length % 4 === 1) {
+    throw new Error('Base64 inválido');
+  }
   if (typeof Buffer !== 'undefined') {
     return Buffer.from(clean, 'base64');
   }
@@ -124,8 +129,17 @@ export const manualSendSchema = z
     }
 
     if (hasData && hasType) {
+      const raw = v.imageData!;
+      if (raw.length > MANUAL_IMAGE_MAX_BASE64_LENGTH) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['imageData'],
+          message: 'A imagem deve ter no máximo 5 MB',
+        });
+        return;
+      }
       try {
-        const bytes = decodeBase64(v.imageData!);
+        const bytes = decodeBase64(raw);
         if (bytes.length > MANUAL_IMAGE_MAX_BYTES) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,

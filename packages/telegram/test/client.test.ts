@@ -100,6 +100,7 @@ describe('TelegramClient', () => {
     const f = fakeFetch([
       { ok: true, result: { message_id: 99 } },
       { ok: true, result: { message_id: 100 } },
+      { ok: true, result: { message_id: 101 } },
     ]);
     const client = new TelegramClient('TOKEN', f as unknown as typeof fetch);
     const buf = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
@@ -110,16 +111,30 @@ describe('TelegramClient', () => {
     const res2 = await client.sendPhotoBuffer('-100123', buf, 'image/png', '<b>foto</b>');
     expect(res2).toEqual({ messageId: 100 });
 
+    const res3 = await client.sendPhotoBuffer('-100123', buf, 'image/webp');
+    expect(res3).toEqual({ messageId: 101 });
+
     const calls = f.mock.calls as unknown as [string, RequestInit][];
     expect(calls[0]![0]).toContain('/sendPhoto');
     const form1 = calls[0]![1].body as FormData;
     expect(form1).toBeInstanceOf(FormData);
     expect(form1.get('chat_id')).toBe('-100123');
-    expect(form1.get('photo')).toBeTruthy();
+    const photo1 = form1.get('photo') as unknown as { type?: string; name?: string };
+    expect(photo1).toBeTruthy();
+    expect(photo1.type).toBe('image/jpeg');
+    expect(photo1.name).toBe('photo.jpg');
 
     const form2 = calls[1]![1].body as FormData;
     expect(form2.get('chat_id')).toBe('-100123');
     expect(form2.get('caption')).toBe('<b>foto</b>');
     expect(form2.get('parse_mode')).toBe('HTML');
+    const photo2 = form2.get('photo') as unknown as { type?: string; name?: string };
+    expect(photo2.type).toBe('image/png');
+    expect(photo2.name).toBe('photo.png');
+
+    const form3 = calls[2]![1].body as FormData;
+    const photo3 = form3.get('photo') as unknown as { type?: string; name?: string };
+    expect(photo3.type).toBe('image/webp');
+    expect(photo3.name).toBe('photo.webp');
   });
 });

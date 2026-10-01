@@ -193,6 +193,17 @@ describe('manualSendSchema: upload de arquivo de imagem', () => {
     ).toBe(false);
   });
 
+  it('rejeita base64 corrompido ou com caracteres inválidos', () => {
+    expect(
+      manualSendSchema.safeParse({
+        text: 'ok',
+        imageData: 'isto-nao-eh-base64!@#$%',
+        imageType: 'image/jpeg',
+        ...targets,
+      }).success,
+    ).toBe(false);
+  });
+
   it('rejeita imagem com mais de 5 MB pós-decode', () => {
     // 5 MB = 5 * 1024 * 1024 = 5242880 bytes
     const header = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
