@@ -410,6 +410,7 @@ describe('POST /manual-send', () => {
     });
     expect(res.statusCode).toBe(413);
     expect(res.json().error.code).toBe('PAYLOAD_TOO_LARGE');
+    expect(res.json().error.message).toBe('Requisição muito grande');
   });
 
   it('400 com texto vazio e com sessão desconectada', async () => {

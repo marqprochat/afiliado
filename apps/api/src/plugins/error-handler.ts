@@ -43,7 +43,7 @@ export function registerErrorHandler(app: FastifyInstance) {
     if (status === 413 || errCode === 'FST_ERR_CTP_BODY_TOO_LARGE') {
       return reply
         .status(413)
-        .send({ error: { code: 'PAYLOAD_TOO_LARGE', message: 'Arquivo muito grande (máx. 5 MB)' } });
+        .send({ error: { code: 'PAYLOAD_TOO_LARGE', message: 'Requisição muito grande' } });
     }
     if (status === 429) {
       return reply
