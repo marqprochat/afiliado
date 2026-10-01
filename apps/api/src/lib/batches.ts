@@ -68,6 +68,8 @@ export async function insertBatchItemNext(args: {
   productId: string;
   window: OperatingWindow;
   now?: Date;
+  /** Posição entre os pendentes (0 = próximo envio, padrão). Valores fora da faixa são ajustados. */
+  index?: number;
 }): Promise<InsertBatchItemResult> {
   const { db, tenantId, batch, productId, window, now = new Date() } = args;
 
@@ -86,13 +88,19 @@ export async function insertBatchItemNext(args: {
   const others = batch.items.filter((i) => i.status !== 'PENDING');
   const base = Math.max(-1, ...others.map((i) => i.order)) + 1;
 
+  // Posição do novo item entre os pendentes; os pendentes a partir dela andam um lugar.
+  const pos = Math.min(Math.max(Math.trunc(args.index ?? 0), 0), pending.length);
+  const slotOf = (idx: number) => (idx < pos ? idx : idx + 1);
+
   const reorderPending = pending.map((it, idx) =>
-    db.batchItem.updateMany({ where: { id: it.id }, data: { order: base + 1 + idx } }),
+    db.batchItem.updateMany({ where: { id: it.id }, data: { order: base + slotOf(idx) } }),
   );
 
   if (batch.status === 'PAUSED') {
     const [created] = await db.$transaction([
-      db.batchItem.create({ data: { batchId: batch.id, productId, order: base, runAt: now } }),
+      db.batchItem.create({
+        data: { batchId: batch.id, productId, order: base + pos, runAt: now },
+      }),
       ...reorderPending,
     ]);
     return {
@@ -129,15 +137,15 @@ export async function insertBatchItemNext(args: {
   // Tira os jobs antigos (qualquer estado, menos "active") para o mesmo jobId poder ser reenfileirado.
   await removeStaleJobs(pending.map((i) => i.id));
 
-  const runAtFor = (idx: number) => runAt[idx]!;
+  const runAtFor = (slot: number) => runAt[slot]!;
   const [created] = await db.$transaction([
     db.batchItem.create({
-      data: { batchId: batch.id, productId, order: base, runAt: runAtFor(0) },
+      data: { batchId: batch.id, productId, order: base + pos, runAt: runAtFor(pos) },
     }),
     ...pending.map((it, idx) =>
       db.batchItem.updateMany({
         where: { id: it.id },
-        data: { order: base + 1 + idx, runAt: runAtFor(idx + 1) },
+        data: { order: base + slotOf(idx), runAt: runAtFor(slotOf(idx)) },
       }),
     ),
     db.batch.updateMany({ where: { id: batch.id }, data: { estimatedEndAt } }),
@@ -146,8 +154,8 @@ export async function insertBatchItemNext(args: {
   try {
     await enqueueBatchItems(
       [
-        { id: created.id, runAt: runAtFor(0) },
-        ...pending.map((it, idx) => ({ id: it.id, runAt: runAtFor(idx + 1) })),
+        { id: created.id, runAt: runAtFor(pos) },
+        ...pending.map((it, idx) => ({ id: it.id, runAt: runAtFor(slotOf(idx)) })),
       ],
       tenantId,
       now,
@@ -158,7 +166,7 @@ export async function insertBatchItemNext(args: {
     throw new ApiError('INTERNAL', 'Falha ao enfileirar lote', 500);
   }
 
-  return { id: created.id, runAt: runAtFor(0), total: batch.items.length + 1, estimatedEndAt };
+  return { id: created.id, runAt: runAtFor(pos), total: batch.items.length + 1, estimatedEndAt };
 }
 
 /** Remove jobs antigos (inclusive falhos/concluídos) para o mesmo jobId poder ser reenfileirado. */

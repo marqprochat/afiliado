@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { QUEUE_SEND_OFFER, type SendOfferJob } from '@afilados/shared';
 import { buildApp } from '../src/app';
@@ -219,6 +219,38 @@ describe('extensão: enviar produto direto para um lote', () => {
         const job = await q.getJob(it.id);
         expect(job, `job do item ${it.id}`).toBeTruthy();
       }
+    });
+
+    it('batchPosition random: entra numa posição sorteada entre os pendentes, sem furar a fila', async () => {
+      const first = new Date(Date.now() + 30 * MIN);
+      const { batch, pending } = await makeBatch('SCHEDULED', 3, {
+        firstRunAt: first,
+        intervalMin: 10,
+      });
+
+      // 3 pendentes → índice sorteado = floor(0.5 * 4) = 2
+      const spy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+      let res;
+      try {
+        res = await capture(batch.id, { batchPosition: 'random' });
+      } finally {
+        spy.mockRestore();
+      }
+      expect(res.statusCode).toBe(200);
+
+      const items = await pendingItems(batch.id);
+      expect(items).toHaveLength(4);
+      expect(items[2]!.product?.title).toBe('Produto capturado');
+      // os antigos mantêm a ordem relativa; só o novo entrou no meio
+      expect([items[0]!.id, items[1]!.id, items[3]!.id]).toEqual(pending);
+      // horários continuam consecutivos, um intervalo entre cada item
+      expect(items.map((i) => i.runAt.getTime())).toEqual([
+        first.getTime(),
+        first.getTime() + 10 * MIN,
+        first.getTime() + 20 * MIN,
+        first.getTime() + 30 * MIN,
+      ]);
+      expect(res.json().batchItem.runAt).toBe(new Date(first.getTime() + 20 * MIN).toISOString());
     });
 
     it('primeiro pendente já vencido: começa agora em vez de agendar no passado', async () => {

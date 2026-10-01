@@ -242,12 +242,17 @@ export async function extensionRoutes(app: FastifyInstance) {
     }
 
     if (targetBatch) {
+      // 'random': sorteia entre 0 e N pendentes (N = no fim), para misturar com os que já estavam.
+      const pendingCount = targetBatch.items.filter((i) => i.status === 'PENDING').length;
       const inserted = await insertBatchItemNext({
         db: tenantDb,
         tenantId,
         batch: targetBatch,
         productId: savedProduct.id,
         window: toCoreWindow(await getOperatingWindow(tenantDb, tenantId)),
+        ...(body.batchPosition === 'random'
+          ? { index: Math.floor(Math.random() * (pendingCount + 1)) }
+          : {}),
       });
       await app.events.publish(tenantId, {
         type: 'batch.progress',

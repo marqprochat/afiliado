@@ -11,6 +11,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const configMsg = document.getElementById('config-msg');
   const btnCapture = document.getElementById('btn-capture');
   const captureStatus = document.getElementById('capture-status');
+  const btnCaptureAll = document.getElementById('btn-capture-all');
+  const captureAllStatus = document.getElementById('capture-all-status');
   const captureTarget = document.getElementById('capture-target');
   const captureTargetLabel = document.getElementById('capture-target-label');
   const linkDashboard = document.getElementById('link-dashboard');
@@ -66,6 +68,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   let currentProduct = null;
+  let currentTabId = null;
   let config = { apiUrl: 'http://localhost:3011', apiToken: '' };
 
   // Permite clicar no status para abrir configurações / trocar token
@@ -160,6 +163,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (t.kind === 'batch' && name) btnCapture.textContent = `⚡ Enviar para lote: ${name}`;
     else if (t.kind === 'rule' && name) btnCapture.textContent = `⚡ Enviar para: ${name}`;
     else btnCapture.textContent = '⚡ Enviar para Fila de Triagem';
+    btnCaptureAll.textContent =
+      t.kind === 'batch' && name
+        ? `📦 Enviar todos da página para lote: ${name}`
+        : t.kind === 'rule' && name
+          ? `📦 Enviar todos da página para: ${name}`
+          : '📦 Enviar todos da página para Fila de Triagem';
   }
 
   async function fetchJsonList(path) {
@@ -334,6 +343,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!tab || !tab.url) return;
 
     const url = tab.url;
+    currentTabId = tab.id;
     let marketplaceKind = null;
 
     if (url.includes('mercadolivre.com.br')) marketplaceKind = 'MERCADOLIVRE';
@@ -414,6 +424,108 @@ document.addEventListener('DOMContentLoaded', async () => {
     extraEl.textContent = extras.join(' • ');
   }
 
+  // `batchPosition`: 'random' sorteia a posição do produto entre os pendentes do lote.
+  function buildCapturePayload(product, target, batchPosition) {
+    return {
+      url: product.url,
+      marketplaceKind: product.marketplaceKind,
+      ...(product.title ? { title: product.title } : {}),
+      ...(product.price !== null && product.price !== undefined ? { price: product.price } : {}),
+      ...(product.originalPrice ? { originalPrice: product.originalPrice } : {}),
+      ...(product.discountPct ? { discountPct: product.discountPct } : {}),
+      ...(product.images && product.images.length > 0 ? { images: product.images } : {}),
+      ...(product.shipping && product.shipping !== 'UNKNOWN' ? { shipping: product.shipping } : {}),
+      ...(product.couponCode ? { couponCode: product.couponCode } : {}),
+      ...(target.kind === 'rule' ? { automationRuleId: target.id } : {}),
+      ...(target.kind === 'batch'
+        ? { batchId: target.id, ...(batchPosition ? { batchPosition } : {}) }
+        : {}),
+    };
+  }
+
+  // Enviar todos os produtos da página para o destino selecionado (Triagem, automação ou lote)
+  btnCaptureAll.addEventListener('click', async () => {
+    if (!currentProduct || currentTabId === null) return;
+    const marketplaceKind = currentProduct.marketplaceKind;
+    const target = parseTarget(captureTarget.value);
+    const name = findTargetName(captureTarget.value) ?? '';
+    const destino =
+      target.kind === 'batch'
+        ? `o lote "${name}"`
+        : target.kind === 'rule'
+          ? `a automação "${name}"`
+          : 'a Fila de Triagem';
+
+    btnCaptureAll.disabled = true;
+    captureAllStatus.className = 'msg';
+    captureAllStatus.style.whiteSpace = 'pre-line';
+    captureAllStatus.textContent = 'Lendo os produtos da página...';
+
+    let items = [];
+    try {
+      const res = await chrome.tabs.sendMessage(currentTabId, { action: 'EXTRACT_PRODUCTS' });
+      items = ((res && res.items) || []).filter((it) => it.title && it.price > 0);
+    } catch {
+      captureAllStatus.textContent = '❌ Não foi possível ler os produtos desta página';
+      captureAllStatus.className = 'msg msg-error';
+      btnCaptureAll.disabled = false;
+      return;
+    }
+
+    if (items.length === 0) {
+      captureAllStatus.textContent = 'Nenhum produto com título e preço foi encontrado na página.';
+      btnCaptureAll.disabled = false;
+      return;
+    }
+    if (!window.confirm(`Enviar ${items.length} produto(s) para ${destino}?`)) {
+      captureAllStatus.textContent = '';
+      btnCaptureAll.disabled = false;
+      return;
+    }
+
+    const queue = items;
+    let sent = 0;
+    let failed = 0;
+    let abortReason = '';
+    for (let i = 0; i < queue.length; i++) {
+      captureAllStatus.textContent = `Enviando ${i + 1}/${queue.length}...`;
+      try {
+        const res = await fetch(`${normalizeApiUrl(config.apiUrl)}/api/v1/extension/capture`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${config.apiToken}`,
+          },
+          body: JSON.stringify(
+            buildCapturePayload({ ...queue[i], marketplaceKind }, target, 'random'),
+          ),
+        });
+        if (res.ok) {
+          sent++;
+          continue;
+        }
+        failed++;
+        const err = await res.json().catch(() => null);
+        // O destino não existe mais: não adianta insistir nos demais.
+        if (err?.error?.code === 'BATCH_INACTIVE' || res.status === 404) {
+          abortReason = err?.error?.message || 'Destino indisponível';
+          void loadCaptureTargets();
+          break;
+        }
+      } catch {
+        failed++;
+      }
+    }
+
+    const notSent = queue.length - sent - failed;
+    const lines = [`✅ ${sent} enviado(s) para ${destino}`];
+    if (failed) lines.push(`❌ ${failed} falharam`);
+    if (abortReason) lines.push(`Envio interrompido: ${abortReason} (${notSent} não enviados)`);
+    captureAllStatus.textContent = lines.join('\n');
+    captureAllStatus.className = failed ? 'msg msg-error' : 'msg msg-success';
+    btnCaptureAll.disabled = false;
+  });
+
   // Capturar oferta
   btnCapture.addEventListener('click', async () => {
     if (!currentProduct) return;
@@ -422,25 +534,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     captureStatus.className = 'msg';
 
     const target = parseTarget(captureTarget.value);
-    const payload = {
-      url: currentProduct.url,
-      marketplaceKind: currentProduct.marketplaceKind,
-      ...(currentProduct.title ? { title: currentProduct.title } : {}),
-      ...(currentProduct.price !== null && currentProduct.price !== undefined
-        ? { price: currentProduct.price }
-        : {}),
-      ...(currentProduct.originalPrice ? { originalPrice: currentProduct.originalPrice } : {}),
-      ...(currentProduct.discountPct ? { discountPct: currentProduct.discountPct } : {}),
-      ...(currentProduct.images && currentProduct.images.length > 0
-        ? { images: currentProduct.images }
-        : {}),
-      ...(currentProduct.shipping && currentProduct.shipping !== 'UNKNOWN'
-        ? { shipping: currentProduct.shipping }
-        : {}),
-      ...(currentProduct.couponCode ? { couponCode: currentProduct.couponCode } : {}),
-      ...(target.kind === 'rule' ? { automationRuleId: target.id } : {}),
-      ...(target.kind === 'batch' ? { batchId: target.id } : {}),
-    };
+    const payload = buildCapturePayload(currentProduct, target);
 
     try {
       const targetUrl = `${normalizeApiUrl(config.apiUrl)}/api/v1/extension/capture`;
