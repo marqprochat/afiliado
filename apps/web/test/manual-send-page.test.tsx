@@ -98,4 +98,47 @@ describe('página de envio manual', () => {
       }),
     );
   });
+
+  async function selectGroup() {
+    fireEvent.click(await screen.findByLabelText('[GRUPO] Ofertas'));
+  }
+
+  it('acima do limite mantém os botões desabilitados e mostra o contador', async () => {
+    renderPage();
+    fireEvent.change(await screen.findByLabelText('Mensagem'), { target: { value: 'a'.repeat(4001) } });
+    await selectGroup();
+    expect(screen.getByText('4001/4000')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Enviar agora' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Colocar na fila' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('envia o texto aparado', async () => {
+    renderPage();
+    fireEvent.change(await screen.findByLabelText('Mensagem'), { target: { value: '  Aviso  ' } });
+    await selectGroup();
+    const nowBtn = screen.getByRole('button', { name: 'Enviar agora' });
+    await waitFor(() => expect((nowBtn as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(nowBtn);
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/manual-send',
+        expect.objectContaining({ json: expect.objectContaining({ text: 'Aviso' }) }),
+      );
+    });
+  });
+
+  it('colocar na fila envia mode queue', async () => {
+    renderPage();
+    fireEvent.change(await screen.findByLabelText('Mensagem'), { target: { value: 'Aviso' } });
+    await selectGroup();
+    const qBtn = screen.getByRole('button', { name: 'Colocar na fila' });
+    await waitFor(() => expect((qBtn as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(qBtn);
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/manual-send',
+        expect.objectContaining({ json: expect.objectContaining({ mode: 'queue' }) }),
+      );
+    });
+  });
 });

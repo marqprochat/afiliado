@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import type { DispatchMode, DispatchResult } from '@afilados/shared';
+import { MANUAL_TEXT_MAX, type DispatchMode, type DispatchResult } from '@afilados/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,12 +36,12 @@ export default function ManualSendPage() {
   const usable = (coupons ?? []).filter(isSelectableCoupon).slice(0, 30);
 
   const send = useApiMutation(
-    (mode: DispatchMode) =>
+    ({ mode, sentText, sentImage }: { mode: DispatchMode; sentText: string; sentImage: string }) =>
       apiFetch<DispatchResult>('/manual-send', {
         method: 'POST',
         json: {
-          text,
-          ...(imageUrl.trim() ? { imageUrl: imageUrl.trim() } : {}),
+          text: sentText,
+          ...(sentImage ? { imageUrl: sentImage } : {}),
           sessionId: target.sessionId,
           groupJids: target.groupJids,
           telegramChatIds: target.telegramChatIds,
@@ -51,14 +51,14 @@ export default function ManualSendPage() {
       }),
     {
       invalidate: [['batches'], ['overview']],
-      onSuccess: (res) => {
+      onSuccess: (res, input) => {
         toast.success(
           res.mode === 'now'
             ? 'Mensagem enviando agora'
             : `Mensagem na fila — sai às ${new Date(res.firstRunAt).toLocaleString('pt-BR')}`,
         );
-        setText('');
-        setImageUrl('');
+        setText((cur) => (cur.trim() === input.sentText ? '' : cur));
+        setImageUrl((cur) => (cur.trim() === input.sentImage ? '' : cur));
       },
     },
   );
@@ -75,7 +75,9 @@ export default function ManualSendPage() {
   );
 
   const canSend =
-    !!text.trim() && !!target.sessionId && target.groupJids.length > 0 && !send.isPending;
+    !!text.trim() &&
+    text.trim().length <= MANUAL_TEXT_MAX &&
+    !!target.sessionId && target.groupJids.length > 0 && !send.isPending;
 
   return (
     <div className="space-y-6">
@@ -93,7 +95,11 @@ export default function ManualSendPage() {
                 placeholder="Escreva o aviso. Use *negrito*, _itálico_ e ~riscado~."
                 className="text-sm"
               />
-              <p className="mt-1 text-xs text-muted-foreground">{text.length}/4000</p>
+              <p
+                className={`mt-1 text-xs ${text.trim().length > MANUAL_TEXT_MAX ? 'text-rose-500' : 'text-muted-foreground'}`}
+              >
+                {text.length}/{MANUAL_TEXT_MAX}
+              </p>
             </div>
             <div>
               <Label htmlFor="manual-image">Imagem (URL, opcional)</Label>
@@ -123,7 +129,7 @@ export default function ManualSendPage() {
                 type="button"
                 className="bg-brand text-white hover:bg-brand/90"
                 disabled={!canSend}
-                onClick={() => send.mutate('now')}
+                onClick={() => send.mutate({ mode: 'now', sentText: text.trim(), sentImage: imageUrl.trim() })}
               >
                 Enviar agora
               </Button>
@@ -131,7 +137,7 @@ export default function ManualSendPage() {
                 type="button"
                 variant="outline"
                 disabled={!canSend}
-                onClick={() => send.mutate('queue')}
+                onClick={() => send.mutate({ mode: 'queue', sentText: text.trim(), sentImage: imageUrl.trim() })}
               >
                 Colocar na fila
               </Button>
