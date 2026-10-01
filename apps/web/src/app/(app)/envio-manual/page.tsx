@@ -159,7 +159,7 @@ export default function ManualSendPage() {
               <div className="flex items-center gap-2">
                 <Input
                   id="manual-image"
-                  aria-label="Imagem (URL, opcional)"
+                  aria-label="Imagem (URL ou arquivo, opcional)"
                   value={imageUrl}
                   onChange={(e) => {
                     setImageUrl(e.target.value);
@@ -170,12 +170,14 @@ export default function ManualSendPage() {
                   placeholder="https://..."
                   className="flex-1"
                 />
-                <label
-                  htmlFor="manual-image-file"
-                  className="inline-flex h-9 cursor-pointer items-center justify-center whitespace-nowrap rounded-md border border-input bg-surface px-3 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
                 >
                   Enviar arquivo
-                </label>
+                </Button>
                 <input
                   ref={fileInputRef}
                   id="manual-image-file"

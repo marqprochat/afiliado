@@ -246,6 +246,8 @@ export interface BatchItem {
   coupon: { id: string; code: string } | null;
   customText: string | null;
   customImageUrl: string | null;
+  hasUploadedImage: boolean;
+  customImageType: string | null;
   sendLogs: BatchItemSendLog[];
 }
 export interface BatchDetail extends Omit<BatchSummary, 'total' | 'sent' | 'errors'> {

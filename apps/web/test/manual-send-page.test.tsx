@@ -62,7 +62,7 @@ describe('página de envio manual', () => {
   it('envia agora com texto, imagem e destino', async () => {
     renderPage();
     fireEvent.change(await screen.findByLabelText('Mensagem'), { target: { value: 'Aviso importante' } });
-    fireEvent.change(screen.getByLabelText('Imagem (URL, opcional)'), {
+    fireEvent.change(screen.getByLabelText('Imagem (URL ou arquivo, opcional)'), {
       target: { value: 'https://img.example/a.jpg' },
     });
     fireEvent.click(await screen.findByLabelText('[GRUPO] Ofertas'));
@@ -195,6 +195,15 @@ describe('página de envio manual', () => {
     });
   });
 
+  it('botão Enviar arquivo abre o seletor de arquivos', async () => {
+    renderPage();
+    const fileInput = screen.getByLabelText(/Enviar arquivo/i, { selector: 'input' });
+    const clickSpy = vi.spyOn(fileInput, 'click');
+    const button = screen.getByRole('button', { name: 'Enviar arquivo' });
+    fireEvent.click(button);
+    expect(clickSpy).toHaveBeenCalled();
+  });
+
   it('botão Remover remove o arquivo selecionado', async () => {
     renderPage();
     const file = new File(['data'], 'foto.jpg', { type: 'image/jpeg' });
@@ -211,7 +220,7 @@ describe('página de envio manual', () => {
 
   it('escolher arquivo limpa URL e digitar URL limpa arquivo', async () => {
     renderPage();
-    const urlInput = await screen.findByLabelText('Imagem (URL, opcional)');
+    const urlInput = await screen.findByLabelText('Imagem (URL ou arquivo, opcional)');
     fireEvent.change(urlInput, { target: { value: 'https://img.example/old.jpg' } });
     expect((urlInput as HTMLInputElement).value).toBe('https://img.example/old.jpg');
 
