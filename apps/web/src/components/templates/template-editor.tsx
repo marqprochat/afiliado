@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -118,9 +119,17 @@ export function TemplateEditor({
           ))}
         </div>
         {kind === 'PRODUCT' ? (
-          <p className="text-xs text-muted-foreground">
-            Blocos condicionais: {'{#cupom}…{/cupom}'} só aparecem quando a variável tem valor.
-          </p>
+          <div className="space-y-1 text-xs text-muted-foreground">
+            <p>Blocos condicionais: {'{#cupom}…{/cupom}'} só aparecem quando a variável tem valor.</p>
+            <p>
+              {'{cta}'} só é gerado com a IA ativa em{' '}
+              <Link href="/config/ia" className="underline hover:text-foreground">
+                Configurações › IA
+              </Link>
+              ; use {'{#cta}{cta}{/cta}'} para a linha sumir quando não houver CTA. A prévia mostra{' '}
+              {'{cta}'} vazio (a IA só roda no envio).
+            </p>
+          </div>
         ) : (
           <p className="text-xs text-muted-foreground">
             Variáveis de cupom: código, loja, descrição e validade.

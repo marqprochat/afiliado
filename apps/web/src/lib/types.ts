@@ -38,6 +38,25 @@ export interface Settings {
   globalRateLimitPerMin: number;
   subIdPattern: string;
 }
+export type AiTone = 'empolgado' | 'divertido' | 'urgente' | 'sofisticado';
+export type AiEmojiLevel = 'poucos' | 'medio' | 'muitos';
+export interface AiSettings {
+  enabled: boolean;
+  baseUrl: string;
+  model: string;
+  hasApiKey: boolean;
+  apiKeyHint: string | null;
+  extraInstructions: string;
+  tone: AiTone;
+  emojiLevel: AiEmojiLevel;
+  maxChars: number;
+  temperature: number;
+}
+export type AiSettingsPatch = Partial<Omit<AiSettings, 'hasApiKey' | 'apiKeyHint'>> & { apiKey?: string };
+export interface AiTestResult {
+  cta: string;
+  latencyMs: number;
+}
 export interface WaSession {
   id: string;
   label: string;

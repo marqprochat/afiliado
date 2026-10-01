@@ -73,3 +73,24 @@ describe('TemplateEditor — cupom', () => {
     expect(onSave).toHaveBeenCalledWith({ name: 'C', body: '{codigo}', isDefault: false, kind: 'COUPON' });
   });
 });
+
+describe('TemplateEditor — {cta}', () => {
+  it('lista {cta} e explica que depende da IA em Configurações > IA (produto)', () => {
+    render(<TemplateEditor onSave={vi.fn()} preview={async () => ''} />);
+    expect(screen.getByRole('button', { name: '{cta}' })).toBeTruthy();
+    const link = screen.getByRole('link', { name: /configurações › ia/i });
+    expect(link.getAttribute('href')).toBe('/config/ia');
+    expect(screen.getByText(/só é gerado com a ia ativa/i)).toBeTruthy();
+  });
+  it('não mostra a dica no template de cupom', () => {
+    render(
+      <TemplateEditor
+        initial={{ id: 't', name: 'C', body: '{codigo}', isDefault: false, kind: 'COUPON' }}
+        kind="COUPON"
+        preview={async () => ''}
+        onSave={() => {}}
+      />,
+    );
+    expect(screen.queryByText(/só é gerado com a ia ativa/i)).toBeNull();
+  });
+});

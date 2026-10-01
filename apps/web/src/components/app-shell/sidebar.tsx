@@ -21,6 +21,7 @@ import {
   User,
   Users,
   UsersRound,
+  WandSparkles,
   Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -46,6 +47,7 @@ const CONFIG = [
   { href: '/config/cupons', label: 'Central de Cupons', icon: Ticket },
   { href: '/marketplaces', label: 'Marketplaces', icon: Store },
   { href: '/config/extensao', label: 'Extensão Chrome', icon: Sparkles },
+  { href: '/config/ia', label: 'IA (CTA)', icon: WandSparkles },
   { href: '/config/conta', label: 'Minha Conta', icon: User },
 ];
 

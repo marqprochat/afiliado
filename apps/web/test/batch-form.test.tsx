@@ -1,6 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BatchForm } from '@/components/queue/batch-form';
+
+vi.mock('@/lib/api', () => ({ apiFetch: vi.fn(async () => []) }));
+
+function renderWithClient(ui: React.ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 const settings = {
   window: { startTime: '00:00', endTime: '23:59', timezone: 'America/Sao_Paulo', enabled: true },
@@ -61,7 +69,7 @@ const templates = [{ id: 't1', name: 'Padrão', body: '{link}', isDefault: true 
 describe('BatchForm', () => {
   it('cria lote com grupos marcados e mostra previsão apenas para grupos com admin', () => {
     const onCreate = vi.fn();
-    render(
+    renderWithClient(
       <BatchForm
         sessions={sessions}
         groups={groups}
@@ -92,7 +100,7 @@ describe('BatchForm', () => {
     );
   });
   it('mostra mensagem informativa quando nenhum grupo possui permissão de admin', () => {
-    render(
+    renderWithClient(
       <BatchForm
         sessions={sessions}
         groups={[
@@ -116,7 +124,7 @@ describe('BatchForm', () => {
     ).toBeInTheDocument();
   });
   it('desabilita criar sem grupos ou sem itens', () => {
-    render(
+    renderWithClient(
       <BatchForm
         sessions={sessions}
         groups={groups}

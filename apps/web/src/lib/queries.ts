@@ -15,6 +15,7 @@ import type {
   MirrorStats,
   Overview,
   QueueResponse,
+  AiSettings,
   Settings,
   Template,
   TelegramBot,
@@ -38,6 +39,8 @@ export const useOverview = () =>
   });
 export const useSettings = () =>
   useQuery({ queryKey: ['settings'], queryFn: () => apiFetch<Settings>('/settings') });
+export const useAiSettings = () =>
+  useQuery({ queryKey: ['settings', 'ai'], queryFn: () => apiFetch<AiSettings>('/settings/ai') });
 export const useSessions = () =>
   useQuery({ queryKey: ['wa', 'sessions'], queryFn: () => apiFetch<WaSession[]>('/wa/sessions') });
 export const useGroups = (sessionId: string | null) =>
