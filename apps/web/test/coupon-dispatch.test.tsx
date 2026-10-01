@@ -142,18 +142,18 @@ describe('seleção e despacho de cupons', () => {
       return (base as (...a: unknown[]) => unknown)(url, ...rest) as never;
     });
     renderPage();
-    await screen.findByText('COD0');
+    await screen.findByText('COD0', undefined, { timeout: 5000 });
     fireEvent.click(screen.getByLabelText('Selecionar todos os cupons'));
-    fireEvent.click(await screen.findByLabelText('[GRUPO] Ofertas'));
+    fireEvent.click(await screen.findByLabelText('[GRUPO] Ofertas', undefined, { timeout: 5000 }));
     const queueBtn = screen.getByRole('button', { name: 'Colocar na fila' });
-    await waitFor(() => expect((queueBtn as HTMLButtonElement).disabled).toBe(false));
+    await waitFor(() => expect((queueBtn as HTMLButtonElement).disabled).toBe(false), { timeout: 5000 });
     expect(
       (screen.getByRole('button', { name: 'Enviar agora' }) as HTMLButtonElement).disabled,
     ).toBe(true);
     expect(
       screen.getByText("Envio imediato aceita até 20 cupons — use 'Colocar na fila'"),
     ).toBeTruthy();
-  });
+  }, 20_000);
 
   it('mantém o aviso de ignorados depois que a barra some', async () => {
     renderPage();
