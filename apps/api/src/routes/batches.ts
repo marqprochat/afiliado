@@ -12,6 +12,7 @@ import {
 import { requireAuth } from '../plugins/auth';
 import { getOperatingWindow, toCoreWindow } from '../lib/settings';
 import { enqueueBatchItems, removePendingJobs, removeStaleJobs } from '../lib/batches';
+import { assertDispatchTargets } from '../lib/dispatch';
 import { toApiProduct } from '../lib/products';
 
 const idParam = z.object({ id: z.string().min(1) });
@@ -41,30 +42,7 @@ async function assertTargets(
     templateId?: string | undefined;
   },
 ) {
-  if (t.groupJids) {
-    const groups = await req.db.waGroup.findMany({
-      where: { sessionId, jid: { in: t.groupJids } },
-      select: { jid: true },
-    });
-    const known = new Set(groups.map((g) => g.jid));
-    const unknown = t.groupJids.filter((j) => !known.has(j));
-    if (unknown.length) throw ApiError.validation(`Grupos desconhecidos: ${unknown.join(', ')}`);
-  }
-  if (t.telegramChatIds?.length) {
-    const chats = await req.db.telegramChat.findMany({
-      where: { chatId: { in: t.telegramChatIds } },
-      select: { chatId: true },
-    });
-    const knownChats = new Set(chats.map((c) => c.chatId));
-    const unknownChats = t.telegramChatIds.filter((c) => !knownChats.has(c));
-    if (unknownChats.length) {
-      throw ApiError.validation(`Chats do Telegram desconhecidos: ${unknownChats.join(', ')}`);
-    }
-  }
-  if (t.templateId) {
-    const template = await req.db.template.findFirst({ where: { id: t.templateId } });
-    if (!template) throw ApiError.notFound('Template não encontrado');
-  }
+  return assertDispatchTargets(req.db, sessionId, t);
 }
 
 /** Recoloca itens com erro na fila do lote (todos, ou só `onlyItemId`). */

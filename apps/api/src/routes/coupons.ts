@@ -1,21 +1,31 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { decryptJson, type Prisma } from '@afilados/db';
-import { parseCouponsFromText } from '@afilados/core';
+import { isEligibleCoupon, parseCouponsFromText } from '@afilados/core';
 import type { AliexpressCredentials, AwinCredentials } from '@afilados/marketplaces';
 import {
   ApiError,
   couponBulkSchema,
+  couponDispatchSchema,
   couponInputSchema,
   couponListQuerySchema,
   couponParseSchema,
   couponVerifySchema,
   QUEUE_COUPON_SYNC,
   type CouponSyncJob,
+  type DispatchResult,
+  type DispatchSkipped,
 } from '@afilados/shared';
 import { requireAuth } from '../plugins/auth';
 import { toApiCoupon, toApiCouponCheck } from '../lib/coupons';
 import { getQueue, getQueueEvents } from '../lib/redis';
+import { getOperatingWindow, toCoreWindow } from '../lib/settings';
+import {
+  assertDispatchTargets,
+  createDispatchBatch,
+  dispatchBatchName,
+  requireConnectedSession,
+} from '../lib/dispatch';
 
 const idParam = z.object({ id: z.string().min(1) });
 
@@ -257,6 +267,65 @@ export async function couponsRoutes(app: FastifyInstance) {
     } catch {
       return { queued: true };
     }
+  });
+
+  app.post('/coupons/dispatch', async (req, reply) => {
+    const body = couponDispatchSchema.parse(req.body);
+    const session = await requireConnectedSession(req.db, body.sessionId);
+    await assertDispatchTargets(req.db, session.id, body);
+    const template = await req.db.template.findFirst({ where: { id: body.templateId } });
+    if (!template) throw ApiError.notFound('Template não encontrado');
+    if (template.kind !== 'COUPON') throw ApiError.validation('Use um template do tipo cupom');
+
+    const ids = [...new Set(body.couponIds)];
+    const found = await req.db.coupon.findMany({ where: { id: { in: ids } } });
+    const byId = new Map(found.map((c) => [c.id, c]));
+    const eligible: string[] = [];
+    const skipped: DispatchSkipped[] = [];
+    for (const id of ids) {
+      const c = byId.get(id);
+      if (!c) {
+        skipped.push({ id, code: null, reason: 'not-found' });
+        continue;
+      }
+      const elig = isEligibleCoupon({
+        code: c.code,
+        status: c.status,
+        expiresAt: c.expiresAt?.toISOString() ?? null,
+      });
+      if (elig.ok) eligible.push(id);
+      else skipped.push({ id, code: c.code, reason: elig.reason });
+    }
+    if (eligible.length === 0) {
+      const why = skipped.map((s) => `${s.code ?? s.id} (${s.reason})`).join(', ');
+      throw new ApiError('VALIDATION', `Nenhum cupom elegível para envio: ${why}`, 422);
+    }
+
+    const window = toCoreWindow(await getOperatingWindow(req.db, req.tenantId));
+    const now = new Date();
+    const result = await createDispatchBatch({
+      db: req.db,
+      tenantId: req.tenantId,
+      sessionId: session.id,
+      templateId: template.id,
+      name: dispatchBatchName('Cupons', now, window.timezone),
+      groupJids: body.groupJids,
+      telegramChatIds: body.telegramChatIds,
+      mode: body.mode,
+      intervalMin: body.intervalMin,
+      items: eligible.map((couponId) => ({ couponId })),
+      window,
+      now,
+    });
+    const out: DispatchResult = {
+      batchId: result.batchId,
+      name: result.name,
+      mode: body.mode,
+      itemCount: result.itemCount,
+      firstRunAt: result.firstRunAt.toISOString(),
+      skipped,
+    };
+    return reply.status(201).send(out);
   });
 
   app.post('/coupons/:id/verify', async (req) => {
