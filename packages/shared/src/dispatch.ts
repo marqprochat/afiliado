@@ -66,10 +66,13 @@ export function detectImageSignature(bytes: Uint8Array): ManualImageType | null 
 }
 
 export const MANUAL_IMAGE_MAX_BASE64_LENGTH = Math.ceil((MANUAL_IMAGE_MAX_BYTES * 4) / 3) + 500;
+/** Folga para quebras de linha (CRLF a cada 76 chars ~ 3%) antes de decodificar. */
+const MANUAL_IMAGE_MAX_RAW_LENGTH = Math.ceil(MANUAL_IMAGE_MAX_BASE64_LENGTH * 1.05);
 
 export function decodeBase64(base64: string): Uint8Array {
-  const clean = base64.replace(/^data:image\/[a-zA-Z]+;base64,/, '').trim();
-  if (!clean || !/^[A-Za-z0-9+/=\s]*$/.test(clean) || clean.length % 4 === 1) {
+  // Remove espaços/quebras de linha (base64 em linhas de 76 chars) antes de validar o comprimento.
+  const clean = base64.replace(/^data:image\/[a-zA-Z]+;base64,/, '').replace(/\s+/g, '');
+  if (!clean || !/^[A-Za-z0-9+/=]*$/.test(clean) || clean.length % 4 === 1) {
     throw new Error('Base64 inválido');
   }
   if (typeof Buffer !== 'undefined') {
@@ -96,7 +99,7 @@ export const manualSendSchema = z
     imageType: z.enum(MANUAL_IMAGE_TYPES).optional(),
     ...dispatchTargets,
   })
-  .superRefine((v, ctx) => {
+  .transform((v, ctx) => {
     const hasUrl = Boolean(v.imageUrl);
     const hasData = Boolean(v.imageData);
     const hasType = Boolean(v.imageType);
@@ -107,7 +110,7 @@ export const manualSendSchema = z
         path: ['imageData'],
         message: 'Informe uma URL ou envie um arquivo, não ambos',
       });
-      return;
+      return z.NEVER;
     }
 
     if (hasData && !hasType) {
@@ -116,7 +119,7 @@ export const manualSendSchema = z
         path: ['imageType'],
         message: 'Tipo de imagem obrigatório ao enviar arquivo',
       });
-      return;
+      return z.NEVER;
     }
 
     if (hasType && !hasData) {
@@ -125,28 +128,29 @@ export const manualSendSchema = z
         path: ['imageData'],
         message: 'Dados da imagem obrigatórios ao informar tipo',
       });
-      return;
+      return z.NEVER;
     }
 
     if (hasData && hasType) {
       const raw = v.imageData!;
-      if (raw.length > MANUAL_IMAGE_MAX_BASE64_LENGTH) {
+      if (raw.length > MANUAL_IMAGE_MAX_RAW_LENGTH) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['imageData'],
           message: 'A imagem deve ter no máximo 5 MB',
         });
-        return;
+        return z.NEVER;
       }
+      let bytes: Uint8Array;
       try {
-        const bytes = decodeBase64(raw);
+        bytes = decodeBase64(raw);
         if (bytes.length > MANUAL_IMAGE_MAX_BYTES) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ['imageData'],
             message: 'A imagem deve ter no máximo 5 MB',
           });
-          return;
+          return z.NEVER;
         }
         const detected = detectImageSignature(bytes);
         if (!detected || detected !== v.imageType) {
@@ -155,15 +159,19 @@ export const manualSendSchema = z
             path: ['imageData'],
             message: 'Arquivo de imagem corrompido ou formato incompatível',
           });
+          return z.NEVER;
         }
+        return { ...v, imageBytes: bytes };
       } catch {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['imageData'],
           message: 'Base64 de imagem inválido',
         });
+        return z.NEVER;
       }
     }
+    return { ...v, imageBytes: undefined as Uint8Array | undefined };
   });
 export type ManualSendBody = z.infer<typeof manualSendSchema>;
 
