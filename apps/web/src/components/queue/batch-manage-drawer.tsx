@@ -124,6 +124,12 @@ export function BatchManageDrawer({
   );
 }
 
+/** Primeiros 60 caracteres da mensagem livre (texto puro; o React escapa na renderização). */
+function customTextPreview(text: string): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length > 60 ? `${flat.slice(0, 60)}…` : flat;
+}
+
 function itemsSignature(b: BatchDetail) {
   return b.items.map((i) => `${i.id}:${i.order}:${i.status}`).join('|');
 }
@@ -267,7 +273,12 @@ function ItemRow({
   children?: React.ReactNode;
 }) {
   const title =
-    item.product?.title ?? (item.coupon ? `Cupom ${item.coupon.code}` : 'Item removido');
+    item.product?.title ??
+    (item.coupon
+      ? `Cupom ${item.coupon.code}`
+      : item.customText
+        ? `Mensagem: ${customTextPreview(item.customText)}`
+        : 'Item removido');
   const img = item.product?.images[0];
   const sent = item.sendLogs.filter((l) => l.status === 'SENT').length;
   const failed = item.sendLogs.length - sent;
