@@ -212,6 +212,7 @@ export interface Template {
   name: string;
   body: string;
   isDefault: boolean;
+  kind?: 'PRODUCT' | 'COUPON';
 }
 export interface BatchSummary {
   id: string;
