@@ -103,7 +103,7 @@ describe('seleção e despacho de cupons', () => {
 
   async function sendNowWith(firstRunAt: string) {
     const base = apiFetchMock.getMockImplementation()!;
-    apiFetchMock.mockImplementation(async (url: string, ...rest: never[]) => {
+    apiFetchMock.mockImplementation(async (url: string, ...rest: unknown[]) => {
       if (url === '/coupons/dispatch') {
         return { batchId: 'b1', name: 'Cupons 30/09 14:00', mode: 'now', itemCount: 1, firstRunAt, skipped: [] } as never;
       }

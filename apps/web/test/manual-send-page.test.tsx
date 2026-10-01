@@ -88,7 +88,7 @@ describe('página de envio manual', () => {
 
   it('"Enviar agora" fora da janela mostra o horário reagendado', async () => {
     const base = apiFetchMock.getMockImplementation()!;
-    apiFetchMock.mockImplementation(async (url: string, ...rest: never[]) => {
+    apiFetchMock.mockImplementation(async (url: string, ...rest: unknown[]) => {
       if (url === '/manual-send') {
         return { batchId: 'b1', name: 'Envio manual', mode: 'now', itemCount: 1, firstRunAt: new Date(Date.now() + 3 * 3600_000).toISOString(), skipped: [] } as never;
       }
