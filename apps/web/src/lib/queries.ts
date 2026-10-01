@@ -87,7 +87,9 @@ export const useTemplates = (kind?: 'PRODUCT' | 'COUPON') =>
   useQuery({
     queryKey: ['templates'],
     queryFn: () => apiFetch<Template[]>('/templates'),
-    select: kind ? (all: Template[]) => all.filter((t) => (t.kind ?? 'PRODUCT') === kind) : undefined,
+    select: kind
+      ? (all: Template[]) => all.filter((t) => (t.kind ?? 'PRODUCT') === kind)
+      : undefined,
   });
 export const useBatches = () =>
   useQuery({

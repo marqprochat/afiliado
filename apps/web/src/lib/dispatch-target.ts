@@ -52,21 +52,30 @@ export function saveDispatchTarget(scope: string, target: DispatchTarget) {
 export function useDispatchTarget(scope: string) {
   const [target, setTarget] = useState<DispatchTarget>(EMPTY_TARGET);
   const ref = useRef(target);
+  const loadedRef = useRef(false);
+
+  // Efeitos de filhos rodam antes dos do pai: `update` pode ser chamado antes do load.
+  const ensureLoaded = useCallback(() => {
+    if (loadedRef.current) return;
+    ref.current = { ...ref.current, ...loadDispatchTarget(scope) };
+    loadedRef.current = true;
+    setTarget(ref.current);
+  }, [scope]);
 
   useEffect(() => {
-    const next = { ...ref.current, ...loadDispatchTarget(scope) };
-    ref.current = next;
-    setTarget(next);
-  }, [scope]);
+    loadedRef.current = false;
+    ensureLoaded();
+  }, [ensureLoaded]);
 
   const update = useCallback(
     (patch: Partial<DispatchTarget>) => {
+      ensureLoaded();
       const next = { ...ref.current, ...patch };
       ref.current = next;
       setTarget(next);
       saveDispatchTarget(scope, next);
     },
-    [scope],
+    [scope, ensureLoaded],
   );
 
   return { target, update };

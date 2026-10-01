@@ -78,7 +78,7 @@ export function DispatchTargetPicker({
           >
             {(sessions ?? []).map((s) => (
               <option key={s.id} value={s.id} disabled={s.status !== 'CONNECTED'}>
-                {s.label} {s.status !== 'CONNECTED' ? `(${s.status})` : ''}
+                {s.status === 'CONNECTED' ? s.label : `${s.label} (${s.status})`}
               </option>
             ))}
           </select>
