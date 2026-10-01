@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { TemplateEditor } from '@/components/templates/template-editor';
 
 describe('TemplateEditor', () => {
@@ -26,6 +26,50 @@ describe('TemplateEditor', () => {
     );
     fireEvent.change(screen.getByLabelText(/nome/i), { target: { value: 'Novo' } });
     fireEvent.click(screen.getByRole('button', { name: /salvar/i }));
-    expect(onSave).toHaveBeenCalledWith({ name: 'Novo', body: '{link}', isDefault: false });
+    expect(onSave).toHaveBeenCalledWith({ name: 'Novo', body: '{link}', isDefault: false, kind: 'PRODUCT' });
+  });
+});
+
+describe('TemplateEditor — cupom', () => {
+  it('mostra as variáveis de cupom e não as de produto', () => {
+    render(
+      <TemplateEditor
+        initial={{ id: 't', name: 'C', body: '{codigo}', isDefault: false, kind: 'COUPON' }}
+        kind="COUPON"
+        preview={async () => ''}
+        onSave={() => {}}
+      />,
+    );
+    expect(screen.getByRole('button', { name: '{codigo}' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: '{titulo}' })).toBeNull();
+  });
+
+  it('prévia usa o cupom escolhido', async () => {
+    const preview = vi.fn(async () => 'PROMO10');
+    render(
+      <TemplateEditor
+        initial={{ id: 't', name: 'C', body: '{codigo}', isDefault: false, kind: 'COUPON' }}
+        kind="COUPON"
+        coupons={[{ id: 'c1', code: 'PROMO10' }]}
+        preview={preview}
+        onSave={() => {}}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Pré-visualizar com o cupom'), { target: { value: 'c1' } });
+    await waitFor(() => expect(preview).toHaveBeenCalledWith('{codigo}', 'c1'));
+  });
+
+  it('onSave inclui o kind', () => {
+    const onSave = vi.fn();
+    render(
+      <TemplateEditor
+        initial={{ id: 't', name: 'C', body: '{codigo}', isDefault: false, kind: 'COUPON' }}
+        kind="COUPON"
+        preview={async () => ''}
+        onSave={onSave}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+    expect(onSave).toHaveBeenCalledWith({ name: 'C', body: '{codigo}', isDefault: false, kind: 'COUPON' });
   });
 });
