@@ -29,6 +29,18 @@ describe('assertPublicHttpUrl', () => {
     'http://localhost/a.jpg',
     'http://foo.localhost/a.jpg',
     'http://db.internal/a.jpg',
+    'http://0x7f.0.0.1/a.jpg',
+    'http://0177.0.0.1/a.jpg',
+    'http://127.1/a.jpg',
+    'http://localhost./a.jpg',
+    'http://[64:ff9b::7f00:1]/a.jpg',
+    'http://[64:ff9b::127.0.0.1]/a.jpg',
+    'http://[2002:7f00:1::]/a.jpg',
+    'http://[::ffff:0:127.0.0.1]/a.jpg',
+    'http://[fec0::1]/a.jpg',
+    'http://198.18.0.1/a.jpg',
+    'http://198.19.255.255/a.jpg',
+    'http://192.0.0.8/a.jpg',
   ])('rejeita %s', async (url) => {
     await expect(assertPublicHttpUrl(url, publicLookup)).rejects.toThrow();
   });

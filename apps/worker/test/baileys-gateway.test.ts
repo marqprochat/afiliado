@@ -98,6 +98,55 @@ describe('BaileysGateway.sendMessage', () => {
   });
 });
 
+describe('BaileysGateway.sendMessage com imagem por URL (anti-SSRF)', () => {
+  const jid = '5511999999999@s.whatsapp.net';
+  const open = async () => {
+    const gw = new BaileysGateway();
+    await gw.connect(session(), { mode: 'qr' });
+    const sock = sockets[sockets.length - 1]!;
+    sock.emit('connection.update', { connection: 'open' });
+    await vi.waitFor(() => expect(gw.isConnected(sessionId)).toBe(true));
+    return { gw, sock };
+  };
+
+  it.each([
+    'http://169.254.169.254/latest/meta-data',
+    'http://127.0.0.1:8080/x.jpg',
+    'http://10.0.0.5/a.jpg',
+    'http://localhost/a.jpg',
+  ])('URL bloqueada %s: nunca vai ao Baileys como image.url; legenda sai como texto', async (url) => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const { gw, sock } = await open();
+    await gw.sendMessage(sessionId, jid, { kind: 'image', imageUrl: url, caption: 'Legenda' } as never);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    for (const call of sock.sendMessage.mock.calls as unknown[][]) {
+      expect(JSON.stringify(call[1])).not.toContain('"url"');
+      expect((call[1] as { image?: unknown }).image).toBeUndefined();
+    }
+    expect(sock.sendMessage).toHaveBeenCalledWith(jid, { text: 'Legenda' });
+    fetchSpy.mockRestore();
+    await gw.stopAll();
+  });
+
+  it('URL pública com download ok usa o buffer', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
+    const { gw, sock } = await open();
+    await gw.sendMessage(sessionId, jid, {
+      kind: 'image',
+      imageUrl: 'http://203.0.113.10/a.jpg',
+      caption: 'Legenda',
+    } as never);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const arg = (sock.sendMessage.mock.calls as unknown[][])[0]![1] as { image: unknown; caption: string };
+    expect(Buffer.isBuffer(arg.image)).toBe(true);
+    expect(arg.caption).toBe('Legenda');
+    fetchSpy.mockRestore();
+    await gw.stopAll();
+  });
+});
+
 describe('BaileysGateway.onMessage', () => {
   const groupJid = '120363405287806336@g.us';
 

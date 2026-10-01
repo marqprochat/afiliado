@@ -17,6 +17,8 @@ function isBlockedIpv4(parts: number[]): boolean {
     (a === 169 && b === 254) ||
     (a === 172 && b >= 16 && b <= 31) ||
     (a === 192 && b === 168) ||
+    (a === 192 && b === 0 && parts[2] === 0) ||
+    (a === 198 && (b === 18 || b === 19)) ||
     a >= 224
   );
 }
@@ -58,6 +60,13 @@ export function isBlockedIp(ip: string): boolean {
   if ((g[0]! & 0xfe00) === 0xfc00) return true; // fc00::/7
   if ((g[0]! & 0xffc0) === 0xfe80) return true; // fe80::/10
   if ((g[0]! & 0xff00) === 0xff00) return true; // multicast
+  if ((g[0]! & 0xffc0) === 0xfec0) return true; // fec0::/10 (site-local, obsoleto)
+  if (g[0] === 0x2002) return true; // 6to4 (2002::/16)
+  if (g[0] === 0x64 && g[1] === 0xff9b && g.slice(2, 6).every((n) => n === 0)) return true; // NAT64
+  // IPv4 traduzido (::ffff:0:a.b.c.d)
+  if (g.slice(0, 4).every((n) => n === 0) && g[4] === 0xffff && g[5] === 0) {
+    return isBlockedIpv4([g[6]! >> 8, g[6]! & 0xff, g[7]! >> 8, g[7]! & 0xff]);
+  }
   // IPv4 mapeado (::ffff:a.b.c.d) ou compatível (::a.b.c.d): vale a regra do IPv4 embutido
   if (g.slice(0, 5).every((n) => n === 0) && (g[5] === 0xffff || g[5] === 0)) {
     return isBlockedIpv4([g[6]! >> 8, g[6]! & 0xff, g[7]! >> 8, g[7]! & 0xff]);

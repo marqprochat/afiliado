@@ -472,19 +472,12 @@ export class BaileysGateway implements WhatsAppGateway {
             caption: msg.caption,
           });
         } else if (!imageBuf && !asPreviewFallback && msg.imageUrl) {
-          try {
-            return await l.sock.sendMessage(jid, {
-              image: { url: msg.imageUrl },
-              caption: msg.caption,
-            });
-          } catch (err) {
-            // Fallback para envio em formato texto caso o download da imagem falhe
-            log.warn(
-              { sessionId, jid, imageUrl: msg.imageUrl, err },
-              'falha ao anexar imagem por URL; enviando em modo texto',
-            );
-            return l.sock.sendMessage(jid, { text: msg.caption });
-          }
+          // Nunca entregar a URL ao Baileys (axios sem checagem de IP e com redirects): SSRF.
+          log.warn(
+            { sessionId, jid, imageUrl: msg.imageUrl },
+            'imagem indisponível ou URL bloqueada; enviando em modo texto',
+          );
+          return l.sock.sendMessage(jid, { text: msg.caption });
         } else {
           return l.sock.sendMessage(jid, { text: msg.caption });
         }
@@ -700,6 +693,7 @@ async function fetchMediaBuffer(url?: string): Promise<Buffer | undefined> {
       });
       const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
       if (!location) break;
+      void res.body?.cancel?.().catch(() => {});
       current = new URL(location, safe).toString();
       res = undefined;
     }
