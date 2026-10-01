@@ -167,10 +167,35 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
       return;
     }
 
+    let imageBuffer: Buffer | undefined;
+    let imageMime = 'image/jpeg';
+    if (job.customImageItemId) {
+      const item = await prisma.batchItem.findUnique({
+        where: { id: job.customImageItemId },
+        include: { batch: { select: { tenantId: true } } },
+      });
+      if (item && item.batch.tenantId === job.tenantId && item.customImageData) {
+        imageBuffer = Buffer.from(item.customImageData);
+        imageMime = item.customImageType ?? 'image/jpeg';
+      } else if (item && item.batch.tenantId !== job.tenantId) {
+        log.warn(
+          { customImageItemId: job.customImageItemId, tenantId: job.tenantId },
+          'item da imagem customizada pertence a outro tenant; upload ignorado',
+        );
+      }
+    }
+
     const html = whatsappToTelegramHtml(text);
     // O Telegram rejeita legenda de foto acima de 1024 caracteres: manda a foto sem legenda e o texto depois.
     let result: { messageId: number };
-    if (imageUrl && html.length > TELEGRAM_CAPTION_MAX) {
+    if (imageBuffer) {
+      if (html.length > TELEGRAM_CAPTION_MAX) {
+        await client.sendPhotoBuffer(job.chatId, imageBuffer, imageMime);
+        result = await client.sendMessage(job.chatId, html);
+      } else {
+        result = await client.sendPhotoBuffer(job.chatId, imageBuffer, imageMime, html);
+      }
+    } else if (imageUrl && html.length > TELEGRAM_CAPTION_MAX) {
       await client.sendPhoto(job.chatId, imageUrl);
       result = await client.sendMessage(job.chatId, html);
     } else if (imageUrl) {

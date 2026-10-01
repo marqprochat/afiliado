@@ -122,9 +122,18 @@ export async function sendOffer(
 
   try {
     if (item.customText) {
-      const message: OutgoingMessage = item.customImageUrl
-        ? { kind: 'image', imageUrl: item.customImageUrl, caption: item.customText }
-        : { kind: 'text', text: item.customText };
+      let message: OutgoingMessage;
+      if (item.customImageData) {
+        message = {
+          kind: 'image',
+          imageBuffer: Buffer.from(item.customImageData),
+          caption: item.customText,
+        };
+      } else if (item.customImageUrl) {
+        message = { kind: 'image', imageUrl: item.customImageUrl, caption: item.customText };
+      } else {
+        message = { kind: 'text', text: item.customText };
+      }
       return sendPlainMessages(
         deps,
         {
@@ -133,6 +142,7 @@ export async function sendOffer(
           couponId: null,
           customText: item.customText,
           customImageUrl: item.customImageUrl,
+          hasCustomImageData: Boolean(item.customImageData),
         },
         batch,
         tenantId,
@@ -315,6 +325,7 @@ async function sendPlainMessages(
     couponId: string | null;
     customText?: string | null;
     customImageUrl?: string | null;
+    hasCustomImageData?: boolean;
   },
   batch: {
     id: string;
@@ -346,6 +357,7 @@ async function sendPlainMessages(
       ...(item.couponId ? { couponId: item.couponId } : {}),
       ...(item.customText ? { customText: item.customText } : {}),
       ...(item.customImageUrl ? { customImageUrl: item.customImageUrl } : {}),
+      ...(item.hasCustomImageData ? { customImageItemId: item.id } : {}),
     }).catch((e) =>
       log.warn({ batchId: batch.id, chatId, err: e }, 'falha ao enfileirar envio no telegram'),
     );
