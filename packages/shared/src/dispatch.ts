@@ -15,11 +15,24 @@ const dispatchTargets = {
   intervalMin: z.number().int().min(1).max(1440).default(10),
 };
 
-export const couponDispatchSchema = z.object({
-  couponIds: z.array(z.string().min(1)).min(1).max(200),
-  templateId: z.string().min(1),
-  ...dispatchTargets,
-});
+/** "Enviar agora" ocupa o worker (um job por vez): acima disso, só pela fila. */
+export const MAX_DISPATCH_NOW = 20;
+
+export const couponDispatchSchema = z
+  .object({
+    couponIds: z.array(z.string().min(1)).min(1).max(200),
+    templateId: z.string().min(1),
+    ...dispatchTargets,
+  })
+  .superRefine((v, ctx) => {
+    if (v.mode === 'now' && v.couponIds.length > MAX_DISPATCH_NOW) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['couponIds'],
+        message: `Envio imediato aceita no máximo ${MAX_DISPATCH_NOW} cupons; use 'Colocar na fila'`,
+      });
+    }
+  });
 export type CouponDispatchBody = z.infer<typeof couponDispatchSchema>;
 
 export const manualSendSchema = z.object({

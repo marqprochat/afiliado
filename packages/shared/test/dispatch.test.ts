@@ -5,6 +5,7 @@ import {
   templatePreviewSchema,
   templateSchema,
   MANUAL_TEXT_MAX,
+  MAX_DISPATCH_NOW,
 } from '../src';
 
 const targets = { sessionId: 's1', groupJids: ['g1@g.us'], mode: 'now' as const };
@@ -37,6 +38,35 @@ describe('couponDispatchSchema', () => {
         mode: 'later',
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('couponDispatchSchema: limite do envio imediato', () => {
+  const ids = (n: number) => Array.from({ length: n }, (_, i) => `c${i}`);
+  it('MAX_DISPATCH_NOW é 20', () => {
+    expect(MAX_DISPATCH_NOW).toBe(20);
+  });
+  it('mode now aceita até 20 cupons e rejeita 21 com mensagem em pt-BR', () => {
+    expect(
+      couponDispatchSchema.safeParse({ couponIds: ids(20), templateId: 't1', ...targets }).success,
+    ).toBe(true);
+    const r = couponDispatchSchema.safeParse({ couponIds: ids(21), templateId: 't1', ...targets });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0]!.message).toBe(
+        "Envio imediato aceita no máximo 20 cupons; use 'Colocar na fila'",
+      );
+    }
+  });
+  it('mode queue continua aceitando mais de 20', () => {
+    expect(
+      couponDispatchSchema.safeParse({
+        couponIds: ids(50),
+        templateId: 't1',
+        ...targets,
+        mode: 'queue',
+      }).success,
+    ).toBe(true);
   });
 });
 

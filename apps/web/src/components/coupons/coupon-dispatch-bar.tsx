@@ -1,6 +1,6 @@
 'use client';
 import { toast } from 'sonner';
-import type { DispatchMode, DispatchResult } from '@afilados/shared';
+import { MAX_DISPATCH_NOW, type DispatchMode, type DispatchResult } from '@afilados/shared';
 import { Button } from '@/components/ui/button';
 import { DispatchTargetPicker } from '@/components/dispatch/dispatch-target-picker';
 import { apiFetch } from '@/lib/api';
@@ -64,6 +64,8 @@ export function CouponDispatchBar({
   const canSend =
     couponIds.length > 0 && !!target.templateId && !!target.sessionId && target.groupJids.length > 0;
 
+  const tooManyForNow = couponIds.length > MAX_DISPATCH_NOW;
+
   return (
     <div className="sticky bottom-2 z-10 space-y-4 rounded-xl border border-brand/40 bg-card p-4 shadow-lg">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -79,7 +81,7 @@ export function CouponDispatchBar({
         <Button
           type="button"
           className="bg-brand text-white hover:bg-brand/90"
-          disabled={!canSend || dispatch.isPending}
+          disabled={!canSend || tooManyForNow || dispatch.isPending}
           onClick={() => dispatch.mutate('now')}
         >
           Enviar agora
@@ -93,6 +95,11 @@ export function CouponDispatchBar({
           Colocar na fila
         </Button>
       </div>
+      {tooManyForNow && (
+        <p className="text-xs text-muted-foreground">
+          Envio imediato aceita até {MAX_DISPATCH_NOW} cupons — use &apos;Colocar na fila&apos;
+        </p>
+      )}
     </div>
   );
 }

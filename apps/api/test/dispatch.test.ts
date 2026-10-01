@@ -200,6 +200,16 @@ describe('POST /coupons/dispatch', () => {
     expect(batch.estimatedEndAt!.getTime() - start).toBe(2 * 60_000);
   });
 
+  it('400 quando "agora" recebe mais de 20 cupons', async () => {
+    const res = await dispatch({
+      couponIds: Array.from({ length: 21 }, (_, i) => `c${i}`),
+      templateId: couponTemplateId,
+      mode: 'now',
+      ...targets(),
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
   it('422 quando nenhum cupom é elegível', async () => {
     const res = await dispatch({
       couponIds: [expiredCouponId],

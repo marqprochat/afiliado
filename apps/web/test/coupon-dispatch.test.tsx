@@ -130,6 +130,31 @@ describe('seleção e despacho de cupons', () => {
     expect(msg).toContain('primeiro envio às');
   });
 
+  it('acima de 20 cupons "Enviar agora" fica desabilitado e mostra a dica', async () => {
+    const many = Array.from({ length: 21 }, (_, i) => ({
+      ...coupons[0]!,
+      id: `m${i}`,
+      code: `COD${i}`,
+    }));
+    const base = apiFetchMock.getMockImplementation()!;
+    apiFetchMock.mockImplementation(async (url: string, ...rest: unknown[]) => {
+      if (url.startsWith('/coupons') && url !== '/coupons/dispatch') return { coupons: many } as never;
+      return (base as (...a: unknown[]) => unknown)(url, ...rest) as never;
+    });
+    renderPage();
+    await screen.findByText('COD0');
+    fireEvent.click(screen.getByLabelText('Selecionar todos os cupons'));
+    fireEvent.click(await screen.findByLabelText('[GRUPO] Ofertas'));
+    const queueBtn = screen.getByRole('button', { name: 'Colocar na fila' });
+    await waitFor(() => expect((queueBtn as HTMLButtonElement).disabled).toBe(false));
+    expect(
+      (screen.getByRole('button', { name: 'Enviar agora' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      screen.getByText("Envio imediato aceita até 20 cupons — use 'Colocar na fila'"),
+    ).toBeTruthy();
+  });
+
   it('mantém o aviso de ignorados depois que a barra some', async () => {
     renderPage();
     await screen.findByText('PROMO10');
