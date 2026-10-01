@@ -11,7 +11,7 @@ import {
 } from '@afilados/shared';
 import { requireAuth } from '../plugins/auth';
 import { getOperatingWindow, toCoreWindow } from '../lib/settings';
-import { enqueueBatchItems, removePendingJobs, removeStaleJobs } from '../lib/batches';
+import { enqueueBatchItems, removePendingJobs, removeStaleJobs, batchItemPublicSelect, toApiBatchItem } from '../lib/batches';
 import { assertDispatchTargets } from '../lib/dispatch';
 import { toApiProduct } from '../lib/products';
 
@@ -21,7 +21,12 @@ async function findBatch(req: FastifyRequest) {
   const { id } = idParam.parse(req.params);
   const b = await req.db.batch.findFirst({
     where: { id },
-    include: { items: { orderBy: { order: 'asc' } } },
+    include: {
+      items: {
+        orderBy: { order: 'asc' },
+        select: batchItemPublicSelect,
+      },
+    },
   });
   if (!b) throw ApiError.notFound('Lote não encontrado');
   return b;
@@ -159,7 +164,12 @@ export async function batchesRoutes(app: FastifyInstance) {
           create: ordered.map((q, i) => ({ productId: q.productId, order: i, runAt: runAt[i]! })),
         },
       },
-      include: { items: { orderBy: { order: 'asc' } } },
+      include: {
+        items: {
+          orderBy: { order: 'asc' },
+          select: batchItemPublicSelect,
+        },
+      },
     });
     try {
       await enqueueBatchItems(batch.items, req.tenantId, now);
@@ -173,11 +183,7 @@ export async function batchesRoutes(app: FastifyInstance) {
     }
     return reply.status(201).send({
       batch: { ...batch, items: undefined },
-      items: batch.items.map((i) => ({
-        ...i,
-        customImageData: undefined,
-        hasUploadedImage: Boolean(i.customImageData),
-      })),
+      items: batch.items.map(toApiBatchItem),
     });
   });
 
@@ -203,7 +209,8 @@ export async function batchesRoutes(app: FastifyInstance) {
       include: {
         items: {
           orderBy: { order: 'asc' },
-          include: {
+          select: {
+            ...batchItemPublicSelect,
             product: true,
             coupon: true,
             sendLogs: {
@@ -218,9 +225,7 @@ export async function batchesRoutes(app: FastifyInstance) {
     return {
       ...b,
       items: b.items.map((i) => ({
-        ...i,
-        customImageData: undefined,
-        hasUploadedImage: Boolean(i.customImageData),
+        ...toApiBatchItem(i),
         product: i.product ? toApiProduct(i.product) : null,
       })),
     };

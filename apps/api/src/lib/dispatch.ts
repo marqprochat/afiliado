@@ -6,7 +6,7 @@ import {
   type OperatingWindow,
 } from '@afilados/core';
 import { ApiError, type DispatchMode } from '@afilados/shared';
-import { enqueueBatchItems } from './batches';
+import { batchItemPublicSelect, enqueueBatchItems } from './batches';
 
 export interface DispatchTargetsInput {
   groupJids?: string[] | undefined;
@@ -146,7 +146,12 @@ export async function createDispatchBatch(
         })),
       },
     },
-    include: { items: { orderBy: { order: 'asc' } } },
+      include: {
+        items: {
+          orderBy: { order: 'asc' },
+          select: batchItemPublicSelect,
+        },
+      },
   });
 
   try {

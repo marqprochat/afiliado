@@ -327,6 +327,91 @@ describe('POST /manual-send', () => {
     expect(getBody.items[0].hasUploadedImage).toBe(true);
   });
 
+  it('isolamento de tenant: outro tenant recebe 404 ao buscar lote com imagem', async () => {
+    const validJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
+    const res = await manual({
+      text: 'Exclusivo do tenant t',
+      imageData: validJpeg.toString('base64'),
+      imageType: 'image/jpeg',
+      mode: 'now',
+      ...targets(),
+    });
+    expect(res.statusCode).toBe(201);
+    const { batchId } = res.json();
+
+    const otherCookie = await loginCookie(app, other.email, other.password);
+    const getRes = await app.inject({
+      method: 'GET',
+      url: `/api/v1/batches/${batchId}`,
+      headers: { cookie: otherCookie },
+    });
+    expect(getRes.statusCode).toBe(404);
+  });
+
+  it('400 quando a assinatura mágica não bate com a declaração ou o arquivo decodificado excede 5 MB', async () => {
+    // Assinatura falsificada: texto simples fingindo ser image/png
+    const fakePng = Buffer.from('nao sou png nem nada');
+    const fakeRes = await manual({
+      text: 'Fake image',
+      imageData: fakePng.toString('base64'),
+      imageType: 'image/png',
+      mode: 'now',
+      ...targets(),
+    });
+    expect(fakeRes.statusCode).toBe(400);
+
+    // Decodificado > 5 MB (5 * 1024 * 1024 + 10 bytes)
+    const header = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
+    const oversized = Buffer.alloc(5 * 1024 * 1024 + 10);
+    header.copy(oversized, 0);
+    const overRes = await manual({
+      text: 'Arquivo gigante',
+      imageData: oversized.toString('base64'),
+      imageType: 'image/jpeg',
+      mode: 'now',
+      ...targets(),
+    });
+    expect(overRes.statusCode).toBe(400);
+  });
+
+  it('aceita JPEG válido de ~3 MB (base64 ~4 MB, acima do limite padrão de 1 MB do Fastify)', async () => {
+    const header = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
+    const threeMbJpeg = Buffer.alloc(3 * 1024 * 1024);
+    header.copy(threeMbJpeg, 0);
+    const res = await manual({
+      text: 'Foto de 3 MB',
+      imageData: threeMbJpeg.toString('base64'),
+      imageType: 'image/jpeg',
+      mode: 'now',
+      ...targets(),
+    });
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    const batch = await prisma.batch.findUniqueOrThrow({
+      where: { id: body.batchId },
+      include: { items: true },
+    });
+    expect(batch.items[0]!.customImageData?.length).toBe(3 * 1024 * 1024);
+  });
+
+  it('413 quando o payload excede 8 MB', async () => {
+    const hugePayload = 'A'.repeat(8 * 1024 * 1024 + 100);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/manual-send',
+      headers: { cookie, 'content-type': 'application/json' },
+      payload: JSON.stringify({
+        text: 'Gigante',
+        imageData: hugePayload,
+        imageType: 'image/jpeg',
+        mode: 'now',
+        ...targets(),
+      }),
+    });
+    expect(res.statusCode).toBe(413);
+    expect(res.json().error.code).toBe('PAYLOAD_TOO_LARGE');
+  });
+
   it('400 com texto vazio e com sessão desconectada', async () => {
     expect((await manual({ text: '   ', mode: 'now', ...targets() })).statusCode).toBe(400);
     expect(

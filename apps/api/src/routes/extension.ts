@@ -22,10 +22,10 @@ import {
   getTagAdapter,
   loadAliexpressCredentials,
   loadShopeeCredentials,
+  loadTagCredentials,
   upsertMarketplaceCredentials,
 } from '../lib/marketplaces';
-import { loadFetchCredentials } from '../lib/ml-api';
-import { insertBatchItemNext } from '../lib/batches';
+import { batchItemPublicSelect, insertBatchItemNext } from '../lib/batches';
 import { getOperatingWindow, toCoreWindow } from '../lib/settings';
 
 async function authenticateExtension(
@@ -134,7 +134,7 @@ export async function extensionRoutes(app: FastifyInstance) {
     const targetBatch = body.batchId
       ? await tenantDb.batch.findFirst({
           where: { id: body.batchId },
-          include: { items: { orderBy: { order: 'asc' } } },
+          include: { items: { select: batchItemPublicSelect, orderBy: { order: 'asc' } } },
         })
       : null;
     if (body.batchId) {
@@ -173,7 +173,7 @@ export async function extensionRoutes(app: FastifyInstance) {
         const creds = await loadAliexpressCredentials(tenantDb);
         list = await getAliexpressAdapter().fetchByUrls(creds, [body.url]);
       } else {
-        const creds = await loadFetchCredentials(tenantDb, body.marketplaceKind);
+        const creds = await loadTagCredentials(tenantDb, body.marketplaceKind);
         list = await getTagAdapter(body.marketplaceKind).fetchByUrls(creds, [body.url]);
       }
       const first = list[0];
