@@ -1,5 +1,5 @@
 import type { Batch, BatchItem, TenantClient } from '@afilados/db';
-import { scheduleBatch, type OperatingWindow } from '@afilados/core';
+import { scheduleBatch, type CouponData, type OperatingWindow } from '@afilados/core';
 import { ApiError, QUEUE_SEND_OFFER, type ProductData, type SendOfferJob } from '@afilados/shared';
 import { getQueue } from './redis';
 
@@ -17,6 +17,13 @@ export const SAMPLE_PRODUCT: ProductData = {
   couponCode: 'AFILIADO10',
   originalUrl: 'https://shopee.com.br/product/1/1',
   raw: {},
+};
+
+export const SAMPLE_COUPON: CouponData = {
+  store: 'SHOPEE',
+  code: 'AFILIADO10',
+  description: '10% de desconto em compras acima de R$ 50',
+  expiresAt: null,
 };
 
 export async function enqueueBatchItems(
