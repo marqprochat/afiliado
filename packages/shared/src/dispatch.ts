@@ -28,7 +28,7 @@ export const manualSendSchema = z.object({
     .string()
     .url()
     .max(2000)
-    .refine((u) => /^https?:$/.test(new URL(u).protocol), 'A imagem deve ser uma URL http(s)')
+    .refine((u) => /^https?:\/\//i.test(u), 'A imagem deve ser uma URL http(s)')
     .optional(),
   ...dispatchTargets,
 });
