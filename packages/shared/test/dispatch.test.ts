@@ -57,6 +57,19 @@ describe('manualSendSchema', () => {
   });
 });
 
+describe('manualSendSchema.imageUrl (só http/https)', () => {
+  const parse = (imageUrl: string) => manualSendSchema.safeParse({ text: 'ok', imageUrl, ...targets }).success;
+  it('aceita https e http', () => {
+    expect(parse('https://cdn.example.com/a.jpg')).toBe(true);
+    expect(parse('http://cdn.example.com/a.jpg')).toBe(true);
+  });
+  it('rejeita ftp:, file: e javascript:', () => {
+    expect(parse('ftp://cdn.example.com/a.jpg')).toBe(false);
+    expect(parse('file:///etc/passwd')).toBe(false);
+    expect(parse('javascript:alert(1)')).toBe(false);
+  });
+});
+
 describe('templates com kind', () => {
   it('templateSchema aceita kind opcional', () => {
     expect(templateSchema.parse({ name: 'a', body: 'b' }).kind).toBeUndefined();

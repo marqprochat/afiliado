@@ -24,7 +24,12 @@ export type CouponDispatchBody = z.infer<typeof couponDispatchSchema>;
 
 export const manualSendSchema = z.object({
   text: z.string().trim().min(1).max(MANUAL_TEXT_MAX),
-  imageUrl: z.string().url().max(2000).optional(),
+  imageUrl: z
+    .string()
+    .url()
+    .max(2000)
+    .refine((u) => /^https?:$/.test(new URL(u).protocol), 'A imagem deve ser uma URL http(s)')
+    .optional(),
   ...dispatchTargets,
 });
 export type ManualSendBody = z.infer<typeof manualSendSchema>;
