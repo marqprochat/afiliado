@@ -11,3 +11,4 @@ export * from './eligibility';
 export * from './coupon-parse';
 
 export * from './subid';
+export * from './ai-cta';

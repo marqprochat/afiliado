@@ -75,6 +75,8 @@ export interface SendTelegramJob {
   customImageUrl?: string;
   /** ID do BatchItem com imagem carregada por upload (o job não carrega os bytes). */
   customImageItemId?: string;
+  /** CTA gerado pela IA no send-offer (um por item); vazio/ausente = sem CTA. */
+  cta?: string;
 }
 
 export interface AwinImportJob {
