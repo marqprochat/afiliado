@@ -150,6 +150,9 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
       };
       text = renderTemplate(template.body, pd, { affiliateLink, now: t.toISOString() });
       imageUrl = product.images[0];
+    } else if (job.customText) {
+      text = job.customText;
+      imageUrl = job.customImageUrl;
     } else {
       return;
     }

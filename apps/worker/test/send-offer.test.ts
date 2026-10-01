@@ -323,6 +323,114 @@ describe('sendOffer', () => {
     expect(updated.status).toBe('SENT');
   });
 
+  it('envia mensagem livre (texto) sem produto nem cupom', async () => {
+    const batch = await prisma.batch.create({
+      data: {
+        tenantId,
+        sessionId,
+        templateId,
+        name: 'manual-texto',
+        groupJids: ['g1@g.us'],
+        intervalMin: 1,
+        items: { create: [{ order: 0, runAt: new Date(), customText: '*Aviso* do dia' }] },
+      },
+      include: { items: true },
+    });
+    const itemId = batch.items[0]!.id;
+
+    const r = await sendOffer(deps, itemId);
+    expect(r).toEqual({ outcome: 'sent', groups: 1 });
+    const msg = gateway.sent[0]!.msg;
+    expect(msg).toEqual({ kind: 'text', text: '*Aviso* do dia' });
+    const updated = await prisma.batchItem.findUniqueOrThrow({ where: { id: itemId } });
+    expect(updated.status).toBe('SENT');
+    expect((await prisma.batch.findUniqueOrThrow({ where: { id: batch.id } })).status).toBe(
+      'DONE',
+    );
+  });
+
+  it('mensagem livre com imagem vira imagem com legenda', async () => {
+    const batch = await prisma.batch.create({
+      data: {
+        tenantId,
+        sessionId,
+        templateId,
+        name: 'manual-imagem',
+        groupJids: ['g1@g.us'],
+        intervalMin: 1,
+        items: {
+          create: [
+            {
+              order: 0,
+              runAt: new Date(),
+              customText: 'Legenda',
+              customImageUrl: 'https://img/promo.jpg',
+            },
+          ],
+        },
+      },
+      include: { items: true },
+    });
+    await sendOffer(deps, batch.items[0]!.id);
+    expect(gateway.sent[0]!.msg).toEqual({
+      kind: 'image',
+      imageUrl: 'https://img/promo.jpg',
+      caption: 'Legenda',
+    });
+  });
+
+  it('mensagem livre enfileira o telegram com customText', async () => {
+    const bot = await prisma.telegramBot.create({
+      data: { tenantId, label: 'BotC', encryptedToken: encryptJson({ token: 'x' }), status: 'OK' },
+    });
+    await prisma.telegramChat.create({
+      data: {
+        tenantId,
+        botId: bot.id,
+        chatId: '-100777',
+        title: 'Canal',
+        kind: 'channel',
+        botIsAdmin: true,
+      },
+    });
+    const batch = await prisma.batch.create({
+      data: {
+        tenantId,
+        sessionId,
+        templateId,
+        name: 'manual-telegram',
+        groupJids: ['g1@g.us'],
+        telegramChatIds: ['-100777'],
+        intervalMin: 1,
+        items: {
+          create: [
+            {
+              order: 0,
+              runAt: new Date(),
+              customText: 'Olá Telegram',
+              customImageUrl: 'https://img/t.jpg',
+            },
+          ],
+        },
+      },
+      include: { items: true },
+    });
+    const item = batch.items[0]!;
+    const enqueued: unknown[] = [];
+    await sendOffer({ ...deps, enqueueTelegram: async (job) => void enqueued.push(job) }, item.id);
+    expect(enqueued).toEqual([
+      {
+        jobId: `${item.id}--100777`,
+        tenantId,
+        botId: bot.id,
+        chatId: '-100777',
+        templateId,
+        customText: 'Olá Telegram',
+        customImageUrl: 'https://img/t.jpg',
+      },
+    ]);
+  });
+
   it('gera o link de afiliado da Awin com clickref no envio', async () => {
     await prisma.marketplaceConnection.create({
       data: {
