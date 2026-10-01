@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { prisma, encryptJson } from '@afilados/db';
 import {
   createShopeeAdapter,
@@ -79,13 +79,14 @@ async function makeBatch(
     status?: 'SCHEDULED' | 'PAUSED';
     groups?: string[];
     telegramChatIds?: string[];
+    templateId?: string;
   } = {},
 ) {
   const batch = await prisma.batch.create({
     data: {
       tenantId,
       sessionId,
-      templateId,
+      templateId: overrides.templateId ?? templateId,
       name: 'b',
       groupJids: overrides.groups ?? ['g1@g.us', 'g2@g.us'],
       telegramChatIds: overrides.telegramChatIds ?? [],
@@ -657,4 +658,91 @@ describe('sendOffer', () => {
       customImageItemId: item.id,
     });
   });
+
+  describe('CTA com IA', () => {
+    const ctaStored = () => ({
+      enabled: true,
+      baseUrl: 'https://router.example.com/v1',
+      model: 'combo',
+      encryptedApiKey: encryptJson({ apiKey: 'sk-test-1234' }).toString('base64'),
+    });
+    const setAi = (value: object) =>
+      prisma.setting.upsert({
+        where: { tenantId_key: { tenantId, key: 'ai' } },
+        update: { value },
+        create: { tenantId, key: 'ai', value },
+      });
+    let ctaTemplateId: string;
+    beforeAll(async () => {
+      ctaTemplateId = (
+        await prisma.template.create({
+          data: { tenantId, name: 'cta', body: '{#cta}{cta}{/cta}\n*{titulo}* {preco}' },
+        })
+      ).id;
+    });
+    beforeEach(async () => {
+      await prisma.setting.deleteMany({ where: { tenantId, key: 'ai' } });
+    });
+
+    it('com IA ativa: o CTA entra na legenda e no job do telegram (gerado 1x por item)', async () => {
+      await setAi(ctaStored());
+      const bot = await prisma.telegramBot.create({
+        data: { tenantId, label: 'BotCta', encryptedToken: encryptJson({ token: 'x' }), status: 'OK' },
+      });
+      await prisma.telegramChat.create({
+        data: { tenantId, botId: bot.id, chatId: '-100777', title: 'VIP', kind: 'supergroup', botIsAdmin: true },
+      });
+      const generateCta = vi.fn(async () => 'Nossaaa! Que oportunidade pra comprar esse fone! 🔥');
+      const enqueued: { cta?: string }[] = [];
+      const { item } = await makeBatch({ templateId: ctaTemplateId, telegramChatIds: ['-100777'] });
+      await sendOffer(
+        { ...deps, generateCta: generateCta as never, enqueueTelegram: async (j) => void enqueued.push(j) },
+        item.id,
+      );
+      expect(generateCta).toHaveBeenCalledTimes(1);
+      for (const s of gateway.sent) {
+        expect(s.msg.kind === 'image' && s.msg.caption).toBe(
+          'Nossaaa! Que oportunidade pra comprar esse fone! 🔥\n*Fone* R$ 99,90',
+        );
+      }
+      expect(enqueued[0]?.cta).toBe('Nossaaa! Que oportunidade pra comprar esse fone! 🔥');
+    });
+
+    it('falha da IA: envia sem CTA (sem linha em branco), conclui e não põe cta no job', async () => {
+      await setAi(ctaStored());
+      const generateCta = vi.fn(async () => {
+        throw new Error('boom');
+      });
+      const enqueued: { cta?: string }[] = [];
+      const { batch, item } = await makeBatch({ templateId: ctaTemplateId });
+      const r = await sendOffer(
+        { ...deps, generateCta: generateCta as never, enqueueTelegram: async (j) => void enqueued.push(j) },
+        item.id,
+      );
+      expect(r).toEqual({ outcome: 'sent', groups: 2 });
+      const first = gateway.sent[0]!.msg;
+      expect(first.kind === 'image' && first.caption).toBe('*Fone* R$ 99,90');
+      expect((await prisma.batch.findUniqueOrThrow({ where: { id: batch.id } })).status).toBe('DONE');
+      expect(enqueued.every((j) => j.cta === undefined)).toBe(true);
+    });
+
+    it('template sem {cta}: a IA não é chamada', async () => {
+      await setAi(ctaStored());
+      const generateCta = vi.fn(async () => 'x');
+      const { item } = await makeBatch(); // template padrão do arquivo não tem {cta}
+      await sendOffer({ ...deps, generateCta: generateCta as never }, item.id);
+      expect(generateCta).not.toHaveBeenCalled();
+    });
+
+    it('IA desativada: a IA não é chamada e a mensagem sai sem CTA', async () => {
+      await setAi({ ...ctaStored(), enabled: false });
+      const generateCta = vi.fn(async () => 'x');
+      const { item } = await makeBatch({ templateId: ctaTemplateId });
+      await sendOffer({ ...deps, generateCta: generateCta as never }, item.id);
+      expect(generateCta).not.toHaveBeenCalled();
+      const first = gateway.sent[0]!.msg;
+      expect(first.kind === 'image' && first.caption).toBe('*Fone* R$ 99,90');
+    });
+  });
 });
+

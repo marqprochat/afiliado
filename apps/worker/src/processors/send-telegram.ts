@@ -158,7 +158,11 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
         ...(product.couponCode ? { couponCode: product.couponCode } : {}),
         ...(product.couponValue !== null ? { couponValue: Number(product.couponValue) } : {}),
       };
-      text = renderTemplate(template.body, pd, { affiliateLink, now: t.toISOString() });
+      text = renderTemplate(template.body, pd, {
+        affiliateLink,
+        now: t.toISOString(),
+        ...(job.cta ? { cta: job.cta } : {}),
+      });
       imageUrl = product.images[0];
     } else if (job.customText) {
       text = job.customText;

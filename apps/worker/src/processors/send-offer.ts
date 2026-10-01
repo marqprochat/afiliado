@@ -3,6 +3,7 @@ import { DelayedError } from 'bullmq';
 import pino from 'pino';
 import { prisma, decryptJson } from '@afilados/db';
 import {
+  generateCta,
   generateSubId,
   isEligibleCoupon,
   isWithinOperatingWindow,
@@ -19,6 +20,7 @@ import {
   type ShopeeCredentials,
 } from '@afilados/marketplaces';
 import type { ProductData, SendOfferJob, SendTelegramJob, TagCredentials } from '@afilados/shared';
+import { resolveItemCta } from '../lib/ai-cta';
 import { publishEvent } from '../lib/events';
 import { enqueueSendTelegram } from '../lib/queue-helpers';
 import { getRedis } from '../lib/redis';
@@ -38,6 +40,8 @@ export interface SendOfferDeps {
   bucketFor?: (sessionId: string, ratePerMin: number) => { take(): Promise<number> };
   /** Injetável em testes; por padrão resolve o adapter real (Amazon/ML/Magalu) por tag. */
   getTagAdapter?: typeof getTagAdapter;
+  /** Injetável em testes; por padrão usa o cliente real (packages/core/src/ai-cta.ts). */
+  generateCta?: typeof generateCta;
   enqueueTelegram?: (job: SendTelegramJob & { jobId: string }) => Promise<void>;
 }
 
@@ -266,7 +270,19 @@ export async function sendOffer(
       ...(product.couponCode ? { couponCode: product.couponCode } : {}),
       ...(product.couponValue !== null ? { couponValue: Number(product.couponValue) } : {}),
     };
-    const text = renderTemplate(batch.template.body, pd, { affiliateLink, now: t.toISOString() });
+    const cta = await resolveItemCta({
+      settings,
+      templateBody: batch.template.body,
+      product: pd,
+      batchItemId: item.id,
+      log,
+      ...(deps.generateCta ? { generate: deps.generateCta } : {}),
+    });
+    const text = renderTemplate(batch.template.body, pd, {
+      affiliateLink,
+      now: t.toISOString(),
+      cta,
+    });
     const image = product.images[0];
     const message: OutgoingMessage =
       batch.mediaMode === 'IMAGE' && image
@@ -283,7 +299,7 @@ export async function sendOffer(
     const bucket = bucketFor(batch.sessionId, ratePerMin);
     return sendPlainMessages(
       deps,
-      { id: item.id, productId: product.id, couponId: null },
+      { id: item.id, productId: product.id, couponId: null, cta },
       batch,
       tenantId,
       message,
@@ -326,6 +342,7 @@ async function sendPlainMessages(
     customText?: string | null;
     customImageUrl?: string | null;
     hasCustomImageData?: boolean;
+    cta?: string;
   },
   batch: {
     id: string;
@@ -358,6 +375,7 @@ async function sendPlainMessages(
       ...(item.customText ? { customText: item.customText } : {}),
       ...(item.customImageUrl ? { customImageUrl: item.customImageUrl } : {}),
       ...(item.hasCustomImageData ? { customImageItemId: item.id } : {}),
+      ...(item.cta ? { cta: item.cta } : {}),
     }).catch((e) =>
       log.warn({ batchId: batch.id, chatId, err: e }, 'falha ao enfileirar envio no telegram'),
     );
