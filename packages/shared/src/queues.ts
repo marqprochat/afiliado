@@ -70,6 +70,9 @@ export interface SendTelegramJob {
   templateId: string;
   productId?: string;
   couponId?: string;
+  /** Mensagem livre (envio manual): texto já final. */
+  customText?: string;
+  customImageUrl?: string;
 }
 
 export interface AwinImportJob {

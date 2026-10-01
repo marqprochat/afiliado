@@ -5,6 +5,7 @@ import {
   MIRROR_LOG_STATUSES,
   MIRROR_MODES,
   SHIPPINGS,
+  TEMPLATE_KINDS,
 } from './enums';
 
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'formato HH:mm');
@@ -159,8 +160,13 @@ export const templateSchema = z.object({
   name: z.string().min(1).max(60),
   body: z.string().min(1).max(4000),
   isDefault: z.boolean().optional(),
+  kind: z.enum(TEMPLATE_KINDS).optional(),
 });
-export const templatePreviewSchema = z.object({ body: z.string().min(1).max(4000) });
+export const templatePreviewSchema = z.object({
+  body: z.string().min(1).max(4000),
+  kind: z.enum(TEMPLATE_KINDS).optional(),
+  couponId: z.string().min(1).optional(),
+});
 
 export const batchCreateSchema = z
   .object({
