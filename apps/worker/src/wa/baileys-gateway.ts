@@ -14,6 +14,7 @@ import pino from 'pino';
 import { prisma, type WaSessionStatus } from '@afilados/db';
 import { config } from '../config';
 import { publishEvent } from '../lib/events';
+import { assertPublicHttpUrl } from '../lib/safe-url';
 import { usePostgresAuthState } from './auth-state';
 import type {
   GroupDetails,
@@ -679,16 +680,30 @@ export class BaileysGateway implements WhatsAppGateway {
   }
 }
 
+const MEDIA_MAX_REDIRECTS = 3;
+
+/** Baixa a imagem validando cada salto (anti-SSRF): só http(s) para hosts públicos. */
 async function fetchMediaBuffer(url?: string): Promise<Buffer | undefined> {
   if (!url) return undefined;
   try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-      },
-    });
+    let current = url;
+    let res: Response | undefined;
+    for (let hop = 0; hop <= MEDIA_MAX_REDIRECTS; hop++) {
+      const safe = await assertPublicHttpUrl(current);
+      res = await fetch(safe, {
+        redirect: 'manual',
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        },
+      });
+      const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
+      if (!location) break;
+      current = new URL(location, safe).toString();
+      res = undefined;
+    }
+    if (!res) return undefined;
     if (!res.ok) return undefined;
     const ab = await res.arrayBuffer();
     const rawBuf = Buffer.from(ab);
