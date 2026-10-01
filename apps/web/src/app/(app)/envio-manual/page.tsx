@@ -1,7 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { MANUAL_TEXT_MAX, type DispatchMode, type DispatchResult } from '@afilados/shared';
+import { MANUAL_TEXT_MAX, type DispatchMode, type DispatchResult, type ManualImageType } from '@afilados/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,6 +28,13 @@ export default function ManualSendPage() {
   const { target, update } = useDispatchTarget('manual');
   const [text, setText] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [imageFile, setImageFile] = useState<{
+    name: string;
+    data: string;
+    type: ManualImageType;
+    previewUrl: string;
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [couponTemplateId, setCouponTemplateId] = useState('');
   const { data: couponTemplates } = useTemplates('COUPON');
   const { data: coupons } = useCoupons({ includeExpired: false });
@@ -37,12 +44,27 @@ export default function ManualSendPage() {
   const usable = (coupons ?? []).filter(isSelectableCoupon).slice(0, 30);
 
   const send = useApiMutation(
-    ({ mode, sentText, sentImage }: { mode: DispatchMode; sentText: string; sentImage: string }) =>
+    ({
+      mode,
+      sentText,
+      sentImageUrl,
+      sentImageData,
+      sentImageType,
+    }: {
+      mode: DispatchMode;
+      sentText: string;
+      sentImageUrl?: string;
+      sentImageData?: string;
+      sentImageType?: ManualImageType;
+    }) =>
       apiFetch<DispatchResult>('/manual-send', {
         method: 'POST',
         json: {
           text: sentText,
-          ...(sentImage ? { imageUrl: sentImage } : {}),
+          ...(sentImageUrl ? { imageUrl: sentImageUrl } : {}),
+          ...(sentImageData && sentImageType
+            ? { imageData: sentImageData, imageType: sentImageType }
+            : {}),
           sessionId: target.sessionId,
           groupJids: target.groupJids,
           telegramChatIds: target.telegramChatIds,
@@ -59,7 +81,8 @@ export default function ManualSendPage() {
             : `${res.mode === 'now' ? 'Mensagem reagendada (fora da janela)' : 'Mensagem na fila'} — sai às ${formatRunAt(res.firstRunAt)}`,
         );
         setText((cur) => (cur.trim() === input.sentText ? '' : cur));
-        setImageUrl((cur) => (cur.trim() === input.sentImage ? '' : cur));
+        setImageUrl((cur) => (cur.trim() === (input.sentImageUrl ?? '') ? '' : cur));
+        setImageFile((cur) => (cur && cur.data === input.sentImageData ? null : cur));
       },
     },
   );
@@ -74,6 +97,35 @@ export default function ManualSendPage() {
       onSuccess: (out) => setText((prev) => (prev.trim() ? `${prev}\n\n${out.text}` : out.text)),
     },
   );
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast.error('Formato de imagem inválido. Use JPG, PNG ou WebP.');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('A imagem deve ter no máximo 5 MB.');
+      e.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.split(',')[1] || '';
+      setImageFile({
+        name: file.name,
+        data: base64,
+        type: file.type as ManualImageType,
+        previewUrl: dataUrl,
+      });
+      setImageUrl('');
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }
 
   const canSend =
     !!text.trim() &&
@@ -102,19 +154,78 @@ export default function ManualSendPage() {
                 {text.length}/{MANUAL_TEXT_MAX}
               </p>
             </div>
-            <div>
-              <Label htmlFor="manual-image">Imagem (URL, opcional)</Label>
-              <Input
-                id="manual-image"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="https://..."
-              />
+            <div className="space-y-2">
+              <Label htmlFor="manual-image">Imagem (URL ou arquivo, opcional)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="manual-image"
+                  aria-label="Imagem (URL, opcional)"
+                  value={imageUrl}
+                  onChange={(e) => {
+                    setImageUrl(e.target.value);
+                    if (e.target.value.trim()) {
+                      setImageFile(null);
+                    }
+                  }}
+                  placeholder="https://..."
+                  className="flex-1"
+                />
+                <label
+                  htmlFor="manual-image-file"
+                  className="inline-flex h-9 cursor-pointer items-center justify-center whitespace-nowrap rounded-md border border-input bg-surface px-3 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  Enviar arquivo
+                </label>
+                <input
+                  ref={fileInputRef}
+                  id="manual-image-file"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  aria-label="Enviar arquivo"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </div>
+              {imageFile && (
+                <div className="flex items-center justify-between rounded-md border border-border bg-surface-2 p-2 text-sm">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <img
+                      src={imageFile.previewUrl}
+                      alt="Miniatura"
+                      className="h-10 w-10 rounded object-cover"
+                    />
+                    <span className="truncate text-xs font-medium text-foreground">
+                      {imageFile.name}
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setImageFile(null)}
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Remover
+                  </Button>
+                </div>
+              )}
             </div>
             <div
               className="rounded-2xl bg-[#005c4b] p-4 text-sm text-white shadow"
               data-testid="manual-preview"
             >
+              {(imageFile?.previewUrl || imageUrl) && (
+                <div className="mb-2 max-h-64 overflow-hidden rounded-lg">
+                  <img
+                    src={imageFile?.previewUrl || imageUrl}
+                    alt="Prévia da imagem"
+                    className="max-h-64 w-full rounded-lg object-contain bg-black/20"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
               <div
                 className="whitespace-pre-wrap break-words"
                 dangerouslySetInnerHTML={{ __html: waMarkup(text) }}
@@ -130,7 +241,15 @@ export default function ManualSendPage() {
                 type="button"
                 className="bg-brand text-white hover:bg-brand/90"
                 disabled={!canSend}
-                onClick={() => send.mutate({ mode: 'now', sentText: text.trim(), sentImage: imageUrl.trim() })}
+                onClick={() =>
+                  send.mutate({
+                    mode: 'now',
+                    sentText: text.trim(),
+                    sentImageUrl: imageUrl.trim() || undefined,
+                    sentImageData: imageFile?.data,
+                    sentImageType: imageFile?.type,
+                  })
+                }
               >
                 Enviar agora
               </Button>
@@ -138,7 +257,15 @@ export default function ManualSendPage() {
                 type="button"
                 variant="outline"
                 disabled={!canSend}
-                onClick={() => send.mutate({ mode: 'queue', sentText: text.trim(), sentImage: imageUrl.trim() })}
+                onClick={() =>
+                  send.mutate({
+                    mode: 'queue',
+                    sentText: text.trim(),
+                    sentImageUrl: imageUrl.trim() || undefined,
+                    sentImageData: imageFile?.data,
+                    sentImageType: imageFile?.type,
+                  })
+                }
               >
                 Colocar na fila
               </Button>
