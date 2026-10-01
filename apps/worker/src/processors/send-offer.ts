@@ -333,7 +333,7 @@ async function sendPlainMessages(
 ): Promise<SendOfferResult> {
   for (const chatId of batch.telegramChatIds) {
     const chat = await prisma.telegramChat
-      .findFirst({ where: { chatId }, select: { botId: true } })
+      .findFirst({ where: { tenantId, chatId }, select: { botId: true } })
       .catch(() => null);
     if (!chat) continue;
     await enqueueTelegram({

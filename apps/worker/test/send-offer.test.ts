@@ -224,6 +224,37 @@ describe('sendOffer', () => {
     ]);
   });
 
+  it('chat do telegram de OUTRO tenant não é enfileirado', async () => {
+    const otherTenant = await prisma.tenant.create({ data: { name: 'so-other' } });
+    try {
+      const foreignBot = await prisma.telegramBot.create({
+        data: {
+          tenantId: otherTenant.id,
+          label: 'Alheio',
+          encryptedToken: encryptJson({ token: 'y' }),
+          status: 'OK',
+        },
+      });
+      const chatId = `-100-xtenant-${Date.now()}`;
+      await prisma.telegramChat.create({
+        data: {
+          tenantId: otherTenant.id,
+          botId: foreignBot.id,
+          chatId,
+          title: 'Alheio',
+          kind: 'supergroup',
+          botIsAdmin: true,
+        },
+      });
+      const enqueued: unknown[] = [];
+      const { item } = await makeBatch({ telegramChatIds: [chatId] });
+      await sendOffer({ ...deps, enqueueTelegram: async (job) => void enqueued.push(job) }, item.id);
+      expect(enqueued).toEqual([]);
+    } finally {
+      await prisma.tenant.deleteMany({ where: { id: otherTenant.id } });
+    }
+  });
+
   it('lote pausado → skipped sem enviar', async () => {
     const { item } = await makeBatch({ status: 'PAUSED' });
     expect(await sendOffer(deps, item.id)).toEqual({
