@@ -72,6 +72,8 @@ export interface DispatchItemInput {
   couponId?: string;
   customText?: string;
   customImageUrl?: string;
+  customImageData?: Buffer;
+  customImageType?: string;
 }
 
 export interface CreateDispatchBatchArgs {
@@ -139,6 +141,8 @@ export async function createDispatchBatch(
           couponId: it.couponId ?? null,
           customText: it.customText ?? null,
           customImageUrl: it.customImageUrl ?? null,
+          customImageData: it.customImageData ?? null,
+          customImageType: it.customImageType ?? null,
         })),
       },
     },

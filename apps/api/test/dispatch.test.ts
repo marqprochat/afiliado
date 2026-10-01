@@ -294,6 +294,39 @@ describe('POST /manual-send', () => {
     expect(new Date(res.json().firstRunAt).getTime()).toBeGreaterThan(Date.now() - 10_000);
   });
 
+  it('cria lote com upload de imagem gravando customImageData e customImageType no banco', async () => {
+    const validJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
+    const res = await manual({
+      text: 'Com anexo',
+      imageData: validJpeg.toString('base64'),
+      imageType: 'image/jpeg',
+      mode: 'now',
+      ...targets(),
+    });
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    const batch = await prisma.batch.findUniqueOrThrow({
+      where: { id: body.batchId },
+      include: { items: true },
+    });
+    expect(batch.items[0]!.customText).toBe('Com anexo');
+    expect(batch.items[0]!.customImageUrl).toBeNull();
+    expect(batch.items[0]!.customImageType).toBe('image/jpeg');
+    expect(Buffer.isBuffer(batch.items[0]!.customImageData)).toBe(true);
+    expect(batch.items[0]!.customImageData).toEqual(validJpeg);
+
+    // GET /batches/:id não pode devolver os bytes e deve devolver hasUploadedImage: true
+    const getRes = await app.inject({
+      method: 'GET',
+      url: `/api/v1/batches/${body.batchId}`,
+      headers: { cookie },
+    });
+    expect(getRes.statusCode).toBe(200);
+    const getBody = getRes.json();
+    expect(getBody.items[0].customImageData).toBeUndefined();
+    expect(getBody.items[0].hasUploadedImage).toBe(true);
+  });
+
   it('400 com texto vazio e com sessão desconectada', async () => {
     expect((await manual({ text: '   ', mode: 'now', ...targets() })).statusCode).toBe(400);
     expect(

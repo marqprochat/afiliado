@@ -171,7 +171,14 @@ export async function batchesRoutes(app: FastifyInstance) {
       });
       throw new ApiError('INTERNAL', 'Falha ao enfileirar lote', 500);
     }
-    return reply.status(201).send({ batch: { ...batch, items: undefined }, items: batch.items });
+    return reply.status(201).send({
+      batch: { ...batch, items: undefined },
+      items: batch.items.map((i) => ({
+        ...i,
+        customImageData: undefined,
+        hasUploadedImage: Boolean(i.customImageData),
+      })),
+    });
   });
 
   app.get('/batches', async (req) => {
@@ -210,7 +217,12 @@ export async function batchesRoutes(app: FastifyInstance) {
     if (!b) throw ApiError.notFound('Lote não encontrado');
     return {
       ...b,
-      items: b.items.map((i) => ({ ...i, product: i.product ? toApiProduct(i.product) : null })),
+      items: b.items.map((i) => ({
+        ...i,
+        customImageData: undefined,
+        hasUploadedImage: Boolean(i.customImageData),
+        product: i.product ? toApiProduct(i.product) : null,
+      })),
     };
   });
 
