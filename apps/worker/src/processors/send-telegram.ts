@@ -174,14 +174,29 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
         where: { id: job.customImageItemId },
         include: { batch: { select: { tenantId: true } } },
       });
-      if (item && item.batch.tenantId === job.tenantId && item.customImageData) {
-        imageBuffer = Buffer.from(item.customImageData);
-        imageMime = item.customImageType ?? 'image/jpeg';
-      } else if (item && item.batch.tenantId !== job.tenantId) {
+      if (!item) {
         log.warn(
-          { customImageItemId: job.customImageItemId, tenantId: job.tenantId },
+          { customImageItemId: job.customImageItemId, botId: job.botId, chatId: job.chatId },
+          'item da imagem customizada não encontrado; envio de foto ignorado',
+        );
+      } else if (item.batch.tenantId !== job.tenantId) {
+        log.warn(
+          {
+            customImageItemId: job.customImageItemId,
+            botId: job.botId,
+            chatId: job.chatId,
+            tenantId: job.tenantId,
+          },
           'item da imagem customizada pertence a outro tenant; upload ignorado',
         );
+      } else if (!item.customImageData) {
+        log.warn(
+          { customImageItemId: job.customImageItemId, botId: job.botId, chatId: job.chatId },
+          'item da imagem customizada sem bytes; envio de foto ignorado',
+        );
+      } else {
+        imageBuffer = Buffer.from(item.customImageData);
+        imageMime = item.customImageType ?? 'image/jpeg';
       }
     }
 

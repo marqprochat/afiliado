@@ -240,4 +240,50 @@ describe('sendTelegram com texto livre', () => {
     expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(sendMessage.mock.calls[0]).toEqual(['-100123', expect.stringContaining('Texto sem imagem alheia')]);
   });
+
+  it('customImageItemId inexistente ou sem bytes: envia apenas texto sem quebrar', async () => {
+    sendMessage.mockClear();
+    sendPhoto.mockClear();
+    sendPhotoBuffer.mockClear();
+    await sendTelegram(deps, {
+      tenantId,
+      botId,
+      chatId: '-100123',
+      templateId,
+      customText: 'Item que nao existe',
+      customImageItemId: 'cuid-inexistente',
+    });
+    expect(sendPhotoBuffer).not.toHaveBeenCalled();
+    expect(sendPhoto).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage.mock.calls[0]).toEqual(['-100123', expect.stringContaining('Item que nao existe')]);
+
+    // Item sem bytes
+    const textOnlyBatch = await prisma.batch.create({
+      data: {
+        tenantId,
+        sessionId: (await prisma.waSession.findFirstOrThrow({ where: { tenantId } })).id,
+        templateId,
+        name: 'Batch Text Only',
+        groupJids: ['g1@g.us'],
+        intervalMin: 1,
+        items: {
+          create: [{ order: 0, runAt: new Date(), customText: 'Apenas texto' }],
+        },
+      },
+      include: { items: true },
+    });
+    sendMessage.mockClear();
+    await sendTelegram(deps, {
+      tenantId,
+      botId,
+      chatId: '-100123',
+      templateId,
+      customText: 'Apenas texto',
+      customImageItemId: textOnlyBatch.items[0]!.id,
+    });
+    expect(sendPhotoBuffer).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage.mock.calls[0]).toEqual(['-100123', expect.stringContaining('Apenas texto')]);
+  });
 });
