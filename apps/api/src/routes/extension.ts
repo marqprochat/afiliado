@@ -22,9 +22,9 @@ import {
   getTagAdapter,
   loadAliexpressCredentials,
   loadShopeeCredentials,
-  loadTagCredentials,
   upsertMarketplaceCredentials,
 } from '../lib/marketplaces';
+import { loadFetchCredentials } from '../lib/ml-api';
 import { batchItemPublicSelect, insertBatchItemNext } from '../lib/batches';
 import { getOperatingWindow, toCoreWindow } from '../lib/settings';
 
@@ -173,7 +173,7 @@ export async function extensionRoutes(app: FastifyInstance) {
         const creds = await loadAliexpressCredentials(tenantDb);
         list = await getAliexpressAdapter().fetchByUrls(creds, [body.url]);
       } else {
-        const creds = await loadTagCredentials(tenantDb, body.marketplaceKind);
+        const creds = await loadFetchCredentials(tenantDb, body.marketplaceKind);
         list = await getTagAdapter(body.marketplaceKind).fetchByUrls(creds, [body.url]);
       }
       const first = list[0];

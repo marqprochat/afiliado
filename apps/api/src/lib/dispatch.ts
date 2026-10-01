@@ -146,12 +146,12 @@ export async function createDispatchBatch(
         })),
       },
     },
-      include: {
-        items: {
-          orderBy: { order: 'asc' },
-          select: batchItemPublicSelect,
-        },
+    include: {
+      items: {
+        orderBy: { order: 'asc' },
+        select: batchItemPublicSelect,
       },
+    },
   });
 
   try {
