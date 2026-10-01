@@ -95,4 +95,31 @@ describe('TelegramClient', () => {
     expect(bodies[0]).toMatchObject({ parse_mode: 'HTML' });
     expect(bodies[1]).toMatchObject({ parse_mode: 'HTML' });
   });
+
+  it('sendPhotoBuffer envia FormData multipart com foto, chat_id e legenda opcional', async () => {
+    const f = fakeFetch([
+      { ok: true, result: { message_id: 99 } },
+      { ok: true, result: { message_id: 100 } },
+    ]);
+    const client = new TelegramClient('TOKEN', f as unknown as typeof fetch);
+    const buf = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
+
+    const res1 = await client.sendPhotoBuffer('-100123', buf, 'image/jpeg');
+    expect(res1).toEqual({ messageId: 99 });
+
+    const res2 = await client.sendPhotoBuffer('-100123', buf, 'image/png', '<b>foto</b>');
+    expect(res2).toEqual({ messageId: 100 });
+
+    const calls = f.mock.calls as unknown as [string, RequestInit][];
+    expect(calls[0]![0]).toContain('/sendPhoto');
+    const form1 = calls[0]![1].body as FormData;
+    expect(form1).toBeInstanceOf(FormData);
+    expect(form1.get('chat_id')).toBe('-100123');
+    expect(form1.get('photo')).toBeTruthy();
+
+    const form2 = calls[1]![1].body as FormData;
+    expect(form2.get('chat_id')).toBe('-100123');
+    expect(form2.get('caption')).toBe('<b>foto</b>');
+    expect(form2.get('parse_mode')).toBe('HTML');
+  });
 });
