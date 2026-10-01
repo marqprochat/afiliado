@@ -73,6 +73,8 @@ export interface SendTelegramJob {
   /** Mensagem livre (envio manual): texto já final. */
   customText?: string;
   customImageUrl?: string;
+  /** ID do BatchItem com imagem carregada por upload (o job não carrega os bytes). */
+  customImageItemId?: string;
 }
 
 export interface AwinImportJob {
