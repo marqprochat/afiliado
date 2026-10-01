@@ -39,6 +39,12 @@ export function registerErrorHandler(app: FastifyInstance) {
       }
     }
     const status = (err as { statusCode?: number }).statusCode;
+    const errCode = (err as { code?: string }).code;
+    if (status === 413 || errCode === 'FST_ERR_CTP_BODY_TOO_LARGE') {
+      return reply
+        .status(413)
+        .send({ error: { code: 'PAYLOAD_TOO_LARGE', message: 'Requisição muito grande' } });
+    }
     if (status === 429) {
       return reply
         .status(429)

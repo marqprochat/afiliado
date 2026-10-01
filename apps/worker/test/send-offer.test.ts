@@ -581,4 +581,80 @@ describe('sendOffer', () => {
       expect(msg.caption).toContain('https://s.click.aliexpress.com/e/_converted?sub_id=');
     }
   });
+
+  it('mensagem avulsa com customImageData entrega imageBuffer no WhatsApp e customImageItemId no Telegram', async () => {
+    gateway.sent = [];
+    const sampleBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x12, 0x34]);
+    const bot = await prisma.telegramBot.create({
+      data: {
+        tenantId,
+        label: 'Bot Test',
+        encryptedToken: encryptJson({ token: 't' }),
+        status: 'OK',
+      },
+    });
+    await prisma.telegramChat.create({
+      data: {
+        tenantId,
+        botId: bot.id,
+        chatId: '-100999',
+        title: 'Chat Test',
+        kind: 'supergroup',
+      },
+    });
+    const batch = await prisma.batch.create({
+      data: {
+        tenantId,
+        sessionId,
+        templateId,
+        name: 'b-upload',
+        groupJids: ['g1@g.us'],
+        telegramChatIds: ['-100999'],
+        intervalMin: 1,
+        status: 'SCHEDULED',
+        items: {
+          create: [
+            {
+              order: 0,
+              runAt: new Date(),
+              customText: 'Aviso com anexo',
+              customImageData: sampleBytes,
+              customImageType: 'image/jpeg',
+            },
+          ],
+        },
+      },
+      include: { items: true },
+    });
+    const item = batch.items[0]!;
+
+    const tgJobs: unknown[] = [];
+    const result = await sendOffer(
+      {
+        ...deps,
+        enqueueTelegram: async (job) => {
+          tgJobs.push(job);
+        },
+      },
+      item.id,
+    );
+
+    expect(result.outcome).toBe('sent');
+    expect(gateway.sent.length).toBe(1);
+    const msg = gateway.sent[0]!.msg;
+    expect(msg.kind).toBe('image');
+    if (msg.kind === 'image') {
+      expect(msg.caption).toBe('Aviso com anexo');
+      expect(msg.imageBuffer).toEqual(sampleBytes);
+      expect(msg.imageUrl).toBeUndefined();
+    }
+
+    expect(tgJobs.length).toBe(1);
+    expect(tgJobs[0]).toMatchObject({
+      tenantId,
+      chatId: '-100999',
+      customText: 'Aviso com anexo',
+      customImageItemId: item.id,
+    });
+  });
 });

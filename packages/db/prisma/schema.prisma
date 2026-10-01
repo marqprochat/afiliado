@@ -401,6 +401,8 @@ model BatchItem {
   /// Mensagem avulsa (envio manual): texto já final, sem template.
   customText     String?
   customImageUrl String?
+  customImageData Bytes?
+  customImageType String?
   order     Int
   runAt     DateTime
   status    BatchItemStatus @default(PENDING)

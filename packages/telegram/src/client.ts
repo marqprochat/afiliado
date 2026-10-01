@@ -130,4 +130,33 @@ export class TelegramClient {
     const r = await this.request<{ message_id: number }>('sendPhoto', body);
     return { messageId: r.message_id };
   }
+
+  async sendPhotoBuffer(
+    chatId: string,
+    buffer: Uint8Array | Buffer,
+    mime: string,
+    caption?: string,
+  ): Promise<{ messageId: number }> {
+    const form = new FormData();
+    form.append('chat_id', chatId);
+    const extension = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
+    form.append('photo', new Blob([buffer as unknown as BlobPart], { type: mime }), `photo.${extension}`);
+    if (caption) {
+      form.append('caption', caption);
+      form.append('parse_mode', 'HTML');
+    }
+    const res = await this.fetchImpl(this.url('sendPhoto'), {
+      method: 'POST',
+      body: form,
+    });
+    const json = (await res.json().catch(() => null)) as {
+      ok?: boolean;
+      result?: { message_id: number };
+      description?: string;
+    } | null;
+    if (!json?.ok || !json.result) {
+      throw new TelegramApiError(json?.description ?? `HTTP ${res.status}`);
+    }
+    return { messageId: json.result.message_id };
+  }
 }

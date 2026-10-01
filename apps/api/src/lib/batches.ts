@@ -26,6 +26,32 @@ export const SAMPLE_COUPON: CouponData = {
   expiresAt: null,
 };
 
+/** Select padrão para não carregar customImageData (BYTEA) nas queries comuns de lotes. */
+export const batchItemPublicSelect = {
+  id: true,
+  batchId: true,
+  productId: true,
+  couponId: true,
+  customText: true,
+  customImageUrl: true,
+  customImageType: true,
+  order: true,
+  runAt: true,
+  status: true,
+  error: true,
+} as const;
+
+export function toApiBatchItem<T extends { customImageType?: string | null; customImageData?: unknown }>(
+  item: T,
+) {
+  const { customImageData: _unused, customImageType, ...rest } = item;
+  return {
+    ...rest,
+    customImageType: customImageType ?? null,
+    hasUploadedImage: Boolean(customImageType),
+  };
+}
+
 export async function enqueueBatchItems(
   items: { id: string; runAt: Date }[],
   tenantId: string,
@@ -64,7 +90,9 @@ export interface InsertBatchItemResult {
 export async function insertBatchItemNext(args: {
   db: TenantClient;
   tenantId: string;
-  batch: Batch & { items: BatchItem[] };
+  batch: Batch & {
+    items: Array<Pick<BatchItem, 'id' | 'productId' | 'status' | 'order' | 'runAt'>>;
+  };
   productId: string;
   window: OperatingWindow;
   now?: Date;

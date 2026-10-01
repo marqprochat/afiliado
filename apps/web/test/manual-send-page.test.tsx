@@ -62,7 +62,7 @@ describe('página de envio manual', () => {
   it('envia agora com texto, imagem e destino', async () => {
     renderPage();
     fireEvent.change(await screen.findByLabelText('Mensagem'), { target: { value: 'Aviso importante' } });
-    fireEvent.change(screen.getByLabelText('Imagem (URL, opcional)'), {
+    fireEvent.change(screen.getByLabelText('Imagem (URL ou arquivo, opcional)'), {
       target: { value: 'https://img.example/a.jpg' },
     });
     fireEvent.click(await screen.findByLabelText('[GRUPO] Ofertas'));
@@ -160,6 +160,104 @@ describe('página de envio manual', () => {
         '/manual-send',
         expect.objectContaining({ json: expect.objectContaining({ mode: 'queue' }) }),
       );
+    });
+  });
+
+  it('permite upload de arquivo de imagem, exibe miniatura e prévia, e envia base64', async () => {
+    renderPage();
+    fireEvent.change(await screen.findByLabelText('Mensagem'), { target: { value: 'Mensagem com anexo' } });
+    await selectGroup();
+
+    const file = new File(['fake-png-content'], 'foto.png', { type: 'image/png' });
+    const fileInput = screen.getByLabelText(/Enviar arquivo/i, { selector: 'input' });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByText('foto.png')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Remover' })).toBeTruthy();
+    });
+
+    const nowBtn = screen.getByRole('button', { name: 'Enviar agora' });
+    expect((nowBtn as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(nowBtn);
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/manual-send',
+        expect.objectContaining({
+          json: expect.objectContaining({
+            text: 'Mensagem com anexo',
+            imageType: 'image/png',
+            imageData: expect.any(String),
+          }),
+        }),
+      );
+    });
+  });
+
+  it('botão Enviar arquivo abre o seletor de arquivos', async () => {
+    renderPage();
+    const fileInput = screen.getByLabelText(/Enviar arquivo/i, { selector: 'input' });
+    const clickSpy = vi.spyOn(fileInput, 'click');
+    const button = screen.getByRole('button', { name: 'Enviar arquivo' });
+    fireEvent.click(button);
+    expect(clickSpy).toHaveBeenCalled();
+  });
+
+  it('botão Remover remove o arquivo selecionado', async () => {
+    renderPage();
+    const file = new File(['data'], 'foto.jpg', { type: 'image/jpeg' });
+    const fileInput = screen.getByLabelText(/Enviar arquivo/i, { selector: 'input' });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => expect(screen.getByText('foto.jpg')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Remover' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('foto.jpg')).toBeNull();
+    });
+  });
+
+  it('escolher arquivo limpa URL e digitar URL limpa arquivo', async () => {
+    renderPage();
+    const urlInput = await screen.findByLabelText('Imagem (URL ou arquivo, opcional)');
+    fireEvent.change(urlInput, { target: { value: 'https://img.example/old.jpg' } });
+    expect((urlInput as HTMLInputElement).value).toBe('https://img.example/old.jpg');
+
+    const file = new File(['data'], 'nova.webp', { type: 'image/webp' });
+    const fileInput = screen.getByLabelText(/Enviar arquivo/i, { selector: 'input' });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect((urlInput as HTMLInputElement).value).toBe('');
+      expect(screen.getByText('nova.webp')).toBeTruthy();
+    });
+
+    fireEvent.change(urlInput, { target: { value: 'https://img.example/new.jpg' } });
+    await waitFor(() => {
+      expect(screen.queryByText('nova.webp')).toBeNull();
+    });
+  });
+
+  it('rejeita arquivo com mais de 5 MB e tipo inválido', async () => {
+    renderPage();
+    const bigFile = new File(['x'.repeat(100)], 'gigante.png', { type: 'image/png' });
+    Object.defineProperty(bigFile, 'size', { value: 6 * 1024 * 1024 });
+
+    const fileInput = screen.getByLabelText(/Enviar arquivo/i, { selector: 'input' });
+    fireEvent.change(fileInput, { target: { files: [bigFile] } });
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('5 MB'));
+      expect(screen.queryByText('gigante.png')).toBeNull();
+    });
+
+    const invalidTypeFile = new File(['x'], 'documento.pdf', { type: 'application/pdf' });
+    fireEvent.change(fileInput, { target: { files: [invalidTypeFile] } });
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('inválido'));
+      expect(screen.queryByText('documento.pdf')).toBeNull();
     });
   });
 });

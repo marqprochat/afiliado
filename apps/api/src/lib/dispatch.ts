@@ -6,7 +6,7 @@ import {
   type OperatingWindow,
 } from '@afilados/core';
 import { ApiError, type DispatchMode } from '@afilados/shared';
-import { enqueueBatchItems } from './batches';
+import { batchItemPublicSelect, enqueueBatchItems } from './batches';
 
 export interface DispatchTargetsInput {
   groupJids?: string[] | undefined;
@@ -72,6 +72,8 @@ export interface DispatchItemInput {
   couponId?: string;
   customText?: string;
   customImageUrl?: string;
+  customImageData?: Buffer;
+  customImageType?: string;
 }
 
 export interface CreateDispatchBatchArgs {
@@ -139,10 +141,17 @@ export async function createDispatchBatch(
           couponId: it.couponId ?? null,
           customText: it.customText ?? null,
           customImageUrl: it.customImageUrl ?? null,
+          customImageData: it.customImageData ?? null,
+          customImageType: it.customImageType ?? null,
         })),
       },
     },
-    include: { items: { orderBy: { order: 'asc' } } },
+    include: {
+      items: {
+        orderBy: { order: 'asc' },
+        select: batchItemPublicSelect,
+      },
+    },
   });
 
   try {

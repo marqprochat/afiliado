@@ -12,7 +12,7 @@ import {
 export async function manualSendRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireAuth);
 
-  app.post('/manual-send', async (req, reply) => {
+  app.post('/manual-send', { bodyLimit: 8 * 1024 * 1024 }, async (req, reply) => {
     const body = manualSendSchema.parse(req.body);
     const session = await requireConnectedSession(req.db, body.sessionId);
     await assertDispatchTargets(req.db, session.id, body);
@@ -22,6 +22,10 @@ export async function manualSendRoutes(app: FastifyInstance) {
       (await req.db.template.findFirst({ where: { isDefault: true } })) ??
       (await req.db.template.findFirst({ orderBy: { createdAt: 'asc' } }));
     if (!template) throw ApiError.validation('Cadastre um template antes de enviar');
+
+    const imageBuffer = body.imageBytes
+      ? Buffer.from(body.imageBytes.buffer, body.imageBytes.byteOffset, body.imageBytes.byteLength)
+      : undefined;
 
     const window = toCoreWindow(await getOperatingWindow(req.db, req.tenantId));
     const now = new Date();
@@ -35,7 +39,15 @@ export async function manualSendRoutes(app: FastifyInstance) {
       telegramChatIds: body.telegramChatIds,
       mode: body.mode,
       intervalMin: body.intervalMin,
-      items: [{ customText: body.text, ...(body.imageUrl ? { customImageUrl: body.imageUrl } : {}) }],
+      items: [
+        {
+          customText: body.text,
+          ...(body.imageUrl ? { customImageUrl: body.imageUrl } : {}),
+          ...(imageBuffer && body.imageType
+            ? { customImageData: imageBuffer, customImageType: body.imageType }
+            : {}),
+        },
+      ],
       window,
       ratePerMin: (await getSettings(req.db)).globalRateLimitPerMin,
       now,
