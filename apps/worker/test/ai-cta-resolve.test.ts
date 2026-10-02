@@ -66,4 +66,51 @@ describe('resolveItemCta', () => {
     expect(await resolveItemCta({ ...base, settings: { ai: { ...stored, model: '' } }, generate: generate as never })).toBe('');
     expect(generate).not.toHaveBeenCalled();
   });
+  it('encaminha extraInstructions do Setting para o system prompt da IA (e vazio não adiciona linha extra)', async () => {
+    let capturedBodyWithExtra = '';
+    let capturedBodyWithoutExtra = '';
+
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const bodyStr = String(init?.body ?? '');
+      if (bodyStr.includes('BANANA')) {
+        capturedBodyWithExtra = bodyStr;
+      } else {
+        capturedBodyWithoutExtra = bodyStr;
+      }
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: 'Corre garantir esse fone! 🔥' } }] }),
+        { status: 200 },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      // 1. Com extraInstructions
+      const outWithExtra = await resolveItemCta({
+        ...base,
+        settings: { ai: { ...stored, extraInstructions: 'Sempre termine com BANANA.' } },
+      });
+      expect(outWithExtra).toBe('Corre garantir esse fone! 🔥');
+      expect(capturedBodyWithExtra).not.toBe('');
+      const jsonWith = JSON.parse(capturedBodyWithExtra);
+      const systemWith = jsonWith.messages[0].content as string;
+      expect(systemWith).toContain('Sempre termine com BANANA.');
+      expect(systemWith.trimEnd().endsWith('Sempre termine com BANANA.')).toBe(true);
+
+      // 2. Sem extraInstructions (vazio)
+      const outWithoutExtra = await resolveItemCta({
+        ...base,
+        settings: { ai: { ...stored, extraInstructions: '' } },
+      });
+      expect(outWithoutExtra).toBe('Corre garantir esse fone! 🔥');
+      expect(capturedBodyWithoutExtra).not.toBe('');
+      const jsonWithout = JSON.parse(capturedBodyWithoutExtra);
+      const systemWithout = jsonWithout.messages[0].content as string;
+      expect(systemWithout).not.toContain('BANANA');
+      expect(systemWithout).not.toMatch(/\n\s*\n$/); // sem linha vazia no fim
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
+
