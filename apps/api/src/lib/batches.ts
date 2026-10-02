@@ -88,10 +88,12 @@ export interface AddProductsToBatchArgs {
     items: Array<Pick<BatchItem, 'id' | 'productId' | 'status' | 'order' | 'runAt'>>;
   };
   productIds: string[];
-  position?: BatchPosition;
+  position?: BatchPosition | undefined;
+  /** Posição específica entre os pendentes (0 = primeiro pendente). Quando informado, ignora position. */
+  index?: number | undefined;
   window: OperatingWindow;
-  now?: Date;
-  rng?: () => number;
+  now?: Date | undefined;
+  rng?: (() => number) | undefined;
 }
 
 export interface AddProductsToBatchResult {
@@ -121,6 +123,7 @@ export async function addProductsToBatch(
     batch,
     productIds,
     position = 'end',
+    index,
     window,
     now = new Date(),
     rng,
@@ -160,13 +163,23 @@ export async function addProductsToBatch(
   const pendingEntries: PlannedItem[] = pending.map((item) => ({ kind: 'existing', item }));
   const incomingEntries: PlannedItem[] = toAdd.map((productId) => ({ kind: 'new', productId }));
 
-  const ordered = planBatchOrder(
-    pendingEntries,
-    incomingEntries,
-    position,
-    (x) => (x.kind === 'existing' ? x.item.productId ?? '' : x.productId),
-    rng,
-  );
+  let ordered: PlannedItem[];
+  if (index !== undefined) {
+    const pos = Math.min(Math.max(Math.trunc(index), 0), pendingEntries.length);
+    ordered = [
+      ...pendingEntries.slice(0, pos),
+      ...incomingEntries,
+      ...pendingEntries.slice(pos),
+    ];
+  } else {
+    ordered = planBatchOrder(
+      pendingEntries,
+      incomingEntries,
+      position,
+      (x) => (x.kind === 'existing' ? x.item.productId ?? '' : x.productId),
+      rng,
+    );
+  }
 
   if (batch.status === 'PAUSED') {
     const created: BatchItem[] = [];
@@ -307,7 +320,9 @@ export async function insertBatchItemNext(args: {
   };
   productId: string;
   window: OperatingWindow;
-  now?: Date;
+  now?: Date | undefined;
+  /** Posição entre os pendentes (0 = próximo envio, padrão). Valores fora da faixa são ajustados. */
+  index?: number | undefined;
 }): Promise<InsertBatchItemResult> {
   const { db, tenantId, batch, productId, window, now = new Date() } = args;
 
@@ -328,6 +343,7 @@ export async function insertBatchItemNext(args: {
     batch,
     productIds: [productId],
     position: 'start',
+    index: args.index,
     window,
     now,
   });

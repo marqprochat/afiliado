@@ -219,6 +219,9 @@ export const extensionCaptureSchema = z
     // Quando presente, o produto entra como o próximo envio deste lote (ativo) em vez de ir
     // para a Triagem. Não pode ser combinado com `automationRuleId`.
     batchId: z.string().min(1).nullish(),
+    // Só vale com `batchId`: 'next' (padrão) fura a fila; 'random' sorteia a posição entre os
+    // pendentes (usado pelo envio em massa da extensão).
+    batchPosition: z.enum(['next', 'random']).nullish(),
   })
   .refine((b) => !(b.batchId && b.automationRuleId), {
     message: 'Informe apenas um destino: lote ou automação',
