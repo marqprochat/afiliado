@@ -13,6 +13,7 @@ import type { BaileysGateway } from './baileys-gateway';
 const log = pino({ name: 'wa-manager' });
 const LOCK_TTL_MS = 30_000;
 const LOCK_RENEW_MS = 10_000;
+const RECONCILE_INTERVAL_MS = 15_000;
 
 /** só renova se ainda formos o dono do lock */
 const RENEW_LUA = `if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('PEXPIRE', KEYS[1], ARGV[2]) else return 0 end`;
@@ -24,6 +25,7 @@ const lockKey = (sessionId: string) => `wa:lock:${sessionId}`;
 export class WaSessionManager {
   private locks = new Map<string, NodeJS.Timeout>();
   private readonly owner = `worker:${process.pid}:${Math.random().toString(36).slice(2)}`;
+  private reconcileTimer: NodeJS.Timeout | null = null;
 
   constructor(private readonly gateway: BaileysGateway) {}
 
@@ -32,20 +34,39 @@ export class WaSessionManager {
   }
 
   async start() {
-    const sessions = await prisma.waSession.findMany({
-      where: { status: { in: ['CONNECTING', 'NEEDS_QR', 'CONNECTED'] } },
-    });
-    for (const s of sessions) {
-      if (await this.acquireLock(s.id)) {
-        await this.gateway.connect({ id: s.id, tenantId: s.tenantId }, { mode: 'qr' });
+    await this.reconcile();
+    if (!this.reconcileTimer) {
+      this.reconcileTimer = setInterval(() => {
+        void this.reconcile();
+      }, RECONCILE_INTERVAL_MS);
+    }
+  }
+
+  async reconcile() {
+    try {
+      const sessions = await prisma.waSession.findMany({
+        where: { status: { in: ['CONNECTING', 'NEEDS_QR', 'CONNECTED'] } },
+      });
+      for (const s of sessions) {
+        if (this.locks.has(s.id)) continue;
+        if (await this.acquireLock(s.id)) {
+          log.info({ sessionId: s.id, tenantId: s.tenantId }, 'iniciando conexão de sessão ativa');
+          await this.gateway.connect({ id: s.id, tenantId: s.tenantId }, { mode: 'qr' });
+        }
       }
+    } catch (e) {
+      log.error({ err: e }, 'falha ao reconciliar sessões do WhatsApp');
     }
   }
 
   async stop() {
+    if (this.reconcileTimer) {
+      clearInterval(this.reconcileTimer);
+      this.reconcileTimer = null;
+    }
     for (const id of [...this.locks.keys()]) {
       try {
-        await this.gateway.disconnect(id);
+        await this.gateway.disconnect(id, true);
       } catch (e) {
         log.error({ err: e, sessionId: id }, 'falha ao desconectar sessão no stop');
       }

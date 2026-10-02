@@ -35,6 +35,8 @@ interface Live {
   stopping: boolean;
   /** logout() é o dono da escrita final de LOGGED_OUT; o close handler não mexe */
   loggingOut: boolean;
+  /** quando true (ex.: shutdown gracioso do worker), não altera o status da sessão no banco para DISCONNECTED */
+  preserveStatusOnClose?: boolean;
   /** true só entre `connection: 'open'` e `connection: 'close'` */
   connected: boolean;
   mode: 'qr' | 'pair';
@@ -321,7 +323,9 @@ export class BaileysGateway implements WhatsAppGateway {
 
             const code = (u.lastDisconnect?.error as Boom | undefined)?.output?.statusCode;
             if (entry.stopping) {
-              await this.setStatus(sessionId, tenantId, 'DISCONNECTED');
+              if (!entry.preserveStatusOnClose) {
+                await this.setStatus(sessionId, tenantId, 'DISCONNECTED');
+              }
               return;
             }
             if (code === DisconnectReason.loggedOut) {
@@ -384,11 +388,12 @@ export class BaileysGateway implements WhatsAppGateway {
     }
   }
 
-  async disconnect(sessionId: string) {
+  async disconnect(sessionId: string, preserveStatus = false) {
     this.cancelReconnect(sessionId);
     const l = this.live.get(sessionId);
     if (!l) return;
     l.stopping = true;
+    l.preserveStatusOnClose = preserveStatus;
     for (const fn of l.cleanup.splice(0)) fn();
     l.sock.end(undefined);
   }
@@ -398,7 +403,7 @@ export class BaileysGateway implements WhatsAppGateway {
     for (const t of this.pendingReconnects.values()) clearTimeout(t);
     this.pendingReconnects.clear();
     for (const sessionId of [...this.live.keys()]) {
-      await this.disconnect(sessionId);
+      await this.disconnect(sessionId, true);
     }
   }
 
