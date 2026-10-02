@@ -108,6 +108,8 @@ function isRetryable(err: AiCtaError): boolean {
   return err.kind === 'timeout' || err.kind === 'network' || err.kind === 'invalid';
 }
 
+export const AI_CTA_MAX_TOKENS = 2048;
+
 async function requestOnce(
   doFetch: typeof fetch,
   url: string,
@@ -140,8 +142,14 @@ async function requestOnce(
     } catch {
       throw new AiCtaError('invalid', 'resposta da IA não é JSON');
     }
-    const content = (data as { choices?: { message?: { content?: unknown } }[] } | null)
-      ?.choices?.[0]?.message?.content;
+    const choice = (
+      data as { choices?: { message?: { content?: unknown }; finish_reason?: string }[] } | null
+    )?.choices?.[0];
+    const finishReason = choice?.finish_reason;
+    if (finishReason === 'length' || finishReason === 'max_tokens') {
+      throw new AiCtaError('invalid', 'resposta da IA truncada por limite de tokens');
+    }
+    const content = choice?.message?.content;
     const cta = typeof content === 'string' ? sanitizeCta(content, maxChars) : null;
     if (!cta) throw new AiCtaError('invalid', 'resposta da IA vazia ou inválida');
     return cta;
@@ -160,7 +168,7 @@ export async function generateCta(
   opts: GenerateCtaOptions,
 ): Promise<string> {
   const doFetch = opts.fetch ?? globalThis.fetch;
-  const timeoutMs = opts.timeoutMs ?? 8_000;
+  const timeoutMs = opts.timeoutMs ?? 15_000;
   const retries = opts.retries ?? 1;
   try {
     await opts.validateBaseUrl(config.baseUrl);
@@ -176,7 +184,7 @@ export async function generateCta(
       { role: 'user', content: user },
     ],
     temperature: config.temperature,
-    max_tokens: Math.max(64, config.maxChars),
+    max_tokens: AI_CTA_MAX_TOKENS,
     stream: false,
   });
   let last: AiCtaError | undefined;

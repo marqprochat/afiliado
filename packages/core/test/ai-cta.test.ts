@@ -185,4 +185,38 @@ describe('generateCta', () => {
       expect(fetchMock).toHaveBeenCalledTimes(2);
     }
   });
+  it('envia max_tokens >= 1024 independente de maxChars para acomodar reasoning_tokens', async () => {
+    const fetchMock = vi.fn(async () => okBody('Oferta top 🔥'));
+    await generateCta(product, { ...config, maxChars: 40 }, { validateBaseUrl: allow, fetch: fetchMock as never });
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.max_tokens).toBeGreaterThanOrEqual(1024);
+  });
+  it('rejeita resposta truncada com finish_reason length ou max_tokens com kind=invalid', async () => {
+    for (const finish_reason of ['length', 'max_tokens']) {
+      const fetchMock = vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: 'Frase incompleta cortada no' }, finish_reason }],
+          }),
+          { status: 200 },
+        ),
+      );
+      await expect(
+        generateCta(product, config, { validateBaseUrl: allow, fetch: fetchMock as never, retries: 0 }),
+      ).rejects.toMatchObject({ kind: 'invalid' });
+    }
+  });
+  it('aceita resposta normal com finish_reason stop', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: 'Oferta incrível aproveite agora! 🔥' }, finish_reason: 'stop' }],
+        }),
+        { status: 200 },
+      ),
+    );
+    const result = await generateCta(product, config, { validateBaseUrl: allow, fetch: fetchMock as never });
+    expect(result).toBe('Oferta incrível aproveite agora! 🔥');
+  });
 });
