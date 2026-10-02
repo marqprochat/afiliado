@@ -88,7 +88,9 @@ describe('resolveItemCta', () => {
       // 1. Com extraInstructions
       const outWithExtra = await resolveItemCta({
         ...base,
-        settings: { ai: { ...stored, extraInstructions: 'Sempre termine com BANANA.' } },
+        settings: {
+          ai: { ...stored, baseUrl: 'https://203.0.113.10/v1', extraInstructions: 'Sempre termine com BANANA.' },
+        },
       });
       expect(outWithExtra).toBe('Corre garantir esse fone! 🔥');
       expect(capturedBodyWithExtra).not.toBe('');
@@ -100,7 +102,9 @@ describe('resolveItemCta', () => {
       // 2. Sem extraInstructions (vazio)
       const outWithoutExtra = await resolveItemCta({
         ...base,
-        settings: { ai: { ...stored, extraInstructions: '' } },
+        settings: {
+          ai: { ...stored, baseUrl: 'https://203.0.113.10/v1', extraInstructions: '' },
+        },
       });
       expect(outWithoutExtra).toBe('Corre garantir esse fone! 🔥');
       expect(capturedBodyWithoutExtra).not.toBe('');
