@@ -12,3 +12,4 @@ export * from './coupon-parse';
 
 export * from './subid';
 export * from './ai-cta';
+export * from './batch-position';

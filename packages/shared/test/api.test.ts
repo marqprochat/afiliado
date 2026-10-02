@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { batchCreateSchema, settingsUpdateSchema, waConnectSchema } from '../src/api';
+import { batchCreateSchema, batchSendProductsSchema, settingsUpdateSchema, waConnectSchema } from '../src/api';
 
 describe('api schemas', () => {
   it('batchCreate exige ao menos um grupo e intervalo >= 1', () => {
@@ -43,4 +43,33 @@ describe('api schemas', () => {
     expect(() => waConnectSchema.parse({ mode: 'pair' })).toThrow();
     expect(waConnectSchema.parse({ mode: 'qr' })).toEqual({ mode: 'qr' });
   });
+  describe('batchSendProductsSchema', () => {
+    it('aceita productIds e defaulta position para end', () => {
+      const parsed = batchSendProductsSchema.parse({ productIds: ['p1', 'p2'] });
+      expect(parsed).toEqual({ productIds: ['p1', 'p2'], position: 'end' });
+    });
+    it('aceita as 3 posições válidas: shuffle, start, end', () => {
+      expect(batchSendProductsSchema.parse({ productIds: ['p1'], position: 'shuffle' })).toEqual({
+        productIds: ['p1'],
+        position: 'shuffle',
+      });
+      expect(batchSendProductsSchema.parse({ productIds: ['p1'], position: 'start' })).toEqual({
+        productIds: ['p1'],
+        position: 'start',
+      });
+      expect(batchSendProductsSchema.parse({ productIds: ['p1'], position: 'end' })).toEqual({
+        productIds: ['p1'],
+        position: 'end',
+      });
+    });
+    it('rejeita productIds vazio', () => {
+      expect(() => batchSendProductsSchema.parse({ productIds: [] })).toThrow();
+    });
+    it('rejeita posição inválida', () => {
+      expect(() =>
+        batchSendProductsSchema.parse({ productIds: ['p1'], position: 'invalid' as never }),
+      ).toThrow();
+    });
+  });
 });
+

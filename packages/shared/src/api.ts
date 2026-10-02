@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  BATCH_POSITIONS,
   MARKETPLACE_KINDS,
   MEDIA_MODES,
   MIRROR_LOG_STATUSES,
@@ -185,6 +186,13 @@ export const batchCreateSchema = z
     ...data,
     productIds: data.productIds ?? undefined,
   }));
+export type BatchCreateBody = z.infer<typeof batchCreateSchema>;
+
+export const batchSendProductsSchema = z.object({
+  productIds: z.array(z.string().min(1)).min(1),
+  position: z.enum(BATCH_POSITIONS).default('end'),
+});
+export type BatchSendProductsBody = z.infer<typeof batchSendProductsSchema>;
 
 export const apiTokenCreateSchema = z.object({
   name: z.string().trim().min(1).max(60),
@@ -269,7 +277,6 @@ export type QueueAddBody = z.infer<typeof queueAddSchema>;
 export type QueueSelectBody = z.infer<typeof queueSelectSchema>;
 export type TemplateBody = z.infer<typeof templateSchema>;
 export type TemplatePreviewBody = z.infer<typeof templatePreviewSchema>;
-export type BatchCreateBody = z.infer<typeof batchCreateSchema>;
 
 export const batchUpdateSchema = z.object({
   name: z.string().min(1).max(80).optional(),

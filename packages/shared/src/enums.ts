@@ -29,6 +29,9 @@ export type WaSessionStatus = (typeof WA_SESSION_STATUSES)[number];
 export const BATCH_STATUSES = ['SCHEDULED', 'RUNNING', 'PAUSED', 'DONE', 'CANCELLED'] as const;
 export type BatchStatus = (typeof BATCH_STATUSES)[number];
 
+export const BATCH_POSITIONS = ['shuffle', 'start', 'end'] as const;
+export type BatchPosition = (typeof BATCH_POSITIONS)[number];
+
 export const BATCH_ITEM_STATUSES = ['PENDING', 'SENDING', 'SENT', 'ERROR'] as const;
 export type BatchItemStatus = (typeof BATCH_ITEM_STATUSES)[number];
 
