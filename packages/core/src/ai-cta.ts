@@ -108,7 +108,7 @@ function isRetryable(err: AiCtaError): boolean {
   return err.kind === 'timeout' || err.kind === 'network' || err.kind === 'invalid';
 }
 
-export const AI_CTA_MAX_TOKENS = 2048;
+export const AI_CTA_MAX_TOKENS = 4096;
 
 async function requestOnce(
   doFetch: typeof fetch,
@@ -168,7 +168,7 @@ export async function generateCta(
   opts: GenerateCtaOptions,
 ): Promise<string> {
   const doFetch = opts.fetch ?? globalThis.fetch;
-  const timeoutMs = opts.timeoutMs ?? 15_000;
+  const timeoutMs = opts.timeoutMs ?? 20_000;
   const retries = opts.retries ?? 1;
   try {
     await opts.validateBaseUrl(config.baseUrl);
