@@ -1,10 +1,12 @@
 'use client';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import type { BatchFormOutput } from '@/components/queue/batch-form';
 import { QueueTable } from '@/components/queue/queue-table';
 import { BatchForm } from '@/components/queue/batch-form';
 import { BatchList } from '@/components/queue/batch-list';
 import { BatchManageDrawer } from '@/components/queue/batch-manage-drawer';
+import { SendToBatchDialog } from '@/components/queue/send-to-batch-dialog';
 import { apiFetch } from '@/lib/api';
 import { useApiMutation } from '@/lib/mutations';
 import {
@@ -15,6 +17,7 @@ import {
   useSettings,
   useTemplates,
 } from '@/lib/queries';
+import type { BatchPosition, BatchSendProductsResponse } from '@/lib/types';
 
 const INV = [['queue'], ['batches'], ['overview']];
 
@@ -53,6 +56,7 @@ export default function EnviarPage() {
     { invalidate: INV },
   );
   const [managingId, setManagingId] = useState<string | null>(null);
+  const [sendToBatchOpen, setSendToBatchOpen] = useState(false);
   const deleteBatch = useApiMutation(
     (id: string) => apiFetch(`/batches/${id}`, { method: 'DELETE' }),
     {
@@ -60,6 +64,28 @@ export default function EnviarPage() {
       success: 'Lote excluído',
       onSuccess: (_out, id) => {
         if (managingId === id) setManagingId(null);
+      },
+    },
+  );
+
+  const selectedPendingProductIds =
+    queue?.items.filter((i) => i.selected && i.status === 'PENDING').map((i) => i.productId) ?? [];
+
+  const sendToBatch = useApiMutation(
+    ({ batchId, position }: { batchId: string; position: BatchPosition }) =>
+      apiFetch<BatchSendProductsResponse>(`/batches/${batchId}/send-products`, {
+        method: 'POST',
+        json: {
+          productIds: selectedPendingProductIds,
+          position,
+        },
+      }),
+    {
+      invalidate: INV,
+      onSuccess: (out) => {
+        setSendToBatchOpen(false);
+        const skippedMsg = out.skipped > 0 ? ` (${out.skipped} ignorado(s))` : '';
+        toast.success(`${out.added} adicionado(s)${skippedMsg}`);
       },
     },
   );
@@ -78,6 +104,7 @@ export default function EnviarPage() {
               onSelect={(ids, selected) => select.mutate({ ids, selected })}
               onRemove={(id) => remove.mutate(id)}
               onClearSent={() => clearSent.mutate(undefined)}
+              onSendToBatch={() => setSendToBatchOpen(true)}
             />
           )}
           <section>
@@ -108,6 +135,14 @@ export default function EnviarPage() {
           />
         )}
       </div>
+      <SendToBatchDialog
+        open={sendToBatchOpen}
+        onOpenChange={setSendToBatchOpen}
+        batches={batches ?? []}
+        count={selectedCount}
+        submitting={sendToBatch.isPending}
+        onConfirm={({ batchId, position }) => sendToBatch.mutate({ batchId, position })}
+      />
     </div>
   );
 }

@@ -27,11 +27,13 @@ export function QueueTable({
   onSelect,
   onRemove,
   onClearSent,
+  onSendToBatch,
 }: {
   data: QueueResponse;
   onSelect: (ids: string[], selected: boolean) => void;
   onRemove: (id: string) => void;
   onClearSent: () => void;
+  onSendToBatch?: () => void;
 }) {
   const allSelected = data.items.length > 0 && data.items.every((i) => i.selected);
   const selectedCount = data.items.filter((i) => i.selected && i.status === 'PENDING').length;
@@ -58,6 +60,16 @@ export function QueueTable({
           {allSelected ? 'Desmarcar todos' : 'Selecionar todos'}
         </Button>
         <span className="text-muted-foreground">{selectedCount} selecionado(s) pendente(s)</span>
+        {onSendToBatch && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={selectedCount === 0}
+            onClick={onSendToBatch}
+          >
+            Trazer selecionados para lote
+          </Button>
+        )}
         <Button size="sm" variant="ghost" className="ml-auto" onClick={onClearSent}>
           Limpar enviados
         </Button>

@@ -3,6 +3,7 @@ import type {
   MediaMode,
   WaSessionStatus,
   BatchStatus,
+  BatchPosition,
   BatchItemStatus,
   CouponOrigin,
   CouponStatus,
@@ -18,6 +19,7 @@ export type {
   MediaMode,
   WaSessionStatus,
   BatchStatus,
+  BatchPosition,
   BatchItemStatus,
   CouponOrigin,
   CouponStatus,
@@ -247,6 +249,20 @@ export interface BatchSummary {
   total: number;
   sent: number;
   errors: number;
+}
+export interface BatchSendProductsResponse {
+  added: number;
+  skipped: number;
+  status: BatchStatus;
+  estimatedEndAt: string | null;
+  reactivated: boolean;
+}
+export interface BatchSendProductsBody {
+  productIds: string[];
+  position: BatchPosition;
+}
+export interface EligibleBatch extends BatchSummary {
+  pending: number;
 }
 export interface BatchItemSendLog {
   groupJid: string;
