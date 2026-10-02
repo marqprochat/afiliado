@@ -7,11 +7,19 @@ import {
   batchAddItemsSchema,
   batchCreateSchema,
   batchOrderSchema,
+  batchSendProductsSchema,
   batchUpdateSchema,
 } from '@afilados/shared';
 import { requireAuth } from '../plugins/auth';
 import { getOperatingWindow, toCoreWindow } from '../lib/settings';
-import { enqueueBatchItems, removePendingJobs, removeStaleJobs, batchItemPublicSelect, toApiBatchItem } from '../lib/batches';
+import {
+  addProductsToBatch,
+  enqueueBatchItems,
+  removePendingJobs,
+  removeStaleJobs,
+  batchItemPublicSelect,
+  toApiBatchItem,
+} from '../lib/batches';
 import { assertDispatchTargets } from '../lib/dispatch';
 import { toApiProduct } from '../lib/products';
 
@@ -348,6 +356,62 @@ export async function batchesRoutes(app: FastifyInstance) {
       });
     }
     return { added: toAdd.length, skipped: unique.length - toAdd.length };
+  });
+
+  app.post('/batches/:id/send-products', async (req) => {
+    const body = batchSendProductsSchema.parse(req.body);
+    const b = await findBatch(req);
+
+    const uniqueProductIds = [...new Set(body.productIds)];
+    const products = await req.db.product.findMany({
+      where: { id: { in: uniqueProductIds }, tenantId: req.tenantId },
+      select: { id: true },
+    });
+    if (products.length < uniqueProductIds.length) {
+      throw ApiError.notFound('Produto não encontrado');
+    }
+
+    const queueItems = await req.db.queueItem.findMany({
+      where: { productId: { in: uniqueProductIds }, tenantId: req.tenantId },
+      select: { status: true },
+    });
+    if (queueItems.some((q) => q.status === 'PENDING_ENRICH')) {
+      throw new ApiError(
+        'PRODUCT_NOT_READY',
+        'Algum produto selecionado ainda está sendo enriquecido',
+        409,
+      );
+    }
+
+    const window = toCoreWindow(await getOperatingWindow(req.db, req.tenantId));
+
+    const res = await addProductsToBatch({
+      db: req.db,
+      tenantId: req.tenantId,
+      batch: b,
+      productIds: body.productIds,
+      position: body.position,
+      window,
+    });
+
+    const totalItems = b.items.length + res.added;
+    const sentCount = b.items.filter((i) => i.status === 'SENT').length;
+    await app.events.publish(req.tenantId, {
+      type: 'batch.progress',
+      batchId: b.id,
+      sent: sentCount,
+      total: totalItems,
+      estimatedEndAt: res.estimatedEndAt ? res.estimatedEndAt.toISOString() : '',
+    });
+    await app.events.publish(req.tenantId, { type: 'queue.updated' });
+
+    return {
+      added: res.added,
+      skipped: res.skipped,
+      status: res.status,
+      estimatedEndAt: res.estimatedEndAt ? res.estimatedEndAt.toISOString() : null,
+      reactivated: res.reactivated,
+    };
   });
 
   app.delete('/batches/:id/items/:itemId', async (req, reply) => {
