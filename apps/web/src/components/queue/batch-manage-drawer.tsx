@@ -1,6 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, RotateCw, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronsUp, GripVertical, RotateCw, Trash2 } from 'lucide-react';
 import { StatusPill } from '@/components/app-shell/status-pill';
 import { Button } from '@/components/ui/button';
 import {
@@ -167,12 +167,21 @@ function ItemsSection({ batch, editable }: { batch: BatchDetail; editable: boole
   const errorCount = done.filter((i) => i.status === 'ERROR').length;
   const canRetry = batch.status !== 'CANCELLED';
 
-  const move = (idx: number, dir: -1 | 1) => {
-    const j = idx + dir;
-    if (j < 0 || j >= pending.length) return;
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+
+  /** Tira o item de `from` e o reinsere em `to` (índices entre os pendentes). */
+  const moveTo = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0 || from >= pending.length || to >= pending.length) return;
     const next = [...pending];
-    [next[idx], next[j]] = [next[j]!, next[idx]!];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved!);
     setPending(next);
+  };
+  const move = (idx: number, dir: -1 | 1) => moveTo(idx, idx + dir);
+  const endDrag = () => {
+    setDragIdx(null);
+    setOverIdx(null);
   };
 
   return (
@@ -224,9 +233,36 @@ function ItemsSection({ batch, editable }: { batch: BatchDetail; editable: boole
           </ItemRow>
         ))}
         {pending.map((it, idx) => (
-          <ItemRow key={it.id} item={it} position={done.length + idx + 1} hideRunAt={editable}>
+          <ItemRow
+            key={it.id}
+            item={it}
+            position={done.length + idx + 1}
+            hideRunAt={editable}
+            drag={
+              editable
+                ? {
+                    dragging: dragIdx === idx,
+                    over: overIdx === idx && dragIdx !== null && dragIdx !== idx,
+                    onDragStart: () => setDragIdx(idx),
+                    onDragOver: () => setOverIdx(idx),
+                    onDrop: () => {
+                      if (dragIdx !== null) moveTo(dragIdx, idx);
+                      endDrag();
+                    },
+                    onDragEnd: endDrag,
+                  }
+                : undefined
+            }
+          >
             {editable && (
               <>
+                <IconBtn
+                  label="Enviar a seguir (próximo envio)"
+                  onClick={() => moveTo(idx, 0)}
+                  disabled={idx === 0}
+                >
+                  <ChevronsUp className="size-3.5" />
+                </IconBtn>
                 <IconBtn label="Subir" onClick={() => move(idx, -1)} disabled={idx === 0}>
                   <ArrowUp className="size-3.5" />
                 </IconBtn>
@@ -265,11 +301,20 @@ function ItemRow({
   item,
   position,
   hideRunAt,
+  drag,
   children,
 }: {
   item: BatchItem;
   position: number;
   hideRunAt?: boolean;
+  drag?: {
+    dragging: boolean;
+    over: boolean;
+    onDragStart: () => void;
+    onDragOver: () => void;
+    onDrop: () => void;
+    onDragEnd: () => void;
+  };
   children?: React.ReactNode;
 }) {
   const title =
@@ -283,7 +328,44 @@ function ItemRow({
   const sent = item.sendLogs.filter((l) => l.status === 'SENT').length;
   const failed = item.sendLogs.length - sent;
   return (
-    <li className="flex items-center gap-2 rounded-md border border-border bg-surface p-2">
+    <li
+      draggable={!!drag}
+      onDragStart={
+        drag
+          ? (e) => {
+              e.dataTransfer.effectAllowed = 'move';
+              // Firefox só inicia o arrasto se houver algum dado no dataTransfer.
+              e.dataTransfer.setData('text/plain', item.id);
+              drag.onDragStart();
+            }
+          : undefined
+      }
+      onDragOver={
+        drag
+          ? (e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+              drag.onDragOver();
+            }
+          : undefined
+      }
+      onDrop={
+        drag
+          ? (e) => {
+              e.preventDefault();
+              drag.onDrop();
+            }
+          : undefined
+      }
+      onDragEnd={drag?.onDragEnd}
+      className={cn(
+        'flex items-center gap-2 rounded-md border border-border bg-surface p-2',
+        drag && 'cursor-grab active:cursor-grabbing',
+        drag?.dragging && 'opacity-40',
+        drag?.over && 'border-brand ring-1 ring-brand',
+      )}
+    >
+      {drag && <GripVertical className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
       <span className="w-6 text-center text-xs text-muted-foreground">{position}</span>
       {img ? (
         // eslint-disable-next-line @next/next/no-img-element

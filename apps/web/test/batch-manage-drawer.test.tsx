@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BatchManageDrawer } from '@/components/queue/batch-manage-drawer';
 
@@ -56,5 +56,55 @@ describe('BatchManageDrawer', () => {
     expect(await screen.findByText('Mensagem: Aviso <b>importante</b>')).toBeTruthy();
     expect(screen.getByText(`Mensagem: ${'A'.repeat(60)}…`)).toBeTruthy();
     expect(screen.getAllByText('Item removido')).toHaveLength(1);
+  });
+
+  describe('lote pausado', () => {
+    const paused = {
+      ...batch,
+      status: 'PAUSED',
+      items: ['i1', 'i2', 'i3'].map((id, order) => ({
+        ...baseItem,
+        id,
+        order,
+        status: 'PENDING',
+        customText: `Item ${id}`,
+      })),
+    };
+
+    function renderPaused() {
+      apiFetchMock.mockImplementation(async (url: string) => {
+        if (url === '/batches/b1') return paused as never;
+        return [] as never;
+      });
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      render(
+        <QueryClientProvider client={client}>
+          <BatchManageDrawer batchId="b1" onClose={() => {}} />
+        </QueryClientProvider>,
+      );
+    }
+    const titles = () => screen.getAllByText(/^Mensagem: Item i\d$/).map((e) => e.textContent);
+
+    it('botão "próximo envio" leva o item para o topo da fila', async () => {
+      renderPaused();
+      await screen.findByText('Mensagem: Item i1');
+      const buttons = screen.getAllByRole('button', { name: /Enviar a seguir/ });
+      expect(buttons[0]).toHaveProperty('disabled', true);
+      fireEvent.click(buttons[2]!);
+      expect(titles()).toEqual(['Mensagem: Item i3', 'Mensagem: Item i1', 'Mensagem: Item i2']);
+      expect(await screen.findByRole('button', { name: 'Salvar ordem' })).toBeTruthy();
+    });
+
+    it('arrastar um item para outra posição reordena a fila', async () => {
+      renderPaused();
+      const first = (await screen.findByText('Mensagem: Item i1')).closest('li')!;
+      const last = screen.getByText('Mensagem: Item i3').closest('li')!;
+      // jsdom não implementa DataTransfer
+      const dataTransfer = { setData: vi.fn(), effectAllowed: '', dropEffect: '' };
+      fireEvent.dragStart(first, { dataTransfer });
+      fireEvent.dragOver(last, { dataTransfer });
+      fireEvent.drop(last, { dataTransfer });
+      expect(titles()).toEqual(['Mensagem: Item i2', 'Mensagem: Item i3', 'Mensagem: Item i1']);
+    });
   });
 });
