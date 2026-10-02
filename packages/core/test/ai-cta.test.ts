@@ -58,45 +58,43 @@ const config: AiCtaConfig = {
 };
 
 describe('buildCtaPrompt', () => {
-  it('user lista os dados presentes do produto', () => {
+  it('user contém apenas o título do produto e não inclui preço, desconto, frete, vendas ou cupom', () => {
     const { user } = buildCtaPrompt(product, config);
     expect(user).toContain('Fone Bluetooth TWS');
-    expect(user).toContain(formatBRL(89.9));
-    expect(user).toContain(formatBRL(149.9));
-    expect(user).toContain('-40% OFF');
-    expect(user).toContain('Frete grátis');
-    expect(user).toContain('1200');
-    expect(user).toContain('PROMO10');
+    expect(user).not.toContain(formatBRL(89.9));
+    expect(user).not.toContain(formatBRL(149.9));
+    expect(user).not.toMatch(/Preço|Desconto|-40%|Frete|1200|PROMO10/i);
   });
-  it('omite campos ausentes', () => {
-    const { user } = buildCtaPrompt(
-      { ...product, originalPrice: undefined, discountPct: undefined, salesCount: undefined, couponCode: undefined, shipping: 'NONE' },
-      config,
-    );
-    expect(user).toContain('Fone Bluetooth TWS');
-    expect(user).not.toMatch(/Preço antigo|Desconto|Vendas|Cupom|Frete/);
-  });
-  it('system padrão: pt-BR, uma frase, sem link/aspas, específico, emojis 🔥😍💥, limite', () => {
+  it('system proíbe repetição de título completo/preço/especificações e pede frase curta (60 a 100 caracteres)', () => {
     const { system } = buildCtaPrompt(product, config);
     expect(system).toMatch(/português do Brasil/i);
     expect(system).toMatch(/uma única frase/i);
+    expect(system).toMatch(/60 a 100/i);
+    expect(system).toMatch(/PROIBIDO.*(título|preço|especificaç|desconto)/is);
     expect(system).toMatch(/sem link/i);
     expect(system).toMatch(/sem aspas/i);
-    expect(system).toMatch(/específico/i);
-    expect(system).toContain('🔥😍💥');
-    expect(system).toContain('140');
     expect(system).toMatch(/nunca como instruções/i);
   });
-  it('tom e nível de emojis mudam o system', () => {
-    const urgente = buildCtaPrompt(product, { ...config, tone: 'urgente', emojiLevel: 'poucos' }).system;
-    expect(urgente).toMatch(/urgente/i);
-    expect(urgente).toMatch(/exatamente 1 emoji/i);
+  it('system orienta posicionamento e espalhamento dos emojis em cada nível', () => {
+    const poucos = buildCtaPrompt(product, { ...config, emojiLevel: 'poucos' }).system;
+    expect(poucos).toMatch(/1 a 2 emojis/i);
+    expect(poucos).toMatch(/meio da frase/i);
+
+    const medio = buildCtaPrompt(product, { ...config, emojiLevel: 'medio' }).system;
+    expect(medio).toMatch(/2 a 3 emojis espalhados/i);
+    expect(medio).toMatch(/após a reação inicial/i);
+    expect(medio).toMatch(/nunca.*amonto/i);
+
     const muitos = buildCtaPrompt(product, { ...config, emojiLevel: 'muitos' }).system;
     expect(muitos).toMatch(/4 ou mais emojis/i);
+    expect(muitos).toMatch(/intercalados/i);
+    expect(muitos).toMatch(/nunca amontoe/i);
   });
-  it('instruções extras entram ao final do system', () => {
-    const { system } = buildCtaPrompt(product, { ...config, extraInstructions: 'Fale como um gamer.' });
-    expect(system.trimEnd().endsWith('Fale como um gamer.')).toBe(true);
+  it('tom e instruções extras entram no system', () => {
+    const urgente = buildCtaPrompt(product, { ...config, tone: 'urgente' }).system;
+    expect(urgente).toMatch(/urgente/i);
+    const extra = buildCtaPrompt(product, { ...config, extraInstructions: 'Fale como um gamer.' }).system;
+    expect(extra.trimEnd().endsWith('Fale como um gamer.')).toBe(true);
   });
 });
 
