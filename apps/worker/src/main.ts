@@ -5,6 +5,7 @@ import {
   QUEUE_AWIN_IMPORT,
   QUEUE_COUPON_SYNC,
   QUEUE_GROUP_LINK_ROTATE,
+  QUEUE_ML_LINKS_PREWARM,
   QUEUE_MIRROR_MESSAGE,
   QUEUE_PRODUCT_ENRICH,
   QUEUE_SEND_OFFER,
@@ -14,6 +15,7 @@ import {
   type AwinImportJob,
   type CouponSyncJob,
   type GroupLinkRotateJob,
+  type MlLinksPrewarmJob,
   type MirrorMessageJob,
   type ProductEnrichJob,
   type SendOfferJob,
@@ -37,6 +39,7 @@ import { createProductEnrichProcessor } from './processors/product-enrich';
 import { createAwinImportProcessor } from './processors/awin-import';
 import { createCouponSyncProcessor } from './processors/coupon-sync';
 import { createGroupLinkRotateProcessor } from './processors/group-link-rotate';
+import { createMlLinksPrewarmProcessor } from './processors/ml-links-prewarm';
 import { GroupLinkMonitor } from './group-links/monitor';
 import { MirrorListener } from './mirror/listener';
 import { AutomationScheduler } from './automation/scheduler';
@@ -102,6 +105,12 @@ const groupLinkRotateWorker = new Worker<GroupLinkRotateJob>(
   createGroupLinkRotateProcessor({ gateway }),
   { connection: getRedis(), concurrency: 1 },
 );
+// Gera links meli.la em lote (20 por chamada) com pausas; uma execução por vez para não estressar o painel do ML.
+const mlLinksPrewarmWorker = new Worker<MlLinksPrewarmJob>(
+  QUEUE_ML_LINKS_PREWARM,
+  createMlLinksPrewarmProcessor(),
+  { connection: getRedis(), concurrency: 1 },
+);
 
 for (const w of [
   waWorker,
@@ -112,6 +121,7 @@ for (const w of [
   awinImportWorker,
   couponSyncWorker,
   groupLinkRotateWorker,
+  mlLinksPrewarmWorker,
 ]) {
   w.on('failed', (job, err) => log.error({ jobId: job?.id, err: err.message }, 'job falhou'));
 }
@@ -208,6 +218,7 @@ async function shutdown() {
       awinImportWorker.close(),
       couponSyncWorker.close(),
       groupLinkRotateWorker.close(),
+      mlLinksPrewarmWorker.close(),
     ]);
     await redisSub.unsubscribe();
     redisSub.disconnect();

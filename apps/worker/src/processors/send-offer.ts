@@ -22,6 +22,7 @@ import {
 import type { ProductData, SendOfferJob, SendTelegramJob, TagCredentials } from '@afilados/shared';
 import { resolveItemCta } from '../lib/ai-cta';
 import { publishEvent } from '../lib/events';
+import { withMlLinkCache } from '../lib/ml-links';
 import { enqueueSendTelegram } from '../lib/queue-helpers';
 import { getRedis } from '../lib/redis';
 import { TokenBucket, jitter, waitForToken } from '../lib/rate-limit';
@@ -239,10 +240,18 @@ export async function sendOffer(
     ) {
       const creds = decryptJson<TagCredentials>(Buffer.from(conn.encryptedCredentials));
       try {
-        affiliateLink = await resolveTagAdapter(product.source).toAffiliateLink(
-          creds,
-          product.originalUrl,
-        );
+        const source = product.source;
+        const generate = () =>
+          resolveTagAdapter(source).toAffiliateLink(creds, product.originalUrl);
+        affiliateLink =
+          product.source === 'MERCADOLIVRE'
+            ? await withMlLinkCache(
+                tenantId,
+                creds.tag?.trim() || undefined,
+                product.originalUrl,
+                generate,
+              )
+            : await generate();
       } catch (err) {
         log.warn(
           { batchItemId: item.id, source: product.source, err },
