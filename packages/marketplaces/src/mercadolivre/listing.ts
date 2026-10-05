@@ -3,6 +3,7 @@ import { parseProductUrl } from '@afilados/core';
 import type { ProductData } from '@afilados/shared';
 import { parseMoney } from '../scrapers/fetcher';
 import { endOfDaySaoPaulo } from '../scrapers/mercadolivre';
+import { cookieHeader } from './official-link';
 
 /**
  * Busca de produtos do ML pelas páginas de listagem (/ofertas, /mais-vendidos…). A busca por
@@ -250,6 +251,132 @@ export function parseMlListingHtml(html: string, now: Date = new Date()): Produc
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(p);
+  }
+  return out;
+}
+
+export const ML_LISTING_MAX_PAGES = 5;
+const PAGE_TIMEOUT_MS = 15_000;
+const UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36';
+
+export interface FetchMlListingOptions {
+  /** Quantos produtos (que passem em `filter`) juntar antes de parar. */
+  limit: number;
+  /** Cookies da sessão sincronizada; usados só quando a página anônima cai na verificação. */
+  cookies?: Record<string, string> | undefined;
+  /** Aplicado a cada produto durante a paginação (desconto, preço, frete…). */
+  filter?: ((product: ProductData) => boolean) | undefined;
+  maxPages?: number | undefined;
+  /** Injetáveis em testes. */
+  fetchImpl?: typeof fetch | undefined;
+  sleep?: ((ms: number) => Promise<void>) | undefined;
+  now?: (() => Date) | undefined;
+}
+
+interface LoadedPage {
+  html: string;
+  finalUrl: string;
+  blockedStatus: boolean;
+}
+
+/**
+ * Lê a listagem página a página (48 cards cada). Cada página é pedida primeiro sem cookies; se cair
+ * na verificação anti-bot e houver sessão sincronizada, repete com ela. Na página 1 os erros sobem
+ * (`MlListingError`); a partir da página 2 qualquer falha só encerra a paginação com o que já veio.
+ */
+export async function fetchMlListing(
+  source: MlListingSource,
+  opts: FetchMlListingOptions,
+): Promise<ProductData[]> {
+  const doFetch = opts.fetchImpl ?? fetch;
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const now = opts.now ?? (() => new Date());
+  const maxPages = opts.maxPages ?? ML_LISTING_MAX_PAGES;
+  const cookie =
+    opts.cookies && Object.keys(opts.cookies).length > 0 ? cookieHeader(opts.cookies) : '';
+
+  async function load(url: string, withCookie: boolean): Promise<LoadedPage> {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), PAGE_TIMEOUT_MS);
+    try {
+      const res = await doFetch(url, {
+        signal: ctrl.signal,
+        redirect: 'follow',
+        headers: {
+          'User-Agent': UA,
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+          ...(withCookie ? { Cookie: cookie } : {}),
+        },
+      });
+      const finalUrl = res.url || url;
+      if (res.status === 403 || res.status === 429) {
+        return { html: '', finalUrl, blockedStatus: true };
+      }
+      if (!res.ok) {
+        throw new MlListingError(
+          `O Mercado Livre respondeu HTTP ${res.status}`,
+          'ML_LISTING_HTTP',
+          url,
+        );
+      }
+      return { html: await res.text(), finalUrl, blockedStatus: false };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  const isBlocked = (p: LoadedPage) => p.blockedStatus || isMlVerificationPage(p.finalUrl, p.html);
+
+  const out: ProductData[] = [];
+  const seen = new Set<string>();
+
+  for (let page = 1; page <= maxPages && out.length < opts.limit; page++) {
+    const url = buildMlListingUrl(source, page); // lança ML_LISTING_INVALID_URL antes de qualquer requisição
+    let loaded: LoadedPage;
+    try {
+      loaded = await load(url, false);
+      if (isBlocked(loaded) && cookie) loaded = await load(url, true);
+    } catch (err) {
+      if (page === 1) throw err;
+      break;
+    }
+
+    if (isBlocked(loaded)) {
+      if (page > 1) break;
+      throw new MlListingError(
+        cookie
+          ? 'O Mercado Livre bloqueou a listagem mesmo com a sessão sincronizada; a sessão pode ter expirado'
+          : 'O Mercado Livre bloqueou a listagem (verificação anti-bot) e não há sessão sincronizada',
+        'ML_LISTING_BLOCKED',
+        url,
+      );
+    }
+
+    const products = parseMlListingHtml(loaded.html, now());
+    if (products.length === 0) {
+      if (page > 1) break;
+      throw new MlListingError(
+        'A página de ofertas do Mercado Livre mudou de layout e nenhum produto foi reconhecido',
+        'ML_LISTING_LAYOUT',
+        `${url} (${loaded.html.length} bytes)`,
+      );
+    }
+
+    let added = 0;
+    for (const p of products) {
+      const key = p.externalId ?? p.originalUrl;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      added++;
+      if (opts.filter && !opts.filter(p)) continue;
+      out.push(p);
+      if (out.length >= opts.limit) break;
+    }
+    if (added === 0) break; // a paginação repetiu a mesma página: acabou
+    if (page < maxPages && out.length < opts.limit) {
+      await sleep(1000 + Math.floor(Math.random() * 1000));
+    }
   }
   return out;
 }
