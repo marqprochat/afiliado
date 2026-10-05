@@ -2,7 +2,7 @@ import type { MarketplaceKind } from './enums';
 
 /** Credenciais das lojas convertidas por parâmetros na URL (sem API). */
 export interface TagCredentials {
-  tag?: string; // Amazon: "SEUID-20"; Magalu: nome da loja em magazinevoce.com.br/<loja>
+  tag?: string; // Amazon: "SEUID-20"; Magalu: nome da loja em magazinevoce.com.br/<loja>. Mercado Livre: etiqueta de afiliado usada no gerador meli.la (vazio = etiqueta padrão da conta)
   mattWord?: string; // Mercado Livre: ID do afiliado
   mattTool?: string; // Mercado Livre: número fixo da conta
   /** Sessão logada do Mercado Livre; permite gerar o link oficial meli.la. */

@@ -36,8 +36,8 @@ const AMAZON_CHECK_CONNECTION_ASIN = 'B08N5WRWNW';
 export type TagKind = 'AMAZON' | 'MERCADOLIVRE' | 'MAGALU';
 
 export interface TagAdapterOptions {
-  /** Gerador do link oficial meli.la (injetável em testes). */
-  mlOfficialLink?: (url: string, cookies: Record<string, string>) => Promise<string>;
+  /** Gerador do link oficial meli.la (injetável em testes); `tag` é a etiqueta de afiliado do ML. */
+  mlOfficialLink?: (url: string, cookies: Record<string, string>, tag?: string) => Promise<string>;
   /** Gerador do link oficial SiteStripe da Amazon (injetável em testes). */
   amazonOfficialLink?: (
     url: string,
@@ -121,7 +121,7 @@ export function createTagAdapter(
   opts: TagAdapterOptions = {},
 ): MarketplaceAdapter<TagCredentials> {
   const officialLink =
-    opts.mlOfficialLink ?? ((url, cookies) => generateOfficialMlLink(url, cookies));
+    opts.mlOfficialLink ?? ((url, cookies, tag) => generateOfficialMlLink(url, cookies, { tag }));
   const amazonOfficialLink =
     opts.amazonOfficialLink ??
     ((url, cookies, storeId) => generateOfficialAmazonLink(url, cookies, storeId));
@@ -201,11 +201,15 @@ export function createTagAdapter(
     async toAffiliateLink(creds, url) {
       // Mercado Livre: gerador oficial (meli.la) via sessão sincronizada, com fallback para tags
       if (kind === 'MERCADOLIVRE' && creds.mlSession?.cookies) {
-        const cacheKey = `MERCADOLIVRE:${url}`;
+        const cacheKey = `MERCADOLIVRE:${creds.tag?.trim() ?? ''}:${url}`;
         const cached = officialLinkCache.get(cacheKey);
         if (cached && cached.expiresAt > Date.now()) return cached.link;
         try {
-          const link = await officialLink(url, creds.mlSession.cookies);
+          const link = await officialLink(
+            url,
+            creds.mlSession.cookies,
+            creds.tag?.trim() || undefined,
+          );
           officialLinkCache.set(cacheKey, { link, expiresAt: Date.now() + OFFICIAL_LINK_TTL_MS });
           return link;
         } catch (err) {
