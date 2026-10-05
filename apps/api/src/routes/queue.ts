@@ -4,6 +4,7 @@ import { ApiError, queueAddSchema, queueSelectSchema } from '@afilados/shared';
 import { requireAuth } from '../plugins/auth';
 import { getSettings } from '../lib/settings';
 import { toApiProduct } from '../lib/products';
+import { enqueueMlLinksPrewarm } from '../lib/ml-links';
 
 const idParam = z.object({ id: z.string().min(1) });
 
@@ -65,6 +66,10 @@ export async function queueRoutes(app: FastifyInstance) {
           status: isPendingEnrich(p.raw) ? 'PENDING_ENRICH' : 'PENDING',
         })),
       });
+      // não deve impedir salvar na fila se o Redis/worker estiver indisponível
+      await enqueueMlLinksPrewarm(req.db, req.tenantId, valid).catch((err) =>
+        req.log.warn({ err }, 'falha ao enfileirar o pré-aquecimento de links do ML'),
+      );
     }
     return reply.status(201).send({ added: valid.length, count: count + valid.length });
   });

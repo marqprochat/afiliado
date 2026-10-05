@@ -25,6 +25,7 @@ import {
 } from '../lib/marketplaces';
 import { getQueue, getQueueEvents } from '../lib/redis';
 import { completeMlOAuth, startMlOAuth } from '../lib/ml-api';
+import { readMlLinkBatchError } from '../lib/ml-links';
 import { getAliexpressCategories, listDatafeeds } from '@afilados/marketplaces';
 
 const kindParams = z.object({ kind: marketplaceKindParam });
@@ -35,9 +36,11 @@ export async function marketplacesRoutes(app: FastifyInstance) {
 
   app.get('/marketplaces', async (req) => {
     const rows = await req.db.marketplaceConnection.findMany();
-    return MARKETPLACE_KINDS.map((kind) =>
-      publicConnection(rows.find((r) => r.kind === kind) ?? null, kind),
-    );
+    const mlLinkBatchError = await readMlLinkBatchError(req.tenantId);
+    return MARKETPLACE_KINDS.map((kind) => {
+      const conn = publicConnection(rows.find((r) => r.kind === kind) ?? null, kind);
+      return kind === 'MERCADOLIVRE' ? { ...conn, mlLinkBatchError } : conn;
+    });
   });
 
   app.put('/marketplaces/:kind', async (req) => {
@@ -69,6 +72,8 @@ export async function marketplacesRoutes(app: FastifyInstance) {
                 ? {
                     mattWord: body.mattWord ?? prev.mattWord,
                     mattTool: body.mattTool ?? prev.mattTool,
+                    // etiqueta do gerador meli.la; string vazia limpa (volta à etiqueta padrão da conta)
+                    tag: body.mlTag !== undefined ? body.mlTag || undefined : prev.tag,
                     // sessão sincronizada pela extensão/manualmente não é editável aqui; só preservada
                     ...(prev.mlSession ? { mlSession: prev.mlSession } : {}),
                     // conexão OAuth com a API oficial: só muda pelo fluxo /oauth; aqui só é preservada

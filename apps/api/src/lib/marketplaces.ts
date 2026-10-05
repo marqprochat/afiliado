@@ -55,6 +55,8 @@ export function publicConnection(
     hasSecret: Boolean(creds?.secret),
     mattWord: creds?.mattWord ?? null,
     mattTool: creds?.mattTool ?? null,
+    // Etiqueta de afiliado do ML (campo `tag` das credenciais só é do ML nesta conexão)
+    mlAffiliateTag: kind === 'MERCADOLIVRE' ? (creds?.tag ?? null) : null,
     amazonClientId: creds?.amazonApi?.clientId ?? null,
     hasAmazonApiSecret: Boolean(creds?.amazonApi?.clientSecret),
     hasAwinFeedListUrl: Boolean(creds?.feedListUrl),

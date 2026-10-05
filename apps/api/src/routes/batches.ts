@@ -22,6 +22,7 @@ import {
 } from '../lib/batches';
 import { assertDispatchTargets } from '../lib/dispatch';
 import { toApiProduct } from '../lib/products';
+import { enqueueMlLinksPrewarm } from '../lib/ml-links';
 
 const idParam = z.object({ id: z.string().min(1) });
 
@@ -393,6 +394,9 @@ export async function batchesRoutes(app: FastifyInstance) {
       position: body.position,
       window,
     });
+    await enqueueMlLinksPrewarm(req.db, req.tenantId, uniqueProductIds).catch((err) =>
+      req.log.warn({ err }, 'falha ao enfileirar o pré-aquecimento de links do ML'),
+    );
 
     const totalItems = b.items.length + res.added;
     const sentCount = b.items.filter((i) => i.status === 'SENT').length;
