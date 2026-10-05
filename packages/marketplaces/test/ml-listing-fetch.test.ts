@@ -114,23 +114,96 @@ describe('fetchMlListing', () => {
   });
 
   it('ML_LISTING_BLOCKED sem cookies e com cookies que não adiantam', async () => {
-    const run = (cookies?: Record<string, string>) =>
+    const run = (cookies: Record<string, string> | undefined, impl: ReturnType<typeof vi.fn>) =>
       fetchMlListing(
         { kind: 'deals' },
         {
           limit: 10,
           ...(cookies ? { cookies } : {}),
-          fetchImpl: vi.fn(async () => blocked()) as unknown as typeof fetch,
+          fetchImpl: impl as unknown as typeof fetch,
           sleep: noSleep,
         },
       );
-    await expect(run()).rejects.toMatchObject({ code: 'ML_LISTING_BLOCKED' });
-    const err = await run({ a: '1' }).catch((e: unknown) => e);
+    const anon = vi.fn(async () => blocked());
+    const anonErr = await run(undefined, anon).catch((e: unknown) => e);
+    expect(anonErr).toBeInstanceOf(MlListingError);
+    expect(anonErr).toMatchObject({ code: 'ML_LISTING_BLOCKED' });
+    expect((anonErr as MlListingError).message).toMatch(/não há sessão sincronizada/);
+    expect(anon).toHaveBeenCalledTimes(1);
+
+    const withCookies = vi.fn(async () => blocked());
+    const err = await run({ a: '1' }, withCookies).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(MlListingError);
-    expect((err as MlListingError).message).toMatch(/sess/i);
+    expect(err).toMatchObject({ code: 'ML_LISTING_BLOCKED' });
+    expect((err as MlListingError).message).toMatch(/mesmo com a sessão sincronizada/);
+    expect(withCookies).toHaveBeenCalledTimes(2);
+    const second = withCookies.mock.calls[1] as unknown as [string, RequestInit];
+    expect((second[1].headers as Record<string, string>).Cookie).toBe('a=1');
   });
 
-  it('trata 403 e 429 como bloqueio', async () => {
+  it('trata 403 como bloqueio', async () => {
+    await expect(
+      fetchMlListing(
+        { kind: 'deals' },
+        {
+          limit: 10,
+          fetchImpl: vi.fn(async () => resp('', { status: 403 })) as unknown as typeof fetch,
+          sleep: noSleep,
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'ML_LISTING_BLOCKED' });
+  });
+
+  it('falha de rede na página 1 vira ML_LISTING_HTTP em português, sem vazar o cookie', async () => {
+    const err = await fetchMlListing(
+      { kind: 'deals' },
+      {
+        limit: 10,
+        cookies: { ssid: 'segredo-123' },
+        fetchImpl: vi.fn(async () => {
+          throw new TypeError('fetch failed');
+        }) as unknown as typeof fetch,
+        sleep: noSleep,
+      },
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(MlListingError);
+    expect(err).toMatchObject({ code: 'ML_LISTING_HTTP' });
+    const e = err as MlListingError;
+    expect(e.message).toMatch(/rede|tempo/i);
+    expect(`${e.message} ${e.details ?? ''}`).not.toContain('segredo-123');
+  });
+
+  it('timeout (AbortError) na página 1 vira ML_LISTING_HTTP', async () => {
+    await expect(
+      fetchMlListing(
+        { kind: 'deals' },
+        {
+          limit: 10,
+          fetchImpl: vi.fn(async () => {
+            throw Object.assign(new Error('This operation was aborted'), { name: 'AbortError' });
+          }) as unknown as typeof fetch,
+          sleep: noSleep,
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'ML_LISTING_HTTP',
+      message: expect.stringMatching(/rede|tempo/i),
+    });
+  });
+
+  it('falha de rede na página 2 devolve o que veio na página 1', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(resp(listingPage(cards(3))))
+      .mockRejectedValueOnce(new TypeError('fetch failed'));
+    const out = await fetchMlListing(
+      { kind: 'deals' },
+      { limit: 100, fetchImpl: fetchImpl as unknown as typeof fetch, sleep: noSleep },
+    );
+    expect(out).toHaveLength(3);
+  });
+
+  it('trata 429 como bloqueio', async () => {
     await expect(
       fetchMlListing(
         { kind: 'deals' },

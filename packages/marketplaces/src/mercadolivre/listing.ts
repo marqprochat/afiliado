@@ -338,8 +338,14 @@ export async function fetchMlListing(
       loaded = await load(url, false);
       if (isBlocked(loaded) && cookie) loaded = await load(url, true);
     } catch (err) {
-      if (page === 1) throw err;
-      break;
+      if (page > 1) break;
+      if (err instanceof MlListingError) throw err;
+      // Rede fora do ar ou 15 s estourados: vira erro tipado para o chamador mostrar mensagem em português.
+      throw new MlListingError(
+        'Falha de rede ou tempo esgotado ao ler a listagem do Mercado Livre',
+        'ML_LISTING_HTTP',
+        `${url}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
 
     if (isBlocked(loaded)) {
