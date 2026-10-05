@@ -6,6 +6,7 @@ export const QUEUE_SEND_TELEGRAM = 'send-telegram';
 export const QUEUE_AWIN_IMPORT = 'awin-import';
 export const QUEUE_COUPON_SYNC = 'coupon-sync';
 export const QUEUE_GROUP_LINK_ROTATE = 'group-link-rotate';
+export const QUEUE_ML_LINKS_PREWARM = 'ml-links-prewarm';
 
 export type WaCommand =
   | 'connect'
@@ -93,4 +94,10 @@ export interface GroupLinkRotateJob {
   groupLinkId: string;
   fromGroupId: string | null;
   reason: 'threshold' | 'orphaned' | 'manual' | 'initial';
+}
+
+export interface MlLinksPrewarmJob {
+  tenantId: string;
+  /** `originalUrl` dos produtos do Mercado Livre cujo link meli.la deve ser gerado antes do envio. */
+  urls: string[];
 }
