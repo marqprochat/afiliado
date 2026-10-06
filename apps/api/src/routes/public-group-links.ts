@@ -73,4 +73,53 @@ export async function publicGroupLinksRoutes(app: FastifyInstance) {
 
     return reply.send(responseData);
   });
+
+  // GET /public/group-links - Lista todos os links de grupos ativos para a landpage de divulgação
+  app.get('/public/group-links', async (req, reply) => {
+    const links = await prisma.groupLink.findMany({
+      where: {
+        enabled: true,
+        status: 'ACTIVE',
+      },
+      orderBy: [
+        { clickCount: 'desc' },
+        { createdAt: 'desc' },
+      ],
+      include: {
+        groups: {
+          where: { status: 'ACTIVE' },
+          take: 1,
+        },
+      },
+    });
+
+    const formatted = links.map((link) => {
+      const activeGroup = link.groups[0] ?? null;
+      return {
+        id: link.id,
+        slug: link.slug,
+        label: link.label,
+        baseName: link.baseName,
+        customText: link.customText,
+        groupDescription: link.groupDescription,
+        groupImageBase64: link.groupImageBase64,
+        clickCount: link.clickCount,
+        status: link.status,
+        memberLimit: link.memberLimit,
+        activeGroup: activeGroup
+          ? {
+              name: activeGroup.name,
+              memberCount: activeGroup.memberCount,
+            }
+          : null,
+        redirectUrl: `/g/${link.slug}`,
+      };
+    });
+
+    return reply.send({
+      ok: true,
+      data: formatted,
+    });
+  });
 }
+

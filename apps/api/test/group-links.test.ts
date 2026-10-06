@@ -189,6 +189,18 @@ describe('group-links API routes', () => {
       inviteLink: 'https://chat.whatsapp.com/TESTPUBLICINVITE',
     });
 
+    // Rota pública para listar todos os links de grupos para a landpage
+    const resListPublic = await app.inject({
+      method: 'GET',
+      url: '/api/v1/public/group-links',
+    });
+
+    expect(resListPublic.statusCode).toBe(200);
+    const bodyList = resListPublic.json();
+    expect(bodyList.ok).toBe(true);
+    expect(Array.isArray(bodyList.data)).toBe(true);
+    expect(bodyList.data.some((l: { slug: string }) => l.slug === uniqueSlug)).toBe(true);
+
     // Rota pública para slug inexistente retorna 404
     const res404 = await app.inject({
       method: 'GET',

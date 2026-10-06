@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Link2, Plus, Search, Users, Activity, MousePointerClick, RefreshCw } from 'lucide-react';
+import { Link2, Plus, Search, Users, Activity, MousePointerClick, RefreshCw, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { GroupLinkCard } from '@/components/group-links/group-link-card';
@@ -42,6 +42,15 @@ export default function LinksGruposPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <a
+            href="/grupos"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/10 border border-indigo-500/30 text-indigo-400 hover:bg-indigo-600/20 hover:text-indigo-300 text-xs font-semibold transition"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+            <span>Ver Landing Page Pública</span>
+          </a>
           <Button
             variant="outline"
             size="sm"
