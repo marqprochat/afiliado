@@ -43,6 +43,15 @@ describe('Buscar Produtos: Ofertas do ML', () => {
     expect(screen.getByLabelText('Fonte da listagem')).toBeTruthy();
   });
 
+  it('ML → Amazon → ML volta para Ofertas do ML, não fica em Por Links', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Mercado Livre' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Amazon' }));
+    expect(screen.queryByLabelText('Fonte da listagem')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Mercado Livre' }));
+    expect(screen.getByLabelText('Fonte da listagem')).toBeTruthy();
+  });
+
   it('busca chama /products/search com mlListing', async () => {
     apiFetchMock.mockImplementation(async (path: string) => {
       if (path === '/marketplaces') return [{ kind: 'MERCADOLIVRE', hasMlApi: false }];

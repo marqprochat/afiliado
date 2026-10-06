@@ -70,7 +70,9 @@ export default function ProdutosPage() {
   function selectSource(kind: MarketplaceKind) {
     setSource(kind);
     const willDisableKeyword = DISABLED_KEYWORD_SOURCES.includes(kind);
-    if (willDisableKeyword && sub === 'keyword') {
+    // Vindo de outro marketplace (ex.: ML → Amazon → ML), o ML sem API oficial abre em Ofertas do ML
+    // em vez de herdar "Por Links / CSV" que a Amazon deixou.
+    if (willDisableKeyword && (sub === 'keyword' || (kind === 'MERCADOLIVRE' && source !== kind))) {
       setSub(fallbackSub(kind));
       return;
     }
