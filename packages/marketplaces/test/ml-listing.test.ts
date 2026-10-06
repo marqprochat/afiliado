@@ -47,6 +47,16 @@ describe('buildMlListingUrl', () => {
     ).toBe('https://www.mercadolivre.com.br/mais-vendidos?page=2');
   });
 
+  it('URL colada com ?page=N: a página 1 é sempre a primeira', () => {
+    const url = 'https://www.mercadolivre.com.br/mais-vendidos?page=3';
+    expect(buildMlListingUrl({ kind: 'url', url }, 1)).toBe(
+      'https://www.mercadolivre.com.br/mais-vendidos',
+    );
+    expect(buildMlListingUrl({ kind: 'url', url }, 2)).toBe(
+      'https://www.mercadolivre.com.br/mais-vendidos?page=2',
+    );
+  });
+
   it('rejeita categoria inválida e URL fora do domínio do ML', () => {
     const invalid = (fn: () => unknown) =>
       expect(thrown(fn)).toMatchObject({ code: 'ML_LISTING_INVALID_URL' });

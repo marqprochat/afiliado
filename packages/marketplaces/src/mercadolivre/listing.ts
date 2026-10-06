@@ -65,6 +65,7 @@ export function buildMlListingUrl(source: MlListingSource, page: number): string
         throw invalid('Use um link https do Mercado Livre (mercadolivre.com.br)');
       }
       u.hash = '';
+      u.searchParams.delete('page'); // a paginação é nossa: a página 1 é sempre a primeira
       break;
   }
   if (page > 1) u.searchParams.set('page', String(page));
