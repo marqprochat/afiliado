@@ -142,6 +142,27 @@ describe('POST /products/search (listing do ML)', () => {
     expect(r.json().error.message).toMatch(/layout/i);
   });
 
+  it.each([
+    ['erro genérico', () => new Error('fetch failed: https://internal')],
+    [
+      'ML_LISTING_HTTP',
+      () =>
+        new MlListingError('HTTP 500 em https://internal', 'ML_LISTING_HTTP', 'https://internal'),
+    ],
+  ])('%s → 502 com mensagem genérica, sem vazar detalhes', async (_nome, makeErr) => {
+    fetchMock.mockRejectedValue(makeErr());
+    const r = await search({
+      source: 'MERCADOLIVRE',
+      mode: 'listing',
+      mlListing: { kind: 'deals' },
+    });
+    expect(r.statusCode).toBe(502);
+    expect(r.json().error.message).toBe(
+      'Não foi possível ler a listagem do Mercado Livre agora; tente de novo em instantes',
+    );
+    expect(r.body).not.toMatch(/internal/);
+  });
+
   it('URL inválida → 400', async () => {
     fetchMock.mockRejectedValue(
       new MlListingError('Use um link https do Mercado Livre', 'ML_LISTING_INVALID_URL'),

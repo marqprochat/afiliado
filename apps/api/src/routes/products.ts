@@ -133,8 +133,12 @@ export async function productsRoutes(app: FastifyInstance) {
           ...(cookies ? { cookies } : {}),
         });
       } catch (e) {
-        if (e instanceof MlListingError && e.details) {
-          req.log.warn({ code: e.code, details: e.details }, 'busca por listagem do ML falhou');
+        if (e instanceof MlListingError) {
+          if (e.details) {
+            req.log.warn({ code: e.code, details: e.details }, 'busca por listagem do ML falhou');
+          }
+        } else {
+          req.log.warn({ err: e }, 'busca por listagem do ML falhou com erro inesperado');
         }
         throw mapMlListingError(e, Boolean(cookies));
       }

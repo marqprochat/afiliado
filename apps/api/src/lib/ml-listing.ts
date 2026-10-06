@@ -18,6 +18,9 @@ export function toMlListingSource(l: MlListingQuery): MlListingSource {
   }
 }
 
+const GENERIC_LISTING_ERROR =
+  'Não foi possível ler a listagem do Mercado Livre agora; tente de novo em instantes';
+
 export function mapMlListingError(e: unknown, hadSession: boolean): ApiError {
   if (e instanceof MlListingError) {
     switch (e.code) {
@@ -37,9 +40,9 @@ export function mapMlListingError(e: unknown, hadSession: boolean): ApiError {
           'A página de ofertas do Mercado Livre mudou de layout e não foi possível ler os produtos',
           502,
         );
-      default:
-        return new ApiError('MARKETPLACE_ERROR', e.message, 502);
+      default: // ML_LISTING_HTTP: a mensagem pode ter URL/detalhe interno; o detalhe vai para o log
+        return new ApiError('MARKETPLACE_ERROR', GENERIC_LISTING_ERROR, 502);
     }
   }
-  return new ApiError('MARKETPLACE_ERROR', e instanceof Error ? e.message : String(e), 502);
+  return new ApiError('MARKETPLACE_ERROR', GENERIC_LISTING_ERROR, 502);
 }
