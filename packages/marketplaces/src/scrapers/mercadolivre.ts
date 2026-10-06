@@ -213,6 +213,11 @@ export function detectFlashSaleEnd(
   }
 
   // c) Só o selo: assume fim do dia em São Paulo (UTC-3)
+  return endOfDaySaoPaulo(now);
+}
+
+/** Fim do dia (23:59:59) em São Paulo (UTC-3, sem horário de verão) como ISO UTC. */
+export function endOfDaySaoPaulo(now: Date = new Date()): string {
   const spNow = new Date(now.getTime() - 3 * 60 * 60 * 1000);
   const endOfDayUtc = Date.UTC(
     spNow.getUTCFullYear(),

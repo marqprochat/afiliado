@@ -54,7 +54,9 @@ export interface AiSettings {
   maxChars: number;
   temperature: number;
 }
-export type AiSettingsPatch = Partial<Omit<AiSettings, 'hasApiKey' | 'apiKeyHint'>> & { apiKey?: string };
+export type AiSettingsPatch = Partial<Omit<AiSettings, 'hasApiKey' | 'apiKeyHint'>> & {
+  apiKey?: string;
+};
 export interface AiTestResult {
   cta: string;
   latencyMs: number;
@@ -105,6 +107,8 @@ export interface MarketplaceConnection {
   hasSecret: boolean;
   mattWord: string | null;
   mattTool: string | null;
+  /** Etiqueta de afiliado do ML usada no gerador meli.la (vazio = padrão da conta). */
+  mlAffiliateTag?: string | null;
   amazonClientId: string | null;
   hasAmazonApiSecret: boolean;
   hasAwinFeedListUrl: boolean;
@@ -127,6 +131,13 @@ export interface MarketplaceConnection {
   /** Sessão do Magazine Você sincronizada; armazenada, sem geração de link nesta fase. */
   magaluSessionSyncedAt: string | null;
   magaluSessionSource: 'extension' | 'manual' | null;
+  /** Último erro do gerador de links em lote do ML (só no card do ML); some quando um lote volta a funcionar. */
+  mlLinkBatchError?: {
+    at: string;
+    message: string;
+    urls: number;
+    recoveredByFallback: number;
+  } | null;
   lastCheckedAt: string | null;
   lastError: string | null;
 }
@@ -213,7 +224,7 @@ export interface ApiProduct {
   /** Metadados brutos; `pendingEnrich: true` enquanto o worker ainda raspa a página.
    * `productCatIds`: IDs reais de categoria da Shopee (namespace da Open Platform, diferente
    * do ID visível na URL do site) — únicos IDs válidos para buscar por categoria. */
-  raw?: { pendingEnrich?: boolean; productCatIds?: number[] } | null;
+  raw?: { pendingEnrich?: boolean; productCatIds?: number[]; priceNote?: string } | null;
 }
 export interface QueueItem {
   id: string;

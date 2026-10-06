@@ -217,3 +217,15 @@ export async function loadFetchCredentials(
   if (kind === 'MERCADOLIVRE') return loadMlApiCredentials(db);
   return {};
 }
+
+/**
+ * Cookies da sessão sincronizada do ML (extensão ou colagem manual), ou undefined. Não renova o
+ * token da API oficial: serve à busca por listagem, que só precisa dos cookies como segunda tentativa.
+ */
+export async function loadMlSessionCookies(
+  db: TenantClient,
+): Promise<Record<string, string> | undefined> {
+  const { creds } = await readCreds(db);
+  const cookies = creds.mlSession?.cookies;
+  return cookies && Object.keys(cookies).length > 0 ? cookies : undefined;
+}

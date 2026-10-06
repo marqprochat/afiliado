@@ -19,6 +19,7 @@ import {
   discoverMercadoLivreByKeyword,
   discoverMlCatalogUrls,
   discoverMagaluByKeyword,
+  MlListingError,
 } from '@afilados/marketplaces';
 import { requireAuth } from '../plugins/auth';
 import {
@@ -28,7 +29,8 @@ import {
   loadAliexpressCredentials,
   loadShopeeCredentials,
 } from '../lib/marketplaces';
-import { loadFetchCredentials } from '../lib/ml-api';
+import { loadFetchCredentials, loadMlSessionCookies } from '../lib/ml-api';
+import { mapMlListingError, mlListingDeps, toMlListingSource } from '../lib/ml-listing';
 import { toApiProduct, upsertProducts } from '../lib/products';
 import { getQueue } from '../lib/redis';
 import { searchAwinCatalog, fetchAwinCatalogByUrls } from '../lib/awin-catalog';
@@ -107,6 +109,40 @@ export async function productsRoutes(app: FastifyInstance) {
       if (!q.query) throw ApiError.validation('Informe uma palavra-chave');
       const found = await searchAwinCatalog(req.db, q.query, q.limit);
       const rows = await upsertProducts(req.db, req.tenantId, applySearchFilters(found, q));
+      return { products: rows.map(toApiProduct) };
+    }
+
+    // Mercado Livre por listagem de ofertas (a busca por palavra-chave é bloqueada pelo anti-bot).
+    if (q.mode === 'listing') {
+      const cookies = await loadMlSessionCookies(req.db);
+      let found: ProductData[];
+      try {
+        found = await mlListingDeps.fetchMlListing(toMlListingSource(q.mlListing!), {
+          limit: q.limit,
+          // filtra durante a paginação para juntar `limit` produtos que passem nos filtros
+          filter: (p) => {
+            // Full que também diz "grátis" no card (raw.freeShipping) vale como frete grátis
+            const freeShipping =
+              p.shipping === 'FREE' ||
+              (p.raw as { freeShipping?: unknown } | undefined)?.freeShipping === true;
+            return (
+              applySearchFilters([p], { ...q, freeShippingOnly: false }).length > 0 &&
+              (!q.freeShippingOnly || freeShipping)
+            );
+          },
+          ...(cookies ? { cookies } : {}),
+        });
+      } catch (e) {
+        if (e instanceof MlListingError) {
+          if (e.details) {
+            req.log.warn({ code: e.code, details: e.details }, 'busca por listagem do ML falhou');
+          }
+        } else {
+          req.log.warn({ err: e }, 'busca por listagem do ML falhou com erro inesperado');
+        }
+        throw mapMlListingError(e, Boolean(cookies));
+      }
+      const rows = await upsertProducts(req.db, req.tenantId, found);
       return { products: rows.map(toApiProduct) };
     }
 

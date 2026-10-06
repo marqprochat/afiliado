@@ -10,8 +10,22 @@ export const SEARCH_SORTS = [
 ] as const;
 export type SearchSort = (typeof SEARCH_SORTS)[number];
 
-export const SEARCH_MODES = ['keyword', 'category', 'trending', 'shop'] as const;
+export const SEARCH_MODES = ['keyword', 'category', 'trending', 'shop', 'listing'] as const;
 export type SearchMode = (typeof SEARCH_MODES)[number];
+
+/** Fontes da busca por listagem do Mercado Livre (ofertas do dia, categoria, relâmpago, URL colada). */
+export const ML_LISTING_KINDS = ['deals', 'category', 'lightning', 'url'] as const;
+export type MlListingKind = (typeof ML_LISTING_KINDS)[number];
+
+const mlListingSchema = z.object({
+  kind: z.enum(ML_LISTING_KINDS),
+  categoryId: z
+    .string()
+    .regex(/^MLB\d+$/, 'Categoria inválida')
+    .optional(),
+  url: z.string().url().max(2000).optional(),
+});
+export type MlListingQuery = z.infer<typeof mlListingSchema>;
 
 export const searchQuerySchema = z
   .object({
@@ -32,6 +46,7 @@ export const searchQuerySchema = z
     minDiscountPct: z.number().int().min(1).max(99).optional(),
     minSales: z.number().int().nonnegative().optional(),
     freeShippingOnly: z.boolean().default(false),
+    mlListing: mlListingSchema.optional(),
   })
   .superRefine((q, ctx) => {
     if (q.mode === 'keyword' && !q.query)
@@ -40,6 +55,27 @@ export const searchQuerySchema = z
       ctx.addIssue({ code: 'custom', path: ['categoryId'], message: 'categoryId obrigatório' });
     if (q.mode === 'shop' && !q.shopId)
       ctx.addIssue({ code: 'custom', path: ['shopId'], message: 'shopId obrigatório' });
+    if (q.mode === 'listing') {
+      if (q.source !== 'MERCADOLIVRE') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['mode'],
+          message: 'A busca por listagem só existe para o Mercado Livre',
+        });
+      }
+      if (!q.mlListing) {
+        ctx.addIssue({ code: 'custom', path: ['mlListing'], message: 'mlListing obrigatório' });
+      } else {
+        if (q.mlListing.kind === 'category' && !q.mlListing.categoryId)
+          ctx.addIssue({
+            code: 'custom',
+            path: ['mlListing', 'categoryId'],
+            message: 'categoryId obrigatório',
+          });
+        if (q.mlListing.kind === 'url' && !q.mlListing.url)
+          ctx.addIssue({ code: 'custom', path: ['mlListing', 'url'], message: 'url obrigatória' });
+      }
+    }
     if (q.minPrice !== undefined && q.maxPrice !== undefined && q.minPrice > q.maxPrice) {
       ctx.addIssue({
         code: 'custom',

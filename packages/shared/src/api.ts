@@ -83,6 +83,8 @@ export const marketplaceUpdateSchema = z.object({
     .string()
     .regex(/^\d{1,12}$/, 'matt_tool deve ser numérico')
     .optional(),
+  /** Etiqueta de afiliado do ML usada no gerador de links meli.la; vazio = etiqueta padrão da conta. */
+  mlTag: z.string().trim().max(100).optional(),
   amazonClientId: z.string().min(1).optional(),
   amazonClientSecret: z.string().min(1).optional(),
   feedListUrl: z

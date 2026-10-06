@@ -2,7 +2,7 @@ import type { MarketplaceKind } from './enums';
 
 /** Credenciais das lojas convertidas por parâmetros na URL (sem API). */
 export interface TagCredentials {
-  tag?: string; // Amazon: "SEUID-20"; Magalu: nome da loja em magazinevoce.com.br/<loja>
+  tag?: string; // Amazon: "SEUID-20"; Magalu: nome da loja em magazinevoce.com.br/<loja>. Mercado Livre: etiqueta de afiliado usada no gerador meli.la (vazio = etiqueta padrão da conta)
   mattWord?: string; // Mercado Livre: ID do afiliado
   mattTool?: string; // Mercado Livre: número fixo da conta
   /** Sessão logada do Mercado Livre; permite gerar o link oficial meli.la. */
@@ -73,3 +73,30 @@ export function hasTagCredentials(
   if (!creds) return false;
   return requiredTagFields(kind).every((f) => typeof creds[f] === 'string' && creds[f]!.length > 0);
 }
+
+/**
+ * Categorias raiz do Mercado Livre aceitas em `/ofertas?category=<id>`. A API pública de categorias
+ * responde 403 para este app, então a lista é estática; cada id foi conferido abrindo a página.
+ */
+export const ML_DEAL_CATEGORIES = [
+  { id: 'MLB1051', label: 'Celulares e Telefones' },
+  { id: 'MLB1648', label: 'Informática' },
+  { id: 'MLB1000', label: 'Eletrônicos, Áudio e Vídeo' },
+  { id: 'MLB1144', label: 'Games' },
+  { id: 'MLB5726', label: 'Eletrodomésticos' },
+  { id: 'MLB1574', label: 'Casa, Móveis e Decoração' },
+  { id: 'MLB1246', label: 'Beleza e Cuidado Pessoal' },
+  { id: 'MLB1430', label: 'Calçados, Roupas e Bolsas' },
+  { id: 'MLB3937', label: 'Joias e Relógios' },
+  { id: 'MLB1276', label: 'Esportes e Fitness' },
+  { id: 'MLB1132', label: 'Brinquedos e Hobbies' },
+  { id: 'MLB1384', label: 'Bebês' },
+  { id: 'MLB1500', label: 'Construção' },
+  { id: 'MLB263532', label: 'Ferramentas' },
+  { id: 'MLB5672', label: 'Acessórios para Veículos' },
+  { id: 'MLB1403', label: 'Alimentos e Bebidas' },
+  { id: 'MLB1071', label: 'Animais' },
+  { id: 'MLB1039', label: 'Câmeras e Acessórios' },
+  { id: 'MLB1182', label: 'Instrumentos Musicais' },
+  { id: 'MLB1196', label: 'Livros, Revistas e Comics' },
+] as const;

@@ -22,6 +22,7 @@ import {
 import type { ProductData, SendOfferJob, SendTelegramJob, TagCredentials } from '@afilados/shared';
 import { resolveItemCta } from '../lib/ai-cta';
 import { publishEvent } from '../lib/events';
+import { resolveCachedAffiliateLink } from '../lib/ml-links';
 import { enqueueSendTelegram } from '../lib/queue-helpers';
 import { getRedis } from '../lib/redis';
 import { TokenBucket, jitter, waitForToken } from '../lib/rate-limit';
@@ -239,10 +240,14 @@ export async function sendOffer(
     ) {
       const creds = decryptJson<TagCredentials>(Buffer.from(conn.encryptedCredentials));
       try {
-        affiliateLink = await resolveTagAdapter(product.source).toAffiliateLink(
+        const source = product.source;
+        affiliateLink = await resolveCachedAffiliateLink({
+          tenantId,
+          source,
           creds,
-          product.originalUrl,
-        );
+          url: product.originalUrl,
+          generate: () => resolveTagAdapter(source).toAffiliateLink(creds, product.originalUrl),
+        });
       } catch (err) {
         log.warn(
           { batchItemId: item.id, source: product.source, err },

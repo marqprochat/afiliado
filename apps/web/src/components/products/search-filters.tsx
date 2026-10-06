@@ -1,7 +1,9 @@
 'use client';
 import { useState } from 'react';
 import {
+  ML_DEAL_CATEGORIES,
   searchQuerySchema,
+  type MlListingKind,
   type MarketplaceKind,
   type SearchMode,
   type SearchQuery,
@@ -37,6 +39,22 @@ const CATEGORY_HELP: Partial<Record<MarketplaceKind, string>> = {
     'Não use o número da URL do shopee.com.br — é outro sistema de IDs e sempre dá 0 resultados. Faça uma busca por palavra-chave, copie o chip "🏷️ Categoria" de um produto e cole aqui.',
 };
 
+const LISTING_URL_ERROR =
+  'Cole a URL completa de uma listagem do Mercado Livre, começando com https://';
+
+// Espelha a regra do servidor: https e host mercadolivre.com.br (ou subdomínio).
+function isMlListingUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return (
+      u.protocol === 'https:' &&
+      (u.hostname === 'mercadolivre.com.br' || u.hostname.endsWith('.mercadolivre.com.br'))
+    );
+  } catch {
+    return false;
+  }
+}
+
 const selectCls = 'h-9 rounded-md border border-input bg-surface-2 px-2 text-sm';
 
 export function SearchFilters({
@@ -61,6 +79,11 @@ export function SearchFilters({
   const [minDiscountPct, setMinDiscountPct] = useState('');
   const [minSales, setMinSales] = useState('');
   const [freeShippingOnly, setFreeShippingOnly] = useState(false);
+  const [listingKind, setListingKind] = useState<MlListingKind>('deals');
+  const [listingCategory, setListingCategory] = useState('');
+  const [listingUrl, setListingUrl] = useState('');
+  const [listingUrlError, setListingUrlError] = useState('');
+  const [formError, setFormError] = useState('');
 
   const isShopee = source === 'SHOPEE';
   const isAliexpress = source === 'ALIEXPRESS';
@@ -85,12 +108,32 @@ export function SearchFilters({
     if (mode === 'keyword') raw.query = text;
     if (mode === 'shop') raw.shopId = text;
     if (mode === 'category') raw.categoryId = categoryId;
+    if (mode === 'listing') {
+      raw.mlListing =
+        listingKind === 'category'
+          ? { kind: 'category', categoryId: listingCategory }
+          : listingKind === 'url'
+            ? { kind: 'url', url: listingUrl.trim() }
+            : { kind: listingKind };
+    }
     if (minPrice) raw.minPrice = Number(minPrice);
     if (maxPrice) raw.maxPrice = Number(maxPrice);
     if (minDiscountPct) raw.minDiscountPct = Number(minDiscountPct);
-    if (minSales) raw.minSales = Number(minSales);
+    // cards de listagem do ML não trazem vendas: o filtro descartaria tudo
+    if (minSales && mode !== 'listing') raw.minSales = Number(minSales);
+    if (mode === 'listing' && listingKind === 'url' && !isMlListingUrl(listingUrl.trim())) {
+      setListingUrlError(LISTING_URL_ERROR);
+      return;
+    }
     const parsed = searchQuerySchema.safeParse(raw);
-    if (parsed.success) onSearch(parsed.data);
+    if (!parsed.success) {
+      // em listagem o usuário não pode ficar sem retorno quando a validação falha
+      if (mode === 'listing') setFormError('Confira os campos da busca');
+      return;
+    }
+    setListingUrlError('');
+    setFormError('');
+    onSearch(parsed.data);
   }
 
   return (
@@ -152,13 +195,68 @@ export function SearchFilters({
               : 'Itens em alta / promoções segundo a API do AliExpress.'}
           </p>
         )}
+        {mode === 'listing' && (
+          <div className="flex flex-1 flex-wrap gap-2">
+            <select
+              aria-label="Fonte da listagem"
+              value={listingKind}
+              onChange={(e) => {
+                setListingKind(e.target.value as MlListingKind);
+                setListingUrlError('');
+              }}
+              className={`${selectCls} w-56`}
+            >
+              <option value="deals">Ofertas do dia</option>
+              <option value="category">Ofertas por categoria</option>
+              <option value="lightning">Ofertas relâmpago</option>
+              <option value="url">Colar URL de listagem</option>
+            </select>
+            {listingKind === 'category' && (
+              <select
+                aria-label="Categoria do ML"
+                value={listingCategory}
+                onChange={(e) => setListingCategory(e.target.value)}
+                className={`${selectCls} w-64`}
+              >
+                <option value="">Selecione uma categoria</option>
+                {ML_DEAL_CATEGORIES.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            )}
+            {listingKind === 'url' && (
+              <Input
+                aria-label="URL da listagem"
+                value={listingUrl}
+                onChange={(e) => {
+                  setListingUrl(e.target.value);
+                  setListingUrlError('');
+                }}
+                aria-invalid={Boolean(listingUrlError)}
+                aria-describedby={listingUrlError ? 'listing-url-error' : undefined}
+                placeholder="https://www.mercadolivre.com.br/ofertas?…"
+                className="min-w-64 flex-1"
+              />
+            )}
+            {listingKind === 'url' && listingUrlError && (
+              <p id="listing-url-error" role="alert" className="basis-full text-xs text-red-400">
+                {listingUrlError}
+              </p>
+            )}
+          </div>
+        )}
         <Button
           type="submit"
           className="bg-brand text-white hover:bg-brand/90"
           disabled={
             loading ||
-            (!supportsAdvancedModes && mode !== 'keyword') ||
-            (mode === 'category' && !categoryId)
+            (!supportsAdvancedModes && mode !== 'keyword' && mode !== 'listing') ||
+            (mode === 'category' && !categoryId) ||
+            (mode === 'listing' &&
+              ((listingKind === 'category' && !listingCategory) ||
+                (listingKind === 'url' && !listingUrl.trim())))
           }
         >
           {loading ? 'Buscando…' : 'Buscar'}
@@ -236,18 +334,20 @@ export function SearchFilters({
             placeholder="0"
           />
         </div>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="minSales">Vendas mín.</Label>
-          <Input
-            id="minSales"
-            type="number"
-            min="0"
-            value={minSales}
-            onChange={(e) => setMinSales(e.target.value)}
-            className="w-24"
-            placeholder="0"
-          />
-        </div>
+        {mode !== 'listing' && (
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="minSales">Vendas mín.</Label>
+            <Input
+              id="minSales"
+              type="number"
+              min="0"
+              value={minSales}
+              onChange={(e) => setMinSales(e.target.value)}
+              className="w-24"
+              placeholder="0"
+            />
+          </div>
+        )}
         <label className="flex items-center gap-2">
           <NativeCheckbox
             checked={freeShippingOnly}
@@ -286,7 +386,18 @@ export function SearchFilters({
               : só busca por palavra-chave está disponível.
             </p>
           )}
+        {mode === 'listing' && (
+          <p className="basis-full text-xs text-muted-foreground">
+            A ordem é a da página do Mercado Livre. O preço mostrado pode ser o do Pix (veja a nota
+            no produto).
+          </p>
+        )}
       </div>
+      {formError && (
+        <p role="alert" className="text-xs text-red-400">
+          {formError}
+        </p>
+      )}
     </form>
   );
 }

@@ -40,6 +40,8 @@ function initialFieldValue(key: MarketplaceFieldKey, connection?: MarketplaceCon
       return connection?.mattWord ?? '';
     case 'mattTool':
       return connection?.mattTool ?? '';
+    case 'mlTag':
+      return connection?.mlAffiliateTag ?? '';
     case 'amazonClientId':
       return connection?.amazonClientId ?? '';
     case 'appKey':
@@ -145,7 +147,13 @@ export function MarketplaceDrawer({
     const fields: Partial<Record<MarketplaceFieldKey, string>> = {};
     for (const field of config.fields) {
       const value = values[field.key]?.trim();
-      if (!value) continue;
+      if (!value) {
+        // esvaziar a etiqueta que já estava salva limpa-a (volta à etiqueta padrão da conta)
+        if (field.key === 'mlTag' && initialFieldValue('mlTag', connection) !== '') {
+          fields.mlTag = '';
+        }
+        continue;
+      }
       fields[field.key] = value;
     }
     // Amazon: Client ID e Client Secret da Creators API são salvos como par — a API só

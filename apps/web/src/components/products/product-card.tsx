@@ -22,6 +22,9 @@ export function ProductCard({
   // Shopee: o ID que aparece na URL do site (shopee.com.br/...-cat.NNNNNNNN) é de um namespace
   // diferente do usado pela Open Platform e sempre retorna 0 resultados (testado ao vivo).
   const shopeeCatId = p.source === 'SHOPEE' ? p.raw?.productCatIds?.[0] : undefined;
+  // Nota do preço da listagem do ML (ex.: "no Pix"): o preço mostrado pode ser o do Pix.
+  const priceNote =
+    typeof p.raw?.priceNote === 'string' && p.raw.priceNote.trim() ? p.raw.priceNote.trim() : null;
   async function copyCatId() {
     if (!shopeeCatId) return;
     await navigator.clipboard.writeText(String(shopeeCatId));
@@ -77,6 +80,7 @@ export function ProductCard({
         {p.title}
       </p>
       <p className="text-sm font-semibold text-emerald-400">{formatBRL(p.price)}</p>
+      {priceNote && <p className="text-xs text-muted-foreground">{priceNote}</p>}
       {p.originalPrice && (
         <p className="text-xs text-muted-foreground line-through">{formatBRL(p.originalPrice)}</p>
       )}

@@ -18,6 +18,7 @@ import {
 } from '@afilados/marketplaces';
 import { TelegramClient } from '@afilados/telegram';
 import type { ProductData, SendTelegramJob, TagCredentials } from '@afilados/shared';
+import { resolveCachedAffiliateLink } from '../lib/ml-links';
 
 const log = pino({ name: 'send-telegram' });
 
@@ -128,10 +129,14 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
       ) {
         const creds = decryptJson<TagCredentials>(Buffer.from(conn.encryptedCredentials));
         try {
-          affiliateLink = await resolveTagAdapter(product.source).toAffiliateLink(
+          const source = product.source;
+          affiliateLink = await resolveCachedAffiliateLink({
+            tenantId: job.tenantId,
+            source,
             creds,
-            product.originalUrl,
-          );
+            url: product.originalUrl,
+            generate: () => resolveTagAdapter(source).toAffiliateLink(creds, product.originalUrl),
+          });
         } catch (err) {
           log.warn(
             { botId: job.botId, source: product.source, err },
