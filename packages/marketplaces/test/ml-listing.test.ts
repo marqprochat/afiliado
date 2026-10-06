@@ -198,6 +198,15 @@ describe('parseMlListingHtml: poly-card', () => {
     expect(products[0]?.externalId).toBe('MLB46202402');
   });
 
+  it('descarta card cujo link não tem id MLB (cairia na home do ML)', () => {
+    const html = listingPage([
+      polyCard({ title: 'Link vazio', href: '#' }),
+      polyCard({ title: 'Link raiz', href: '/' }),
+      polyCard({ title: 'Bom', href: 'https://www.mercadolivre.com.br/bom/p/MLB77' }),
+    ]);
+    expect(parseMlListingHtml(html, NOW).map((x) => x.title)).toEqual(['Bom']);
+  });
+
   it('associa o period_end de cada card com contagem, na ordem', () => {
     const html = listingPage(
       [
@@ -254,6 +263,20 @@ describe('parseMlListingHtml: carrossel', () => {
         raw: { origin: 'ml-listing' },
       },
     ]);
+  });
+});
+
+describe('parseMlListingHtml: carrossel sem id', () => {
+  it('descarta item do carrossel cujo link não tem id MLB', () => {
+    const item = (href: string) =>
+      '<div class="dynamic-carousel__item-container">' +
+      `<a class="splinter-link" href="${href}">` +
+      '<img src="https://http2.mlstatic.com/D_1.webp">' +
+      '<h3 class="dynamic-carousel__title">Fone</h3>' +
+      '<span class="dynamic-carousel__price"><span>10</span></span>' +
+      '</a></div>';
+    const html = `<html><body>${item('#')}${item('/')}</body></html>`;
+    expect(parseMlListingHtml(html, NOW)).toEqual([]);
   });
 });
 

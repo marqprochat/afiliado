@@ -159,7 +159,8 @@ function parsePolycards($: cheerio.CheerioAPI, html: string, now: Date): Product
     const url = cleanMlProductUrl(titleEl.attr('href') ?? '');
     if (!title || !url) continue;
     const parsedUrl = parseProductUrl(url);
-    if (parsedUrl.source !== 'MERCADOLIVRE') continue;
+    // sem id MLB o link não é de produto (ex.: "#" vira a home do ML)
+    if (parsedUrl.source !== 'MERCADOLIVRE' || !parsedUrl.externalId) continue;
 
     const imgEl = card.find('img.poly-component__picture').first();
     const image = [imgEl.attr('src'), imgEl.attr('data-src')].find((s) => s?.startsWith('http'));
@@ -182,7 +183,7 @@ function parsePolycards($: cheerio.CheerioAPI, html: string, now: Date): Product
 
     out.push({
       source: 'MERCADOLIVRE',
-      ...(parsedUrl.externalId ? { externalId: parsedUrl.externalId } : {}),
+      externalId: parsedUrl.externalId,
       title,
       price,
       ...(originalPrice !== undefined ? { originalPrice } : {}),
@@ -211,7 +212,7 @@ function parseCarousel($: cheerio.CheerioAPI): ProductData[] {
     const image = card.find('img').first().attr('src');
     if (!title || !url || !image?.startsWith('http')) return;
     const parsedUrl = parseProductUrl(url);
-    if (parsedUrl.source !== 'MERCADOLIVRE') return;
+    if (parsedUrl.source !== 'MERCADOLIVRE' || !parsedUrl.externalId) return;
 
     const intPart = card
       .find('.dynamic-carousel__price span')
@@ -233,7 +234,7 @@ function parseCarousel($: cheerio.CheerioAPI): ProductData[] {
 
     out.push({
       source: 'MERCADOLIVRE',
-      ...(parsedUrl.externalId ? { externalId: parsedUrl.externalId } : {}),
+      externalId: parsedUrl.externalId,
       title,
       price,
       ...(originalPrice !== undefined ? { originalPrice } : {}),
