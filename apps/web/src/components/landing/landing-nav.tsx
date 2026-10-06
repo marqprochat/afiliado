@@ -26,7 +26,7 @@ export function LandingNav() {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
         {/* Brand Logo & System Title */}
-        <Link href="/grupos" className="flex items-center gap-3 group">
+        <Link href="/landpage" className="flex items-center gap-3 group">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 p-0.5 shadow-lg shadow-indigo-500/25 group-hover:scale-105 transition-transform">
             <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
               <Sparkles className="w-5 h-5 text-indigo-400 group-hover:rotate-12 transition-transform" />

@@ -43,7 +43,7 @@ export default function LinksGruposPage() {
 
         <div className="flex items-center gap-2">
           <a
-            href="/grupos"
+            href="/landpage"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/10 border border-indigo-500/30 text-indigo-400 hover:bg-indigo-600/20 hover:text-indigo-300 text-xs font-semibold transition"
