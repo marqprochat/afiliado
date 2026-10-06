@@ -124,9 +124,24 @@ describe('parseMlListingHtml: poly-card', () => {
         shipping: 'FULL',
         originalUrl:
           'https://www.mercadolivre.com.br/smartwatch-huawei-band-10/p/MLB46202402#wid=MLB4083441037',
-        raw: { origin: 'ml-listing', priceNote: 'no Pix' },
+        raw: { origin: 'ml-listing', priceNote: 'no Pix', freeShipping: true },
       },
     ]);
+  });
+
+  it('card Full: marca raw.freeShipping só quando o texto diz grátis', () => {
+    const html = listingPage([
+      polyCard({ shipping: 'Chegará grátis amanhã', full: true }),
+      polyCard({
+        href: 'https://www.mercadolivre.com.br/outro/p/MLB900',
+        shipping: 'Chegará amanhã',
+        full: true,
+      }),
+    ]);
+    const [a, b] = parseMlListingHtml(html, NOW);
+    expect(a).toMatchObject({ shipping: 'FULL', raw: { freeShipping: true } });
+    expect(b?.shipping).toBe('FULL');
+    expect(b?.raw).not.toHaveProperty('freeShipping');
   });
 
   it('lê anúncio individual sem preço riscado e com frete grátis', () => {

@@ -107,6 +107,17 @@ describe('POST /products/search (listing do ML)', () => {
     expect(filter(sample(1, { discountPct: 10, price: 100, shipping: 'FREE' }))).toBe(false);
     expect(filter(sample(1, { discountPct: 50, price: 400, shipping: 'FREE' }))).toBe(false);
     expect(filter(sample(1, { discountPct: 50, price: 100, shipping: 'FULL' }))).toBe(false);
+    // Full com "grátis" no texto do card conta como frete grátis
+    expect(
+      filter(
+        sample(1, {
+          discountPct: 50,
+          price: 100,
+          shipping: 'FULL',
+          raw: { origin: 'ml-listing', freeShipping: true },
+        }),
+      ),
+    ).toBe(true);
   });
 
   it('bloqueio do ML → 502 com orientação para sincronizar a sessão', async () => {

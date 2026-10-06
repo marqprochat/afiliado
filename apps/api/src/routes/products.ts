@@ -120,7 +120,16 @@ export async function productsRoutes(app: FastifyInstance) {
         found = await mlListingDeps.fetchMlListing(toMlListingSource(q.mlListing!), {
           limit: q.limit,
           // filtra durante a paginação para juntar `limit` produtos que passem nos filtros
-          filter: (p) => applySearchFilters([p], q).length > 0,
+          filter: (p) => {
+            // Full que também diz "grátis" no card (raw.freeShipping) vale como frete grátis
+            const freeShipping =
+              p.shipping === 'FREE' ||
+              (p.raw as { freeShipping?: unknown } | undefined)?.freeShipping === true;
+            return (
+              applySearchFilters([p], { ...q, freeShippingOnly: false }).length > 0 &&
+              (!q.freeShippingOnly || freeShipping)
+            );
+          },
           ...(cookies ? { cookies } : {}),
         });
       } catch (e) {

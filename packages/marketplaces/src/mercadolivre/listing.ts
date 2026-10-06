@@ -177,7 +177,8 @@ function parsePolycards($: cheerio.CheerioAPI, html: string, now: Date): Product
 
     const shipEl = card.find('.poly-component__shipping-v2');
     const hasFull = shipEl.find('svg[aria-label*="full" i], use[href="#poly_full"]').length > 0;
-    const shipping = hasFull ? 'FULL' : /gr[áa]tis/i.test(shipEl.text()) ? 'FREE' : 'UNKNOWN';
+    const freeText = /gr[áa]tis/i.test(shipEl.text());
+    const shipping = hasFull ? 'FULL' : freeText ? 'FREE' : 'UNKNOWN';
 
     out.push({
       source: 'MERCADOLIVRE',
@@ -190,7 +191,12 @@ function parsePolycards($: cheerio.CheerioAPI, html: string, now: Date): Product
       shipping,
       ...(flashSaleEndsAt ? { flashSaleEndsAt } : {}),
       originalUrl: url,
-      raw: { origin: 'ml-listing', ...(priceNote ? { priceNote } : {}) },
+      raw: {
+        origin: 'ml-listing',
+        ...(priceNote ? { priceNote } : {}),
+        // Full que também diz "grátis" (ex.: "Chegará grátis amanhã") conta no filtro de frete grátis
+        ...(freeText ? { freeShipping: true } : {}),
+      },
     });
   }
   return out;
