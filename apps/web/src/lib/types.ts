@@ -224,7 +224,7 @@ export interface ApiProduct {
   /** Metadados brutos; `pendingEnrich: true` enquanto o worker ainda raspa a página.
    * `productCatIds`: IDs reais de categoria da Shopee (namespace da Open Platform, diferente
    * do ID visível na URL do site) — únicos IDs válidos para buscar por categoria. */
-  raw?: { pendingEnrich?: boolean; productCatIds?: number[] } | null;
+  raw?: { pendingEnrich?: boolean; productCatIds?: number[]; priceNote?: string } | null;
 }
 export interface QueueItem {
   id: string;

@@ -40,4 +40,17 @@ describe('ProductCard', () => {
     fireEvent.click(screen.getByRole('button', { name: /copiar texto \+ link/i }));
     expect(onCopy).toHaveBeenCalledWith(p);
   });
+  it('mostra a nota do preço (ex.: no Pix) só quando existe', () => {
+    const { rerender } = render(
+      <ProductCard
+        product={{ ...p, raw: { priceNote: 'no Pix' } }}
+        selected={false}
+        onToggle={vi.fn()}
+        onCopy={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('no Pix')).toBeInTheDocument();
+    rerender(<ProductCard product={p} selected={false} onToggle={vi.fn()} onCopy={vi.fn()} />);
+    expect(screen.queryByText('no Pix')).not.toBeInTheDocument();
+  });
 });
