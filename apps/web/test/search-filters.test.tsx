@@ -106,6 +106,46 @@ describe('SearchFilters: listagem do Mercado Livre', () => {
     );
   });
 
+  describe('URL de listagem inválida', () => {
+    const MSG = 'Cole a URL completa de uma listagem do Mercado Livre, começando com https://';
+
+    function tentar(valor: string) {
+      const onSearch = vi.fn();
+      renderFilters({ source: 'MERCADOLIVRE', mode: 'listing', onSearch });
+      fireEvent.change(screen.getByLabelText('Fonte da listagem'), { target: { value: 'url' } });
+      fireEvent.change(screen.getByLabelText('URL da listagem'), { target: { value: valor } });
+      fireEvent.click(screen.getByRole('button', { name: /buscar/i }));
+      return onSearch;
+    }
+
+    it.each([
+      ['domínio fora do Mercado Livre', 'https://evil.com/x'],
+      ['texto que não é URL', 'not a url'],
+      ['http em vez de https', 'http://www.mercadolivre.com.br/x'],
+    ])('%s: não busca e mostra erro inline', (_nome, valor) => {
+      const onSearch = tentar(valor);
+      expect(onSearch).not.toHaveBeenCalled();
+      expect(screen.getByRole('alert').textContent).toBe(MSG);
+      expect(screen.getByLabelText('URL da listagem').getAttribute('aria-invalid')).toBe('true');
+    });
+
+    it('limpa o erro ao editar a URL e busca com a URL válida', () => {
+      const onSearch = tentar('https://evil.com/x');
+      expect(screen.getByRole('alert')).toBeTruthy();
+      fireEvent.change(screen.getByLabelText('URL da listagem'), {
+        target: { value: 'https://www.mercadolivre.com.br/mais-vendidos' },
+      });
+      expect(screen.queryByRole('alert')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: /buscar/i }));
+      expect(onSearch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mlListing: { kind: 'url', url: 'https://www.mercadolivre.com.br/mais-vendidos' },
+        }),
+      );
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+  });
+
   it('inclui o desconto mínimo junto com a listagem', () => {
     const onSearch = vi.fn();
     renderFilters({ source: 'MERCADOLIVRE', mode: 'listing', onSearch });

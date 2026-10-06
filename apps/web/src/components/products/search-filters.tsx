@@ -39,6 +39,22 @@ const CATEGORY_HELP: Partial<Record<MarketplaceKind, string>> = {
     'Não use o número da URL do shopee.com.br — é outro sistema de IDs e sempre dá 0 resultados. Faça uma busca por palavra-chave, copie o chip "🏷️ Categoria" de um produto e cole aqui.',
 };
 
+const LISTING_URL_ERROR =
+  'Cole a URL completa de uma listagem do Mercado Livre, começando com https://';
+
+// Espelha a regra do servidor: https e host mercadolivre.com.br (ou subdomínio).
+function isMlListingUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return (
+      u.protocol === 'https:' &&
+      (u.hostname === 'mercadolivre.com.br' || u.hostname.endsWith('.mercadolivre.com.br'))
+    );
+  } catch {
+    return false;
+  }
+}
+
 const selectCls = 'h-9 rounded-md border border-input bg-surface-2 px-2 text-sm';
 
 export function SearchFilters({
@@ -66,6 +82,8 @@ export function SearchFilters({
   const [listingKind, setListingKind] = useState<MlListingKind>('deals');
   const [listingCategory, setListingCategory] = useState('');
   const [listingUrl, setListingUrl] = useState('');
+  const [listingUrlError, setListingUrlError] = useState('');
+  const [formError, setFormError] = useState('');
 
   const isShopee = source === 'SHOPEE';
   const isAliexpress = source === 'ALIEXPRESS';
@@ -103,8 +121,19 @@ export function SearchFilters({
     if (minDiscountPct) raw.minDiscountPct = Number(minDiscountPct);
     // cards de listagem do ML não trazem vendas: o filtro descartaria tudo
     if (minSales && mode !== 'listing') raw.minSales = Number(minSales);
+    if (mode === 'listing' && listingKind === 'url' && !isMlListingUrl(listingUrl.trim())) {
+      setListingUrlError(LISTING_URL_ERROR);
+      return;
+    }
     const parsed = searchQuerySchema.safeParse(raw);
-    if (parsed.success) onSearch(parsed.data);
+    if (!parsed.success) {
+      // em listagem o usuário não pode ficar sem retorno quando a validação falha
+      if (mode === 'listing') setFormError('Confira os campos da busca');
+      return;
+    }
+    setListingUrlError('');
+    setFormError('');
+    onSearch(parsed.data);
   }
 
   return (
@@ -171,7 +200,10 @@ export function SearchFilters({
             <select
               aria-label="Fonte da listagem"
               value={listingKind}
-              onChange={(e) => setListingKind(e.target.value as MlListingKind)}
+              onChange={(e) => {
+                setListingKind(e.target.value as MlListingKind);
+                setListingUrlError('');
+              }}
               className={`${selectCls} w-56`}
             >
               <option value="deals">Ofertas do dia</option>
@@ -198,10 +230,20 @@ export function SearchFilters({
               <Input
                 aria-label="URL da listagem"
                 value={listingUrl}
-                onChange={(e) => setListingUrl(e.target.value)}
+                onChange={(e) => {
+                  setListingUrl(e.target.value);
+                  setListingUrlError('');
+                }}
+                aria-invalid={Boolean(listingUrlError)}
+                aria-describedby={listingUrlError ? 'listing-url-error' : undefined}
                 placeholder="https://www.mercadolivre.com.br/ofertas?…"
                 className="min-w-64 flex-1"
               />
+            )}
+            {listingKind === 'url' && listingUrlError && (
+              <p id="listing-url-error" role="alert" className="basis-full text-xs text-red-400">
+                {listingUrlError}
+              </p>
             )}
           </div>
         )}
@@ -351,6 +393,11 @@ export function SearchFilters({
           </p>
         )}
       </div>
+      {formError && (
+        <p role="alert" className="text-xs text-red-400">
+          {formError}
+        </p>
+      )}
     </form>
   );
 }
