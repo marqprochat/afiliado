@@ -1,9 +1,10 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@afilados/db';
 import { QUEUE_ML_LINKS_PREWARM, type MlLinksPrewarmJob } from '@afilados/shared';
 import { mlLinksErrorKey } from '@afilados/marketplaces';
 import { buildApp } from '../src/app';
 import { getQueue, getRedis } from '../src/lib/redis';
+import { readMlLinkBatchError } from '../src/lib/ml-links';
 import { cleanupTenant, createTenantWithUser, loginCookie } from './helpers';
 
 const app = await buildApp({ logger: false });
@@ -75,6 +76,52 @@ describe('erro do gerador em lote no card do ML', () => {
   });
 });
 
+describe('Redis indisponível não trava a API', () => {
+  it('readMlLinkBatchError devolve null em ~1 s quando o get nunca responde', async () => {
+    const spy = vi
+      .spyOn(getRedis(), 'get')
+      .mockImplementation((() => new Promise(() => {})) as never);
+    try {
+      const t0 = Date.now();
+      await expect(readMlLinkBatchError(t.tenantId)).resolves.toBeNull();
+      expect(Date.now() - t0).toBeLessThan(1500);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('POST /queue responde 201 mesmo se enfileirar o pré-aquecimento nunca terminar', async () => {
+    const queue = getQueue<MlLinksPrewarmJob>(QUEUE_ML_LINKS_PREWARM);
+    const spy = vi
+      .spyOn(queue, 'add')
+      .mockImplementation((() => new Promise(() => {})) as unknown as typeof queue.add);
+    try {
+      const ml = await prisma.product.create({
+        data: {
+          tenantId: t.tenantId,
+          source: 'MERCADOLIVRE',
+          externalId: 'MLB5555',
+          title: 'Produto ML travado',
+          price: 10,
+          originalUrl: 'https://www.mercadolivre.com.br/produto/p/MLB5555',
+          raw: {},
+        },
+      });
+      const r = await app.inject({
+        method: 'POST',
+        url: '/api/v1/queue',
+        headers: { cookie },
+        payload: { productIds: [ml.id] },
+      });
+      expect(r.statusCode).toBe(201);
+      // o disparo é assíncrono: só restaura o spy depois de a chamada pendurada acontecer
+      await vi.waitFor(() => expect(spy).toHaveBeenCalled(), { timeout: 3000 });
+    } finally {
+      spy.mockRestore();
+    }
+  }, 5000);
+});
+
 describe('pré-aquecimento ao salvar na fila', () => {
   it('POST /queue enfileira só as URLs de produtos do ML', async () => {
     const queue = getQueue<MlLinksPrewarmJob>(QUEUE_ML_LINKS_PREWARM);
@@ -109,9 +156,16 @@ describe('pré-aquecimento ao salvar na fila', () => {
     });
     expect(r.statusCode).toBe(201);
 
-    const jobs = await queue.getJobs(['waiting', 'delayed', 'active', 'prioritized']);
-    const mine = jobs.filter((j) => j.data.tenantId === t.tenantId);
-    expect(mine).toHaveLength(1);
+    // o pré-aquecimento é disparado sem aguardar (fire-and-forget): espera o job aparecer
+    const mine = await vi.waitFor(
+      async () => {
+        const jobs = await queue.getJobs(['waiting', 'delayed', 'active', 'prioritized']);
+        const found = jobs.filter((j) => j.data.tenantId === t.tenantId);
+        expect(found).toHaveLength(1);
+        return found;
+      },
+      { timeout: 5000 },
+    );
     expect(mine[0]?.data.urls).toEqual(['https://www.mercadolivre.com.br/produto/p/MLB1234']);
     for (const j of mine) await j.remove().catch(() => {});
   });

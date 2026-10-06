@@ -66,8 +66,8 @@ export async function queueRoutes(app: FastifyInstance) {
           status: isPendingEnrich(p.raw) ? 'PENDING_ENRICH' : 'PENDING',
         })),
       });
-      // não deve impedir salvar na fila se o Redis/worker estiver indisponível
-      await enqueueMlLinksPrewarm(req.db, req.tenantId, valid).catch((err) =>
+      // sem await: com o Redis fora do ar o enfileiramento ficaria pendurado e atrasaria a resposta
+      void enqueueMlLinksPrewarm(req.db, req.tenantId, valid).catch((err) =>
         req.log.warn({ err }, 'falha ao enfileirar o pré-aquecimento de links do ML'),
       );
     }
