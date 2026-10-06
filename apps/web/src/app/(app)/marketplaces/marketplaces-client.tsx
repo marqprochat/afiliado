@@ -5,6 +5,7 @@ import { MARKETPLACE_KINDS, type MarketplaceKind } from '@afilados/shared';
 import { Button } from '@/components/ui/button';
 import { StatusPill } from '@/components/app-shell/status-pill';
 import { apiFetch } from '@/lib/api';
+import { formatDateTime } from '@/lib/format';
 import { useMarketplaces } from '@/lib/queries';
 import {
   MarketplaceDrawer,
@@ -83,6 +84,16 @@ export function MarketplacesClient() {
                 <StatusPill label={status} status={status} />
               </div>
               <p className="mb-4 text-sm text-muted-foreground">{config.description}</p>
+              {kind === 'MERCADOLIVRE' && conn?.mlLinkBatchError && (
+                <p
+                  role="alert"
+                  className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-600"
+                >
+                  Gerador de links em lote falhou em {formatDateTime(conn.mlLinkBatchError.at)}:{' '}
+                  {conn.mlLinkBatchError.message}. {conn.mlLinkBatchError.recoveredByFallback} de{' '}
+                  {conn.mlLinkBatchError.urls} link(s) foram gerados pelo método individual.
+                </p>
+              )}
               <Button variant="outline" onClick={() => openDrawer(kind)}>
                 Configurar marketplace
               </Button>

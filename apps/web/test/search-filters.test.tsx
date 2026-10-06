@@ -57,3 +57,74 @@ describe('SearchFilters', () => {
     expect(onSearch).toHaveBeenCalledWith(expect.objectContaining({ mode: 'trending' }));
   });
 });
+
+describe('SearchFilters: listagem do Mercado Livre', () => {
+  it('Ofertas do dia: emite mlListing deals', () => {
+    const onSearch = vi.fn();
+    renderFilters({ source: 'MERCADOLIVRE', mode: 'listing', onSearch });
+    fireEvent.click(screen.getByRole('button', { name: /buscar/i }));
+    expect(onSearch).toHaveBeenCalledWith({
+      source: 'MERCADOLIVRE',
+      mode: 'listing',
+      mlListing: { kind: 'deals' },
+      sort: 'DISCOUNT_DESC',
+      limit: 100,
+      topSellers: false,
+      extraCommission: false,
+      freeShippingOnly: false,
+    });
+  });
+
+  it('Categoria: só habilita a busca depois de escolher a categoria', () => {
+    const onSearch = vi.fn();
+    renderFilters({ source: 'MERCADOLIVRE', mode: 'listing', onSearch });
+    fireEvent.change(screen.getByLabelText('Fonte da listagem'), { target: { value: 'category' } });
+    const button = screen.getByRole('button', { name: /buscar/i });
+    expect(button).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Categoria do ML'), { target: { value: 'MLB1051' } });
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(onSearch).toHaveBeenCalledWith(
+      expect.objectContaining({ mlListing: { kind: 'category', categoryId: 'MLB1051' } }),
+    );
+  });
+
+  it('Colar URL: exige a URL e a envia aparada', () => {
+    const onSearch = vi.fn();
+    renderFilters({ source: 'MERCADOLIVRE', mode: 'listing', onSearch });
+    fireEvent.change(screen.getByLabelText('Fonte da listagem'), { target: { value: 'url' } });
+    const button = screen.getByRole('button', { name: /buscar/i });
+    expect(button).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('URL da listagem'), {
+      target: { value: '  https://www.mercadolivre.com.br/mais-vendidos  ' },
+    });
+    fireEvent.click(button);
+    expect(onSearch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mlListing: { kind: 'url', url: 'https://www.mercadolivre.com.br/mais-vendidos' },
+      }),
+    );
+  });
+
+  it('inclui o desconto mínimo junto com a listagem', () => {
+    const onSearch = vi.fn();
+    renderFilters({ source: 'MERCADOLIVRE', mode: 'listing', onSearch });
+    fireEvent.change(screen.getByLabelText('Fonte da listagem'), {
+      target: { value: 'lightning' },
+    });
+    fireEvent.change(screen.getByLabelText(/desconto mín/i), { target: { value: '30' } });
+    fireEvent.click(screen.getByRole('button', { name: /buscar/i }));
+    expect(onSearch).toHaveBeenCalledWith(
+      expect.objectContaining({ mlListing: { kind: 'lightning' }, minDiscountPct: 30 }),
+    );
+  });
+  it('não mostra Vendas mín. na listagem (cards do ML não têm vendas), mas mantém em keyword', () => {
+    renderFilters({ source: 'MERCADOLIVRE', mode: 'listing', onSearch: vi.fn() });
+    expect(screen.queryByLabelText(/vendas mín/i)).toBeNull();
+  });
+
+  it('keyword continua com Vendas mín.', () => {
+    renderFilters({ source: 'SHOPEE', mode: 'keyword', onSearch: vi.fn() });
+    expect(screen.getByLabelText(/vendas mín/i)).toBeTruthy();
+  });
+});

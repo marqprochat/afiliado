@@ -39,6 +39,7 @@ const ALL_SUBTABS: {
   { key: 'category', label: 'Explorar Categorias', sources: ['SHOPEE', 'ALIEXPRESS'] },
   { key: 'trending', label: 'Mais Buscados', sources: ['SHOPEE', 'ALIEXPRESS'] },
   { key: 'shop', label: 'Lojas Favoritas', sources: ['SHOPEE'] },
+  { key: 'listing', label: 'Ofertas do ML', sources: ['MERCADOLIVRE'] },
   { key: 'import', label: 'Por Links / CSV' },
 ];
 
@@ -60,18 +61,22 @@ export default function ProdutosPage() {
         ...baseSubtabs.filter((t) => t.key !== 'import'),
       ]
     : baseSubtabs;
-  const effectiveSub = isKeywordDisabled && sub === 'keyword' ? 'import' : sub;
+  // Sem busca por palavra-chave (anti-bot), o ML abre nas Ofertas do ML; os demais, em Por Links / CSV.
+  const fallbackSub = (kind: MarketplaceKind): SearchMode | 'import' =>
+    kind === 'MERCADOLIVRE' ? 'listing' : 'import';
+  const effectiveSub: SearchMode | 'import' =
+    isKeywordDisabled && sub === 'keyword' ? fallbackSub(source) : sub;
 
   function selectSource(kind: MarketplaceKind) {
     setSource(kind);
     const willDisableKeyword = DISABLED_KEYWORD_SOURCES.includes(kind);
     if (willDisableKeyword && sub === 'keyword') {
-      setSub('import');
+      setSub(fallbackSub(kind));
       return;
     }
     const stillValid = ALL_SUBTABS.find((t) => t.key === sub);
     if (stillValid?.sources && !stillValid.sources.includes(kind)) {
-      setSub(willDisableKeyword ? 'import' : 'keyword');
+      setSub(willDisableKeyword ? fallbackSub(kind) : 'keyword');
     }
   }
 

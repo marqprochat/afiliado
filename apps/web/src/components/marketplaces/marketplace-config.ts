@@ -13,7 +13,8 @@ export type MarketplaceFieldKey =
   | 'offersApiToken'
   | 'appKey'
   | 'appSecret'
-  | 'trackingId';
+  | 'trackingId'
+  | 'mlTag';
 
 export interface MarketplaceFieldDef {
   key: MarketplaceFieldKey;
@@ -75,6 +76,16 @@ export const MARKETPLACE_CONFIGS: Record<MarketplaceKind, MarketplaceConfig> = {
         type: 'text',
         required: true,
         placeholder: 'Ex: 12345678',
+      },
+      {
+        key: 'mlTag',
+        label: 'Etiqueta de afiliado (opcional)',
+        type: 'text',
+        required: false,
+        placeholder: 'Ex: minha-etiqueta',
+        helpTitle: 'Onde encontro minha etiqueta?',
+        helpContent:
+          'Na Central de afiliados do Mercado Livre → "Administrar etiquetas". Deixe em branco para usar a etiqueta padrão da conta.',
       },
     ],
     supportsSession: true,
