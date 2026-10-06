@@ -43,3 +43,30 @@ export async function withMlLinkCache(
   }
   return link;
 }
+
+/**
+ * Normaliza a etiqueta do ML. Faz parte do contrato da chave do cache: o pré-aquecimento e o envio
+ * precisam usar exatamente a mesma forma, senão o link pré-aquecido nunca é encontrado.
+ */
+export function normalizeMlTag(tag: string | undefined): string | undefined {
+  return tag?.trim() || undefined;
+}
+
+/**
+ * Gera o link de afiliado passando pelo cache só quando a fonte é o Mercado Livre; as demais fontes
+ * apenas geram, sem acessar o Redis.
+ */
+export async function resolveCachedAffiliateLink(args: {
+  tenantId: string;
+  source: string;
+  creds: { tag?: string | undefined };
+  url: string;
+  generate: () => Promise<string>;
+  store?: LinkStore | undefined;
+}): Promise<string> {
+  if (args.source !== 'MERCADOLIVRE') return args.generate();
+  const tag = normalizeMlTag(args.creds.tag);
+  return args.store
+    ? withMlLinkCache(args.tenantId, tag, args.url, args.generate, args.store)
+    : withMlLinkCache(args.tenantId, tag, args.url, args.generate);
+}

@@ -12,7 +12,7 @@ import {
   type PrewarmResult,
 } from '@afilados/marketplaces';
 import { loadTagCredentials } from '../lib/marketplace-credentials';
-import { redisLinkStore, type LinkStore } from '../lib/ml-links';
+import { normalizeMlTag, redisLinkStore, type LinkStore } from '../lib/ml-links';
 
 const log = pino({ name: 'ml-links-prewarm' });
 
@@ -41,7 +41,7 @@ export async function runMlLinksPrewarm(
     log.info({ tenantId }, 'sem sessão do ML sincronizada; pré-aquecimento ignorado');
     return { skipped: 'sem-sessao' };
   }
-  const tag = creds.tag?.trim() || undefined;
+  const tag = normalizeMlTag(creds.tag);
   const store = deps.store ?? redisLinkStore();
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
 

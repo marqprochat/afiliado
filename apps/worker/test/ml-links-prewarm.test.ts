@@ -76,6 +76,19 @@ describe('runMlLinksPrewarm', () => {
     expect(generateBatch.mock.calls[0]?.[0]).toEqual([U(2)]);
   });
 
+  it('todas as URLs já em cache: retorna em-cache sem gerar', async () => {
+    const { store, data } = memoryStore();
+    data.set(mlAffLinkKey('t1', 'etq', U(1)), 'https://meli.la/a');
+    data.set(mlAffLinkKey('t1', 'etq', U(2)), 'https://meli.la/b');
+    const generateBatch = vi.fn();
+    const r = await runMlLinksPrewarm(
+      { loadCredentials: async () => creds, store, generateBatch, sleep: async () => {} },
+      { tenantId: 't1', urls: [U(1), U(2)] },
+    );
+    expect(r).toEqual({ skipped: 'em-cache' });
+    expect(generateBatch).not.toHaveBeenCalled();
+  });
+
   it('lote falha: usa o método individual e grava o erro para o card', async () => {
     const { store, data } = memoryStore();
     const generateBatch = vi.fn(async () => {
