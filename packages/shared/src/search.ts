@@ -26,6 +26,22 @@ const mlListingSchema = z.object({
 });
 export type MlListingQuery = z.infer<typeof mlListingSchema>;
 
+function normalizeSearchText(value: string): string {
+  return value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+}
+
+/**
+ * Filtro por palavra-chave sobre o título de um produto: todas as palavras da consulta precisam
+ * aparecer, em qualquer ordem, ignorando acentos e maiúsculas. Consulta vazia aceita qualquer título.
+ * Usado pelas listagens do Mercado Livre, que não têm busca por palavra-chave própria.
+ */
+export function matchesSearchKeywords(title: string, query: string): boolean {
+  const tokens = normalizeSearchText(query).split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+  const normalizedTitle = normalizeSearchText(title);
+  return tokens.every((token) => normalizedTitle.includes(token));
+}
+
 export const searchQuerySchema = z
   .object({
     source: z.enum(MARKETPLACE_KINDS),

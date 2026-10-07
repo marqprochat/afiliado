@@ -8,6 +8,7 @@ import {
   searchQuerySchema,
   ApiError,
   QUEUE_PRODUCT_ENRICH,
+  matchesSearchKeywords,
   type MarketplaceKind,
   type ProductData,
   type ProductEnrichJob,
@@ -127,7 +128,9 @@ export async function productsRoutes(app: FastifyInstance) {
               (p.raw as { freeShipping?: unknown } | undefined)?.freeShipping === true;
             return (
               applySearchFilters([p], { ...q, freeShippingOnly: false }).length > 0 &&
-              (!q.freeShippingOnly || freeShipping)
+              (!q.freeShippingOnly || freeShipping) &&
+              // a listagem não tem busca própria: a palavra-chave filtra pelo título dos cards
+              (!q.query || matchesSearchKeywords(p.title, q.query))
             );
           },
           ...(cookies ? { cookies } : {}),

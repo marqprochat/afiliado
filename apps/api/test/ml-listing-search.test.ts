@@ -120,6 +120,27 @@ describe('POST /products/search (listing do ML)', () => {
     ).toBe(true);
   });
 
+  it('filtra por palavra-chave no título durante a paginação (sem acento e sem ordem)', async () => {
+    fetchMock.mockResolvedValue([]);
+    await search({
+      source: 'MERCADOLIVRE',
+      mode: 'listing',
+      mlListing: { kind: 'deals' },
+      query: '  camera SEGURANCA ',
+    });
+    const filter = (fetchMock.mock.calls[0]?.[1] as { filter: (p: ProductData) => boolean }).filter;
+    expect(filter(sample(1, { title: 'Câmera de Segurança Wifi Externa' }))).toBe(true);
+    expect(filter(sample(1, { title: 'Segurança: kit com câmera 2 unidades' }))).toBe(true);
+    expect(filter(sample(1, { title: 'Fone Bluetooth' }))).toBe(false);
+  });
+
+  it('sem palavra-chave a listagem não filtra por título', async () => {
+    fetchMock.mockResolvedValue([]);
+    await search({ source: 'MERCADOLIVRE', mode: 'listing', mlListing: { kind: 'deals' } });
+    const filter = (fetchMock.mock.calls[0]?.[1] as { filter: (p: ProductData) => boolean }).filter;
+    expect(filter(sample(1, { title: 'Qualquer produto' }))).toBe(true);
+  });
+
   it('bloqueio do ML → 502 com orientação para sincronizar a sessão', async () => {
     fetchMock.mockRejectedValue(new MlListingError('x', 'ML_LISTING_BLOCKED'));
     const r = await search({
