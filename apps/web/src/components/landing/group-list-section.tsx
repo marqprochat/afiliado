@@ -5,16 +5,17 @@ import { Card3D } from './3d-card';
 import {
   Users,
   Search,
-  ExternalLink,
   Sparkles,
-  CheckCircle2,
-  Share2,
   Copy,
-  Zap,
   Tag,
   ShieldCheck,
   Flame,
   ArrowRight,
+  Smartphone,
+  Laptop,
+  Ticket,
+  Zap,
+  CheckCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -36,103 +37,103 @@ export interface PublicGroupLink {
   redirectUrl: string;
 }
 
-// Fallback demo links shown if database is empty, so landing page is never blank
-const DEMO_GROUP_LINKS: PublicGroupLink[] = [
+// Fallback demo links tailored to Dudu Rocha Tech deals
+const DUDU_ROCHA_DEMO_LINKS: PublicGroupLink[] = [
   {
-    id: 'demo-1',
-    slug: 'promo-vip',
-    label: 'PROMO VIP',
-    baseName: 'Grupo VIP de Ofertas Imperdíveis',
-    customText: 'As melhores promoções de Shopee, Mercado Livre e Amazon com até 80% OFF.',
-    groupDescription: 'Receba alertas diários de bugs, cupons secretos e promoções relâmpago em primeira mão!',
+    id: 'dudu-1',
+    slug: 'dudu-ofertas-vip',
+    label: '🔥 GERAL / PROMOS VIP',
+    baseName: 'Dudu Rocha | Grupo VIP de Ofertas #01',
+    customText: 'As melhores promoções de tecnologia selecionadas a dedo pela equipe do Dudu Rocha.',
+    groupDescription: 'Smartphones, hardware, eletrônicos, cupons diários e bugs de preço com desconto real.',
     groupImageBase64: null,
-    clickCount: 1420,
+    clickCount: 5430,
     status: 'ACTIVE',
     memberLimit: 1000,
     activeGroup: {
-      name: '🔥 PROMO VIP #12',
-      memberCount: 894,
+      name: '🔥 DUDU ROCHA OFERTAS VIP #14',
+      memberCount: 940,
     },
-    redirectUrl: '/g/promo-vip',
+    redirectUrl: '/g/dudu-ofertas-vip',
   },
   {
-    id: 'demo-2',
-    slug: 'eletronicos-tech',
-    label: 'ELETRÔNICOS & TECH',
-    baseName: 'Clube Tech & Smartphones',
-    customText: 'Smartphones, Notebooks, Hardware e Gadgets com menor preço histórico.',
-    groupDescription: 'Curadoria especializada em tecnologia, hardware e eletrônicos.',
+    id: 'dudu-2',
+    slug: 'dudu-smartphones',
+    label: '📱 SMARTPHONES & IPHONES',
+    baseName: 'Dudu Rocha | Celulares & Acessórios',
+    customText: 'Samsung Galaxy, iPhones, Xiaomi e Motorola pelo menor preço histórico.',
+    groupDescription: 'Monitore quedas de preço e lançamentos com links 100% confiáveis.',
     groupImageBase64: null,
-    clickCount: 980,
+    clickCount: 3820,
     status: 'ACTIVE',
     memberLimit: 1000,
     activeGroup: {
-      name: '⚡ TECH & GADGETS #05',
-      memberCount: 742,
+      name: '📱 DUDU ROCHA SMARTPHONES #08',
+      memberCount: 885,
     },
-    redirectUrl: '/g/eletronicos-tech',
+    redirectUrl: '/g/dudu-smartphones',
   },
   {
-    id: 'demo-3',
-    slug: 'cupons-exclusivos',
-    label: 'CUPONS EXCLUSIVOS',
-    baseName: 'Central de Cupons & Descontos',
-    customText: 'Cupons testados e atualizados minuto a minuto para todas as grandes lojas.',
-    groupDescription: 'Economize em todas as suas compras com nossos códigos exclusivos.',
+    id: 'dudu-3',
+    slug: 'dudu-notebooks-hardware',
+    label: '💻 NOTEBOOKS & SETUP TECH',
+    baseName: 'Dudu Rocha | Notebooks & PC Gamer',
+    customText: 'Laptops de trabalho, MacBooks, periféricos e monitores com cupons aplicados.',
+    groupDescription: 'Compre o melhor notebook para suas necessidades economizando até 40%.',
     groupImageBase64: null,
-    clickCount: 2150,
+    clickCount: 2950,
     status: 'ACTIVE',
     memberLimit: 1000,
     activeGroup: {
-      name: '🎟️ CUPONS & DESCONTOS #18',
-      memberCount: 960,
+      name: '💻 NOTEBOOKS & HARDWARE #04',
+      memberCount: 790,
     },
-    redirectUrl: '/g/cupons-exclusivos',
+    redirectUrl: '/g/dudu-notebooks-hardware',
   },
   {
-    id: 'demo-4',
-    slug: 'casa-decoracao',
-    label: 'CASA & DECORAÇÃO',
-    baseName: 'Achadinhos de Casa & Cozinha',
-    customText: 'Utensílios, eletrodomésticos e decoração com os melhores preços.',
-    groupDescription: 'Tudo para deixar seu lar moderno pagando muito menos.',
+    id: 'dudu-4',
+    slug: 'dudu-cupons-secretos',
+    label: '🎟️ CUPONS & BUGS',
+    baseName: 'Dudu Rocha | Cupons & Descontos Secretos',
+    customText: 'Cupons exclusivos de Mercado Livre, Shopee, Amazon, Magalu e AliExpress.',
+    groupDescription: 'Notificações relâmpago de bugs de frete grátis e códigos de desconto ativos.',
     groupImageBase64: null,
-    clickCount: 640,
+    clickCount: 6810,
     status: 'ACTIVE',
     memberLimit: 1000,
     activeGroup: {
-      name: '🏠 CASA & STYLES #03',
-      memberCount: 512,
+      name: '🎟️ DUDU ROCHA CUPONS #22',
+      memberCount: 982,
     },
-    redirectUrl: '/g/casa-decoracao',
+    redirectUrl: '/g/dudu-cupons-secretos',
   },
 ];
 
-// Map labels to vibrant gradient accents
+// Color mapping for label badges
 const LABEL_COLORS: Record<string, { bg: string; text: string; border: string; glow: string }> = {
-  'PROMO VIP': {
-    bg: 'bg-amber-500/10',
-    text: 'text-amber-400',
-    border: 'border-amber-500/30',
-    glow: 'rgba(245, 158, 11, 0.2)',
+  '🔥 GERAL / PROMOS VIP': {
+    bg: 'bg-emerald-500/10',
+    text: 'text-[#27c40b]',
+    border: 'border-[#27c40b]/40',
+    glow: 'rgba(39, 196, 11, 0.25)',
   },
-  'ELETRÔNICOS & TECH': {
+  '📱 SMARTPHONES & IPHONES': {
     bg: 'bg-cyan-500/10',
     text: 'text-cyan-400',
-    border: 'border-cyan-500/30',
-    glow: 'rgba(6, 182, 212, 0.2)',
+    border: 'border-cyan-500/40',
+    glow: 'rgba(6, 182, 212, 0.25)',
   },
-  'CUPONS EXCLUSIVOS': {
-    bg: 'bg-emerald-500/10',
-    text: 'text-emerald-400',
-    border: 'border-emerald-500/30',
-    glow: 'rgba(16, 185, 129, 0.2)',
+  '💻 NOTEBOOKS & SETUP TECH': {
+    bg: 'bg-blue-500/10',
+    text: 'text-blue-400',
+    border: 'border-blue-500/40',
+    glow: 'rgba(59, 130, 246, 0.25)',
   },
-  'CASA & DECORAÇÃO': {
-    bg: 'bg-purple-500/10',
-    text: 'text-purple-400',
-    border: 'border-purple-500/30',
-    glow: 'rgba(168, 85, 247, 0.2)',
+  '🎟️ CUPONS & BUGS': {
+    bg: 'bg-amber-500/10',
+    text: 'text-amber-400',
+    border: 'border-amber-500/40',
+    glow: 'rgba(245, 158, 11, 0.25)',
   },
 };
 
@@ -153,15 +154,15 @@ export function GroupListSection() {
             setLinks(json.data);
             setIsUsingDemo(false);
           } else {
-            setLinks(DEMO_GROUP_LINKS);
+            setLinks(DUDU_ROCHA_DEMO_LINKS);
             setIsUsingDemo(true);
           }
         } else {
-          setLinks(DEMO_GROUP_LINKS);
+          setLinks(DUDU_ROCHA_DEMO_LINKS);
           setIsUsingDemo(true);
         }
       } catch {
-        setLinks(DEMO_GROUP_LINKS);
+        setLinks(DUDU_ROCHA_DEMO_LINKS);
         setIsUsingDemo(true);
       } finally {
         setLoading(false);
@@ -203,7 +204,7 @@ export function GroupListSection() {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const fullUrl = `${origin}/g/${slug}`;
     navigator.clipboard.writeText(fullUrl);
-    toast.success('Link do grupo copiado!', {
+    toast.success('Link do grupo copiado com sucesso!', {
       description: fullUrl,
     });
   };
@@ -212,16 +213,16 @@ export function GroupListSection() {
     <section id="grupos" className="relative py-16 sm:py-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
       {/* Section Header */}
       <div className="text-center max-w-3xl mx-auto mb-12 sm:mb-16">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs sm:text-sm font-medium mb-4 backdrop-blur-md">
-          <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" />
-          <span>Central de Grupos Verificados</span>
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#27c40b]/10 border border-[#27c40b]/30 text-[#27c40b] text-xs sm:text-sm font-bold mb-4 backdrop-blur-md">
+          <Sparkles className="w-4 h-4 text-[#27c40b] animate-pulse" />
+          <span>Comunidade Oficial do Canal Dudu Rocha</span>
         </div>
 
-        <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-white mb-4">
-          Escolha seu <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">Rótulo & Grupo</span>
+        <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white mb-4">
+          Escolha o seu <span className="bg-gradient-to-r from-[#27c40b] via-[#00d084] to-cyan-400 bg-clip-text text-transparent">Grupo de Ofertas</span>
         </h2>
-        <p className="text-slate-400 text-sm sm:text-base lg:text-lg">
-          Acesse grupos exclusivos filtrados por categoria de interesse. Vagas limitadas e redirecionamento inteligente automatizado.
+        <p className="text-slate-300 text-sm sm:text-base lg:text-lg">
+          Entre gratuitamente nos canais e grupos oficiais do Dudu Rocha. Economize em celulares, notebooks, TVs e cupons exclusivos.
         </p>
       </div>
 
@@ -234,8 +235,8 @@ export function GroupListSection() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar por nome do grupo, rótulo ou assunto..."
-            className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition shadow-inner backdrop-blur-xl text-sm"
+            placeholder="Buscar grupo por assunto, smartphone, cupom..."
+            className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#27c40b]/50 focus:border-[#27c40b] transition shadow-inner backdrop-blur-xl text-sm"
           />
           {searchQuery && (
             <button
@@ -251,15 +252,15 @@ export function GroupListSection() {
         <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
           <button
             onClick={() => setSelectedLabel('ALL')}
-            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 flex items-center gap-2 border ${
+            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-2 border ${
               selectedLabel === 'ALL'
-                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 shadow-lg shadow-indigo-500/25 scale-105'
-                : 'bg-slate-900/60 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white'
+                ? 'bg-gradient-to-r from-[#27c40b] to-emerald-600 text-black border-[#27c40b] shadow-lg shadow-emerald-500/25 scale-105'
+                : 'bg-slate-900/70 text-slate-300 border-slate-800 hover:bg-slate-800 hover:text-white'
             }`}
           >
             <Sparkles className="w-4 h-4" />
             <span>Todos os Grupos</span>
-            <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] bg-white/10 text-white font-bold">
+            <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] bg-black/40 text-white font-bold">
               {links.length}
             </span>
           </button>
@@ -268,25 +269,25 @@ export function GroupListSection() {
             const count = links.filter((l) => l.label.trim() === lbl.trim()).length;
             const isSelected = selectedLabel.toLowerCase().trim() === lbl.toLowerCase().trim();
             const colorScheme = LABEL_COLORS[lbl.toUpperCase()] || {
-              bg: 'bg-slate-800/60',
-              text: 'text-indigo-300',
-              border: 'border-indigo-500/30',
-              glow: 'rgba(99, 102, 241, 0.2)',
+              bg: 'bg-slate-800/70',
+              text: 'text-emerald-300',
+              border: 'border-emerald-500/30',
+              glow: 'rgba(39, 196, 11, 0.2)',
             };
 
             return (
               <button
                 key={lbl}
                 onClick={() => setSelectedLabel(lbl)}
-                className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 flex items-center gap-2 border ${
+                className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-2 border ${
                   isSelected
-                    ? 'bg-slate-800 text-white border-indigo-400 ring-2 ring-indigo-500/40 shadow-lg scale-105'
+                    ? 'bg-slate-800 text-[#27c40b] border-[#27c40b] ring-2 ring-[#27c40b]/40 shadow-lg scale-105'
                     : `${colorScheme.bg} ${colorScheme.text} ${colorScheme.border} hover:scale-102 hover:brightness-125`
                 }`}
               >
                 <Tag className="w-3.5 h-3.5" />
                 <span>{lbl}</span>
-                <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-black/30 font-bold">
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-black/40 font-bold">
                   {count}
                 </span>
               </button>
@@ -297,8 +298,8 @@ export function GroupListSection() {
 
       {/* Loading Skeleton */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-64 rounded-2xl bg-slate-900/40 border border-slate-800 animate-pulse p-6" />
           ))}
         </div>
@@ -315,20 +316,20 @@ export function GroupListSection() {
               setSelectedLabel('ALL');
               setSearchQuery('');
             }}
-            className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-500 transition"
+            className="px-5 py-2.5 rounded-xl bg-[#27c40b] text-black text-xs font-bold hover:bg-emerald-400 transition"
           >
             Ver Todos os Grupos
           </button>
         </div>
       ) : (
-        /* Group Cards 3D Grid */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+        /* Prominent Group Action Buttons & 3D Cards List */
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
           {filteredLinks.map((link) => {
             const labelColor = LABEL_COLORS[link.label.toUpperCase()] || {
-              bg: 'bg-indigo-500/10',
-              text: 'text-indigo-400',
-              border: 'border-indigo-500/30',
-              glow: 'rgba(99, 102, 241, 0.2)',
+              bg: 'bg-emerald-500/10',
+              text: 'text-[#27c40b]',
+              border: 'border-[#27c40b]/30',
+              glow: 'rgba(39, 196, 11, 0.25)',
             };
 
             const memberCount = link.activeGroup?.memberCount ?? 0;
@@ -336,82 +337,82 @@ export function GroupListSection() {
 
             return (
               <Card3D key={link.id} glowColor={labelColor.glow} className="h-full">
-                <div className="group relative h-full flex flex-col justify-between p-6 sm:p-7 rounded-2xl bg-slate-900/70 border border-slate-800/80 backdrop-blur-xl hover:border-slate-700/80 transition-all duration-300 shadow-xl overflow-hidden">
+                <div className="group relative h-full flex flex-col justify-between p-6 sm:p-8 rounded-2xl bg-[#0d1017]/80 border border-slate-800/80 backdrop-blur-xl hover:border-emerald-500/50 transition-all duration-300 shadow-2xl overflow-hidden">
                   {/* Subtle Accent Glow */}
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none group-hover:bg-indigo-500/15 transition-all" />
+                  <div className="absolute top-0 right-0 w-36 h-36 bg-[#27c40b]/10 rounded-full blur-3xl pointer-events-none group-hover:bg-[#27c40b]/20 transition-all" />
 
                   {/* Card Top: Identity / Rótulo & Status */}
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-4">
                       {/* Rótulo Badge */}
                       <span
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${labelColor.bg} ${labelColor.text} ${labelColor.border}`}
+                        className={`inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wide border ${labelColor.bg} ${labelColor.text} ${labelColor.border}`}
                       >
-                        <Tag className="w-3 h-3" />
+                        <Tag className="w-3.5 h-3.5" />
                         {link.label}
                       </span>
 
                       {/* Status Indicator */}
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-[#27c40b]/10 text-[#27c40b] border border-[#27c40b]/30">
+                        <span className="w-2 h-2 rounded-full bg-[#27c40b] animate-ping" />
                         Vagas Abertas
                       </span>
                     </div>
 
                     {/* Group Title */}
-                    <h3 className="text-xl font-bold text-white group-hover:text-indigo-300 transition-colors line-clamp-2 mb-2">
+                    <h3 className="text-xl sm:text-2xl font-black text-white group-hover:text-emerald-300 transition-colors mb-3 leading-snug">
                       {groupTitle}
                     </h3>
 
                     {/* Subtitle / Custom Text */}
                     {link.customText && (
-                      <p className="text-slate-300 text-xs sm:text-sm font-medium mb-3 line-clamp-2">
+                      <p className="text-slate-200 text-sm font-medium mb-3">
                         {link.customText}
                       </p>
                     )}
 
                     {/* Description */}
                     {link.groupDescription && (
-                      <p className="text-slate-400 text-xs line-clamp-2 mb-4 leading-relaxed">
+                      <p className="text-slate-400 text-xs sm:text-sm leading-relaxed mb-6">
                         {link.groupDescription}
                       </p>
                     )}
                   </div>
 
-                  {/* Card Bottom: Stats & CTA Action */}
-                  <div className="mt-6 pt-5 border-t border-slate-800/80 flex flex-col gap-4">
+                  {/* Card Bottom: Member Info & High-Impact Action Button */}
+                  <div className="mt-4 pt-5 border-t border-slate-800/80 flex flex-col gap-4">
                     {/* Live Member & Security Badge */}
                     <div className="flex items-center justify-between text-xs text-slate-400">
                       <div className="flex items-center gap-1.5">
-                        <Users className="w-4 h-4 text-indigo-400" />
-                        <span className="font-semibold text-slate-200">
-                          {memberCount > 0 ? `${memberCount} membros` : 'Comunidade Ativa'}
+                        <Users className="w-4 h-4 text-[#27c40b]" />
+                        <span className="font-bold text-slate-200">
+                          {memberCount > 0 ? `${memberCount} membros ativos` : 'Grupo Oficial Dudu Rocha'}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1 text-emerald-400">
-                        <ShieldCheck className="w-3.5 h-3.5" />
-                        <span>Verificado</span>
+                      <div className="flex items-center gap-1 text-[#27c40b] font-bold">
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>Canal Verificado</span>
                       </div>
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex items-center gap-2">
+                    {/* High-Converting Action Button Row */}
+                    <div className="flex items-center gap-3">
                       <a
                         href={link.redirectUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex-1 inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs sm:text-sm shadow-md shadow-indigo-600/25 hover:shadow-indigo-600/40 active:scale-98 transition duration-200"
+                        className="flex-1 inline-flex items-center justify-center gap-2.5 py-4 px-6 rounded-xl bg-gradient-to-r from-[#27c40b] via-[#22b809] to-[#00d084] hover:brightness-110 active:scale-98 text-black font-black text-sm sm:text-base shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition duration-200 uppercase tracking-wide"
                       >
-                        <span>Entrar no Grupo</span>
-                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                        <span>Entrar no Grupo Agora</span>
+                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1.5 transition-transform" />
                       </a>
 
                       <button
                         onClick={() => handleCopyLink(link.slug)}
                         title="Copiar Link de Acesso"
-                        className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/60 text-slate-300 hover:text-white hover:bg-slate-700 transition active:scale-95"
+                        className="p-4 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700 transition active:scale-95"
                       >
-                        <Copy className="w-4 h-4" />
+                        <Copy className="w-5 h-5" />
                       </button>
                     </div>
                   </div>
@@ -419,15 +420,6 @@ export function GroupListSection() {
               </Card3D>
             );
           })}
-        </div>
-      )}
-
-      {/* Demo Notice Banner */}
-      {isUsingDemo && (
-        <div className="mt-12 p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-center max-w-xl mx-auto backdrop-blur-md">
-          <p className="text-xs text-indigo-300 font-medium">
-            💡 <strong>Modo Demonstrativo Ativo:</strong> Crie seus próprios links de grupos com rótulos personalizados no painel para exibi-los automaticamente aqui!
-          </p>
         </div>
       )}
     </section>

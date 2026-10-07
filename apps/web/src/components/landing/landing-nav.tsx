@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Sparkles, Shield, ArrowRight, Menu, X, LayoutDashboard } from 'lucide-react';
+import { Sparkles, Youtube, Instagram, ExternalLink, Menu, X, ShieldCheck } from 'lucide-react';
 
 export function LandingNav() {
   const [scrolled, setScrolled] = useState(false);
@@ -20,61 +20,84 @@ export function LandingNav() {
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled
-          ? 'bg-slate-950/80 backdrop-blur-xl border-b border-slate-800/80 py-3 shadow-2xl'
+          ? 'bg-[#0a0c10]/90 backdrop-blur-xl border-b border-emerald-500/20 py-3 shadow-2xl shadow-emerald-950/20'
           : 'bg-transparent py-5'
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-        {/* Brand Logo & System Title */}
-        <Link href="/landpage" className="flex items-center gap-3 group">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 p-0.5 shadow-lg shadow-indigo-500/25 group-hover:scale-105 transition-transform">
-            <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-indigo-400 group-hover:rotate-12 transition-transform" />
+        {/* Dudu Rocha Brand Logo */}
+        <Link href="/landpage" className="flex items-center gap-3.5 group">
+          <div className="relative">
+            {/* Glow effect */}
+            <div className="absolute -inset-1 bg-gradient-to-r from-[#27c40b] to-[#06b6d4] rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300" />
+            <div className="relative h-11 w-auto px-3 py-1 bg-black rounded-lg flex items-center justify-center border border-emerald-500/40">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="https://dudurochatec.com.br/wp-content/uploads/2025/02/imagem_2025-02-25_112238371.png"
+                alt="Dudu Rocha Tec"
+                className="h-7 w-auto object-contain brightness-110"
+                onError={(e) => {
+                  // Fallback to text if remote image is blocked
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
+              <span className="font-black text-sm tracking-wider text-white flex items-center gap-1">
+                DUDU ROCHA <span className="text-[#27c40b]">OFERTAS</span>
+              </span>
             </div>
-          </div>
-          <div>
-            <span className="text-lg font-black tracking-tight text-white group-hover:text-indigo-300 transition-colors">
-              AFILADOS<span className="text-indigo-500">.</span>HUB
-            </span>
-            <span className="block text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
-              Comunidade Oficial
-            </span>
           </div>
         </Link>
 
         {/* Desktop Nav Links */}
-        <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
-          <a href="#grupos" className="hover:text-indigo-400 transition-colors">
-            Lista de Grupos
+        <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-300">
+          <a href="#grupos" className="hover:text-[#27c40b] transition-colors flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[#27c40b] animate-ping" />
+            Grupos VIP
           </a>
-          <a href="#diferenciais" className="hover:text-indigo-400 transition-colors">
-            Diferenciais
+          <a href="#diferenciais" className="hover:text-[#27c40b] transition-colors">
+            Por que Participar?
           </a>
-          <a href="#faq" className="hover:text-indigo-400 transition-colors">
-            Perguntas Frequentes
+          <a href="#faq" className="hover:text-[#27c40b] transition-colors">
+            Dúvidas Frequentes
+          </a>
+          <a
+            href="https://dudurochatec.com.br/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-emerald-400 transition-colors flex items-center gap-1 text-slate-400"
+          >
+            <span>Site Oficial</span>
+            <ExternalLink className="w-3.5 h-3.5" />
           </a>
         </nav>
 
-        {/* Status Indicator & Admin Button */}
-        <div className="hidden sm:flex items-center gap-4">
-          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Sistema Online</span>
-          </div>
-
-          <Link
-            href="/links-grupos"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 border border-slate-700/80 hover:border-indigo-500/50 text-slate-200 hover:text-white text-xs font-bold transition shadow-sm"
+        {/* Social Badges & Status */}
+        <div className="hidden sm:flex items-center gap-3">
+          <a
+            href="https://www.youtube.com/channel/UCIhmXuqtOQVJCPbh_tXns1g"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-600/10 border border-red-500/20 text-red-400 text-xs font-bold hover:bg-red-600/20 transition"
           >
-            <LayoutDashboard className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Gerenciar Grupos</span>
-          </Link>
+            <Youtube className="w-3.5 h-3.5" />
+            <span>+3.5M Inscritos</span>
+          </a>
+
+          <a
+            href="https://www.instagram.com/dudurocha.oficial"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-pink-600/10 border border-pink-500/20 text-pink-400 text-xs font-bold hover:bg-pink-600/20 transition"
+          >
+            <Instagram className="w-3.5 h-3.5" />
+            <span>@dudurocha.oficial</span>
+          </a>
         </div>
 
         {/* Mobile Menu Toggle */}
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="md:hidden p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white"
+          className="md:hidden p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white"
         >
           {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
@@ -82,37 +105,36 @@ export function LandingNav() {
 
       {/* Mobile Menu Dropdown */}
       {mobileMenuOpen && (
-        <div className="md:hidden bg-slate-950/95 backdrop-blur-2xl border-b border-slate-800 px-4 pt-4 pb-6 space-y-4">
+        <div className="md:hidden bg-[#0a0c10]/95 backdrop-blur-2xl border-b border-emerald-500/20 px-4 pt-4 pb-6 space-y-4 shadow-2xl">
           <a
             href="#grupos"
             onClick={() => setMobileMenuOpen(false)}
-            className="block text-slate-200 font-medium py-2 hover:text-indigo-400"
+            className="block text-slate-100 font-bold py-2 hover:text-[#27c40b]"
           >
-            Lista de Grupos
+            🔥 Lista de Grupos VIP
           </a>
           <a
             href="#diferenciais"
             onClick={() => setMobileMenuOpen(false)}
-            className="block text-slate-200 font-medium py-2 hover:text-indigo-400"
+            className="block text-slate-200 font-medium py-2 hover:text-[#27c40b]"
           >
-            Diferenciais
+            ✨ Por que Participar?
           </a>
           <a
             href="#faq"
             onClick={() => setMobileMenuOpen(false)}
-            className="block text-slate-200 font-medium py-2 hover:text-indigo-400"
+            className="block text-slate-200 font-medium py-2 hover:text-[#27c40b]"
           >
-            Perguntas Frequentes
+            ❓ Dúvidas Frequentes
           </a>
-          <div className="pt-2 flex flex-col gap-3">
-            <Link
-              href="/links-grupos"
-              className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-indigo-600 text-white font-bold text-xs"
-            >
-              <LayoutDashboard className="w-4 h-4" />
-              <span>Acessar Painel do Gestor</span>
-            </Link>
-          </div>
+          <a
+            href="https://dudurochatec.com.br/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block text-emerald-400 font-medium py-2"
+          >
+            🌐 Acessar Portal dudurochatec.com.br
+          </a>
         </div>
       )}
     </header>

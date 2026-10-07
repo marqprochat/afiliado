@@ -18,7 +18,7 @@ export function ThreeCanvas() {
       0.1,
       1000
     );
-    camera.position.z = 6;
+    camera.position.z = 5.8;
 
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
@@ -29,44 +29,53 @@ export function ThreeCanvas() {
     const group = new THREE.Group();
     scene.add(group);
 
-    // Main 3D Glowing Wireframe Core (Icosahedron)
-    const geometry = new THREE.IcosahedronGeometry(2.2, 2);
+    // Main 3D Glowing Wireframe Core (Dudu Rocha Electric Green #27c40b)
+    const geometry = new THREE.IcosahedronGeometry(2.1, 2);
     const material = new THREE.MeshStandardMaterial({
-      color: 0x6366f1,
+      color: 0x27c40b,
       wireframe: true,
-      roughness: 0.2,
-      metalness: 0.8,
-      emissive: 0x4f46e5,
-      emissiveIntensity: 0.4,
+      roughness: 0.15,
+      metalness: 0.9,
+      emissive: 0x1da308,
+      emissiveIntensity: 0.5,
     });
     const coreMesh = new THREE.Mesh(geometry, material);
     group.add(coreMesh);
 
-    // Inner Glowing Solid Core
-    const innerGeo = new THREE.IcosahedronGeometry(1.4, 1);
+    // Inner Glowing Solid Cyber Core (Cyan & Emerald)
+    const innerGeo = new THREE.IcosahedronGeometry(1.3, 1);
     const innerMat = new THREE.MeshPhongMaterial({
-      color: 0x06b6d4,
-      emissive: 0x0891b2,
-      emissiveIntensity: 0.6,
-      shininess: 100,
+      color: 0x00d084,
+      emissive: 0x06b6d4,
+      emissiveIntensity: 0.7,
+      shininess: 120,
       transparent: true,
       opacity: 0.85,
     });
     const innerMesh = new THREE.Mesh(innerGeo, innerMat);
     group.add(innerMesh);
 
-    // Outer Orbiting Ring
-    const ringGeo = new THREE.TorusGeometry(3.3, 0.04, 16, 100);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: 0xec4899,
+    // Outer Orbiting Rings (Tech Halo)
+    const ringGeo1 = new THREE.TorusGeometry(3.1, 0.04, 16, 100);
+    const ringMat1 = new THREE.MeshBasicMaterial({
+      color: 0x27c40b,
       wireframe: false,
     });
-    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-    ringMesh.rotation.x = Math.PI / 3;
-    group.add(ringMesh);
+    const ringMesh1 = new THREE.Mesh(ringGeo1, ringMat1);
+    ringMesh1.rotation.x = Math.PI / 3;
+    group.add(ringMesh1);
 
-    // Particle Cloud
-    const particleCount = 200;
+    const ringGeo2 = new THREE.TorusGeometry(3.4, 0.03, 16, 100);
+    const ringMat2 = new THREE.MeshBasicMaterial({
+      color: 0x06b6d4,
+      wireframe: false,
+    });
+    const ringMesh2 = new THREE.Mesh(ringGeo2, ringMat2);
+    ringMesh2.rotation.y = Math.PI / 4;
+    group.add(ringMesh2);
+
+    // Tech Particle Cloud
+    const particleCount = 220;
     const particleGeo = new THREE.BufferGeometry();
     const particlePositions = new Float32Array(particleCount * 3);
 
@@ -78,19 +87,19 @@ export function ThreeCanvas() {
 
     particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
     const particleMat = new THREE.PointsMaterial({
-      color: 0xa855f7,
+      color: 0x27c40b,
       size: 0.05,
       transparent: true,
-      opacity: 0.75,
+      opacity: 0.8,
     });
     const particleSystem = new THREE.Points(particleGeo, particleMat);
     scene.add(particleSystem);
 
     // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
 
-    const pointLight1 = new THREE.PointLight(0x6366f1, 2, 20);
+    const pointLight1 = new THREE.PointLight(0x27c40b, 2.5, 20);
     pointLight1.position.set(5, 5, 5);
     scene.add(pointLight1);
 
@@ -130,10 +139,11 @@ export function ThreeCanvas() {
       animationFrameId = requestAnimationFrame(animate);
 
       // Rotate 3D meshes smoothly
-      coreMesh.rotation.y += 0.005;
-      coreMesh.rotation.x += 0.002;
-      innerMesh.rotation.y -= 0.008;
-      ringMesh.rotation.z += 0.004;
+      coreMesh.rotation.y += 0.006;
+      coreMesh.rotation.x += 0.003;
+      innerMesh.rotation.y -= 0.009;
+      ringMesh1.rotation.z += 0.005;
+      ringMesh2.rotation.x += 0.004;
       particleSystem.rotation.y += 0.001;
 
       // Mouse smooth interpolation (lerp)
@@ -161,18 +171,20 @@ export function ThreeCanvas() {
       material.dispose();
       innerGeo.dispose();
       innerMat.dispose();
-      ringGeo.dispose();
-      ringMat.dispose();
+      ringGeo1.dispose();
+      ringMat1.dispose();
+      ringGeo2.dispose();
+      ringMat2.dispose();
       particleGeo.dispose();
       particleMat.dispose();
     };
   }, []);
 
   return (
-    <div className="relative w-full h-[380px] sm:h-[480px] lg:h-[540px] flex items-center justify-center overflow-hidden">
+    <div className="relative w-full h-[360px] sm:h-[450px] lg:h-[500px] flex items-center justify-center overflow-hidden">
       {/* Background glow behind 3D Canvas */}
-      <div className="absolute w-72 h-72 sm:w-96 sm:h-96 bg-indigo-600/20 rounded-full blur-[100px] pointer-events-none -z-10 animate-pulse" />
-      <div className="absolute w-60 h-60 sm:w-80 sm:h-80 bg-cyan-500/15 rounded-full blur-[90px] pointer-events-none -z-10 translate-x-20 translate-y-20" />
+      <div className="absolute w-72 h-72 sm:w-96 sm:h-96 bg-[#27c40b]/20 rounded-full blur-[110px] pointer-events-none -z-10 animate-pulse" />
+      <div className="absolute w-60 h-60 sm:w-80 sm:h-80 bg-cyan-500/15 rounded-full blur-[90px] pointer-events-none -z-10 translate-x-20 translate-y-10" />
       
       {/* Three.js Canvas Container */}
       <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
