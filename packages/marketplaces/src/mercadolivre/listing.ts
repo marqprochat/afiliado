@@ -15,10 +15,7 @@ import { cookieHeader } from './official-link';
 const ML_ORIGIN = 'https://www.mercadolivre.com.br';
 
 export type MlListingSource =
-  | { kind: 'deals' }
-  | { kind: 'category'; categoryId: string }
-  | { kind: 'lightning' }
-  | { kind: 'url'; url: string };
+  { kind: 'deals' } | { kind: 'category'; categoryId: string } | { kind: 'lightning' };
 
 export type MlListingErrorCode =
   'ML_LISTING_BLOCKED' | 'ML_LISTING_LAYOUT' | 'ML_LISTING_INVALID_URL' | 'ML_LISTING_HTTP';
@@ -54,18 +51,6 @@ export function buildMlListingUrl(source: MlListingSource, page: number): string
       if (!/^MLB\d+$/.test(source.categoryId)) throw invalid('Categoria do Mercado Livre inválida');
       u = new URL(`${ML_ORIGIN}/ofertas`);
       u.searchParams.set('category', source.categoryId);
-      break;
-    case 'url':
-      try {
-        u = new URL(source.url);
-      } catch {
-        throw invalid('URL da listagem inválida');
-      }
-      if (u.protocol !== 'https:' || !isMlHost(u.hostname)) {
-        throw invalid('Use um link https do Mercado Livre (mercadolivre.com.br)');
-      }
-      u.hash = '';
-      u.searchParams.delete('page'); // a paginação é nossa: a página 1 é sempre a primeira
       break;
   }
   if (page > 1) u.searchParams.set('page', String(page));

@@ -39,22 +39,6 @@ const CATEGORY_HELP: Partial<Record<MarketplaceKind, string>> = {
     'Não use o número da URL do shopee.com.br — é outro sistema de IDs e sempre dá 0 resultados. Faça uma busca por palavra-chave, copie o chip "🏷️ Categoria" de um produto e cole aqui.',
 };
 
-const LISTING_URL_ERROR =
-  'Cole a URL completa de uma listagem do Mercado Livre, começando com https://';
-
-// Espelha a regra do servidor: https e host mercadolivre.com.br (ou subdomínio).
-function isMlListingUrl(value: string): boolean {
-  try {
-    const u = new URL(value);
-    return (
-      u.protocol === 'https:' &&
-      (u.hostname === 'mercadolivre.com.br' || u.hostname.endsWith('.mercadolivre.com.br'))
-    );
-  } catch {
-    return false;
-  }
-}
-
 const selectCls = 'h-9 rounded-md border border-input bg-surface-2 px-2 text-sm';
 
 export function SearchFilters({
@@ -81,8 +65,6 @@ export function SearchFilters({
   const [freeShippingOnly, setFreeShippingOnly] = useState(false);
   const [listingKind, setListingKind] = useState<MlListingKind>('deals');
   const [listingCategory, setListingCategory] = useState('');
-  const [listingUrl, setListingUrl] = useState('');
-  const [listingUrlError, setListingUrlError] = useState('');
   const [formError, setFormError] = useState('');
 
   const isShopee = source === 'SHOPEE';
@@ -112,26 +94,19 @@ export function SearchFilters({
       raw.mlListing =
         listingKind === 'category'
           ? { kind: 'category', categoryId: listingCategory }
-          : listingKind === 'url'
-            ? { kind: 'url', url: listingUrl.trim() }
-            : { kind: listingKind };
+          : { kind: listingKind };
     }
     if (minPrice) raw.minPrice = Number(minPrice);
     if (maxPrice) raw.maxPrice = Number(maxPrice);
     if (minDiscountPct) raw.minDiscountPct = Number(minDiscountPct);
     // cards de listagem do ML não trazem vendas: o filtro descartaria tudo
     if (minSales && mode !== 'listing') raw.minSales = Number(minSales);
-    if (mode === 'listing' && listingKind === 'url' && !isMlListingUrl(listingUrl.trim())) {
-      setListingUrlError(LISTING_URL_ERROR);
-      return;
-    }
     const parsed = searchQuerySchema.safeParse(raw);
     if (!parsed.success) {
       // em listagem o usuário não pode ficar sem retorno quando a validação falha
       if (mode === 'listing') setFormError('Confira os campos da busca');
       return;
     }
-    setListingUrlError('');
     setFormError('');
     onSearch(parsed.data);
   }
@@ -200,16 +175,12 @@ export function SearchFilters({
             <select
               aria-label="Fonte da listagem"
               value={listingKind}
-              onChange={(e) => {
-                setListingKind(e.target.value as MlListingKind);
-                setListingUrlError('');
-              }}
+              onChange={(e) => setListingKind(e.target.value as MlListingKind)}
               className={`${selectCls} w-56`}
             >
               <option value="deals">Ofertas do dia</option>
               <option value="category">Ofertas por categoria</option>
               <option value="lightning">Ofertas relâmpago</option>
-              <option value="url">Colar URL de listagem</option>
             </select>
             {listingKind === 'category' && (
               <select
@@ -226,25 +197,6 @@ export function SearchFilters({
                 ))}
               </select>
             )}
-            {listingKind === 'url' && (
-              <Input
-                aria-label="URL da listagem"
-                value={listingUrl}
-                onChange={(e) => {
-                  setListingUrl(e.target.value);
-                  setListingUrlError('');
-                }}
-                aria-invalid={Boolean(listingUrlError)}
-                aria-describedby={listingUrlError ? 'listing-url-error' : undefined}
-                placeholder="https://www.mercadolivre.com.br/ofertas?…"
-                className="min-w-64 flex-1"
-              />
-            )}
-            {listingKind === 'url' && listingUrlError && (
-              <p id="listing-url-error" role="alert" className="basis-full text-xs text-red-400">
-                {listingUrlError}
-              </p>
-            )}
           </div>
         )}
         <Button
@@ -254,9 +206,7 @@ export function SearchFilters({
             loading ||
             (!supportsAdvancedModes && mode !== 'keyword' && mode !== 'listing') ||
             (mode === 'category' && !categoryId) ||
-            (mode === 'listing' &&
-              ((listingKind === 'category' && !listingCategory) ||
-                (listingKind === 'url' && !listingUrl.trim())))
+            (mode === 'listing' && listingKind === 'category' && !listingCategory)
           }
         >
           {loading ? 'Buscando…' : 'Buscar'}

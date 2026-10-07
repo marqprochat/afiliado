@@ -4,13 +4,11 @@ import { ApiError, type MlListingQuery } from '@afilados/shared';
 /** Indireção para os testes trocarem a busca real (que acessa o ML) por um dublê. */
 export const mlListingDeps = { fetchMlListing };
 
-/** O schema (`searchQuerySchema`) já garante categoryId/url quando o tipo exige. */
+/** O schema (`searchQuerySchema`) já garante o categoryId quando o tipo é categoria. */
 export function toMlListingSource(l: MlListingQuery): MlListingSource {
   switch (l.kind) {
     case 'category':
       return { kind: 'category', categoryId: l.categoryId! };
-    case 'url':
-      return { kind: 'url', url: l.url! };
     case 'lightning':
       return { kind: 'lightning' };
     default:

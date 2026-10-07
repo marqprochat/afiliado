@@ -13,8 +13,8 @@ export type SearchSort = (typeof SEARCH_SORTS)[number];
 export const SEARCH_MODES = ['keyword', 'category', 'trending', 'shop', 'listing'] as const;
 export type SearchMode = (typeof SEARCH_MODES)[number];
 
-/** Fontes da busca por listagem do Mercado Livre (ofertas do dia, categoria, relâmpago, URL colada). */
-export const ML_LISTING_KINDS = ['deals', 'category', 'lightning', 'url'] as const;
+/** Fontes da busca por listagem do Mercado Livre (ofertas do dia, categoria, relâmpago). */
+export const ML_LISTING_KINDS = ['deals', 'category', 'lightning'] as const;
 export type MlListingKind = (typeof ML_LISTING_KINDS)[number];
 
 const mlListingSchema = z.object({
@@ -23,7 +23,6 @@ const mlListingSchema = z.object({
     .string()
     .regex(/^MLB\d+$/, 'Categoria inválida')
     .optional(),
-  url: z.string().url().max(2000).optional(),
 });
 export type MlListingQuery = z.infer<typeof mlListingSchema>;
 
@@ -72,8 +71,6 @@ export const searchQuerySchema = z
             path: ['mlListing', 'categoryId'],
             message: 'categoryId obrigatório',
           });
-        if (q.mlListing.kind === 'url' && !q.mlListing.url)
-          ctx.addIssue({ code: 'custom', path: ['mlListing', 'url'], message: 'url obrigatória' });
       }
     }
     if (q.minPrice !== undefined && q.maxPrice !== undefined && q.minPrice > q.maxPrice) {

@@ -26,13 +26,13 @@ describe('searchQuerySchema: listagem do Mercado Livre', () => {
     expect(ok.mlListing?.categoryId).toBe('MLB1051');
   });
 
-  it('exige url quando o tipo é url', () => {
-    expect(() => searchQuerySchema.parse({ ...base, mlListing: { kind: 'url' } })).toThrow();
-    const ok = searchQuerySchema.parse({
-      ...base,
-      mlListing: { kind: 'url', url: 'https://www.mercadolivre.com.br/ofertas' },
-    });
-    expect(ok.mlListing?.url).toBe('https://www.mercadolivre.com.br/ofertas');
+  it('não aceita mais o tipo url (URL colada): a extensão já cobre esse caso', () => {
+    expect(() =>
+      searchQuerySchema.parse({
+        ...base,
+        mlListing: { kind: 'url', url: 'https://www.mercadolivre.com.br/ofertas' },
+      }),
+    ).toThrow();
   });
 
   it('exige mlListing no modo listing', () => {

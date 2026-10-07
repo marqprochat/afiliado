@@ -163,16 +163,26 @@ describe('POST /products/search (listing do ML)', () => {
     expect(r.body).not.toMatch(/internal/);
   });
 
-  it('URL inválida → 400', async () => {
+  it('entrada inválida da listagem → 400', async () => {
     fetchMock.mockRejectedValue(
-      new MlListingError('Use um link https do Mercado Livre', 'ML_LISTING_INVALID_URL'),
+      new MlListingError('Categoria do Mercado Livre inválida', 'ML_LISTING_INVALID_URL'),
     );
     const r = await search({
       source: 'MERCADOLIVRE',
       mode: 'listing',
-      mlListing: { kind: 'url', url: 'https://evil.com/x' },
+      mlListing: { kind: 'category', categoryId: 'MLB1051' },
     });
     expect(r.statusCode).toBe(400);
+  });
+
+  it('não aceita mais a colagem de URL de listagem → 400 e nenhuma busca no ML', async () => {
+    const r = await search({
+      source: 'MERCADOLIVRE',
+      mode: 'listing',
+      mlListing: { kind: 'url', url: 'https://www.mercadolivre.com.br/ofertas' },
+    });
+    expect(r.statusCode).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('rejeita listing fora do Mercado Livre e sem mlListing', async () => {

@@ -28,7 +28,7 @@ describe('endOfDaySaoPaulo', () => {
 });
 
 describe('buildMlListingUrl', () => {
-  it('monta as quatro fontes e a paginação', () => {
+  it('monta as três fontes e a paginação', () => {
     expect(buildMlListingUrl({ kind: 'deals' }, 1)).toBe('https://www.mercadolivre.com.br/ofertas');
     expect(buildMlListingUrl({ kind: 'deals' }, 2)).toBe(
       'https://www.mercadolivre.com.br/ofertas?page=2',
@@ -39,37 +39,14 @@ describe('buildMlListingUrl', () => {
     expect(buildMlListingUrl({ kind: 'category', categoryId: 'MLB1051' }, 3)).toBe(
       'https://www.mercadolivre.com.br/ofertas?category=MLB1051&page=3',
     );
-    expect(
-      buildMlListingUrl(
-        { kind: 'url', url: 'https://www.mercadolivre.com.br/mais-vendidos#frag' },
-        2,
-      ),
-    ).toBe('https://www.mercadolivre.com.br/mais-vendidos?page=2');
   });
 
-  it('URL colada com ?page=N: a página 1 é sempre a primeira', () => {
-    const url = 'https://www.mercadolivre.com.br/mais-vendidos?page=3';
-    expect(buildMlListingUrl({ kind: 'url', url }, 1)).toBe(
-      'https://www.mercadolivre.com.br/mais-vendidos',
-    );
-    expect(buildMlListingUrl({ kind: 'url', url }, 2)).toBe(
-      'https://www.mercadolivre.com.br/mais-vendidos?page=2',
-    );
-  });
-
-  it('rejeita categoria inválida e URL fora do domínio do ML', () => {
+  it('rejeita categoria inválida (só ids MLB… entram na URL)', () => {
     const invalid = (fn: () => unknown) =>
       expect(thrown(fn)).toMatchObject({ code: 'ML_LISTING_INVALID_URL' });
     invalid(() => buildMlListingUrl({ kind: 'category', categoryId: 'abc' }, 1));
-    invalid(() => buildMlListingUrl({ kind: 'url', url: 'http://www.mercadolivre.com.br/x' }, 1));
-    invalid(() => buildMlListingUrl({ kind: 'url', url: 'https://evil.com/ofertas' }, 1));
-    invalid(() =>
-      buildMlListingUrl({ kind: 'url', url: 'https://mercadolivre.com.br.evil.com/x' }, 1),
-    );
-    invalid(() => buildMlListingUrl({ kind: 'url', url: 'não é url' }, 1));
-    expect(
-      buildMlListingUrl({ kind: 'url', url: 'https://lista.mercadolivre.com.br/fone' }, 1),
-    ).toBe('https://lista.mercadolivre.com.br/fone');
+    invalid(() => buildMlListingUrl({ kind: 'category', categoryId: 'MLB1&x=1' }, 1));
+    invalid(() => buildMlListingUrl({ kind: 'category', categoryId: '../ofertas' }, 1));
   });
 });
 

@@ -89,61 +89,13 @@ describe('SearchFilters: listagem do Mercado Livre', () => {
     );
   });
 
-  it('Colar URL: exige a URL e a envia aparada', () => {
-    const onSearch = vi.fn();
-    renderFilters({ source: 'MERCADOLIVRE', mode: 'listing', onSearch });
-    fireEvent.change(screen.getByLabelText('Fonte da listagem'), { target: { value: 'url' } });
-    const button = screen.getByRole('button', { name: /buscar/i });
-    expect(button).toBeDisabled();
-    fireEvent.change(screen.getByLabelText('URL da listagem'), {
-      target: { value: '  https://www.mercadolivre.com.br/mais-vendidos  ' },
-    });
-    fireEvent.click(button);
-    expect(onSearch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        mlListing: { kind: 'url', url: 'https://www.mercadolivre.com.br/mais-vendidos' },
-      }),
+  it('não oferece mais a colagem de URL de listagem (a extensão já cobre esse caso)', () => {
+    renderFilters({ source: 'MERCADOLIVRE', mode: 'listing', onSearch: vi.fn() });
+    const options = [...screen.getByLabelText('Fonte da listagem').querySelectorAll('option')].map(
+      (o) => o.textContent,
     );
-  });
-
-  describe('URL de listagem inválida', () => {
-    const MSG = 'Cole a URL completa de uma listagem do Mercado Livre, começando com https://';
-
-    function tentar(valor: string) {
-      const onSearch = vi.fn();
-      renderFilters({ source: 'MERCADOLIVRE', mode: 'listing', onSearch });
-      fireEvent.change(screen.getByLabelText('Fonte da listagem'), { target: { value: 'url' } });
-      fireEvent.change(screen.getByLabelText('URL da listagem'), { target: { value: valor } });
-      fireEvent.click(screen.getByRole('button', { name: /buscar/i }));
-      return onSearch;
-    }
-
-    it.each([
-      ['domínio fora do Mercado Livre', 'https://evil.com/x'],
-      ['texto que não é URL', 'not a url'],
-      ['http em vez de https', 'http://www.mercadolivre.com.br/x'],
-    ])('%s: não busca e mostra erro inline', (_nome, valor) => {
-      const onSearch = tentar(valor);
-      expect(onSearch).not.toHaveBeenCalled();
-      expect(screen.getByRole('alert').textContent).toBe(MSG);
-      expect(screen.getByLabelText('URL da listagem').getAttribute('aria-invalid')).toBe('true');
-    });
-
-    it('limpa o erro ao editar a URL e busca com a URL válida', () => {
-      const onSearch = tentar('https://evil.com/x');
-      expect(screen.getByRole('alert')).toBeTruthy();
-      fireEvent.change(screen.getByLabelText('URL da listagem'), {
-        target: { value: 'https://www.mercadolivre.com.br/mais-vendidos' },
-      });
-      expect(screen.queryByRole('alert')).toBeNull();
-      fireEvent.click(screen.getByRole('button', { name: /buscar/i }));
-      expect(onSearch).toHaveBeenCalledWith(
-        expect.objectContaining({
-          mlListing: { kind: 'url', url: 'https://www.mercadolivre.com.br/mais-vendidos' },
-        }),
-      );
-      expect(screen.queryByRole('alert')).toBeNull();
-    });
+    expect(options).toEqual(['Ofertas do dia', 'Ofertas por categoria', 'Ofertas relâmpago']);
+    expect(screen.queryByLabelText('URL da listagem')).toBeNull();
   });
 
   it('inclui o desconto mínimo junto com a listagem', () => {
