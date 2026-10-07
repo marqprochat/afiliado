@@ -2,17 +2,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Search,
   ExternalLink,
-  Tag,
-  CheckCircle,
-  Share2,
   Copy,
-  Users,
-  Smartphone,
-  Laptop,
-  Flame,
-  Ticket,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -35,83 +26,85 @@ export interface PublicGroupLink {
   redirectUrl: string;
 }
 
-// Fallback demo links shown if database is empty
+// Fallback demo links abrangendo várias categorias
 const DUDU_ROCHA_DEMO_LINKS: PublicGroupLink[] = [
   {
     id: 'dudu-1',
     slug: 'dudu-ofertas-vip',
-    label: 'Todas as Ofertas',
-    baseName: 'Grupo VIP de Ofertas Dudu Rocha',
-    customText: 'Smartphones, tecnologia, eletrônicos e bugs de preço com desconto real.',
-    groupDescription: 'Notificações diárias das melhores ofertas da internet.',
+    label: '🔥 Todas as Ofertas & Bugs',
+    baseName: 'Grupo VIP Geral Dudu Rocha',
+    customText: 'Acompanhe em tempo real os maiores descontos, erros de preço e cupons de todas as lojas.',
+    groupDescription: 'Acompanhe em tempo real os maiores descontos, erros de preço e cupons de todas as lojas.',
     groupImageBase64: null,
     clickCount: 5430,
     status: 'ACTIVE',
     memberLimit: 1000,
-    activeGroup: {
-      name: 'Grupo VIP de Ofertas Dudu Rocha #14',
-      memberCount: 940,
-    },
+    activeGroup: null,
     redirectUrl: '/g/dudu-ofertas-vip',
   },
   {
     id: 'dudu-2',
     slug: 'dudu-smartphones',
-    label: 'Celulares e Smartphones',
+    label: '📱 Celulares & Smartphones',
     baseName: 'Ofertas de Celulares & Smartphones',
-    customText: 'Samsung Galaxy, iPhones, Xiaomi e Motorola pelo menor preço histórico.',
-    groupDescription: 'Monitore quedas de preço e lançamentos com links 100% confiáveis.',
+    customText: 'Samsung Galaxy, iPhones, Xiaomi e Motorola com o menor preço histórico e cupons.',
+    groupDescription: 'Samsung Galaxy, iPhones, Xiaomi e Motorola com o menor preço histórico e cupons.',
     groupImageBase64: null,
     clickCount: 3820,
     status: 'ACTIVE',
     memberLimit: 1000,
-    activeGroup: {
-      name: 'Ofertas de Celulares Dudu Rocha #08',
-      memberCount: 885,
-    },
+    activeGroup: null,
     redirectUrl: '/g/dudu-smartphones',
   },
   {
     id: 'dudu-3',
-    slug: 'dudu-notebooks',
-    label: 'Notebook e Informática',
-    baseName: 'Notebooks, PCs e Periféricos',
-    customText: 'Laptops de trabalho, MacBooks, monitores e periféricos com cupons.',
-    groupDescription: 'Compre o melhor notebook para suas necessidades com desconto.',
-    groupImageBase64: null,
-    clickCount: 2950,
-    status: 'ACTIVE',
-    memberLimit: 1000,
-    activeGroup: {
-      name: 'Notebooks & Informática Dudu Rocha #04',
-      memberCount: 790,
-    },
-    redirectUrl: '/g/dudu-notebooks',
-  },
-  {
-    id: 'dudu-4',
     slug: 'dudu-cupons',
-    label: 'Cupons e Descontos',
+    label: '🏷️ Cupons & Descontos Secretos',
     baseName: 'Cupons Secretos & Descontos Relâmpago',
-    customText: 'Cupons de Mercado Livre, Shopee, Amazon, Magalu e KaBuM.',
-    groupDescription: 'Códigos promocionais testados minuto a minuto.',
+    customText: 'Cupons exclusivos de Mercado Livre, Amazon, Shopee, Magalu e KaBuM testados diariamente.',
+    groupDescription: 'Cupons exclusivos de Mercado Livre, Amazon, Shopee, Magalu e KaBuM testados diariamente.',
     groupImageBase64: null,
     clickCount: 6810,
     status: 'ACTIVE',
     memberLimit: 1000,
-    activeGroup: {
-      name: 'Cupons & Descontos Dudu Rocha #22',
-      memberCount: 982,
-    },
+    activeGroup: null,
     redirectUrl: '/g/dudu-cupons',
+  },
+  {
+    id: 'dudu-4',
+    slug: 'dudu-notebooks',
+    label: '💻 Notebooks & Informática',
+    baseName: 'Notebooks, PCs e Periféricos',
+    customText: 'Laptops para trabalho e estudo, monitores, MacBooks e periféricos com super desconto.',
+    groupDescription: 'Laptops para trabalho e estudo, monitores, MacBooks e periféricos com super desconto.',
+    groupImageBase64: null,
+    clickCount: 2950,
+    status: 'ACTIVE',
+    memberLimit: 1000,
+    activeGroup: null,
+    redirectUrl: '/g/dudu-notebooks',
+  },
+  {
+    id: 'dudu-5',
+    slug: 'dudu-casa-eletro',
+    label: '🏠 Casa, Cozinha & Eletro',
+    baseName: 'Casa e Eletrodomésticos',
+    customText: 'Air fryers, aspiradores robô, geladeiras, TVs e itens essenciais para sua casa.',
+    groupDescription: 'Air fryers, aspiradores robô, geladeiras, TVs e itens essenciais para sua casa.',
+    groupImageBase64: null,
+    clickCount: 2120,
+    status: 'ACTIVE',
+    memberLimit: 1000,
+    activeGroup: null,
+    redirectUrl: '/g/dudu-casa-eletro',
   },
 ];
 
-// Helper component for group avatar image
+// Componente para Foto Grande do Grupo
 function GroupAvatar({
   src,
   label,
-  className = 'w-12 h-12',
+  className = 'w-16 h-16 sm:w-20 sm:h-20',
 }: {
   src?: string | null;
   label: string;
@@ -129,6 +122,7 @@ function GroupAvatar({
   }, [src]);
 
   const initials = (label || 'G')
+    .replace(/[^a-zA-ZÀ-ÿ0-9 ]/g, '')
     .split(' ')
     .filter(Boolean)
     .slice(0, 2)
@@ -142,16 +136,16 @@ function GroupAvatar({
         src={imageSrc}
         alt={label}
         onError={() => setHasError(true)}
-        className={`${className} shrink-0 rounded-xl sm:rounded-2xl object-cover border border-slate-700/80 shadow-md group-hover:border-[#25D366] transition-all duration-200`}
+        className={`${className} shrink-0 rounded-2xl object-cover border-2 border-slate-700/80 shadow-md group-hover:border-[#25D366] transition-all duration-200`}
       />
     );
   }
 
   return (
     <div
-      className={`${className} shrink-0 rounded-xl sm:rounded-2xl bg-gradient-to-br from-emerald-600/30 to-slate-800 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-extrabold text-sm sm:text-base shadow-md group-hover:scale-105 group-hover:border-[#25D366] transition-all duration-200`}
+      className={`${className} shrink-0 rounded-2xl bg-gradient-to-br from-emerald-600/30 to-slate-800 border-2 border-emerald-500/40 flex items-center justify-center text-emerald-400 font-black text-lg sm:text-2xl shadow-md group-hover:scale-105 group-hover:border-[#25D366] transition-all duration-200`}
     >
-      {initials}
+      {initials || 'VIP'}
     </div>
   );
 }
@@ -212,17 +206,17 @@ export function GroupListSection() {
   };
 
   return (
-    <section id="grupos" className="py-8 px-4 sm:px-6 max-w-4xl mx-auto">
+    <section id="grupos" className="py-8 px-4 sm:px-6 max-w-4xl mx-auto scroll-mt-20">
       {/* Box Principal Estilo Canaltech Ofertas */}
       <div className="bg-[#12151c] border border-slate-800 rounded-2xl p-5 sm:p-8 shadow-2xl">
         
         {/* Título de chamada */}
         <div className="text-center mb-6 sm:mb-8">
-          <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">
-            🤑 Escolha o grupo que deseja acompanhar:
+          <h2 className="text-xl sm:text-3xl font-extrabold text-white mb-2">
+            🤑 Escolha os grupos que deseja entrar:
           </h2>
-          <p className="text-slate-400 text-sm">
-            Selecione a categoria de ofertas abaixo para entrar diretamente pelo WhatsApp:
+          <p className="text-slate-400 text-sm sm:text-base">
+            Clique no botão do grupo para receber as ofertas e cupons diretamente no seu WhatsApp:
           </p>
         </div>
 
@@ -260,11 +254,11 @@ export function GroupListSection() {
           </div>
         )}
 
-        {/* Lista de Botões Diretos de Grupos */}
+        {/* Lista de Botões Diretos de Grupos com Imagem Grande e Descrição */}
         {loading ? (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-16 bg-slate-900/60 rounded-xl animate-pulse" />
+              <div key={i} className="h-24 bg-slate-900/60 rounded-2xl animate-pulse" />
             ))}
           </div>
         ) : filteredLinks.length === 0 ? (
@@ -272,31 +266,32 @@ export function GroupListSection() {
             Nenhum grupo encontrado nesta categoria.
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4">
             {filteredLinks.map((link) => {
+              const description = link.groupDescription || link.customText;
               return (
                 <a
                   key={link.id}
                   href={link.redirectUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group relative flex items-center justify-between p-3.5 sm:p-4 rounded-xl bg-[#1a1f2c] hover:bg-[#202738] border border-slate-700/80 hover:border-[#25D366] transition-all duration-150 shadow-md hover:shadow-lg hover:shadow-[#25D366]/10"
+                  className="group relative flex items-center justify-between p-4 sm:p-5 rounded-2xl bg-[#181d28] hover:bg-[#202738] border border-slate-700/70 hover:border-[#25D366] transition-all duration-150 shadow-md hover:shadow-xl hover:shadow-[#25D366]/10"
                 >
-                  {/* Lado Esquerdo: Foto do Grupo + Identidade/Rótulo */}
-                  <div className="flex-1 min-w-0 flex items-center gap-3 sm:gap-4 pr-2 sm:pr-4">
+                  {/* Lado Esquerdo: Foto Grande + Identidade/Rótulo + Descrição */}
+                  <div className="flex-1 min-w-0 flex items-center gap-4 sm:gap-5 pr-3 sm:pr-6">
                     <GroupAvatar
                       src={link.groupImageBase64}
                       label={link.label}
-                      className="w-11 h-11 sm:w-12 sm:h-12"
+                      className="w-14 h-14 sm:w-20 sm:h-20 shrink-0"
                     />
 
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-sm sm:text-base md:text-lg font-bold text-white group-hover:text-[#25D366] transition-colors leading-snug break-words">
+                      <h3 className="text-base sm:text-xl font-bold text-white group-hover:text-[#25D366] transition-colors leading-snug break-words">
                         {link.label}
                       </h3>
-                      {link.customText && (
-                        <p className="text-xs text-slate-400 truncate mt-0.5 hidden md:block">
-                          {link.customText}
+                      {description && (
+                        <p className="text-xs sm:text-sm text-slate-300 leading-relaxed mt-1 line-clamp-2">
+                          {description}
                         </p>
                       )}
                     </div>
@@ -307,14 +302,14 @@ export function GroupListSection() {
                     <button
                       onClick={(e) => handleCopyLink(e, link.slug)}
                       title="Copiar link de convite"
-                      className="hidden sm:flex p-2.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition"
+                      className="hidden sm:flex p-3 rounded-xl bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition"
                     >
                       <Copy className="w-4 h-4" />
                     </button>
 
-                    <div className="px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-[#25D366] text-black font-extrabold text-xs sm:text-sm group-hover:bg-[#22c35e] group-hover:scale-105 transition-all flex items-center gap-1.5 shadow shrink-0">
+                    <div className="px-4 py-3 sm:px-6 sm:py-3.5 rounded-xl bg-[#25D366] text-black font-extrabold text-xs sm:text-base group-hover:bg-[#22c35e] group-hover:scale-105 transition-all flex items-center gap-2 shadow-lg shadow-[#25D366]/20 shrink-0 uppercase tracking-wide">
                       <span>Entrar</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
+                      <ExternalLink className="w-4 h-4" />
                     </div>
                   </div>
                 </a>
@@ -324,9 +319,9 @@ export function GroupListSection() {
         )}
 
         {/* Rodapé simples do box */}
-        <div className="mt-6 pt-5 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-2">
-          <span>🔒 Todos os grupos são 100% gratuitos e verificados</span>
-          <span>⚡ Redirecionamento automático com vagas ativas</span>
+        <div className="mt-8 pt-5 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-2">
+          <span>🔒 Todos os grupos são 100% gratuitos e livres de spam</span>
+          <span>⚡ Links com vagas verificadas e redirecionamento automático</span>
         </div>
       </div>
     </section>
