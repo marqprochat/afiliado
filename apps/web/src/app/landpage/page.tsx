@@ -1,93 +1,92 @@
 import React from 'react';
 import type { Metadata } from 'next';
-import { ThreeCanvas } from '@/components/landing/three-canvas';
-import { LandingNav } from '@/components/landing/landing-nav';
 import { GroupListSection } from '@/components/landing/group-list-section';
-import { FeaturesSection } from '@/components/landing/features-section';
-import { FaqSection } from '@/components/landing/faq-section';
+import { LandingNav } from '@/components/landing/landing-nav';
 import { LandingFooter } from '@/components/landing/landing-footer';
-import { Sparkles, ArrowDown, Youtube, CheckCircle2, Flame } from 'lucide-react';
+import { ArrowDown, CheckCircle, ShieldCheck, Flame, Bell, Sparkles } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Grupos Oficiais de Ofertas do Dudu Rocha | Tecnologia & Cupons',
-  description: 'Participe gratuitamente dos Grupos VIP de Ofertas do Dudu Rocha. Celulares, notebooks, periféricos, cupons e bugs de preço com desconto real.',
+  title: 'Grupos de Ofertas do Dudu Rocha - Cupons e Descontos',
+  description: 'Participe dos grupos oficiais do Dudu Rocha no WhatsApp e Telegram. Cupons e descontos em celulares, notebooks, tecnologia e muito mais!',
 };
 
 export default function LandpagePage() {
   return (
-    <div className="min-h-screen bg-[#07080b] text-slate-100 font-sans selection:bg-[#27c40b] selection:text-black overflow-x-hidden">
-      {/* Top Navbar with Dudu Rocha Branding */}
+    <div className="min-h-screen bg-[#0b0e14] text-slate-100 font-sans selection:bg-[#25D366] selection:text-black">
+      {/* Top Navbar */}
       <LandingNav />
 
-      {/* Hero Section */}
-      <section className="relative pt-32 pb-16 sm:pt-40 sm:pb-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto flex flex-col items-center text-center">
-        {/* Ambient Lighting & Background 3D Glows */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-tr from-[#27c40b]/15 via-cyan-600/15 to-emerald-500/10 rounded-full blur-[140px] pointer-events-none -z-10 animate-pulse" />
-        <div className="absolute top-10 left-10 w-72 h-72 bg-[#27c40b]/10 rounded-full blur-[100px] pointer-events-none -z-10" />
-
-        {/* Hero Top Authority Badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900/90 border border-[#27c40b]/40 text-[#27c40b] text-xs sm:text-sm font-black mb-8 backdrop-blur-xl shadow-lg shadow-emerald-500/10">
-          <Flame className="w-4 h-4 text-[#27c40b]" />
-          <span>GRUPOS VIP DE OFERTAS · CANAL DUDU ROCHA</span>
+      {/* Hero Header Estilo Canaltech Ofertas */}
+      <header className="pt-28 pb-10 sm:pt-36 sm:pb-14 px-4 sm:px-6 max-w-4xl mx-auto text-center">
+        {/* Logo / Badge Dudu Rocha */}
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#25D366]/10 border border-[#25D366]/30 text-[#25D366] text-xs sm:text-sm font-bold mb-6">
+          <Flame className="w-4 h-4 text-[#25D366]" />
+          <span>Grupos Oficiais do Dudu Rocha</span>
         </div>
 
-        {/* Hero Main Headline */}
-        <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white max-w-5xl leading-[1.1] mb-6">
-          Receba as Melhores Ofertas de <br className="hidden sm:inline" />
-          <span className="bg-gradient-to-r from-[#27c40b] via-[#00d084] to-cyan-400 bg-clip-text text-transparent">
-            Tecnologia & Celulares no WhatsApp
-          </span>
+        {/* Título Principal */}
+        <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-white mb-4 leading-tight">
+          O Grupo que reúne as <span className="text-[#25D366]">melhores ofertas</span> para você em tempo real
         </h1>
 
-        {/* Subtitle */}
-        <p className="text-slate-300 text-base sm:text-lg lg:text-xl max-w-3xl font-normal leading-relaxed mb-10">
-          Curadoria diária feita pela equipe do <strong>Dudu Rocha</strong> (+3.5 Milhões no YouTube). 
-          Alertas em tempo real de menores preços históricos, cupons secretos e bugs em lojas oficiais.
+        {/* Subtítulo */}
+        <p className="text-slate-300 text-base sm:text-lg max-w-2xl mx-auto mb-8 leading-relaxed">
+          Receba cupons exclusivos, bugs de preço e promoções imperdíveis de tecnologia, smartphones e informática selecionados pela equipe do <strong>Dudu Rocha</strong>.
         </p>
 
-        {/* CTA Buttons */}
-        <div className="flex flex-col sm:flex-row items-center gap-4 mb-12">
-          <a
-            href="#grupos"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-[#27c40b] via-[#22b809] to-[#00d084] hover:brightness-110 text-black font-black text-base shadow-xl shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:scale-105 active:scale-95 transition-all duration-200 uppercase tracking-wide"
-          >
-            <span>Ver Grupos Disponíveis</span>
-            <ArrowDown className="w-5 h-5 animate-bounce" />
-          </a>
+        {/* Botão de Acesso Rápido */}
+        <a
+          href="#grupos"
+          className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl bg-[#25D366] hover:bg-[#22c35e] text-black font-extrabold text-sm sm:text-base shadow-lg shadow-[#25D366]/20 transition-all duration-150 uppercase tracking-wide"
+        >
+          <span>Escolher meu Grupo</span>
+          <ArrowDown className="w-4 h-4" />
+        </a>
+      </header>
+
+      {/* Cards de Benefícios / Dores (Inspirado no Canaltech) */}
+      <section className="py-6 px-4 sm:px-6 max-w-4xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-5 rounded-xl bg-[#12151c] border border-slate-800 flex items-start gap-3.5">
+            <span className="text-2xl">😭</span>
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Você costuma <strong className="text-white">perder os melhores descontos</strong> porque sempre fica sabendo tarde demais quando os estoques já acabaram?
+            </p>
+          </div>
+
+          <div className="p-5 rounded-xl bg-[#12151c] border border-slate-800 flex items-start gap-3.5">
+            <span className="text-2xl">🤔</span>
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Ou na hora de comprar fica com receio de <strong className="text-white">não ter encontrado o menor preço</strong> histórico do produto?
+            </p>
+          </div>
         </div>
 
-        {/* Hero Live Stats Bar */}
-        <div className="w-full max-w-3xl grid grid-cols-2 sm:grid-cols-3 gap-4 p-4 sm:p-6 rounded-2xl bg-[#0d1017]/80 border border-slate-800 backdrop-blur-xl shadow-2xl mb-12">
-          <div className="flex flex-col items-center justify-center p-3 border-r border-slate-800/80 last:border-r-0 sm:last:border-r">
-            <span className="text-2xl sm:text-3xl font-black text-[#27c40b]">100% Grátis</span>
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Acesso Instantâneo</span>
+        {/* Resolução */}
+        <div className="mt-4 p-5 sm:p-6 rounded-xl bg-[#12151c] border border-slate-800 text-center sm:text-left flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <h3 className="text-base font-bold text-[#25D366] mb-1">
+              Os Grupos do Dudu Rocha são a solução!
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-400 max-w-xl">
+              Nossa equipe monitora 24 horas as principais lojas do Brasil para entregar no seu WhatsApp apenas as ofertas que realmente valem a pena.
+            </p>
           </div>
-          <div className="flex flex-col items-center justify-center p-3 border-r border-slate-800/80 sm:border-r">
-            <span className="text-2xl sm:text-3xl font-black text-cyan-400">+3.5 Milhões</span>
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Seguidores do Canal</span>
+          <div className="flex items-center gap-4 text-xs font-semibold text-slate-300 shrink-0">
+            <span className="flex items-center gap-1 text-[#25D366]">
+              <CheckCircle className="w-4 h-4" /> 100% Grátis
+            </span>
+            <span className="flex items-center gap-1 text-[#25D366]">
+              <ShieldCheck className="w-4 h-4" /> Zero Spam
+            </span>
           </div>
-          <div className="col-span-2 sm:col-span-1 flex flex-col items-center justify-center p-3">
-            <span className="text-2xl sm:text-3xl font-black text-amber-400">Zero Spam</span>
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Apenas Ofertas Reais</span>
-          </div>
-        </div>
-
-        {/* 3D Interactive Canvas Element */}
-        <div className="w-full max-w-4xl">
-          <ThreeCanvas />
         </div>
       </section>
 
-      {/* Dynamic Group List & Identity Filter Section */}
+      {/* Lista Principal de Botões Diretos de Grupos */}
       <GroupListSection />
 
-      {/* Features & Highlights */}
-      <FeaturesSection />
-
-      {/* FAQ Section */}
-      <FaqSection />
-
-      {/* Footer */}
+      {/* Rodapé */}
       <LandingFooter />
     </div>
   );
