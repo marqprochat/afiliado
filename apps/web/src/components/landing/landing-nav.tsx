@@ -18,11 +18,10 @@ export function LandingNav() {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled
           ? 'bg-[#0a0c10]/90 backdrop-blur-xl border-b border-emerald-500/20 py-3 shadow-2xl shadow-emerald-950/20'
           : 'bg-transparent py-5'
-      }`}
+        }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
         {/* Dudu Rocha Brand Logo */}
@@ -42,7 +41,7 @@ export function LandingNav() {
                 }}
               />
               <span className="font-black text-sm tracking-wider text-white flex items-center gap-1">
-                DUDU ROCHA <span className="text-[#27c40b]">OFERTAS</span>
+                <span className="text-[#27c40b]">OFERTAS</span>
               </span>
             </div>
           </div>
