@@ -29,19 +29,20 @@ export function LandingNav() {
           <div className="relative">
             {/* Glow effect */}
             <div className="absolute -inset-1 bg-gradient-to-r from-[#27c40b] to-[#06b6d4] rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-300" />
-            <div className="relative h-11 w-auto px-3 py-1 bg-black rounded-lg flex items-center justify-center border border-emerald-500/40">
+            <div className="relative h-11 w-auto px-3.5 py-1.5 bg-black/90 rounded-xl flex items-center gap-3 border border-emerald-500/40 shadow-inner">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="https://dudurochatec.com.br/wp-content/uploads/2025/02/imagem_2025-02-25_112238371.png"
                 alt="Dudu Rocha Tec"
-                className="h-7 w-auto object-contain brightness-110"
+                className="h-6 w-auto object-contain brightness-110"
                 onError={(e) => {
                   // Fallback to text if remote image is blocked
                   (e.target as HTMLElement).style.display = 'none';
                 }}
               />
-              <span className="font-black text-sm tracking-wider text-white flex items-center gap-1">
-                <span className="text-[#27c40b]">OFERTAS</span>
+              <div className="h-4 w-[1px] bg-slate-700" />
+              <span className="px-2 py-0.5 rounded-md bg-[#27c40b]/15 text-[#27c40b] text-xs font-black tracking-wider uppercase border border-[#27c40b]/30">
+                OFERTAS
               </span>
             </div>
           </div>
