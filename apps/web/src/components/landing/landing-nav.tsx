@@ -19,8 +19,8 @@ export function LandingNav() {
   return (
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled
-          ? 'bg-[#0a0c10]/90 backdrop-blur-xl border-b border-emerald-500/20 py-3 shadow-2xl shadow-emerald-950/20'
-          : 'bg-transparent py-5'
+        ? 'bg-[#0a0c10]/90 backdrop-blur-xl border-b border-emerald-500/20 py-3 shadow-2xl shadow-emerald-950/20'
+        : 'bg-transparent py-5'
         }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
@@ -80,7 +80,7 @@ export function LandingNav() {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-600/10 border border-red-500/20 text-red-400 text-xs font-bold hover:bg-red-600/20 transition"
           >
             <Youtube className="w-3.5 h-3.5" />
-            <span>+3.5M Inscritos</span>
+            <span>+1.8M Inscritos</span>
           </a>
 
           <a
