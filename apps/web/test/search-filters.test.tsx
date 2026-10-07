@@ -110,6 +110,33 @@ describe('SearchFilters: listagem do Mercado Livre', () => {
       expect.objectContaining({ mlListing: { kind: 'lightning' }, minDiscountPct: 30 }),
     );
   });
+  it.each([['deals'], ['category'], ['lightning']])(
+    'palavra-chave opcional vale em "%s" e vai como query aparada',
+    (kind) => {
+      const onSearch = vi.fn();
+      renderFilters({ source: 'MERCADOLIVRE', mode: 'listing', onSearch });
+      fireEvent.change(screen.getByLabelText('Fonte da listagem'), { target: { value: kind } });
+      if (kind === 'category') {
+        fireEvent.change(screen.getByLabelText('Categoria do ML'), {
+          target: { value: 'MLB1051' },
+        });
+      }
+      fireEvent.change(screen.getByLabelText('Palavra-chave (opcional)'), {
+        target: { value: '  fone bluetooth ' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /buscar/i }));
+      expect(onSearch).toHaveBeenCalledWith(expect.objectContaining({ query: 'fone bluetooth' }));
+    },
+  );
+
+  it('sem palavra-chave não envia query (o campo é opcional e não trava a busca)', () => {
+    const onSearch = vi.fn();
+    renderFilters({ source: 'MERCADOLIVRE', mode: 'listing', onSearch });
+    fireEvent.click(screen.getByRole('button', { name: /buscar/i }));
+    expect(onSearch).toHaveBeenCalledTimes(1);
+    expect(onSearch.mock.calls[0]?.[0]).not.toHaveProperty('query');
+  });
+
   it('não mostra Vendas mín. na listagem (cards do ML não têm vendas), mas mantém em keyword', () => {
     renderFilters({ source: 'MERCADOLIVRE', mode: 'listing', onSearch: vi.fn() });
     expect(screen.queryByLabelText(/vendas mín/i)).toBeNull();

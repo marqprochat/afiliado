@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { searchQuerySchema } from '../src/search';
+import { matchesSearchKeywords, searchQuerySchema } from '../src/search';
 import { marketplaceUpdateSchema } from '../src/api';
 import { ML_DEAL_CATEGORIES } from '../src/marketplaces';
 import { QUEUE_ML_LINKS_PREWARM } from '../src/queues';
@@ -70,6 +70,21 @@ describe('ML_DEAL_CATEGORIES', () => {
       expect(c.id).toMatch(/^MLB\d+$/);
       expect(c.label.length).toBeGreaterThan(2);
     }
+  });
+});
+
+describe('matchesSearchKeywords', () => {
+  it('exige todas as palavras, ignorando acentos, maiúsculas e a ordem', () => {
+    const title = 'Fone de Ouvido Bluetooth Sem Fio JBL';
+    expect(matchesSearchKeywords(title, 'fone bluetooth')).toBe(true);
+    expect(matchesSearchKeywords(title, 'JBL fone')).toBe(true);
+    expect(matchesSearchKeywords('Câmera de Segurança Wifi', 'camera seguranca')).toBe(true);
+    expect(matchesSearchKeywords(title, 'fone gamer')).toBe(false);
+  });
+
+  it('consulta vazia ou só espaços aceita qualquer título', () => {
+    expect(matchesSearchKeywords('Qualquer coisa', '')).toBe(true);
+    expect(matchesSearchKeywords('Qualquer coisa', '   ')).toBe(true);
   });
 });
 

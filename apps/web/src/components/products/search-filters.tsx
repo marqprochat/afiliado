@@ -95,6 +95,8 @@ export function SearchFilters({
         listingKind === 'category'
           ? { kind: 'category', categoryId: listingCategory }
           : { kind: listingKind };
+      // opcional: filtra pelo título dos produtos da listagem (a listagem não tem busca própria)
+      if (text.trim()) raw.query = text.trim();
     }
     if (minPrice) raw.minPrice = Number(minPrice);
     if (maxPrice) raw.maxPrice = Number(maxPrice);
@@ -197,6 +199,13 @@ export function SearchFilters({
                 ))}
               </select>
             )}
+            <Input
+              aria-label="Palavra-chave (opcional)"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Filtrar por palavra-chave (opcional)…"
+              className="min-w-64 flex-1"
+            />
           </div>
         )}
         <Button
