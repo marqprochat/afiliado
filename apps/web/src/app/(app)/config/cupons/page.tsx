@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { copyToClipboard } from '@/lib/clipboard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -126,8 +127,8 @@ export default function CuponsPage() {
     },
   });
 
-  const handleCopyCode = (code: string) => {
-    navigator.clipboard.writeText(code);
+  const handleCopyCode = async (code: string) => {
+    await copyToClipboard(code);
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2000);
   };

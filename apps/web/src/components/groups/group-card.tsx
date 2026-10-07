@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { apiFetch } from '@/lib/api';
+import { copyToClipboard } from '@/lib/clipboard';
 import { useApiMutation } from '@/lib/mutations';
 import { useRealtime } from '@/lib/realtime';
 import type { WaGroup } from '@/lib/types';
@@ -147,7 +148,10 @@ export function GroupCard({ sessionId, group }: { sessionId: string; group: WaGr
                       size="icon-sm"
                       variant="outline"
                       aria-label="Copiar link"
-                      onClick={() => void navigator.clipboard.writeText(group.inviteLink!)}
+                      onClick={async () => {
+                        await copyToClipboard(group.inviteLink!);
+                        toast.success('Link copiado!');
+                      }}
                     >
                       <Copy className="h-3.5 w-3.5" />
                     </Button>

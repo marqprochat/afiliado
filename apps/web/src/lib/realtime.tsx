@@ -2,12 +2,12 @@
 import { createContext, useContext, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { RealtimeEvent } from '@afilados/shared';
-import { WS_URL } from './api';
+import { getWsUrl } from './api';
 
 type Handler = (e: RealtimeEvent) => void;
 
 export function createRealtimeClient(
-  url: string,
+  url: string | (() => string),
   onEvent: Handler,
   WS: typeof WebSocket = WebSocket,
 ) {
@@ -16,7 +16,14 @@ export function createRealtimeClient(
   let ws: WebSocket | null = null;
   const open = () => {
     if (stopped) return;
-    ws = new WS(url);
+    const targetUrl = typeof url === 'function' ? url() : url;
+    try {
+      ws = new WS(targetUrl);
+    } catch {
+      const delay = Math.min(30_000, 1_000 * 2 ** attempt++);
+      setTimeout(open, delay);
+      return;
+    }
     ws.onopen = () => {
       attempt = 0;
     };
@@ -31,6 +38,9 @@ export function createRealtimeClient(
       if (stopped) return;
       const delay = Math.min(30_000, 1_000 * 2 ** attempt++);
       setTimeout(open, delay);
+    };
+    ws.onerror = () => {
+      // Deixa o onclose tratar a reconexão
     };
   };
   open();
@@ -48,7 +58,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
   const handlers = useRef(new Set<Handler>());
   useEffect(() => {
-    const client = createRealtimeClient(WS_URL, (e) => {
+    const client = createRealtimeClient(getWsUrl, (e) => {
       if (e.type.startsWith('wa.')) {
         void qc.invalidateQueries({ queryKey: ['wa'] });
         void qc.invalidateQueries({ queryKey: ['overview'] });

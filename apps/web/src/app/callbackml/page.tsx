@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { copyToClipboard } from '@/lib/clipboard';
 import { Button } from '@/components/ui/button';
 
 // Retorno do OAuth do Mercado Livre (redirect_uri = https://<domínio>/callbackml). Rota pública
@@ -70,12 +71,10 @@ export default function CallbackMlPage() {
   }, [connect]);
 
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(href);
+    const ok = await copyToClipboard(href);
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
-    } catch {
-      // sem permissão de área de transferência: o usuário copia a caixa à mão
     }
   }
 

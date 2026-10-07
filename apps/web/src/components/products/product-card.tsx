@@ -1,5 +1,6 @@
 'use client';
 import { toast } from 'sonner';
+import { copyToClipboard } from '@/lib/clipboard';
 import { NativeCheckbox } from '@/components/ui/native-checkbox';
 import { Button } from '@/components/ui/button';
 import { formatBRL } from '@/lib/format';
@@ -27,7 +28,7 @@ export function ProductCard({
     typeof p.raw?.priceNote === 'string' && p.raw.priceNote.trim() ? p.raw.priceNote.trim() : null;
   async function copyCatId() {
     if (!shopeeCatId) return;
-    await navigator.clipboard.writeText(String(shopeeCatId));
+    await copyToClipboard(String(shopeeCatId));
     toast.success(`ID de categoria ${shopeeCatId} copiado`);
   }
   return (

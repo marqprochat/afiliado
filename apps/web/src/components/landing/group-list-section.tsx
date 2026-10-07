@@ -15,6 +15,7 @@ import {
   Ticket,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { copyToClipboard } from '@/lib/clipboard';
 
 export interface PublicGroupLink {
   id: string;
@@ -201,12 +202,12 @@ export function GroupListSection() {
     );
   }, [links, selectedLabel]);
 
-  const handleCopyLink = (e: React.MouseEvent, slug: string) => {
+  const handleCopyLink = async (e: React.MouseEvent, slug: string) => {
     e.preventDefault();
     e.stopPropagation();
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const fullUrl = `${origin}/g/${slug}`;
-    navigator.clipboard.writeText(fullUrl);
+    await copyToClipboard(fullUrl);
     toast.success('Link de convite copiado!');
   };
 

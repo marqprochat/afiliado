@@ -1,6 +1,7 @@
 'use client';
 import { Copy, ExternalLink, Users } from 'lucide-react';
 import { toast } from 'sonner';
+import { copyToClipboard } from '@/lib/clipboard';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,8 +29,8 @@ export function GroupLinkHistoryDialog({
 }: GroupLinkHistoryDialogProps) {
   const { data: groups = [], isLoading } = useGroupLinkHistory(groupLink?.id ?? null);
 
-  const copyInvite = (link: string) => {
-    navigator.clipboard.writeText(link);
+  const copyInvite = async (link: string) => {
+    await copyToClipboard(link);
     toast.success('Link de convite copiado!');
   };
 

@@ -21,6 +21,7 @@ import { GroupLinkHistoryDialog } from './group-link-history-dialog';
 import { GroupLinkFormDialog } from './group-link-form-dialog';
 import { useApiMutation } from '@/lib/mutations';
 import { apiFetch } from '@/lib/api';
+import { copyToClipboard } from '@/lib/clipboard';
 import type { GroupLink } from '@/lib/types';
 
 interface GroupLinkCardProps {
@@ -41,8 +42,8 @@ export function GroupLinkCard({ link }: GroupLinkCardProps) {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const publicUrl = `${origin}/g/${link.slug}`;
 
-  const copyLink = () => {
-    navigator.clipboard.writeText(publicUrl);
+  const copyLink = async () => {
+    await copyToClipboard(publicUrl);
     setCopied(true);
     toast.success('Link público copiado!');
     setTimeout(() => setCopied(false), 2000);

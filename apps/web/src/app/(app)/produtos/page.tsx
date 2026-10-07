@@ -7,6 +7,7 @@ import { ProductCard } from '@/components/products/product-card';
 import { SearchFilters } from '@/components/products/search-filters';
 import { ImportPanel } from '@/components/products/import-panel';
 import { apiFetch } from '@/lib/api';
+import { copyToClipboard } from '@/lib/clipboard';
 import { useRealtime } from '@/lib/realtime';
 import { formatBRL } from '@/lib/format';
 import { useApiMutation } from '@/lib/mutations';
@@ -129,7 +130,7 @@ export default function ProdutosPage() {
     setSelected(selected.size === products.length ? new Set() : new Set(products.map((p) => p.id)));
   }
   async function copy(p: ApiProduct) {
-    await navigator.clipboard.writeText(`${p.title}\n${formatBRL(p.price)}\n${p.originalUrl}`);
+    await copyToClipboard(`${p.title}\n${formatBRL(p.price)}\n${p.originalUrl}`);
     toast.success('Copiado');
   }
 

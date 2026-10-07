@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiTokens } from '@/lib/queries';
 import { apiFetch } from '@/lib/api';
+import { copyToClipboard as safeCopy } from '@/lib/clipboard';
 import type { ApiToken } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -71,8 +72,8 @@ export default function ExtensaoConfigPage() {
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+  const handleCopy = async (text: string) => {
+    await safeCopy(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
@@ -109,7 +110,7 @@ export default function ExtensaoConfigPage() {
               <Button
                 size="sm"
                 className="bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5"
-                onClick={() => copyToClipboard(newlyCreatedToken)}
+                onClick={() => handleCopy(newlyCreatedToken)}
               >
                 {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                 {copied ? 'Copiado!' : 'Copiar'}
