@@ -256,11 +256,11 @@ describe('fetchMlListing', () => {
     expect(out).toHaveLength(3);
   });
 
-  it('URL inválida falha antes de qualquer requisição', async () => {
+  it('categoria inválida falha antes de qualquer requisição', async () => {
     const fetchImpl = vi.fn();
     await expect(
       fetchMlListing(
-        { kind: 'url', url: 'https://evil.com/x' },
+        { kind: 'category', categoryId: 'abc' },
         { limit: 10, fetchImpl: fetchImpl as unknown as typeof fetch, sleep: noSleep },
       ),
     ).rejects.toMatchObject({ code: 'ML_LISTING_INVALID_URL' });
