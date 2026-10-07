@@ -282,19 +282,19 @@ export function GroupListSection() {
                   className="group relative flex items-center justify-between p-3.5 sm:p-4 rounded-xl bg-[#1a1f2c] hover:bg-[#202738] border border-slate-700/80 hover:border-[#25D366] transition-all duration-150 shadow-md hover:shadow-lg hover:shadow-[#25D366]/10"
                 >
                   {/* Lado Esquerdo: Foto do Grupo + Identidade/Rótulo */}
-                  <div className="flex items-center gap-3.5 sm:gap-4 min-w-0 pr-2">
+                  <div className="flex-1 min-w-0 flex items-center gap-3 sm:gap-4 pr-2 sm:pr-4">
                     <GroupAvatar
                       src={link.groupImageBase64}
                       label={link.label}
                       className="w-11 h-11 sm:w-12 sm:h-12"
                     />
 
-                    <div className="min-w-0">
-                      <h3 className="text-base sm:text-lg font-bold text-white group-hover:text-[#25D366] transition-colors truncate">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-sm sm:text-base md:text-lg font-bold text-white group-hover:text-[#25D366] transition-colors leading-snug break-words">
                         {link.label}
                       </h3>
                       {link.customText && (
-                        <p className="text-xs text-slate-400 truncate mt-0.5 hidden sm:block">
+                        <p className="text-xs text-slate-400 truncate mt-0.5 hidden md:block">
                           {link.customText}
                         </p>
                       )}
@@ -311,7 +311,7 @@ export function GroupListSection() {
                       <Copy className="w-4 h-4" />
                     </button>
 
-                    <div className="px-4 py-2.5 rounded-lg bg-[#25D366] text-black font-extrabold text-xs sm:text-sm group-hover:bg-[#22c35e] group-hover:scale-105 transition-all flex items-center gap-1.5 shadow">
+                    <div className="px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-[#25D366] text-black font-extrabold text-xs sm:text-sm group-hover:bg-[#22c35e] group-hover:scale-105 transition-all flex items-center gap-1.5 shadow shrink-0">
                       <span>Entrar</span>
                       <ExternalLink className="w-3.5 h-3.5" />
                     </div>
