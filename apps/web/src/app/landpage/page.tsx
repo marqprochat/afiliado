@@ -6,6 +6,9 @@ import { LandingNav } from '@/components/landing/landing-nav';
 import { LandingFooter } from '@/components/landing/landing-footer';
 import { ArrowDown, CheckCircle, ShieldCheck, Flame, Sparkles, Tag, Zap } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export const metadata: Metadata = {
   title: 'Grupos VIP de Ofertas e Cupons do Dudu Rocha',
   description: 'Receba cupons secretos, bugs de preço e as melhores ofertas de todas as categorias direto no seu WhatsApp com o Dudu Rocha!',
