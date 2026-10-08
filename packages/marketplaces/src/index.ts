@@ -18,6 +18,7 @@ export * from './awin/offers';
 export * from './aliexpress';
 export * from './aliexpress/coupons';
 export * from './coupons';
+export * from './amazon/listing';
 export {
   AmazonSessionError,
   generateOfficialAmazonLink,
