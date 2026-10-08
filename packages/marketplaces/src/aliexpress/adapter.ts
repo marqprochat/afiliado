@@ -28,11 +28,7 @@ export interface AliexpressAdapterOptions {
 export function createAliexpressAdapter(
   opts: AliexpressAdapterOptions = {},
 ): MarketplaceAdapter<AliexpressCredentials> {
-  const getClient = (creds: AliexpressCredentials) =>
-    new AliexpressClient(creds, {
-      fetchImpl: opts.fetchImpl,
-      apiUrl: opts.apiUrl,
-    });
+  const getClient = (creds: AliexpressCredentials) => new AliexpressClient(creds, opts);
 
   return {
     kind: 'ALIEXPRESS',
