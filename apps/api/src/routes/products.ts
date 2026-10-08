@@ -20,6 +20,7 @@ import {
   discoverMercadoLivreByKeyword,
   discoverMlCatalogUrls,
   discoverMagaluByKeyword,
+  AmazonListingError,
   MlListingError,
 } from '@afilados/marketplaces';
 import { requireAuth } from '../plugins/auth';
@@ -31,6 +32,12 @@ import {
   loadShopeeCredentials,
 } from '../lib/marketplaces';
 import { loadFetchCredentials, loadMlSessionCookies } from '../lib/ml-api';
+import {
+  amazonListingDeps,
+  loadAmazonSessionCookies,
+  mapAmazonListingError,
+  toAmazonListingSource,
+} from '../lib/amazon-listing';
 import { mapMlListingError, mlListingDeps, toMlListingSource } from '../lib/ml-listing';
 import { toApiProduct, upsertProducts } from '../lib/products';
 import { getQueue } from '../lib/redis';
@@ -110,6 +117,43 @@ export async function productsRoutes(app: FastifyInstance) {
       if (!q.query) throw ApiError.validation('Informe uma palavra-chave');
       const found = await searchAwinCatalog(req.db, q.query, q.limit);
       const rows = await upsertProducts(req.db, req.tenantId, applySearchFilters(found, q));
+      return { products: rows.map(toApiProduct) };
+    }
+
+    // Amazon por listagem de ofertas: busca por palavra-chave no departamento Ofertas ou a página
+    // Mega Oferta Prime. Os filtros rodam durante a paginação, como no Mercado Livre.
+    if (q.mode === 'listing' && q.source === 'AMAZON') {
+      const cookies = await loadAmazonSessionCookies(req.db);
+      let found: ProductData[];
+      try {
+        found = await amazonListingDeps.fetchAmazonListing(
+          toAmazonListingSource(q.amazonListing!, q.query),
+          {
+            limit: q.limit,
+            filter: (p) =>
+              applySearchFilters([p], { ...q, freeShippingOnly: false }).length > 0 &&
+              (!q.freeShippingOnly || p.shipping === 'FREE') &&
+              // a vitrine Mega Oferta Prime não tem busca própria: a palavra-chave filtra pelo título
+              (q.amazonListing!.kind === 'deals' ||
+                !q.query ||
+                matchesSearchKeywords(p.title, q.query)),
+            ...(cookies ? { cookies } : {}),
+          },
+        );
+      } catch (e) {
+        if (e instanceof AmazonListingError) {
+          if (e.details) {
+            req.log.warn(
+              { code: e.code, details: e.details },
+              'busca por listagem da Amazon falhou',
+            );
+          }
+        } else {
+          req.log.warn({ err: e }, 'busca por listagem da Amazon falhou com erro inesperado');
+        }
+        throw mapAmazonListingError(e, Boolean(cookies));
+      }
+      const rows = await upsertProducts(req.db, req.tenantId, found);
       return { products: rows.map(toApiProduct) };
     }
 

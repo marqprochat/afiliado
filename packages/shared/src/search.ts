@@ -26,6 +26,13 @@ const mlListingSchema = z.object({
 });
 export type MlListingQuery = z.infer<typeof mlListingSchema>;
 
+/** Fontes da busca por listagem da Amazon: ofertas por palavra-chave e a página Mega Oferta Prime. */
+export const AMAZON_LISTING_KINDS = ['deals', 'mega'] as const;
+export type AmazonListingKind = (typeof AMAZON_LISTING_KINDS)[number];
+
+const amazonListingSchema = z.object({ kind: z.enum(AMAZON_LISTING_KINDS) });
+export type AmazonListingQuery = z.infer<typeof amazonListingSchema>;
+
 function normalizeSearchText(value: string): string {
   return value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 }
@@ -62,6 +69,7 @@ export const searchQuerySchema = z
     minSales: z.number().int().nonnegative().optional(),
     freeShippingOnly: z.boolean().default(false),
     mlListing: mlListingSchema.optional(),
+    amazonListing: amazonListingSchema.optional(),
   })
   .superRefine((q, ctx) => {
     if (q.mode === 'keyword' && !q.query)
@@ -71,22 +79,30 @@ export const searchQuerySchema = z
     if (q.mode === 'shop' && !q.shopId)
       ctx.addIssue({ code: 'custom', path: ['shopId'], message: 'shopId obrigatório' });
     if (q.mode === 'listing') {
-      if (q.source !== 'MERCADOLIVRE') {
+      if (q.source !== 'MERCADOLIVRE' && q.source !== 'AMAZON') {
         ctx.addIssue({
           code: 'custom',
           path: ['mode'],
-          message: 'A busca por listagem só existe para o Mercado Livre',
+          message: 'A busca por listagem só existe para o Mercado Livre e a Amazon',
         });
-      }
-      if (!q.mlListing) {
-        ctx.addIssue({ code: 'custom', path: ['mlListing'], message: 'mlListing obrigatório' });
-      } else {
-        if (q.mlListing.kind === 'category' && !q.mlListing.categoryId)
+      } else if (q.source === 'AMAZON') {
+        if (!q.amazonListing) {
           ctx.addIssue({
             code: 'custom',
-            path: ['mlListing', 'categoryId'],
-            message: 'categoryId obrigatório',
+            path: ['amazonListing'],
+            message: 'amazonListing obrigatório',
           });
+        } else if (q.amazonListing.kind === 'deals' && !q.query) {
+          ctx.addIssue({ code: 'custom', path: ['query'], message: 'query obrigatória' });
+        }
+      } else if (!q.mlListing) {
+        ctx.addIssue({ code: 'custom', path: ['mlListing'], message: 'mlListing obrigatório' });
+      } else if (q.mlListing.kind === 'category' && !q.mlListing.categoryId) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['mlListing', 'categoryId'],
+          message: 'categoryId obrigatório',
+        });
       }
     }
     if (q.minPrice !== undefined && q.maxPrice !== undefined && q.minPrice > q.maxPrice) {

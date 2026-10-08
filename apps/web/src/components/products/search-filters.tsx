@@ -3,6 +3,7 @@ import { useState } from 'react';
 import {
   ML_DEAL_CATEGORIES,
   searchQuerySchema,
+  type AmazonListingKind,
   type MlListingKind,
   type MarketplaceKind,
   type SearchMode,
@@ -65,9 +66,11 @@ export function SearchFilters({
   const [freeShippingOnly, setFreeShippingOnly] = useState(false);
   const [listingKind, setListingKind] = useState<MlListingKind>('deals');
   const [listingCategory, setListingCategory] = useState('');
+  const [amazonKind, setAmazonKind] = useState<AmazonListingKind>('deals');
   const [formError, setFormError] = useState('');
 
   const isShopee = source === 'SHOPEE';
+  const isAmazonListing = mode === 'listing' && source === 'AMAZON';
   const isAliexpress = source === 'ALIEXPRESS';
   // Categoria/mais buscados existem tanto na API oficial da Shopee quanto na do AliExpress;
   // os demais marketplaces (ML/Amazon/Magalu/Awin) só têm busca por palavra-chave.
@@ -91,11 +94,14 @@ export function SearchFilters({
     if (mode === 'shop') raw.shopId = text;
     if (mode === 'category') raw.categoryId = categoryId;
     if (mode === 'listing') {
-      raw.mlListing =
-        listingKind === 'category'
-          ? { kind: 'category', categoryId: listingCategory }
-          : { kind: listingKind };
-      // opcional: filtra pelo título dos produtos da listagem (a listagem não tem busca própria)
+      if (isAmazonListing) raw.amazonListing = { kind: amazonKind };
+      else
+        raw.mlListing =
+          listingKind === 'category'
+            ? { kind: 'category', categoryId: listingCategory }
+            : { kind: listingKind };
+      // ML: opcional, filtra pelo título dos produtos da listagem (ela não tem busca própria).
+      // Amazon "ofertas por palavra-chave": é o termo da busca (obrigatório).
       if (text.trim()) raw.query = text.trim();
     }
     if (minPrice) raw.minPrice = Number(minPrice);
@@ -172,7 +178,7 @@ export function SearchFilters({
               : 'Itens em alta / promoções segundo a API do AliExpress.'}
           </p>
         )}
-        {mode === 'listing' && (
+        {mode === 'listing' && !isAmazonListing && (
           <div className="flex flex-1 flex-wrap gap-2">
             <select
               aria-label="Fonte da listagem"
@@ -208,6 +214,32 @@ export function SearchFilters({
             />
           </div>
         )}
+        {isAmazonListing && (
+          <div className="flex flex-1 flex-wrap gap-2">
+            <select
+              aria-label="Fonte das ofertas da Amazon"
+              value={amazonKind}
+              onChange={(e) => setAmazonKind(e.target.value as AmazonListingKind)}
+              className={`${selectCls} w-64`}
+            >
+              <option value="deals">Ofertas por palavra-chave</option>
+              <option value="mega">Mega Oferta Prime</option>
+            </select>
+            <Input
+              aria-label={
+                amazonKind === 'deals' ? 'Palavra-chave das ofertas' : 'Palavra-chave (opcional)'
+              }
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder={
+                amazonKind === 'deals'
+                  ? 'Buscar ofertas por palavra-chave…'
+                  : 'Filtrar por palavra-chave (opcional)…'
+              }
+              className="min-w-64 flex-1"
+            />
+          </div>
+        )}
         <Button
           type="submit"
           className="bg-brand text-white hover:bg-brand/90"
@@ -215,7 +247,11 @@ export function SearchFilters({
             loading ||
             (!supportsAdvancedModes && mode !== 'keyword' && mode !== 'listing') ||
             (mode === 'category' && !categoryId) ||
-            (mode === 'listing' && listingKind === 'category' && !listingCategory)
+            (mode === 'listing' &&
+              !isAmazonListing &&
+              listingKind === 'category' &&
+              !listingCategory) ||
+            (isAmazonListing && amazonKind === 'deals' && !text.trim())
           }
         >
           {loading ? 'Buscando…' : 'Buscar'}
@@ -345,7 +381,13 @@ export function SearchFilters({
               : só busca por palavra-chave está disponível.
             </p>
           )}
-        {mode === 'listing' && (
+        {isAmazonListing && (
+          <p className="basis-full text-xs text-muted-foreground">
+            A ordem é a da página da Amazon. Produtos patrocinados aparecem no resultado; o desconto
+            é calculado pelo preço riscado.
+          </p>
+        )}
+        {mode === 'listing' && !isAmazonListing && (
           <p className="basis-full text-xs text-muted-foreground">
             A ordem é a da página do Mercado Livre. O preço mostrado pode ser o do Pix (veja a nota
             no produto).
