@@ -108,8 +108,11 @@ export function GroupLinkCard({ link }: GroupLinkCardProps) {
       <div className="flex flex-col rounded-xl border border-border bg-surface p-5 shadow-sm transition-all hover:border-border/80">
         {/* Header com Rótulo e Status */}
         <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge variant="outline" className="bg-brand/10 text-brand border-brand/30 text-xs font-bold">
+                #{(link.displayOrder ?? 0) + 1} na Landpage
+              </Badge>
               <h3 className="font-bold text-base text-foreground">{link.label}</h3>
               {link.status === 'ACTIVE' && (
                 <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30">

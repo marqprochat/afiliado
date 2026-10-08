@@ -460,6 +460,7 @@ export interface GroupLink {
   status: GroupLinkStatus;
   lastError: string | null;
   lastRotatedAt: string | null;
+  displayOrder: number;
   clickCount: number;
   createdAt: string;
   updatedAt: string;

@@ -82,7 +82,7 @@ export async function publicGroupLinksRoutes(app: FastifyInstance) {
         status: 'ACTIVE',
       },
       orderBy: [
-        { clickCount: 'desc' },
+        { displayOrder: 'asc' },
         { createdAt: 'desc' },
       ],
       include: {
@@ -103,6 +103,7 @@ export async function publicGroupLinksRoutes(app: FastifyInstance) {
         customText: link.customText,
         groupDescription: link.groupDescription,
         groupImageBase64: link.groupImageBase64,
+        displayOrder: link.displayOrder,
         clickCount: link.clickCount,
         status: link.status,
         memberLimit: link.memberLimit,

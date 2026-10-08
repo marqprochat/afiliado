@@ -1,15 +1,17 @@
 'use client';
 import { useState } from 'react';
-import { Link2, Plus, Search, Users, Activity, MousePointerClick, RefreshCw, Sparkles } from 'lucide-react';
+import { Link2, Plus, Search, Users, Activity, MousePointerClick, RefreshCw, Sparkles, ListOrdered } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { GroupLinkCard } from '@/components/group-links/group-link-card';
 import { GroupLinkFormDialog } from '@/components/group-links/group-link-form-dialog';
+import { GroupLinkReorderDialog } from '@/components/group-links/group-link-reorder-dialog';
 import { useGroupLinks } from '@/lib/queries';
 
 export default function LinksGruposPage() {
   const { data: links = [], isLoading, refetch, isRefetching } = useGroupLinks();
   const [showCreate, setShowCreate] = useState(false);
+  const [showReorder, setShowReorder] = useState(false);
   const [search, setSearch] = useState('');
 
   const activeLinksCount = links.filter((l) => l.status === 'ACTIVE').length;
@@ -41,7 +43,17 @@ export default function LinksGruposPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowReorder(true)}
+            disabled={links.length <= 1}
+            className="gap-1.5 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+          >
+            <ListOrdered className="h-4 w-4" />
+            Organizar Ordem da Landpage
+          </Button>
           <a
             href="/landpage"
             target="_blank"
@@ -49,7 +61,7 @@ export default function LinksGruposPage() {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/10 border border-indigo-500/30 text-indigo-400 hover:bg-indigo-600/20 hover:text-indigo-300 text-xs font-semibold transition"
           >
             <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
-            <span>Ver Landing Page Pública</span>
+            <span>Ver Landing Page</span>
           </a>
           <Button
             variant="outline"
@@ -159,6 +171,9 @@ export default function LinksGruposPage() {
 
       {/* Modal de Criação */}
       <GroupLinkFormDialog open={showCreate} onOpenChange={setShowCreate} />
+
+      {/* Modal de Reorganização da Ordem na Landpage */}
+      <GroupLinkReorderDialog open={showReorder} onOpenChange={setShowReorder} links={links} />
     </div>
   );
 }

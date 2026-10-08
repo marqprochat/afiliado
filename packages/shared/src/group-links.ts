@@ -224,6 +224,11 @@ export const groupLinkUpdateSchema = z.object({
     .optional(),
   enabled: z.boolean().optional(),
   status: z.enum(GROUP_LINK_STATUSES).optional(),
+  displayOrder: z.coerce.number().int().optional(),
+});
+
+export const groupLinkReorderSchema = z.object({
+  orderedIds: z.array(z.string().min(1)).min(1),
 });
 
 export const groupLinkRotateSchema = z.object({

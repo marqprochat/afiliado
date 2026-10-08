@@ -6,6 +6,7 @@ import {
   QUEUE_GROUP_LINK_ROTATE,
   buildGroupName,
   groupLinkCreateSchema,
+  groupLinkReorderSchema,
   groupLinkRotateSchema,
   groupLinkUpdateSchema,
   isValidSlug,
@@ -47,7 +48,10 @@ export async function groupLinksRoutes(app: FastifyInstance) {
   // Lista todos os links fixos do tenant
   app.get('/group-links', async (req) => {
     const links = await req.db.groupLink.findMany({
-      orderBy: { createdAt: 'desc' },
+      orderBy: [
+        { displayOrder: 'asc' },
+        { createdAt: 'desc' },
+      ],
       include: {
         session: { select: { id: true, label: true, phone: true, status: true } },
         groups: {
@@ -60,6 +64,27 @@ export async function groupLinksRoutes(app: FastifyInstance) {
       },
     });
     return links;
+  });
+
+  // Reordena a lista de links fixos (ordem de exibição na landing page)
+  app.patch('/group-links/reorder', async (req, reply) => {
+    const { orderedIds } = groupLinkReorderSchema.parse(req.body);
+
+    await prisma.$transaction(
+      orderedIds.map((id, index) =>
+        prisma.groupLink.updateMany({
+          where: { id, tenantId: req.tenantId },
+          data: { displayOrder: index },
+        })
+      )
+    );
+
+    await req.server.events.publish(req.tenantId, {
+      type: 'group-links.changed',
+      tenantId: req.tenantId,
+    });
+
+    return reply.send({ ok: true });
   });
 
   // Cria um novo link fixo
@@ -79,6 +104,11 @@ export async function groupLinksRoutes(app: FastifyInstance) {
     if (!session) {
       throw ApiError.notFound('Sessão do WhatsApp não encontrada');
     }
+
+    const maxOrder = await req.db.groupLink.aggregate({
+      _max: { displayOrder: true },
+    });
+    const nextOrder = (maxOrder._max.displayOrder ?? -1) + 1;
 
     const link = await req.db.groupLink.create({
       data: {
@@ -102,6 +132,7 @@ export async function groupLinksRoutes(app: FastifyInstance) {
         fallbackUrl: body.fallbackUrl || null,
         enabled: true,
         status: 'ACTIVE',
+        displayOrder: nextOrder,
       },
     });
 
@@ -229,6 +260,7 @@ export async function groupLinksRoutes(app: FastifyInstance) {
         ...(body.fallbackUrl !== undefined ? { fallbackUrl: body.fallbackUrl } : {}),
         ...(body.enabled !== undefined ? { enabled: body.enabled } : {}),
         ...(body.status !== undefined ? { status: body.status } : {}),
+        ...(body.displayOrder !== undefined ? { displayOrder: body.displayOrder } : {}),
       },
     });
 
