@@ -1,5 +1,6 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import { Queue } from 'bullmq';
 import { QUEUE_SEND_OFFER, type SendOfferJob } from '@afilados/shared';
 import { buildApp } from '../src/app';
 import { prisma } from '@afilados/db';
@@ -34,6 +35,7 @@ describe('POST /api/v1/batches/share', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     const items = await prisma.batchItem.findMany({
       where: { batch: { tenantId: t.tenantId } },
       select: { id: true },
@@ -211,6 +213,30 @@ describe('POST /api/v1/batches/share', () => {
     const inTarget = await prisma.batchItem.findMany({ where: { batchId: target.id } });
     expect(inTarget.map((i) => i.productId)).toContain(productId);
     expect(inTarget).toHaveLength(2);
+    const pending = inTarget.filter((i) => i.status === 'PENDING');
+    const shared = pending.find((i) => i.productId === productId)!;
+    expect(shared.order).toBe(Math.min(...pending.map((i) => i.order)));
+  });
+
+  it('falha ao enfileirar em um lote: ele pausa com INTERNAL e o outro continua', async () => {
+    const { batch: broken } = await makeBatch('RUNNING', 1);
+    const { batch: healthy } = await makeBatch('RUNNING', 1);
+    const p = await makeProduct();
+
+    vi.spyOn(Queue.prototype, 'addBulk').mockRejectedValueOnce(new Error('Redis connection failed'));
+
+    const res = await share({ productIds: [p.id], batchIds: [broken.id, healthy.id] });
+
+    expect(res.statusCode).toBe(200);
+    const { results } = res.json();
+    expect(results).toHaveLength(2);
+    expect(results[0]).toMatchObject({ batchId: broken.id, ok: false, added: 0 });
+    expect(results[0].error.code).toBe('INTERNAL');
+    expect(results[1]).toMatchObject({ batchId: healthy.id, ok: true, added: 1, error: null });
+    const freshBroken = await prisma.batch.findUniqueOrThrow({ where: { id: broken.id } });
+    expect(freshBroken.status).toBe('PAUSED');
+    const freshHealthy = await prisma.batch.findUniqueOrThrow({ where: { id: healthy.id } });
+    expect(freshHealthy.status).toBe('RUNNING');
   });
 
   it('404 sem gravar nada quando o produto é de outro tenant', async () => {

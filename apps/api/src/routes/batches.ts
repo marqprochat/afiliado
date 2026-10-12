@@ -430,6 +430,12 @@ export async function batchesRoutes(app: FastifyInstance) {
       error: { code: string; message: string } | null;
     };
     const results: ShareResult[] = [];
+    const progress: Array<{
+      batchId: string;
+      sent: number;
+      total: number;
+      estimatedEndAt: string;
+    }> = [];
 
     for (const batchId of batchIds) {
       const b = byId.get(batchId)!;
@@ -451,8 +457,7 @@ export async function batchesRoutes(app: FastifyInstance) {
           status: res.status,
           error: null,
         });
-        await app.events.publish(req.tenantId, {
-          type: 'batch.progress',
+        progress.push({
           batchId,
           sent: b.items.filter((i) => i.status === 'SENT').length,
           total: b.items.length + res.added,
@@ -478,11 +483,21 @@ export async function batchesRoutes(app: FastifyInstance) {
       }
     }
 
-    // sem await: com o Redis fora do ar o enfileiramento ficaria pendurado e atrasaria a resposta
-    void enqueueMlLinksPrewarm(req.db, req.tenantId, productIds).catch((err) =>
-      req.log.warn({ err }, 'falha ao enfileirar o pré-aquecimento de links do ML'),
-    );
-    await app.events.publish(req.tenantId, { type: 'queue.updated' });
+    // eventos são best-effort: uma falha ao publicar não pode alterar o resultado já gravado
+    if (results.some((r) => r.ok)) {
+      // sem await: com o Redis fora do ar o enfileiramento ficaria pendurado e atrasaria a resposta
+      void enqueueMlLinksPrewarm(req.db, req.tenantId, productIds).catch((err) =>
+        req.log.warn({ err }, 'falha ao enfileirar o pré-aquecimento de links do ML'),
+      );
+      try {
+        for (const p of progress) {
+          await app.events.publish(req.tenantId, { type: 'batch.progress', ...p });
+        }
+        await app.events.publish(req.tenantId, { type: 'queue.updated' });
+      } catch (err) {
+        req.log.warn({ err }, 'falha ao publicar eventos do compartilhamento');
+      }
+    }
 
     return { results };
   });

@@ -356,7 +356,6 @@ export async function insertBatchItemNext(args: {
   };
 }
 
-
 /** Garante que os produtos existem no tenant e já saíram do enriquecimento (podem ser enviados). */
 export async function assertProductsSendable(
   db: TenantClient,
