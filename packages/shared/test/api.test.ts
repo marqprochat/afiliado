@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { batchCreateSchema, batchSendProductsSchema, settingsUpdateSchema, waConnectSchema } from '../src/api';
+import {
+  batchCreateSchema,
+  batchSendProductsSchema,
+  batchShareSchema,
+  settingsUpdateSchema,
+  waConnectSchema,
+} from '../src/api';
 
 describe('api schemas', () => {
   it('batchCreate exige ao menos um grupo e intervalo >= 1', () => {
@@ -69,6 +75,32 @@ describe('api schemas', () => {
       expect(() =>
         batchSendProductsSchema.parse({ productIds: ['p1'], position: 'invalid' as never }),
       ).toThrow();
+    });
+  });
+  describe('batchShareSchema', () => {
+    it('aceita produtos e lotes e defaulta position para end', () => {
+      const r = batchShareSchema.parse({ productIds: ['p1'], batchIds: ['b1', 'b2'] });
+      expect(r.position).toBe('end');
+      expect(r.batchIds).toEqual(['b1', 'b2']);
+    });
+    it('aceita as 3 posições', () => {
+      for (const position of ['shuffle', 'start', 'end'] as const) {
+        expect(
+          batchShareSchema.parse({ productIds: ['p1'], batchIds: ['b1'], position }).position,
+        ).toBe(position);
+      }
+    });
+    it('rejeita productIds ou batchIds vazios', () => {
+      expect(batchShareSchema.safeParse({ productIds: [], batchIds: ['b1'] }).success).toBe(false);
+      expect(batchShareSchema.safeParse({ productIds: ['p1'], batchIds: [] }).success).toBe(false);
+    });
+    it('rejeita mais de 20 lotes e posição inválida', () => {
+      const many = Array.from({ length: 21 }, (_, i) => `b${i}`);
+      expect(batchShareSchema.safeParse({ productIds: ['p1'], batchIds: many }).success).toBe(false);
+      expect(
+        batchShareSchema.safeParse({ productIds: ['p1'], batchIds: ['b1'], position: 'meio' })
+          .success,
+      ).toBe(false);
     });
   });
 });

@@ -196,6 +196,13 @@ export const batchSendProductsSchema = z.object({
 });
 export type BatchSendProductsBody = z.infer<typeof batchSendProductsSchema>;
 
+export const batchShareSchema = z.object({
+  productIds: z.array(z.string().min(1)).min(1).max(500),
+  batchIds: z.array(z.string().min(1)).min(1).max(20),
+  position: z.enum(BATCH_POSITIONS).default('end'),
+});
+export type BatchShareBody = z.infer<typeof batchShareSchema>;
+
 export const apiTokenCreateSchema = z.object({
   name: z.string().trim().min(1).max(60),
 });
