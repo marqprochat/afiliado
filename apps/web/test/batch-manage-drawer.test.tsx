@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BatchManageDrawer } from '@/components/queue/batch-manage-drawer';
 
@@ -105,6 +105,100 @@ describe('BatchManageDrawer', () => {
       fireEvent.dragOver(last, { dataTransfer });
       fireEvent.drop(last, { dataTransfer });
       expect(titles()).toEqual(['Mensagem: Item i2', 'Mensagem: Item i3', 'Mensagem: Item i1']);
+    });
+  });
+
+  describe('compartilhar com outros lotes', () => {
+    const productItem = (id: string, order: number, productId: string, title: string) => ({
+      ...baseItem,
+      id,
+      order,
+      status: 'PENDING',
+      productId,
+      product: { title, images: [] },
+    });
+    const running = {
+      ...batch,
+      status: 'RUNNING',
+      items: [
+        productItem('i1', 0, 'p1', 'Fone Bluetooth'),
+        productItem('i2', 1, 'p2', 'Mouse Gamer'),
+        { ...baseItem, id: 'i3', order: 2, status: 'PENDING', customText: 'Aviso' },
+      ],
+    };
+    const summary = (id: string, name: string, status: string) => ({
+      id,
+      name,
+      status,
+      intervalMin: 5,
+      mediaMode: 'IMAGE',
+      shuffled: false,
+      groupJids: [],
+      telegramChatIds: [],
+      estimatedEndAt: null,
+      createdAt: '2026-10-12T10:00:00.000Z',
+      total: 4,
+      sent: 1,
+      errors: 0,
+    });
+
+    function renderRunning() {
+      apiFetchMock.mockImplementation(async (url: string, opts?: any) => {
+        if (url === '/batches/b1') return running as never;
+        if (url === '/batches') {
+          return [
+            summary('b1', 'Lote Origem', 'RUNNING'),
+            summary('b2', 'Lote Destino', 'RUNNING'),
+          ] as never;
+        }
+        if (url === '/batches/share' && opts?.method === 'POST') {
+          return {
+            results: [
+              { batchId: 'b2', ok: true, added: 1, skipped: 0, reactivated: false, status: 'RUNNING', error: null },
+            ],
+          } as never;
+        }
+        return [] as never;
+      });
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      render(
+        <QueryClientProvider client={client}>
+          <BatchManageDrawer batchId="b1" onClose={() => {}} />
+        </QueryClientProvider>,
+      );
+    }
+
+    it('lote rodando: checkbox só nos itens de produto e botão desabilitado sem seleção', async () => {
+      renderRunning();
+      expect(await screen.findByLabelText('Selecionar Fone Bluetooth')).toBeTruthy();
+      expect(screen.getByLabelText('Selecionar Mouse Gamer')).toBeTruthy();
+      expect(screen.getAllByRole('checkbox', { name: /^Selecionar / })).toHaveLength(2);
+      expect(screen.getByRole('button', { name: /Compartilhar selecionados/ })).toHaveProperty(
+        'disabled',
+        true,
+      );
+    });
+
+    it('compartilha os selecionados com outro lote sem pausar o de origem', async () => {
+      renderRunning();
+      fireEvent.click(await screen.findByLabelText('Selecionar Fone Bluetooth'));
+      fireEvent.click(screen.getByRole('button', { name: 'Compartilhar selecionados (1)' }));
+
+      // o lote de origem não aparece como destino
+      expect(await screen.findByLabelText('Lote Destino')).toBeTruthy();
+      expect(screen.queryByLabelText('Lote Origem')).toBeNull();
+
+      fireEvent.click(screen.getByLabelText('Lote Destino'));
+      fireEvent.click(screen.getByRole('button', { name: /avançar/i }));
+      fireEvent.click(await screen.findByRole('button', { name: /confirmar/i }));
+
+      await waitFor(() => {
+        expect(apiFetchMock).toHaveBeenCalledWith('/batches/share', {
+          method: 'POST',
+          json: { productIds: ['p1'], batchIds: ['b2'], position: 'end' },
+        });
+      });
+      expect(apiFetchMock).not.toHaveBeenCalledWith('/batches/b1/pause', expect.anything());
     });
   });
 });

@@ -1,6 +1,6 @@
 'use client';
-import { useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ChevronsUp, GripVertical, RotateCw, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp, ChevronsUp, GripVertical, RotateCw, Share2, Trash2 } from 'lucide-react';
 import { StatusPill } from '@/components/app-shell/status-pill';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,11 +14,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NativeCheckbox } from '@/components/ui/native-checkbox';
+import { SendToBatchDialog } from '@/components/queue/send-to-batch-dialog';
 import { apiFetch } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { useApiMutation } from '@/lib/mutations';
-import { useBatch, useGroups, useQueue, useTelegramAllChats, useTemplates } from '@/lib/queries';
+import { useBatch, useBatches, useGroups, useQueue, useTelegramAllChats, useTemplates } from '@/lib/queries';
 import type { BatchDetail, BatchItem } from '@/lib/types';
+import { useShareToBatches } from '@/lib/use-share-to-batches';
 import { cn } from '@/lib/utils';
 
 const INV = [['batches'], ['overview']];
@@ -57,7 +59,32 @@ export function BatchManageDrawer({
   const editable = batch?.status === 'PAUSED';
   const canPause = batch?.status === 'SCHEDULED' || batch?.status === 'RUNNING';
 
+  const { data: allBatches } = useBatches();
+  const [shareSelected, setShareSelected] = useState<Set<string>>(new Set());
+  const [shareOpen, setShareOpen] = useState(false);
+  useEffect(() => {
+    setShareSelected(new Set());
+    setShareOpen(false);
+  }, [batchId]);
+  // só vale o que ainda existe no lote
+  const shareIds = useMemo(() => {
+    const inBatch = new Set((batch?.items ?? []).map((i) => i.productId).filter(Boolean));
+    return [...shareSelected].filter((id) => inBatch.has(id));
+  }, [batch?.items, shareSelected]);
+  const toggleShare = (productId: string) =>
+    setShareSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) next.delete(productId);
+      else next.add(productId);
+      return next;
+    });
+  const share = useShareToBatches(allBatches ?? [], () => {
+    setShareOpen(false);
+    setShareSelected(new Set());
+  });
+
   return (
+    <>
     <Drawer open={!!batchId} onOpenChange={(open) => !open && onClose()}>
       <DrawerContent className="max-w-2xl">
         <DrawerHeader>
@@ -74,8 +101,8 @@ export function BatchManageDrawer({
             {editable
               ? 'Lote pausado: edite à vontade e clique em Retomar para reagendar os envios.'
               : canPause
-                ? 'Para editar, pause o lote. Envios agendados ficam suspensos até você retomar.'
-                : 'Lote finalizado: apenas visualização.'}
+                ? 'Para editar, pause o lote. Envios agendados ficam suspensos até você retomar. Para compartilhar ofertas com outros lotes não precisa pausar.'
+                : 'Lote finalizado: edição indisponível (você ainda pode compartilhar ofertas com outros lotes).'}
           </DrawerDescription>
           {canPause && (
             <Button
@@ -98,6 +125,9 @@ export function BatchManageDrawer({
               key={`items-${itemsSignature(batch)}`}
               batch={batch}
               editable={editable}
+              shareIds={shareIds}
+              onToggleShare={toggleShare}
+              onShare={() => setShareOpen(true)}
             />
             {editable && <AddProductsSection batch={batch} />}
             <ConfigSection
@@ -121,6 +151,18 @@ export function BatchManageDrawer({
         )}
       </DrawerContent>
     </Drawer>
+    <SendToBatchDialog
+      open={shareOpen}
+      onOpenChange={setShareOpen}
+      batches={allBatches ?? []}
+      excludeBatchIds={batchId ? [batchId] : []}
+      count={shareIds.length}
+      submitting={share.isPending}
+      onConfirm={({ batchIds, position }) =>
+        share.mutate({ productIds: shareIds, batchIds, position })
+      }
+    />
+    </>
   );
 }
 
@@ -134,7 +176,19 @@ function itemsSignature(b: BatchDetail) {
   return b.items.map((i) => `${i.id}:${i.order}:${i.status}`).join('|');
 }
 
-function ItemsSection({ batch, editable }: { batch: BatchDetail; editable: boolean }) {
+function ItemsSection({
+  batch,
+  editable,
+  shareIds,
+  onToggleShare,
+  onShare,
+}: {
+  batch: BatchDetail;
+  editable: boolean;
+  shareIds: string[];
+  onToggleShare: (productId: string) => void;
+  onShare: () => void;
+}) {
   const done = useMemo(() => batch.items.filter((i) => i.status !== 'PENDING'), [batch.items]);
   const initialPending = useMemo(
     () => batch.items.filter((i) => i.status === 'PENDING'),
@@ -184,10 +238,28 @@ function ItemsSection({ batch, editable }: { batch: BatchDetail; editable: boole
     setOverIdx(null);
   };
 
+  const shareProps = (it: BatchItem) =>
+    it.productId && it.product
+      ? {
+          checked: shareIds.includes(it.productId),
+          onChange: () => onToggleShare(it.productId!),
+          label: `Selecionar ${it.product.title}`,
+        }
+      : undefined;
+
   return (
     <section className="space-y-2">
       <div className="flex items-center gap-2">
         <h3 className="font-semibold">Fila do lote ({batch.items.length})</h3>
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={shareIds.length === 0}
+          onClick={onShare}
+        >
+          <Share2 className="size-3.5" />
+          Compartilhar selecionados ({shareIds.length})
+        </Button>
         {canRetry && errorCount > 0 && (
           <Button
             size="sm"
@@ -215,7 +287,7 @@ function ItemsSection({ batch, editable }: { batch: BatchDetail; editable: boole
       )}
       <ol className="space-y-1.5">
         {done.map((it, idx) => (
-          <ItemRow key={it.id} item={it} position={idx + 1}>
+          <ItemRow key={it.id} item={it} position={idx + 1} select={shareProps(it)}>
             {canRetry && it.status === 'ERROR' && (
               <IconBtn
                 label="Tentar novamente"
@@ -237,6 +309,7 @@ function ItemsSection({ batch, editable }: { batch: BatchDetail; editable: boole
             key={it.id}
             item={it}
             position={done.length + idx + 1}
+            select={shareProps(it)}
             hideRunAt={editable}
             drag={
               editable
@@ -302,6 +375,7 @@ function ItemRow({
   position,
   hideRunAt,
   drag,
+  select,
   children,
 }: {
   item: BatchItem;
@@ -315,6 +389,7 @@ function ItemRow({
     onDrop: () => void;
     onDragEnd: () => void;
   };
+  select?: { checked: boolean; onChange: () => void; label: string };
   children?: React.ReactNode;
 }) {
   const title =
@@ -366,6 +441,13 @@ function ItemRow({
       )}
     >
       {drag && <GripVertical className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
+      {select && (
+        <NativeCheckbox
+          checked={select.checked}
+          onChange={select.onChange}
+          aria-label={select.label}
+        />
+      )}
       <span className="w-6 text-center text-xs text-muted-foreground">{position}</span>
       {img ? (
         // eslint-disable-next-line @next/next/no-img-element
