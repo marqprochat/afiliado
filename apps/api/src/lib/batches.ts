@@ -357,6 +357,32 @@ export async function insertBatchItemNext(args: {
 }
 
 
+/** Garante que os produtos existem no tenant e já saíram do enriquecimento (podem ser enviados). */
+export async function assertProductsSendable(
+  db: TenantClient,
+  tenantId: string,
+  productIds: string[],
+) {
+  const products = await db.product.findMany({
+    where: { id: { in: productIds }, tenantId },
+    select: { id: true },
+  });
+  if (products.length < productIds.length) {
+    throw ApiError.notFound('Produto não encontrado');
+  }
+  const queueItems = await db.queueItem.findMany({
+    where: { productId: { in: productIds }, tenantId },
+    select: { status: true },
+  });
+  if (queueItems.some((q) => q.status === 'PENDING_ENRICH')) {
+    throw new ApiError(
+      'PRODUCT_NOT_READY',
+      'Algum produto selecionado ainda está sendo enriquecido',
+      409,
+    );
+  }
+}
+
 /** Remove jobs antigos (inclusive falhos/concluídos) para o mesmo jobId poder ser reenfileirado. */
 export async function removeStaleJobs(itemIds: string[]) {
   const q = getQueue<SendOfferJob>(QUEUE_SEND_OFFER);
