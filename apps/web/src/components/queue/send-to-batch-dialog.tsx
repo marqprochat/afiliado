@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertTriangle, Layers } from 'lucide-react';
 import {
   Dialog,
@@ -24,12 +24,35 @@ const BATCH_STATUS_LABEL: Record<string, string> = {
   CANCELLED: 'Cancelado',
 };
 
+const POSITIONS: Array<{ value: BatchPosition; label: string; title: string; hint: string }> = [
+  {
+    value: 'end',
+    label: 'Fim da fila',
+    title: 'Fim da fila (padrão)',
+    hint: 'Os produtos entram após todos os envios pendentes existentes.',
+  },
+  {
+    value: 'start',
+    label: 'Começo da fila',
+    title: 'Começo da fila',
+    hint: 'Os produtos entram como os próximos a serem enviados pelo lote.',
+  },
+  {
+    value: 'shuffle',
+    label: 'Embaralhar',
+    title: 'Embaralhar',
+    hint: 'Os novos produtos entram em posições aleatórias entre os pendentes.',
+  },
+];
+
 export interface SendToBatchDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   batches: BatchSummary[];
   count: number;
-  onConfirm: (params: { batchId: string; position: BatchPosition }) => void | Promise<void>;
+  /** Lotes que não devem aparecer como destino (ex.: o lote de origem). */
+  excludeBatchIds?: string[];
+  onConfirm: (params: { batchIds: string[]; position: BatchPosition }) => void | Promise<void>;
   submitting?: boolean;
 }
 
@@ -38,26 +61,37 @@ export function SendToBatchDialog({
   onOpenChange,
   batches,
   count,
+  excludeBatchIds = [],
   onConfirm,
   submitting = false,
 }: SendToBatchDialogProps) {
   const [step, setStep] = useState<1 | 2>(1);
-  const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [position, setPosition] = useState<BatchPosition>('end');
 
-  const availableBatches = eligibleBatches(batches);
-  const selectedBatch = availableBatches.find((b) => b.id === selectedBatchId) ?? null;
+  const availableBatches = eligibleBatches(batches).filter((b) => !excludeBatchIds.includes(b.id));
+  const selectedBatches = availableBatches.filter((b) => selectedIds.has(b.id));
+  const doneBatches = selectedBatches.filter((b) => b.status === 'DONE');
 
   useEffect(() => {
     if (open) {
       setStep(1);
       setPosition('end');
+      setSelectedIds(new Set());
     }
   }, [open]);
 
+  const toggle = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   const handleConfirm = () => {
-    if (!selectedBatchId) return;
-    onConfirm({ batchId: selectedBatchId, position });
+    if (selectedBatches.length === 0) return;
+    onConfirm({ batchIds: selectedBatches.map((b) => b.id), position });
   };
 
   return (
@@ -66,12 +100,12 @@ export function SendToBatchDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Layers className="h-5 w-5 text-brand" />
-            {step === 1 ? 'Enviar produtos para lote' : 'Confirmar posição no lote'}
+            {step === 1 ? 'Enviar produtos para lotes' : 'Confirmar posição nos lotes'}
           </DialogTitle>
           <DialogDescription>
             {step === 1
-              ? 'Selecione o lote de destino para os produtos selecionados da triagem.'
-              : 'Defina onde os novos produtos serão inseridos na fila do lote.'}
+              ? 'Marque um ou mais lotes de destino para os produtos selecionados.'
+              : 'Defina onde os novos produtos serão inseridos na fila de cada lote.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -84,7 +118,7 @@ export function SendToBatchDialog({
             ) : (
               <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
                 {availableBatches.map((b) => {
-                  const isSelected = selectedBatchId === b.id;
+                  const isSelected = selectedIds.has(b.id);
                   return (
                     <label
                       key={b.id}
@@ -97,11 +131,10 @@ export function SendToBatchDialog({
                     >
                       <div className="flex items-center gap-3">
                         <input
-                          type="radio"
-                          name="selected-batch"
+                          type="checkbox"
                           value={b.id}
                           checked={isSelected}
-                          onChange={() => setSelectedBatchId(b.id)}
+                          onChange={() => toggle(b.id)}
                           aria-label={b.name}
                           className="text-brand focus:ring-brand"
                         />
@@ -128,7 +161,7 @@ export function SendToBatchDialog({
               </Button>
               <Button
                 type="button"
-                disabled={!selectedBatchId || availableBatches.length === 0}
+                disabled={selectedBatches.length === 0}
                 onClick={() => setStep(2)}
               >
                 Avançar
@@ -137,102 +170,61 @@ export function SendToBatchDialog({
           </div>
         )}
 
-        {step === 2 && selectedBatch && (
+        {step === 2 && selectedBatches.length > 0 && (
           <div className="space-y-4 py-2">
             <div className="rounded-lg border border-border bg-surface-2 p-3 text-sm font-medium">
-              {`Enviar ${count} produto(s) para «${selectedBatch.name}»`}
+              {`Enviar ${count} produto(s) para ${selectedBatches.map((b) => `«${b.name}»`).join(', ')}`}
             </div>
 
-            {selectedBatch.status === 'DONE' && (
+            {doneBatches.length > 0 && (
               <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
                 <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
-                <div>
-                  Este lote está concluído. Ele <strong>será reativado e voltará a rodar</strong> no
-                  próximo horário válido da janela de envio.
-                </div>
+                {doneBatches.length === 1 ? (
+                  <div>
+                    O lote «{doneBatches[0]!.name}» está concluído e{' '}
+                    <strong>será reativado e voltará a rodar</strong> no próximo horário válido da
+                    janela de envio.
+                  </div>
+                ) : (
+                  <div>
+                    Os lotes concluídos {doneBatches.map((b) => `«${b.name}»`).join(', ')}{' '}
+                    <strong>serão reativados e voltarão a rodar</strong> no próximo horário válido
+                    da janela de envio.
+                  </div>
+                )}
               </div>
             )}
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Posição na fila
-              </label>
-
+              </span>
               <div className="space-y-2">
-                <label
-                  className={cn(
-                    'flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm transition-colors',
-                    position === 'end'
-                      ? 'border-brand bg-brand/5 ring-1 ring-brand'
-                      : 'border-border bg-surface hover:bg-surface-2',
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="batch-position"
-                    value="end"
-                    checked={position === 'end'}
-                    onChange={() => setPosition('end')}
-                    aria-label="Fim da fila"
-                    className="mt-0.5 text-brand focus:ring-brand"
-                  />
-                  <div>
-                    <div className="font-medium">Fim da fila (padrão)</div>
-                    <div className="text-xs text-muted-foreground">
-                      Os produtos entram após todos os envios pendentes existentes.
+                {POSITIONS.map((p) => (
+                  <label
+                    key={p.value}
+                    className={cn(
+                      'flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm transition-colors',
+                      position === p.value
+                        ? 'border-brand bg-brand/5 ring-1 ring-brand'
+                        : 'border-border bg-surface hover:bg-surface-2',
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="batch-position"
+                      value={p.value}
+                      checked={position === p.value}
+                      onChange={() => setPosition(p.value)}
+                      aria-label={p.label}
+                      className="mt-0.5 text-brand focus:ring-brand"
+                    />
+                    <div>
+                      <div className="font-medium">{p.title}</div>
+                      <div className="text-xs text-muted-foreground">{p.hint}</div>
                     </div>
-                  </div>
-                </label>
-
-                <label
-                  className={cn(
-                    'flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm transition-colors',
-                    position === 'start'
-                      ? 'border-brand bg-brand/5 ring-1 ring-brand'
-                      : 'border-border bg-surface hover:bg-surface-2',
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="batch-position"
-                    value="start"
-                    checked={position === 'start'}
-                    onChange={() => setPosition('start')}
-                    aria-label="Começo da fila"
-                    className="mt-0.5 text-brand focus:ring-brand"
-                  />
-                  <div>
-                    <div className="font-medium">Começo da fila</div>
-                    <div className="text-xs text-muted-foreground">
-                      Os produtos entram como os próximos a serem enviados pelo lote.
-                    </div>
-                  </div>
-                </label>
-
-                <label
-                  className={cn(
-                    'flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm transition-colors',
-                    position === 'shuffle'
-                      ? 'border-brand bg-brand/5 ring-1 ring-brand'
-                      : 'border-border bg-surface hover:bg-surface-2',
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="batch-position"
-                    value="shuffle"
-                    checked={position === 'shuffle'}
-                    onChange={() => setPosition('shuffle')}
-                    aria-label="Embaralhar"
-                    className="mt-0.5 text-brand focus:ring-brand"
-                  />
-                  <div>
-                    <div className="font-medium">Embaralhar</div>
-                    <div className="text-xs text-muted-foreground">
-                      Os novos produtos entram em posições aleatórias entre os pendentes.
-                    </div>
-                  </div>
-                </label>
+                  </label>
+                ))}
               </div>
             </div>
 

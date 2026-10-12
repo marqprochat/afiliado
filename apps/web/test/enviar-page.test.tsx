@@ -170,13 +170,11 @@ describe('EnviarPage - integração Trazer selecionados para lote', () => {
       if (path === '/settings') return mockSettings;
       if (path.startsWith('/groups')) return [];
       if (path.startsWith('/telegram/chats')) return [];
-      if (path === '/batches/batch-123/send-products' && options?.method === 'POST') {
+      if (path === '/batches/share' && options?.method === 'POST') {
         return {
-          added: 2,
-          skipped: 0,
-          status: 'RUNNING',
-          estimatedEndAt: '2026-10-02T16:00:00.000Z',
-          reactivated: false,
+          results: [
+            { batchId: 'batch-123', ok: true, added: 2, skipped: 0, reactivated: false, status: 'RUNNING', error: null },
+          ],
         };
       }
       return [];
@@ -209,17 +207,18 @@ describe('EnviarPage - integração Trazer selecionados para lote', () => {
     fireEvent.click(screen.getByRole('button', { name: /confirmar/i }));
 
     await waitFor(() => {
-      expect(apiFetchMock).toHaveBeenCalledWith('/batches/batch-123/send-products', {
+      expect(apiFetchMock).toHaveBeenCalledWith('/batches/share', {
         method: 'POST',
         json: {
           productIds: ['p1', 'p2'],
+          batchIds: ['batch-123'],
           position: 'start',
         },
       });
     });
 
     await waitFor(() => {
-      expect(toast.success).toHaveBeenCalledWith('2 adicionado(s)');
+      expect(toast.success).toHaveBeenCalledWith('2 adicionado(s) em 1 lote(s)');
     });
   });
 
@@ -232,13 +231,11 @@ describe('EnviarPage - integração Trazer selecionados para lote', () => {
       if (path === '/settings') return mockSettings;
       if (path.startsWith('/groups')) return [];
       if (path.startsWith('/telegram/chats')) return [];
-      if (path === '/batches/batch-123/send-products' && options?.method === 'POST') {
+      if (path === '/batches/share' && options?.method === 'POST') {
         return {
-          added: 1,
-          skipped: 1,
-          status: 'RUNNING',
-          estimatedEndAt: '2026-10-02T16:00:00.000Z',
-          reactivated: false,
+          results: [
+            { batchId: 'batch-123', ok: true, added: 1, skipped: 1, reactivated: false, status: 'RUNNING', error: null },
+          ],
         };
       }
       return [];
@@ -256,14 +253,54 @@ describe('EnviarPage - integração Trazer selecionados para lote', () => {
     fireEvent.click(await screen.findByRole('button', { name: /confirmar/i }));
 
     await waitFor(() => {
-      expect(apiFetchMock).toHaveBeenCalledWith('/batches/batch-123/send-products', {
+      expect(apiFetchMock).toHaveBeenCalledWith('/batches/share', {
         method: 'POST',
         json: {
           productIds: ['p1', 'p2'],
+          batchIds: ['batch-123'],
           position: 'end',
         },
       });
-      expect(toast.success).toHaveBeenCalledWith('1 adicionado(s) (1 ignorado(s))');
+      expect(toast.success).toHaveBeenCalledWith('1 adicionado(s) em 1 lote(s) (1 ignorado(s))');
+    });
+  });
+
+  it('envia para dois lotes e mostra erro do lote que falhou', async () => {
+    apiFetchMock.mockImplementation(async (path: string, options?: any) => {
+      if (path === '/queue') return mockQueue;
+      if (path === '/batches') return mockBatches;
+      if (path === '/sessions') return mockSessions;
+      if (path.startsWith('/templates')) return mockTemplates;
+      if (path === '/settings') return mockSettings;
+      if (path.startsWith('/groups')) return [];
+      if (path.startsWith('/telegram/chats')) return [];
+      if (path === '/batches/share' && options?.method === 'POST') {
+        return {
+          results: [
+            { batchId: 'batch-123', ok: true, added: 2, skipped: 0, reactivated: false, status: 'RUNNING', error: null },
+            { batchId: 'batch-done', ok: false, added: 0, skipped: 0, reactivated: false, status: null, error: { code: 'BATCH_INACTIVE', message: 'Lote cancelado não pode receber produtos' } },
+          ],
+        };
+      }
+      return [];
+    });
+
+    renderEnviarPage();
+    expect(await screen.findByText('Fone Bluetooth')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /trazer selecionados para lote/i }));
+    fireEvent.click(await screen.findByLabelText('Lote Principal'));
+    fireEvent.click(screen.getByLabelText('Lote Antigo'));
+    fireEvent.click(screen.getByRole('button', { name: /avançar/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /confirmar/i }));
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith('/batches/share', {
+        method: 'POST',
+        json: { productIds: ['p1', 'p2'], batchIds: ['batch-123', 'batch-done'], position: 'end' },
+      });
+      expect(toast.success).toHaveBeenCalledWith('2 adicionado(s) em 1 lote(s)');
+      expect(toast.error).toHaveBeenCalledWith('«Lote Antigo»: Lote cancelado não pode receber produtos');
     });
   });
 });

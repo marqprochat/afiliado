@@ -1,4 +1,4 @@
-import type { BatchSummary, EligibleBatch } from './types';
+import type { BatchShareResult, BatchSummary, EligibleBatch } from './types';
 
 /**
  * Filtra e prepara lotes elegíveis para receber produtos da triagem:
@@ -18,4 +18,26 @@ export function eligibleBatches(batches: BatchSummary[]): EligibleBatch[] {
       const bDone = b.status === 'DONE' ? 1 : 0;
       return aDone - bDone;
     });
+}
+
+/** Resume o retorno de POST /batches/share para montar os toasts. */
+export function summarizeShare(
+  results: BatchShareResult[],
+  batches: Array<{ id: string; name: string }>,
+) {
+  const nameOf = (id: string) => batches.find((b) => b.id === id)?.name ?? id;
+  let added = 0;
+  let skipped = 0;
+  let okCount = 0;
+  const failed: Array<{ name: string; message: string }> = [];
+  for (const r of results) {
+    if (r.ok) {
+      okCount++;
+      added += r.added;
+      skipped += r.skipped;
+    } else {
+      failed.push({ name: nameOf(r.batchId), message: r.error?.message ?? 'Erro inesperado' });
+    }
+  }
+  return { added, skipped, okCount, failed };
 }

@@ -1,6 +1,5 @@
 'use client';
 import { useState } from 'react';
-import { toast } from 'sonner';
 import type { BatchFormOutput } from '@/components/queue/batch-form';
 import { QueueTable } from '@/components/queue/queue-table';
 import { BatchForm } from '@/components/queue/batch-form';
@@ -9,6 +8,7 @@ import { BatchManageDrawer } from '@/components/queue/batch-manage-drawer';
 import { SendToBatchDialog } from '@/components/queue/send-to-batch-dialog';
 import { apiFetch } from '@/lib/api';
 import { useApiMutation } from '@/lib/mutations';
+import { useShareToBatches } from '@/lib/use-share-to-batches';
 import {
   useBatches,
   useGroups,
@@ -17,7 +17,6 @@ import {
   useSettings,
   useTemplates,
 } from '@/lib/queries';
-import type { BatchPosition, BatchSendProductsResponse } from '@/lib/types';
 
 const INV = [['queue'], ['batches'], ['overview']];
 
@@ -71,24 +70,7 @@ export default function EnviarPage() {
   const selectedPendingProductIds =
     queue?.items.filter((i) => i.selected && i.status === 'PENDING').map((i) => i.productId) ?? [];
 
-  const sendToBatch = useApiMutation(
-    ({ batchId, position }: { batchId: string; position: BatchPosition }) =>
-      apiFetch<BatchSendProductsResponse>(`/batches/${batchId}/send-products`, {
-        method: 'POST',
-        json: {
-          productIds: selectedPendingProductIds,
-          position,
-        },
-      }),
-    {
-      invalidate: INV,
-      onSuccess: (out) => {
-        setSendToBatchOpen(false);
-        const skippedMsg = out.skipped > 0 ? ` (${out.skipped} ignorado(s))` : '';
-        toast.success(`${out.added} adicionado(s)${skippedMsg}`);
-      },
-    },
-  );
+  const sendToBatch = useShareToBatches(batches ?? [], () => setSendToBatchOpen(false));
 
   const selectedCount =
     queue?.items.filter((i) => i.selected && i.status === 'PENDING').length ?? 0;
@@ -141,7 +123,9 @@ export default function EnviarPage() {
         batches={batches ?? []}
         count={selectedCount}
         submitting={sendToBatch.isPending}
-        onConfirm={({ batchId, position }) => sendToBatch.mutate({ batchId, position })}
+        onConfirm={({ batchIds, position }) =>
+          sendToBatch.mutate({ productIds: selectedPendingProductIds, batchIds, position })
+        }
       />
     </div>
   );

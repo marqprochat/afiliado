@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { eligibleBatches } from '@/lib/batch-target';
+import { eligibleBatches, summarizeShare } from '@/lib/batch-target';
 import type { BatchSummary } from '@/lib/types';
 
 describe('eligibleBatches', () => {
@@ -58,5 +58,61 @@ describe('eligibleBatches', () => {
   it('retorna array vazio quando não há lotes ou todos são CANCELLED', () => {
     expect(eligibleBatches([])).toEqual([]);
     expect(eligibleBatches([makeBatch('1', 'Cancelado', 'CANCELLED')])).toEqual([]);
+  });
+});
+
+describe('summarizeShare', () => {
+  const batches = [
+    { id: 'b1', name: 'Lote A' },
+    { id: 'b2', name: 'Lote B' },
+  ];
+  const ok = (batchId: string, added: number, skipped = 0) => ({
+    batchId,
+    ok: true,
+    added,
+    skipped,
+    reactivated: false,
+    status: 'RUNNING' as const,
+    error: null,
+  });
+
+  it('soma adicionados/ignorados dos lotes que deram certo', () => {
+    expect(summarizeShare([ok('b1', 2, 1), ok('b2', 3)], batches)).toEqual({
+      added: 5,
+      skipped: 1,
+      okCount: 2,
+      failed: [],
+    });
+  });
+
+  it('lista as falhas com o nome do lote e a mensagem', () => {
+    const failed = {
+      batchId: 'b2',
+      ok: false,
+      added: 0,
+      skipped: 0,
+      reactivated: false,
+      status: null,
+      error: { code: 'BATCH_INACTIVE', message: 'Lote cancelado não pode receber produtos' },
+    };
+    expect(summarizeShare([ok('b1', 1), failed], batches)).toEqual({
+      added: 1,
+      skipped: 0,
+      okCount: 1,
+      failed: [{ name: 'Lote B', message: 'Lote cancelado não pode receber produtos' }],
+    });
+  });
+
+  it('usa o id quando o lote não está na lista', () => {
+    const failed = {
+      batchId: 'zz',
+      ok: false,
+      added: 0,
+      skipped: 0,
+      reactivated: false,
+      status: null,
+      error: { code: 'INTERNAL', message: 'Falha' },
+    };
+    expect(summarizeShare([failed], batches).failed).toEqual([{ name: 'zz', message: 'Falha' }]);
   });
 });

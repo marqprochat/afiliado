@@ -272,6 +272,18 @@ export interface BatchSendProductsBody {
   productIds: string[];
   position: BatchPosition;
 }
+export interface BatchShareResult {
+  batchId: string;
+  ok: boolean;
+  added: number;
+  skipped: number;
+  reactivated: boolean;
+  status: BatchStatus | null;
+  error: { code: string; message: string } | null;
+}
+export interface BatchShareResponse {
+  results: BatchShareResult[];
+}
 export interface EligibleBatch extends BatchSummary {
   pending: number;
 }

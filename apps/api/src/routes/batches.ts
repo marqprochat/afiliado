@@ -8,12 +8,15 @@ import {
   batchCreateSchema,
   batchOrderSchema,
   batchSendProductsSchema,
+  batchShareSchema,
   batchUpdateSchema,
+  type BatchStatus,
 } from '@afilados/shared';
 import { requireAuth } from '../plugins/auth';
 import { getOperatingWindow, toCoreWindow } from '../lib/settings';
 import {
   addProductsToBatch,
+  assertProductsSendable,
   enqueueBatchItems,
   removePendingJobs,
   removeStaleJobs,
@@ -364,25 +367,7 @@ export async function batchesRoutes(app: FastifyInstance) {
     const b = await findBatch(req);
 
     const uniqueProductIds = [...new Set(body.productIds)];
-    const products = await req.db.product.findMany({
-      where: { id: { in: uniqueProductIds }, tenantId: req.tenantId },
-      select: { id: true },
-    });
-    if (products.length < uniqueProductIds.length) {
-      throw ApiError.notFound('Produto não encontrado');
-    }
-
-    const queueItems = await req.db.queueItem.findMany({
-      where: { productId: { in: uniqueProductIds }, tenantId: req.tenantId },
-      select: { status: true },
-    });
-    if (queueItems.some((q) => q.status === 'PENDING_ENRICH')) {
-      throw new ApiError(
-        'PRODUCT_NOT_READY',
-        'Algum produto selecionado ainda está sendo enriquecido',
-        409,
-      );
-    }
+    await assertProductsSendable(req.db, req.tenantId, uniqueProductIds);
 
     const window = toCoreWindow(await getOperatingWindow(req.db, req.tenantId));
 
@@ -417,6 +402,104 @@ export async function batchesRoutes(app: FastifyInstance) {
       estimatedEndAt: res.estimatedEndAt ? res.estimatedEndAt.toISOString() : null,
       reactivated: res.reactivated,
     };
+  });
+
+  app.post('/batches/share', async (req) => {
+    const body = batchShareSchema.parse(req.body);
+    const productIds = [...new Set(body.productIds)];
+    const batchIds = [...new Set(body.batchIds)];
+
+    await assertProductsSendable(req.db, req.tenantId, productIds);
+
+    const batches = await req.db.batch.findMany({
+      where: { id: { in: batchIds } },
+      include: { items: { orderBy: { order: 'asc' }, select: batchItemPublicSelect } },
+    });
+    if (batches.length < batchIds.length) throw ApiError.notFound('Lote não encontrado');
+    const byId = new Map(batches.map((b) => [b.id, b]));
+
+    const window = toCoreWindow(await getOperatingWindow(req.db, req.tenantId));
+
+    type ShareResult = {
+      batchId: string;
+      ok: boolean;
+      added: number;
+      skipped: number;
+      reactivated: boolean;
+      status: BatchStatus | null;
+      error: { code: string; message: string } | null;
+    };
+    const results: ShareResult[] = [];
+    const progress: Array<{
+      batchId: string;
+      sent: number;
+      total: number;
+      estimatedEndAt: string;
+    }> = [];
+
+    for (const batchId of batchIds) {
+      const b = byId.get(batchId)!;
+      try {
+        const res = await addProductsToBatch({
+          db: req.db,
+          tenantId: req.tenantId,
+          batch: b,
+          productIds,
+          position: body.position,
+          window,
+        });
+        results.push({
+          batchId,
+          ok: true,
+          added: res.added,
+          skipped: res.skipped,
+          reactivated: res.reactivated,
+          status: res.status,
+          error: null,
+        });
+        progress.push({
+          batchId,
+          sent: b.items.filter((i) => i.status === 'SENT').length,
+          total: b.items.length + res.added,
+          estimatedEndAt: res.estimatedEndAt ? res.estimatedEndAt.toISOString() : '',
+        });
+      } catch (err) {
+        const error =
+          err instanceof ApiError
+            ? { code: err.code, message: err.message }
+            : { code: 'INTERNAL', message: 'Falha ao adicionar ao lote' };
+        if (!(err instanceof ApiError)) {
+          req.log.error({ err, batchId }, 'falha ao compartilhar com o lote');
+        }
+        results.push({
+          batchId,
+          ok: false,
+          added: 0,
+          skipped: 0,
+          reactivated: false,
+          status: null,
+          error,
+        });
+      }
+    }
+
+    // eventos são best-effort: uma falha ao publicar não pode alterar o resultado já gravado
+    if (results.some((r) => r.ok)) {
+      // sem await: com o Redis fora do ar o enfileiramento ficaria pendurado e atrasaria a resposta
+      void enqueueMlLinksPrewarm(req.db, req.tenantId, productIds).catch((err) =>
+        req.log.warn({ err }, 'falha ao enfileirar o pré-aquecimento de links do ML'),
+      );
+      try {
+        for (const p of progress) {
+          await app.events.publish(req.tenantId, { type: 'batch.progress', ...p });
+        }
+        await app.events.publish(req.tenantId, { type: 'queue.updated' });
+      } catch (err) {
+        req.log.warn({ err }, 'falha ao publicar eventos do compartilhamento');
+      }
+    }
+
+    return { results };
   });
 
   app.delete('/batches/:id/items/:itemId', async (req, reply) => {

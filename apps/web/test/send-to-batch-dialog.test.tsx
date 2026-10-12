@@ -130,7 +130,7 @@ describe('SendToBatchDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /confirmar|enviar/i }));
     expect(onConfirm).toHaveBeenCalledWith({
-      batchId: 'b1',
+      batchIds: ['b1'],
       position: 'start',
     });
   });
@@ -156,9 +156,68 @@ describe('SendToBatchDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /confirmar|enviar/i }));
     expect(onConfirm).toHaveBeenCalledWith({
-      batchId: 'b1',
+      batchIds: ['b1'],
       position: 'shuffle',
     });
+  });
+
+  it('permite marcar vários lotes e mostra todos no resumo', () => {
+    const onConfirm = vi.fn();
+    render(
+      <SendToBatchDialog
+        open={true}
+        onOpenChange={vi.fn()}
+        batches={batches}
+        count={2}
+        onConfirm={onConfirm}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText(/Lote Rodando/i));
+    fireEvent.click(screen.getByLabelText(/Lote Concluído/i));
+    expect(screen.getByLabelText(/Lote Rodando/i)).toBeChecked();
+    expect(screen.getByLabelText(/Lote Concluído/i)).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: /avançar|continuar/i }));
+
+    expect(
+      screen.getByText(/Enviar 2 produto\(s\) para «Lote Rodando», «Lote Concluído»/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/será reativado e voltará a rodar/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /confirmar|enviar/i }));
+    expect(onConfirm).toHaveBeenCalledWith({ batchIds: ['b1', 'b2'], position: 'end' });
+  });
+
+  it('desmarcar o único lote volta a desabilitar o Avançar', () => {
+    render(
+      <SendToBatchDialog
+        open={true}
+        onOpenChange={vi.fn()}
+        batches={batches}
+        count={1}
+        onConfirm={vi.fn()}
+      />,
+    );
+    const box = screen.getByLabelText(/Lote Rodando/i);
+    fireEvent.click(box);
+    expect(screen.getByRole('button', { name: /avançar|continuar/i })).toBeEnabled();
+    fireEvent.click(box);
+    expect(screen.getByRole('button', { name: /avançar|continuar/i })).toBeDisabled();
+  });
+
+  it('não lista os lotes de excludeBatchIds', () => {
+    render(
+      <SendToBatchDialog
+        open={true}
+        onOpenChange={vi.fn()}
+        batches={batches}
+        excludeBatchIds={['b1']}
+        count={1}
+        onConfirm={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText('Lote Rodando')).not.toBeInTheDocument();
+    expect(screen.getByText('Lote Concluído')).toBeInTheDocument();
   });
 
   it('botão Voltar no passo 2 retorna ao passo 1 preservando a escolha do lote', () => {
