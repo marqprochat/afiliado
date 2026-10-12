@@ -154,7 +154,15 @@ describe('BatchManageDrawer', () => {
         if (url === '/batches/share' && opts?.method === 'POST') {
           return {
             results: [
-              { batchId: 'b2', ok: true, added: 1, skipped: 0, reactivated: false, status: 'RUNNING', error: null },
+              {
+                batchId: 'b2',
+                ok: true,
+                added: 1,
+                skipped: 0,
+                reactivated: false,
+                status: 'RUNNING',
+                error: null,
+              },
             ],
           } as never;
         }

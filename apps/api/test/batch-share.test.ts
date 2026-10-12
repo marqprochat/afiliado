@@ -134,12 +134,20 @@ describe('POST /api/v1/batches/share', () => {
     const p1 = await makeProduct();
     const p2 = await makeProduct();
 
-    const res = await share({ productIds: [p1.id, p2.id], batchIds: [a.id, b.id], position: 'end' });
+    const res = await share({
+      productIds: [p1.id, p2.id],
+      batchIds: [a.id, b.id],
+      position: 'end',
+    });
 
     expect(res.statusCode).toBe(200);
     const { results } = res.json();
     expect(
-      results.map((r: { batchId: string; ok: boolean; added: number }) => [r.batchId, r.ok, r.added]),
+      results.map((r: { batchId: string; ok: boolean; added: number }) => [
+        r.batchId,
+        r.ok,
+        r.added,
+      ]),
     ).toEqual([
       [a.id, true, 2],
       [b.id, true, 2],
@@ -223,7 +231,9 @@ describe('POST /api/v1/batches/share', () => {
     const { batch: healthy } = await makeBatch('RUNNING', 1);
     const p = await makeProduct();
 
-    vi.spyOn(Queue.prototype, 'addBulk').mockRejectedValueOnce(new Error('Redis connection failed'));
+    vi.spyOn(Queue.prototype, 'addBulk').mockRejectedValueOnce(
+      new Error('Redis connection failed'),
+    );
 
     const res = await share({ productIds: [p.id], batchIds: [broken.id, healthy.id] });
 
@@ -247,6 +257,34 @@ describe('POST /api/v1/batches/share', () => {
 
     expect(res.statusCode).toBe(404);
     expect(await countItems(batch.id)).toBe(1);
+  });
+
+  it('404 sem gravar nada quando algum lote é de outro tenant', async () => {
+    const { batch: own } = await makeBatch('RUNNING', 1);
+    const otherSession = await prisma.waSession.create({
+      data: { tenantId: otherT.tenantId, label: 's-other', status: 'CONNECTED' },
+    });
+    const otherTemplate = await prisma.template.findFirstOrThrow({
+      where: { tenantId: otherT.tenantId },
+    });
+    const foreignBatch = await prisma.batch.create({
+      data: {
+        tenantId: otherT.tenantId,
+        sessionId: otherSession.id,
+        templateId: otherTemplate.id,
+        name: 'Lote de outro tenant',
+        groupJids: ['g2@g.us'],
+        intervalMin: 10,
+        status: 'RUNNING',
+      },
+    });
+    const p = await makeProduct();
+
+    const res = await share({ productIds: [p.id], batchIds: [own.id, foreignBatch.id] });
+
+    expect(res.statusCode).toBe(404);
+    expect(await countItems(own.id)).toBe(1);
+    expect(await countItems(foreignBatch.id)).toBe(0);
   });
 
   it('404 quando algum lote não existe, sem gravar nos outros', async () => {

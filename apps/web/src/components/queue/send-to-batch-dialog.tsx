@@ -188,8 +188,8 @@ export function SendToBatchDialog({
                 ) : (
                   <div>
                     Os lotes concluídos {doneBatches.map((b) => `«${b.name}»`).join(', ')}{' '}
-                    <strong>serão reativados e voltarão a rodar</strong> no próximo horário válido da
-                    janela de envio.
+                    <strong>serão reativados e voltarão a rodar</strong> no próximo horário válido
+                    da janela de envio.
                   </div>
                 )}
               </div>
