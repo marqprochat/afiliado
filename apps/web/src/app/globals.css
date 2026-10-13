@@ -95,6 +95,25 @@
   --sidebar-ring: var(--ring);
 }
 
+/* Paleta clara: vale quando o <html> não tem a classe `dark` (hoje fixa no layout). */
+html:not(.dark) {
+  --background: hsl(210 40% 98%);
+  --foreground: hsl(222 47% 11%);
+  --surface: hsl(0 0% 100%);
+  --surface-2: hsl(210 40% 96%);
+  --secondary: hsl(210 40% 94%);
+  --muted: hsl(210 40% 94%);
+  --muted-foreground: hsl(215 19% 35%);
+  --accent: hsl(210 40% 92%);
+  --border: hsl(214 32% 85%);
+  --input: hsl(214 32% 80%);
+  --chart-1: hsl(173 80% 28%);
+  --chart-2: hsl(32 95% 40%);
+  --chart-3: hsl(0 72% 45%);
+  --chart-4: hsl(217 80% 45%);
+  --chart-5: hsl(280 60% 45%);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
