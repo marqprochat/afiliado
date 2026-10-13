@@ -1,4 +1,6 @@
-import { prisma, type ProductSource } from '@afilados/db';
+import { randomUUID } from 'node:crypto';
+import { prisma, type GroupMemberAction, type ProductSource } from '@afilados/db';
+import { spMidnight } from '@afilados/shared';
 import { createTenantWithUser } from './helpers';
 
 export interface MetricsCtx {
@@ -120,4 +122,60 @@ export async function addCouponSend(ctx: MetricsCtx, opts: { groupJid: string; s
   });
   await addSendLog(ctx, opts.groupJid, opts.sentAt, 'SENT', { batchItemId: item.id });
   return coupon;
+}
+
+export function addMemberEvent(
+  ctx: MetricsCtx,
+  groupJid: string,
+  action: GroupMemberAction,
+  occurredAt: string,
+) {
+  return prisma.groupMemberEvent.create({
+    data: {
+      tenantId: ctx.tenantId,
+      sessionId: ctx.sessionId,
+      groupJid,
+      participantJid: `${randomUUID()}@s.whatsapp.net`,
+      action,
+      occurredAt: new Date(occurredAt),
+      dedupeKey: `fx-${randomUUID()}`,
+    },
+  });
+}
+
+/** `day` no formato YYYY-MM-DD (dia de SP). */
+export function addSnapshot(ctx: MetricsCtx, groupJid: string, day: string, memberCount: number) {
+  return prisma.groupSnapshot.create({
+    data: {
+      tenantId: ctx.tenantId,
+      sessionId: ctx.sessionId,
+      groupJid,
+      date: spMidnight(day),
+      memberCount,
+    },
+  });
+}
+
+export function addGroupLink(ctx: MetricsCtx, slug: string, label: string) {
+  return prisma.groupLink.create({
+    data: { tenantId: ctx.tenantId, sessionId: ctx.sessionId, slug, label, baseName: label },
+  });
+}
+
+export function addClick(
+  ctx: MetricsCtx,
+  groupLinkId: string,
+  slug: string,
+  clickedAt: string,
+  targetGroupJid: string | null = null,
+) {
+  return prisma.linkClickEvent.create({
+    data: {
+      tenantId: ctx.tenantId,
+      groupLinkId,
+      slug,
+      targetGroupJid,
+      clickedAt: new Date(clickedAt),
+    },
+  });
 }
