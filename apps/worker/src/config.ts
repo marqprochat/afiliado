@@ -14,5 +14,7 @@ const schema = z.object({
   // App do Mercado Livre (DevCenter) da API oficial. Vazio = integração desligada.
   ML_CLIENT_ID: z.string().optional(),
   ML_CLIENT_SECRET: z.string().optional(),
+  // Retenção de GroupMemberEvent, GroupSnapshot e LinkClickEvent (12 meses por padrão).
+  METRICS_RETENTION_DAYS: z.coerce.number().int().min(30).default(365),
 });
 export const config = schema.parse(process.env);
