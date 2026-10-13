@@ -45,6 +45,8 @@ export interface GroupParticipantsUpdateEvent {
   jid: string;
   participants: string[];
   action: GroupParticipantAction;
+  /** JID de quem executou a ação (admin), quando o WhatsApp informa */
+  author?: string;
 }
 
 export interface GroupSnapshot {

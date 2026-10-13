@@ -235,6 +235,7 @@ export class BaileysGateway implements WhatsAppGateway {
           jid: event.id,
           participants: event.participants,
           action: event.action as GroupParticipantAction,
+          ...(event.author ? { author: event.author } : {}),
         };
         for (const h of this.groupParticipantHandlers) {
           try {

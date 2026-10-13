@@ -41,6 +41,7 @@ import { createCouponSyncProcessor } from './processors/coupon-sync';
 import { createGroupLinkRotateProcessor } from './processors/group-link-rotate';
 import { createMlLinksPrewarmProcessor } from './processors/ml-links-prewarm';
 import { GroupLinkMonitor } from './group-links/monitor';
+import { GroupMemberRecorder } from './metrics/group-member-recorder';
 import { MirrorListener } from './mirror/listener';
 import { AutomationScheduler } from './automation/scheduler';
 import { AwinImportScheduler } from './automation/awin-import-scheduler';
@@ -53,6 +54,7 @@ const gateway = new BaileysGateway();
 const manager = new WaSessionManager(gateway);
 const mirrorListener = new MirrorListener(gateway);
 const groupLinkMonitor = new GroupLinkMonitor(gateway);
+const groupMemberRecorder = new GroupMemberRecorder(gateway);
 const automationScheduler = new AutomationScheduler();
 const awinImportScheduler = new AwinImportScheduler();
 const couponSyncScheduler = new CouponSyncScheduler();
@@ -189,6 +191,7 @@ redisSub.on('message', (_channel, raw) => {
 });
 
 const http = startHttp(config.WORKER_PORT, () => manager.sessionCount());
+groupMemberRecorder.start();
 await manager.start();
 await mirrorListener.start();
 await groupLinkMonitor.start();
