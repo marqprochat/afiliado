@@ -35,6 +35,9 @@ const TENANT_MODELS = new Set([
   'AwinCatalogProduct',
   'GroupLink',
   'ManagedGroup',
+  'GroupMemberEvent',
+  'GroupSnapshot',
+  'LinkClickEvent',
 ]);
 
 const FILTERED_OPS = new Set([
