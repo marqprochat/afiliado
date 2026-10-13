@@ -6,6 +6,7 @@ import {
   QUEUE_COUPON_SYNC,
   QUEUE_GROUP_LINK_ROTATE,
   QUEUE_ML_LINKS_PREWARM,
+  QUEUE_METRICS_DAILY,
   QUEUE_MIRROR_MESSAGE,
   QUEUE_PRODUCT_ENRICH,
   QUEUE_SEND_OFFER,
@@ -16,6 +17,7 @@ import {
   type CouponSyncJob,
   type GroupLinkRotateJob,
   type MlLinksPrewarmJob,
+  type MetricsDailyJob,
   type MirrorMessageJob,
   type ProductEnrichJob,
   type SendOfferJob,
@@ -28,7 +30,7 @@ import {
   createAliexpressAdapter,
 } from '@afilados/marketplaces';
 import { config } from './config';
-import { getRedis, closeRedis } from './lib/redis';
+import { getRedis, closeRedis, getQueue } from './lib/redis';
 import { BaileysGateway } from './wa/baileys-gateway';
 import { WaSessionManager } from './wa/session-manager';
 import { processWaCommand } from './processors/wa-commands';
@@ -38,9 +40,11 @@ import { processMirrorMessage } from './processors/mirror-message';
 import { createProductEnrichProcessor } from './processors/product-enrich';
 import { createAwinImportProcessor } from './processors/awin-import';
 import { createCouponSyncProcessor } from './processors/coupon-sync';
+import { createMetricsDailyProcessor, scheduleMetricsDaily } from './processors/metrics-daily';
 import { createGroupLinkRotateProcessor } from './processors/group-link-rotate';
 import { createMlLinksPrewarmProcessor } from './processors/ml-links-prewarm';
 import { GroupLinkMonitor } from './group-links/monitor';
+import { GroupMemberRecorder } from './metrics/group-member-recorder';
 import { MirrorListener } from './mirror/listener';
 import { AutomationScheduler } from './automation/scheduler';
 import { AwinImportScheduler } from './automation/awin-import-scheduler';
@@ -53,6 +57,7 @@ const gateway = new BaileysGateway();
 const manager = new WaSessionManager(gateway);
 const mirrorListener = new MirrorListener(gateway);
 const groupLinkMonitor = new GroupLinkMonitor(gateway);
+const groupMemberRecorder = new GroupMemberRecorder(gateway);
 const automationScheduler = new AutomationScheduler();
 const awinImportScheduler = new AwinImportScheduler();
 const couponSyncScheduler = new CouponSyncScheduler();
@@ -111,6 +116,12 @@ const mlLinksPrewarmWorker = new Worker<MlLinksPrewarmJob>(
   createMlLinksPrewarmProcessor(),
   { connection: getRedis(), concurrency: 1 },
 );
+// Snapshot diário dos grupos + retenção das métricas (meia-noite de SP).
+const metricsDailyWorker = new Worker<MetricsDailyJob>(
+  QUEUE_METRICS_DAILY,
+  createMetricsDailyProcessor({ retentionDays: config.METRICS_RETENTION_DAYS }),
+  { connection: getRedis(), concurrency: 1 },
+);
 
 for (const w of [
   waWorker,
@@ -122,6 +133,7 @@ for (const w of [
   couponSyncWorker,
   groupLinkRotateWorker,
   mlLinksPrewarmWorker,
+  metricsDailyWorker,
 ]) {
   w.on('failed', (job, err) => log.error({ jobId: job?.id, err: err.message }, 'job falhou'));
 }
@@ -189,12 +201,16 @@ redisSub.on('message', (_channel, raw) => {
 });
 
 const http = startHttp(config.WORKER_PORT, () => manager.sessionCount());
+groupMemberRecorder.start();
 await manager.start();
 await mirrorListener.start();
 await groupLinkMonitor.start();
 await automationScheduler.start();
 awinImportScheduler.start();
 couponSyncScheduler.start();
+await scheduleMetricsDaily(getQueue<MetricsDailyJob>(QUEUE_METRICS_DAILY)).catch((e) =>
+  log.error(e, 'falha ao agendar métricas diárias'),
+);
 await telegramManager.start();
 log.info({ port: config.WORKER_PORT }, 'worker iniciado');
 
@@ -219,6 +235,7 @@ async function shutdown() {
       couponSyncWorker.close(),
       groupLinkRotateWorker.close(),
       mlLinksPrewarmWorker.close(),
+      metricsDailyWorker.close(),
     ]);
     await redisSub.unsubscribe();
     redisSub.disconnect();

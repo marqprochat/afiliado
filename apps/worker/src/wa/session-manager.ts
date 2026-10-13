@@ -8,6 +8,7 @@ import {
 } from '@afilados/shared';
 import { getRedis, getQueue } from '../lib/redis';
 import { publishEvent } from '../lib/events';
+import { snapshotGroups } from '../metrics/group-snapshots';
 import type { BaileysGateway } from './baileys-gateway';
 
 const log = pino({ name: 'wa-manager' });
@@ -353,6 +354,11 @@ export class WaSessionManager {
       ),
     ]);
     await publishEvent(tenantId, { type: 'wa.groups.synced', sessionId, count: groups.length });
+    try {
+      await snapshotGroups({ sessionId });
+    } catch (err) {
+      log.error({ err, sessionId }, 'falha ao gravar snapshot de grupos em syncGroups');
+    }
 
     // Verifica ManagedGroups ativos cujo jid não foi retornado pelo WhatsApp
     try {
