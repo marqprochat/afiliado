@@ -666,6 +666,36 @@
       return { price, originalPrice };
     }
 
+    if (url.includes('aliexpress.')) {
+      // O texto dos cards do AliExpress não é confiável: os valores ficam colados em outros
+      // textos ("R$1.999" + "524 vendido(s)" vira "R$1.999524") e a parcela vem como
+      // "12 × R$165,75" / "12 parcelas de R$53,53", que escapam da limpeza do fallback.
+      // O próprio link do card traz os preços no parâmetro pdp_npi, no formato
+      // "6@dis!BRL!<preço cheio>!<preço atual>!!!..." — lemos daí.
+      const links = [];
+      if (container.matches?.('a[href]')) links.push(container);
+      links.push(...container.querySelectorAll('a[href*="pdp_npi"]'));
+      for (const link of links) {
+        let npi;
+        try {
+          npi = new URL(link.getAttribute('href'), window.location.href).searchParams.get(
+            'pdp_npi',
+          );
+        } catch {
+          continue;
+        }
+        if (!npi) continue;
+        const parts = npi.split('!');
+        const i = parts.indexOf('BRL');
+        if (i < 0) continue;
+        const orig = parseFloat(parts[i + 1]);
+        const sale = parseFloat(parts[i + 2]);
+        if (isNaN(sale) || sale <= 0) continue;
+        return { price: sale, originalPrice: !isNaN(orig) && orig > sale ? orig : undefined };
+      }
+      return null;
+    }
+
     return null;
   }
 
@@ -764,7 +794,7 @@
         // escolher o menor valor como preço, remove o valor da parcela ("10x de R$ 55,44") e
         // de cupons ("R$ 300 OFF") — senão a parcela vira o preço e o preço vira o "original".
         const priceText = (container.textContent || '')
-          .replace(/\d+\s*x\s*(?:de\s*)?R\$\s?[\d.,]+/gi, ' ')
+          .replace(/\d+\s*(?:[x×]|parcelas)\s*(?:de\s*)?R\$\s?[\d.,]+/gi, ' ')
           .replace(/R\$\s?[\d.,]+\s*(?:OFF|de\s+desconto)/gi, ' ');
         const priceMatches = Array.from(priceText.matchAll(/R\$\s?([\d.,]+)/g))
           .map((m) => parseFloat(m[1].replace(/\./g, '').replace(',', '.')))
