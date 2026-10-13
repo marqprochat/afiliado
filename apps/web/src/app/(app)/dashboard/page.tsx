@@ -1,4 +1,10 @@
-import { PhasePlaceholder } from '@/components/phase-placeholder';
-export default function Page() {
-  return <PhasePlaceholder title="Dashboard & Métricas" phase="F6" />;
+import { Suspense } from 'react';
+import { DashboardClient } from '@/components/metrics/dashboard-client';
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<p className="text-muted-foreground">Carregando…</p>}>
+      <DashboardClient />
+    </Suspense>
+  );
 }
