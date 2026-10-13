@@ -19,6 +19,7 @@ import { templatesRoutes } from './routes/templates';
 import { batchesRoutes } from './routes/batches';
 import { mirrorRoutes } from './routes/mirror';
 import { overviewRoutes } from './routes/overview';
+import { metricsRoutes } from './routes/metrics';
 import { apiTokensRoutes } from './routes/api-tokens';
 import { extensionRoutes } from './routes/extension';
 import { automationsRoutes } from './routes/automations';
@@ -76,6 +77,7 @@ export async function buildApp(opts: BuildAppOptions = {}) {
       await api.register(batchesRoutes);
       await api.register(mirrorRoutes);
       await api.register(overviewRoutes);
+      await api.register(metricsRoutes);
       await api.register(apiTokensRoutes);
       await api.register(extensionRoutes);
       await api.register(automationsRoutes);
