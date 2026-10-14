@@ -3,6 +3,24 @@ import { prisma, decryptJson } from '@afilados/db';
 import { buildApp } from '../src/app';
 import { createTenantWithUser, cleanupTenant, loginCookie } from './helpers';
 
+// A API não sobe worker nos testes: sem isto, o job Awin nunca roda e a rota espera o timeout.
+// Só a fila de import Awin é substituída quando `awinFake.active` está ligado.
+const awinFake = vi.hoisted(() => ({ active: false, results: [] as unknown[] }));
+vi.mock('../src/lib/redis', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/lib/redis')>();
+  return {
+    ...actual,
+    getQueue: ((name: string) => {
+      if (!awinFake.active) return actual.getQueue(name);
+      return {
+        add: async () => ({ waitUntilFinished: async () => awinFake.results }),
+      };
+    }) as typeof actual.getQueue,
+    getQueueEvents: ((name: string) =>
+      awinFake.active ? {} : actual.getQueueEvents(name)) as typeof actual.getQueueEvents,
+  };
+});
+
 process.env.SHOPEE_MOCK = '1';
 const app = await buildApp({ logger: false });
 let t: Awaited<ReturnType<typeof createTenantWithUser>>;
@@ -443,23 +461,30 @@ describe('marketplaces', () => {
   });
 
   it('POST /marketplaces/awin/import enfileira o job e devolve quantos produtos foram encontrados pelo link', async () => {
-    const r = await app.inject({
-      method: 'POST',
-      url: '/api/v1/marketplaces/awin/import',
-      headers: { cookie },
-    });
-    expect(r.statusCode).toBe(200);
-    // A rota aguarda o job terminar (com timeout) para devolver a contagem real de produtos
-    // encontrados pelo link do feed, em vez de só "queued: true" sem nenhum retorno útil.
-    // Aqui o feedListUrl é fake (não é uma URL real da Awin), então o resultado esperado é
-    // uma falha por feed — o que já é suficiente para provar que a contagem chega ao cliente.
-    expect(r.json()).toMatchObject({
-      queued: false,
-      totalImported: 0,
-      totalRemoved: 0,
-      failedCount: expect.any(Number),
-      feeds: expect.any(Array),
-    });
+    // Simula o worker devolvendo uma falha por feed (feedListUrl fake, sem acesso real à Awin).
+    awinFake.results = [
+      { feedId: 'f1', ok: false, imported: 0, removed: 0, error: 'feed inválido' },
+    ];
+    awinFake.active = true;
+    try {
+      const r = await app.inject({
+        method: 'POST',
+        url: '/api/v1/marketplaces/awin/import',
+        headers: { cookie },
+      });
+      expect(r.statusCode).toBe(200);
+      // A rota devolve a contagem real de produtos encontrados pelo link do feed, em vez de só
+      // "queued: true" sem nenhum retorno útil.
+      expect(r.json()).toMatchObject({
+        queued: false,
+        totalImported: 0,
+        totalRemoved: 0,
+        failedCount: 1,
+        feeds: awinFake.results,
+      });
+    } finally {
+      awinFake.active = false;
+    }
   });
 
   it('POST /marketplaces/awin/import sem credenciais configuradas responde com erro, não enfileira', async () => {
