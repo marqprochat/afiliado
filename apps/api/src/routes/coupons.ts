@@ -272,7 +272,7 @@ export async function couponsRoutes(app: FastifyInstance) {
     try {
       const results = (await job.waitUntilFinished(
         getQueueEvents(QUEUE_COUPON_SYNC),
-        45_000,
+        20_000, // abaixo do timeout de 30s do proxy do Next
       )) as any[];
       return { queued: false, results };
     } catch {

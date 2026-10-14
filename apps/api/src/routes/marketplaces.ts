@@ -238,11 +238,13 @@ export async function marketplacesRoutes(app: FastifyInstance) {
         removeOnFail: 50,
       },
     );
+    // A espera precisa ficar abaixo do timeout de 30s do proxy do Next (rewrites): acima disso o
+    // proxy derruba a conexão e o usuário vê HTTP 500 sem a API nunca responder.
     // Aguarda o job terminar para devolver quantos produtos foram encontrados pelo link do
     // feed — sem isso o usuário só via "os produtos aparecem em alguns minutos" e não tinha
     // como saber se o import funcionou ou trouxe 0 produtos (link/feed inválido ou expirado).
     try {
-      const results = (await job.waitUntilFinished(getQueueEvents(QUEUE_AWIN_IMPORT), 45_000)) as {
+      const results = (await job.waitUntilFinished(getQueueEvents(QUEUE_AWIN_IMPORT), 20_000)) as {
         feedId: string;
         ok: boolean;
         imported: number;
