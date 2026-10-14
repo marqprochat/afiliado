@@ -6,6 +6,7 @@ import {
   createShopeeAdapter,
   getAliexpressAdapter,
   getTagAdapter,
+  scrapeAliexpress,
   type AliexpressCredentials,
   type ShopeeCredentials,
 } from '@afilados/marketplaces';
@@ -62,10 +63,16 @@ async function fetchViaAdapter(
     const conn = await prisma.marketplaceConnection.findFirst({
       where: { tenantId, kind: 'ALIEXPRESS' },
     });
-    if (!conn?.encryptedCredentials) throw new Error('AliExpress não configurado para este tenant');
-    const creds = decryptJson<AliexpressCredentials>(Buffer.from(conn.encryptedCredentials));
-    const list = await getAliexpressAdapter().fetchByUrls(creds, [url]);
-    return list[0] ?? null;
+    if (conn?.encryptedCredentials) {
+      try {
+        const creds = decryptJson<AliexpressCredentials>(Buffer.from(conn.encryptedCredentials));
+        const list = await getAliexpressAdapter().fetchByUrls(creds, [url]);
+        if (list[0]) return list[0];
+      } catch (err) {
+        log.warn({ err, url }, 'Falha na API oficial do AliExpress; tentando fallback por raspagem');
+      }
+    }
+    return await scrapeAliexpress(url);
   }
   const creds = await loadFetchCredentials(tenantId, kind);
   const list = await getTagAdapter(kind).fetchByUrls(creds, [url]);
@@ -116,17 +123,29 @@ export async function enrichProduct(
       });
     }
 
+    const hasCustomMeta = product.title !== 'Importando…' && Number(product.price) > 0;
+
     await prisma.product.updateMany({
       where: { id: productId, tenantId },
       data: {
-        title: scraped.title,
-        price: scraped.price,
-        originalPrice: scraped.originalPrice ?? null,
-        discountPct: scraped.discountPct ?? null,
-        images: scraped.images,
-        shipping: scraped.shipping,
-        couponCode: scraped.couponCode ?? null,
-        couponValue: scraped.couponValue ?? null,
+        title: hasCustomMeta ? product.title : scraped.title,
+        price: hasCustomMeta ? product.price : scraped.price,
+        originalPrice:
+          hasCustomMeta && product.originalPrice !== null
+            ? product.originalPrice
+            : (scraped.originalPrice ?? null),
+        discountPct:
+          hasCustomMeta && product.discountPct !== null
+            ? product.discountPct
+            : (scraped.discountPct ?? null),
+        images: product.images.length > 0 ? product.images : scraped.images,
+        shipping: product.shipping !== 'UNKNOWN' ? product.shipping : scraped.shipping,
+        couponCode:
+          hasCustomMeta && product.couponCode ? product.couponCode : (scraped.couponCode ?? null),
+        couponValue:
+          hasCustomMeta && product.couponValue !== null
+            ? product.couponValue
+            : (scraped.couponValue ?? null),
         flashSaleEndsAt: scraped.flashSaleEndsAt ? new Date(scraped.flashSaleEndsAt) : null,
         raw: scraped.raw as object,
       },

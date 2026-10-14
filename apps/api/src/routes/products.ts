@@ -42,6 +42,7 @@ import { mapMlListingError, mlListingDeps, toMlListingSource } from '../lib/ml-l
 import { toApiProduct, upsertProducts } from '../lib/products';
 import { getQueue } from '../lib/redis';
 import { searchAwinCatalog, fetchAwinCatalogByUrls } from '../lib/awin-catalog';
+import { parseSpreadsheetBuffer, parseSpreadsheetText } from '../lib/spreadsheet';
 
 const idsQuery = z.object({ ids: z.string().min(1) });
 
@@ -222,28 +223,37 @@ export async function productsRoutes(app: FastifyInstance) {
   });
 
   app.post('/products/import', async (req) => {
-    let urls: string[];
+    let urls: string[] = [];
     let itemsWithMeta: ProductsImportItem[] = [];
+
     if (req.isMultipart()) {
       const file = await req.file();
-      if (!file) throw ApiError.validation('Arquivo CSV ausente');
-      const text = (await file.toBuffer()).toString('utf8');
-      const records = parse(text, { columns: true, skip_empty_lines: true, trim: true }) as {
-        url?: string;
-      }[];
-      urls = records.map((r) => r.url ?? '').filter(Boolean);
-      if (urls.length === 0) throw ApiError.validation('CSV sem coluna url');
+      if (!file) throw ApiError.validation('Arquivo ausente');
+      const buffer = await file.toBuffer();
+      const parsedItems = parseSpreadsheetBuffer(buffer);
+      if (parsedItems.length === 0) {
+        throw ApiError.validation('Nenhum link ou produto encontrado na planilha');
+      }
+      itemsWithMeta = parsedItems.filter((i) => i.title !== undefined);
+      urls = parsedItems.filter((i) => i.title === undefined).map((i) => i.url);
     } else {
       const body = productsImportSchema.parse(req.body);
-      // Itens com título já vieram com metadados extraídos pela extensão direto do DOM da
-      // página (busca/listagem) — pulamos o scraping do backend, que para ML/Magalu esbarra
-      // em bloqueio anti-bot e não retorna dados reais. Itens sem título caem no fluxo normal.
-      const metaItems = body.items ?? [];
-      itemsWithMeta = metaItems.filter((i) => i.title !== undefined);
-      urls = [
-        ...(body.urls ?? []),
-        ...metaItems.filter((i) => i.title === undefined).map((i) => i.url),
-      ];
+      if (body.text) {
+        const parsedItems = parseSpreadsheetText(body.text);
+        if (parsedItems.length > 0) {
+          itemsWithMeta = parsedItems.filter((i) => i.title !== undefined);
+          urls = parsedItems.filter((i) => i.title === undefined).map((i) => i.url);
+        } else {
+          urls = [...new Set(body.text.match(/https?:\/\/[^\s"'<>]+/g) ?? [])];
+        }
+      } else {
+        const metaItems = body.items ?? [];
+        itemsWithMeta = metaItems.filter((i) => i.title !== undefined);
+        urls = [
+          ...(body.urls ?? []),
+          ...metaItems.filter((i) => i.title === undefined).map((i) => i.url),
+        ];
+      }
     }
 
     const unsupported: { url: string; reason: string }[] = [];
@@ -284,8 +294,28 @@ export async function productsRoutes(app: FastifyInstance) {
         shipping: item.shipping ?? 'UNKNOWN',
         couponCode: item.couponCode,
         originalUrl: item.url,
-        raw: { source: 'extension-listing-capture', ...item },
+        raw: { source: 'spreadsheet-import', ...item },
       });
+    }
+
+    // Se temos itens de AliExpress sem imagens (como os vindos de planilha),
+    // tenta puxar as fotos pela API oficial rápida se credenciais estiverem conectadas.
+    const aliNoImages = allFound.filter((p) => p.source === 'ALIEXPRESS' && p.images.length === 0);
+    if (aliNoImages.length > 0) {
+      try {
+        const aliCreds = await loadAliexpressCredentials(req.db);
+        const aliFound = await getAliexpressAdapter().fetchByUrls(
+          aliCreds,
+          aliNoImages.map((p) => p.originalUrl),
+        );
+        const imgMap = new Map(aliFound.map((f) => [f.externalId, f.images]));
+        for (const p of aliNoImages) {
+          const imgs = p.externalId ? imgMap.get(p.externalId) : undefined;
+          if (imgs && imgs.length > 0) p.images = imgs;
+        }
+      } catch {
+        // Sem credenciais do AliExpress ou erro de rede; o worker product-enrich cuidará disso
+      }
     }
 
     // Shopee e AliExpress usam APIs oficiais (rápidas) e respondem de forma síncrona.
@@ -354,16 +384,37 @@ export async function productsRoutes(app: FastifyInstance) {
       const rows = await upsertProducts(req.db, req.tenantId, [...allFound, ...stubs]);
       products = rows.map(toApiProduct);
       const stubRows = rows.slice(allFound.length);
-      if (stubRows.length) {
+
+      // Produtos que precisam de enriquecimento de imagem em background:
+      // 1. stubs (ML/Amazon sem dados)
+      // 2. produtos de planilha que ainda estão com imagens vazias (ex: AliExpress sem API oficial)
+      const needEnrichRows = rows
+        .slice(0, allFound.length)
+        .filter((r) => r.images.length === 0 && r.source !== 'MANUAL');
+
+      const allEnrichItems = [
+        ...stubRows.map((row, i) => ({
+          row,
+          url: queuedUrls[i]!.url,
+          kind: queuedUrls[i]!.kind as ProductEnrichJob['marketplaceKind'],
+        })),
+        ...needEnrichRows.map((row) => ({
+          row,
+          url: row.originalUrl,
+          kind: row.source as ProductEnrichJob['marketplaceKind'],
+        })),
+      ];
+
+      if (allEnrichItems.length) {
         const queue = getQueue<ProductEnrichJob>(QUEUE_PRODUCT_ENRICH);
         await queue.addBulk(
-          stubRows.map((row, i) => ({
+          allEnrichItems.map(({ row, url, kind }) => ({
             name: 'enrich',
             data: {
               tenantId: req.tenantId,
               productId: row.id,
-              url: queuedUrls[i]!.url,
-              marketplaceKind: queuedUrls[i]!.kind,
+              url,
+              marketplaceKind: kind,
             },
             opts: {
               jobId: `enrich-${row.id}`,

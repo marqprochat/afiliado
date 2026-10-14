@@ -12,18 +12,18 @@ export type ImportResult = {
   unsupported: { url: string; reason: string }[];
 };
 
-type ImportBody = { urls: string[] } | { items: ProductsImportItem[] } | FormData;
+type ImportBody =
+  | { urls: string[] }
+  | { items: ProductsImportItem[] }
+  | { text: string }
+  | FormData;
 
 /** Aceita tanto o JSON estruturado copiado pela extensão (título/preço/imagem já lidos do
- *  card da página) quanto texto solto com URLs — o que a extensão copia quando consegue ler
- *  metadados do card vira `items`, evitando depender do backend raspar cada URL depois.
- *  Itens sem preço válido (0, ausente ou não numérico) são descartados: a extensão já não
- *  deveria copiá-los, mas isso cobre colagens manuais ou de uma versão antiga dela — sem
- *  preço, o card vira lixo na lista de importação (`droppedNoPrice` reporta quantos foram
- *  descartados pra exibir um aviso). */
+ *  card da página) quanto texto solto ou linhas de planilha — o backend faz o parse inteligente
+ *  de colunas e URLs. */
 function parsePastedText(text: string): {
-  urls?: string[];
   items?: ProductsImportItem[];
+  textPayload?: string;
   droppedNoPrice: number;
 } {
   try {
@@ -39,10 +39,9 @@ function parsePastedText(text: string): {
       return { items, droppedNoPrice: all.length - items.length };
     }
   } catch {
-    // não é JSON — segue para extração de URLs em texto livre
+    // não é JSON — segue como texto de planilha / URLs
   }
-  const urls = [...new Set(text.match(/https?:\/\/[^\s"'<>]+/g) ?? [])];
-  return { urls, droppedNoPrice: 0 };
+  return { textPayload: text.trim(), droppedNoPrice: 0 };
 }
 
 export function ImportPanel({ onImported }: { onImported: (r: ImportResult) => void }) {
@@ -63,13 +62,13 @@ export function ImportPanel({ onImported }: { onImported: (r: ImportResult) => v
   );
 
   function handleImportClick() {
-    const { urls, items, droppedNoPrice: dropped } = parsePastedText(text);
+    const { items, textPayload, droppedNoPrice: dropped } = parsePastedText(text);
     setDroppedNoPrice(dropped);
     if (items) {
       if (items.length === 0) return;
       imp.mutate({ items });
-    } else if (urls) {
-      imp.mutate({ urls });
+    } else if (textPayload) {
+      imp.mutate({ text: textPayload });
     }
   }
 
@@ -82,12 +81,9 @@ export function ImportPanel({ onImported }: { onImported: (r: ImportResult) => v
         className="h-[138px] max-h-[138px] resize-none overflow-y-auto [field-sizing:fixed]"
         style={{ fieldSizing: 'fixed' }}
         placeholder={
-          'Cole uma ou mais URLs (uma por linha, ou use o botão 🔗 Copiar links\n' +
-          'da extensão Afilados Connect numa página de busca do marketplace):\n' +
-          'https://shopee.com.br/...\n' +
-          'https://produto.mercadolivre.com.br/MLB-...\n' +
-          'https://www.amazon.com.br/dp/...\n' +
-          'https://www.magazineluiza.com.br/p/...'
+          'Cole uma ou mais URLs ou copie e cole as linhas da sua planilha:\n' +
+          'SKU,ID ALIE,Nome do Item,Preço DE,Código Cupom,Preço c/ Cupom,Link...\n\n' +
+          'Ou envie o arquivo Excel (.xlsx, .xls) ou CSV diretamente pelo botão abaixo.'
         }
       />
       <div className="flex items-center gap-3">
@@ -96,13 +92,13 @@ export function ImportPanel({ onImported }: { onImported: (r: ImportResult) => v
           disabled={imp.isPending || !text.trim()}
           onClick={handleImportClick}
         >
-          Importar links
+          {imp.isPending ? 'Importando…' : 'Importar produtos'}
         </Button>
-        <label className="cursor-pointer text-sm text-brand underline">
-          ou enviar CSV (coluna <code>url</code>)
+        <label className="cursor-pointer text-sm text-brand underline hover:text-brand/80">
+          ou enviar Planilha (.xlsx, .xls, .csv)
           <input
             type="file"
-            accept=".csv,text/csv"
+            accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];

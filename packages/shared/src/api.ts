@@ -148,10 +148,17 @@ export const productsImportSchema = z
   .object({
     urls: z.array(z.string().url()).min(1).max(200).optional(),
     items: z.array(productsImportItemSchema).min(1).max(200).optional(),
+    text: z.string().optional(),
   })
-  .refine((v) => (v.urls && v.urls.length > 0) || (v.items && v.items.length > 0), {
-    message: 'Informe urls ou items',
-  });
+  .refine(
+    (v) =>
+      (v.urls && v.urls.length > 0) ||
+      (v.items && v.items.length > 0) ||
+      (v.text && v.text.trim().length > 0),
+    {
+      message: 'Informe urls, items ou text',
+    },
+  );
 export const queueAddSchema = z.object({ productIds: z.array(z.string().min(1)).min(1) });
 export const queueSelectSchema = z.object({
   ids: z.array(z.string().min(1)),
