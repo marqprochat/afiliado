@@ -11,11 +11,28 @@ export function toApiCouponCheck(check: CouponCheck) {
   };
 }
 
+const STORE_LABELS: Record<string, string> = {
+  SHOPEE: 'Shopee',
+  MERCADOLIVRE: 'Mercado Livre',
+  AMAZON: 'Amazon',
+  MAGALU: 'Magalu',
+  ALIEXPRESS: 'AliExpress',
+  AWIN: 'Awin',
+};
+
+export function resolveCouponStoreName(store: string, advertiserName?: string | null): string {
+  if (store.toUpperCase() === 'AWIN' && advertiserName?.trim()) {
+    return advertiserName.trim();
+  }
+  return advertiserName?.trim() || STORE_LABELS[store.toUpperCase()] || store;
+}
+
 export function toApiCoupon(c: Coupon & { checks?: CouponCheck[] }) {
   return {
     id: c.id,
     tenantId: c.tenantId,
     store: c.store,
+    storeName: resolveCouponStoreName(c.store, c.advertiserName),
     scope: c.scope,
     advertiserName: c.advertiserName,
     code: c.code,

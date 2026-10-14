@@ -34,7 +34,9 @@ export function CouponChecksDrawer({ coupon, onClose }: Props) {
             <span className="font-mono text-primary font-bold">{coupon?.code}</span>
           </DrawerTitle>
           <DrawerDescription>
-            {coupon?.store} — {coupon?.description}
+            {(coupon?.store === 'AWIN' && coupon?.advertiserName
+              ? `${coupon.advertiserName} (Awin)`
+              : (coupon?.advertiserName || coupon?.store))} — {coupon?.description}
           </DrawerDescription>
         </DrawerHeader>
 

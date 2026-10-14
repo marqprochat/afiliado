@@ -72,6 +72,7 @@ export async function templatesRoutes(app: FastifyInstance) {
         if (!coupon) throw ApiError.notFound('Cupom não encontrado');
         data = {
           store: coupon.store,
+          advertiserName: coupon.advertiserName,
           code: coupon.code,
           description: coupon.description,
           expiresAt: coupon.expiresAt?.toISOString() ?? null,

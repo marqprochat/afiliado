@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { copyToClipboard } from '@/lib/clipboard';
 import { Button } from '@/components/ui/button';
@@ -58,7 +58,7 @@ const ORIGIN_LABELS: Record<string, string> = {
 
 export default function CuponsPage() {
   const qc = useQueryClient();
-  const [storeFilter, setStoreFilter] = useState<MarketplaceKind | 'ALL'>('ALL');
+  const [storeFilter, setStoreFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [originFilter, setOriginFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -81,6 +81,14 @@ export default function CuponsPage() {
     q: searchQuery.trim() || undefined,
     includeExpired,
   });
+
+  const advertiserOptions = useMemo(() => {
+    const names = new Set<string>();
+    (coupons ?? []).forEach((c) => {
+      if (c.advertiserName?.trim()) names.add(c.advertiserName.trim());
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [coupons]);
 
   const syncMutation = useMutation({
     mutationFn: async () => {
@@ -285,7 +293,7 @@ export default function CuponsPage() {
         <div>
           <Select
             value={storeFilter}
-            onValueChange={(v) => setStoreFilter(v as MarketplaceKind | 'ALL')}
+            onValueChange={(v) => setStoreFilter(v ?? 'ALL')}
           >
             <SelectTrigger className="h-9 text-xs">
               <SelectValue placeholder="Todas as Lojas" />
@@ -294,9 +302,21 @@ export default function CuponsPage() {
               <SelectItem value="ALL">Todas as Lojas</SelectItem>
               {MARKETPLACE_KINDS.map((k) => (
                 <SelectItem key={k} value={k}>
-                  {STORE_LABELS[k]}
+                  {k === 'AWIN' ? 'Rede Awin (todas)' : STORE_LABELS[k]}
                 </SelectItem>
               ))}
+              {advertiserOptions.length > 0 && (
+                <>
+                  <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase border-t border-border mt-1 pt-1">
+                    Lojas Awin
+                  </div>
+                  {advertiserOptions.map((adv) => (
+                    <SelectItem key={adv} value={adv}>
+                      {adv}
+                    </SelectItem>
+                  ))}
+                </>
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -389,11 +409,23 @@ export default function CuponsPage() {
                   </TableCell>
                   <TableCell className="font-medium whitespace-nowrap">
                     <div>
-                      <span>{STORE_LABELS[c.store] ?? c.store}</span>
-                      {c.advertiserName && (
-                        <div className="text-xs text-muted-foreground truncate max-w-[120px]">
-                          {c.advertiserName}
+                      <div className="font-semibold text-foreground">
+                        {c.store === 'AWIN' && c.advertiserName
+                          ? c.advertiserName
+                          : (c.advertiserName || STORE_LABELS[c.store] || c.store)}
+                      </div>
+                      {c.store === 'AWIN' ? (
+                        <div className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-muted text-muted-foreground font-normal">
+                            via Awin
+                          </span>
                         </div>
+                      ) : (
+                        c.advertiserName && (
+                          <div className="text-xs text-muted-foreground truncate max-w-[120px]">
+                            {c.advertiserName}
+                          </div>
+                        )
                       )}
                     </div>
                   </TableCell>

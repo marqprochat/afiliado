@@ -27,4 +27,20 @@ describe('renderCouponTemplate', () => {
     );
     expect(out).toBe('Validade: sem validade definida');
   });
+
+  it('reconhece o anunciante como loja para cupons da Awin', () => {
+    const body = '🎟️ Cupom da {loja}: *{codigo}*';
+    const out = renderCouponTemplate(
+      body,
+      {
+        store: 'AWIN',
+        advertiserName: 'Kabum BR',
+        code: 'CAIXADONEY',
+        description: 'Desconto em periféricos',
+        expiresAt: null,
+      },
+      { now: '2026-09-17T12:00:00.000Z' },
+    );
+    expect(out).toBe('🎟️ Cupom da Kabum BR: *CAIXADONEY*');
+  });
 });

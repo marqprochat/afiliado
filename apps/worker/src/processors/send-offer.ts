@@ -169,6 +169,7 @@ export async function sendOffer(
         batch.template.body,
         {
           store: coupon.store,
+          advertiserName: coupon.advertiserName,
           code: coupon.code,
           description: coupon.description,
           expiresAt: coupon.expiresAt?.toISOString() ?? null,

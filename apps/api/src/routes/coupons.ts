@@ -5,6 +5,8 @@ import { isEligibleCoupon, parseCouponsFromText } from '@afilados/core';
 import type { AliexpressCredentials, AwinCredentials } from '@afilados/marketplaces';
 import {
   ApiError,
+  MARKETPLACE_KINDS,
+  type MarketplaceKind,
   couponBulkSchema,
   couponDispatchSchema,
   couponInputSchema,
@@ -42,7 +44,16 @@ export async function couponsRoutes(app: FastifyInstance) {
   app.get('/coupons', async (req) => {
     const q = couponListQuerySchema.parse(req.query);
     const where: Prisma.CouponWhereInput = {};
-    if (q.store) where.store = q.store;
+    if (q.store) {
+      if ((MARKETPLACE_KINDS as readonly string[]).includes(q.store)) {
+        where.store = q.store as MarketplaceKind;
+      } else {
+        where.advertiserName = { contains: q.store, mode: 'insensitive' };
+      }
+    }
+    if (q.advertiser) {
+      where.advertiserName = { contains: q.advertiser, mode: 'insensitive' };
+    }
     if (q.origin) where.origin = q.origin;
     if (q.status) {
       where.status = q.status;

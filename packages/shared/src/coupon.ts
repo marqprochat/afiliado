@@ -41,7 +41,8 @@ export const couponInputSchema = z.object({
 export type CouponInput = z.infer<typeof couponInputSchema>;
 
 export const couponListQuerySchema = z.object({
-  store: z.enum(MARKETPLACE_KINDS).optional(),
+  store: z.string().max(60).optional(),
+  advertiser: z.string().max(120).optional(),
   status: z.enum(COUPON_STATUSES).optional(),
   origin: z.enum(COUPON_ORIGINS).optional(),
   q: z.string().max(100).optional(),

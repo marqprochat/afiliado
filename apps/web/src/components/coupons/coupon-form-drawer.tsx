@@ -185,14 +185,17 @@ export function CouponFormDrawer({ open, coupon, onClose }: Props) {
 
             {store === 'AWIN' && (
               <div>
-                <Label htmlFor="advertiserName">Anunciante (Awin)</Label>
+                <Label htmlFor="advertiserName">Loja / Anunciante Real (Awin)</Label>
                 <Input
                   id="advertiserName"
-                  placeholder="Ex: Casas Bahia, Nike..."
+                  placeholder="Ex: Kabum BR, Fastshop BR, AliExpress..."
                   className="mt-1"
                   value={advertiserName}
                   onChange={(e) => setAdvertiserName(e.target.value)}
                 />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Awin é a rede afiliada. O cupom será identificado e divulgado com o nome desta loja.
+                </p>
               </div>
             )}
 

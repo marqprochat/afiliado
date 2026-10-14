@@ -154,6 +154,7 @@ export interface ApiCoupon {
   id: string;
   tenantId: string;
   store: MarketplaceKind;
+  storeName?: string;
   scope: string;
   advertiserName: string | null;
   code: string;
@@ -176,6 +177,18 @@ export interface ApiCoupon {
   createdAt: string;
   updatedAt: string;
   checks?: ApiCouponCheck[];
+}
+
+export function getCouponStoreName(c: {
+  store: MarketplaceKind | string;
+  advertiserName?: string | null;
+  storeName?: string;
+}): string {
+  if (c.storeName?.trim()) return c.storeName.trim();
+  if (c.store === 'AWIN' && c.advertiserName?.trim()) {
+    return c.advertiserName.trim();
+  }
+  return c.advertiserName?.trim() || c.store;
 }
 
 export interface CouponCandidateItem {

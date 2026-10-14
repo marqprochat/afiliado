@@ -153,7 +153,8 @@ export const useAutomationQueue = (ruleId: string | null) =>
   });
 
 export const useCoupons = (params?: {
-  store?: MarketplaceKind;
+  store?: string;
+  advertiser?: string;
   status?: string;
   origin?: string;
   q?: string;

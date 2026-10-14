@@ -311,7 +311,11 @@ export default function ManualSendPage() {
                       className="w-full rounded-md border border-border px-2 py-1.5 text-left text-sm hover:border-brand"
                     >
                       <span className="font-mono font-bold text-primary">{c.code}</span>
-                      <span className="ml-2 text-xs text-muted-foreground">{c.store}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {c.store === 'AWIN' && c.advertiserName
+                          ? `${c.advertiserName} (Awin)`
+                          : (c.advertiserName || c.store)}
+                      </span>
                       <div className="truncate text-xs text-muted-foreground">{c.description}</div>
                     </button>
                   </li>

@@ -57,15 +57,32 @@ export function renderTemplate(body: string, product: ProductData, ctx: Template
 
 export interface CouponData {
   store: string;
+  advertiserName?: string | null;
   code: string;
   description: string;
   expiresAt: string | null;
 }
 
+const STORE_LABELS: Record<string, string> = {
+  SHOPEE: 'Shopee',
+  MERCADOLIVRE: 'Mercado Livre',
+  AMAZON: 'Amazon',
+  MAGALU: 'Magalu',
+  ALIEXPRESS: 'AliExpress',
+  AWIN: 'Awin',
+};
+
+export function resolveCouponStoreName(c: { store: string; advertiserName?: string | null }): string {
+  if (c.advertiserName?.trim()) {
+    return c.advertiserName.trim();
+  }
+  return STORE_LABELS[c.store.toUpperCase()] ?? c.store;
+}
+
 function buildCouponVars(c: CouponData): Record<string, string> {
   return {
     codigo: c.code,
-    loja: c.store,
+    loja: resolveCouponStoreName(c),
     descricao: c.description,
     validade: c.expiresAt
       ? DateTime.fromISO(c.expiresAt).toFormat('dd/MM/yyyy')
