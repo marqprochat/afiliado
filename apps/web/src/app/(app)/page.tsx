@@ -42,10 +42,7 @@ export default function OverviewPage() {
           </Link>
         </Card>
         <Card title="Fila de produtos">
-          <p className="text-3xl font-bold">
-            {data.queue.count}
-            <span className="text-base text-muted-foreground"> / {data.queue.limit}</span>
-          </p>
+          <p className="text-3xl font-bold">{data.queue.count}</p>
           <Link href="/produtos" className="text-xs text-brand underline">
             buscar produtos
           </Link>

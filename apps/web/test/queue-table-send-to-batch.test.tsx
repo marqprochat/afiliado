@@ -6,7 +6,6 @@ import type { QueueResponse } from '@/lib/types';
 describe('QueueTable - Enviar para lote', () => {
   const makeQueueData = (selected = false): QueueResponse => ({
     count: 2,
-    limit: 500,
     items: [
       {
         id: 'q1',

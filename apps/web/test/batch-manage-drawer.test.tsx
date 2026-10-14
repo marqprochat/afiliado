@@ -58,6 +58,21 @@ describe('BatchManageDrawer', () => {
     expect(screen.getAllByText('Item removido')).toHaveLength(1);
   });
 
+  it('"Limpar enviados" apaga os itens enviados do lote', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <BatchManageDrawer batchId="b1" onClose={() => {}} />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: /limpar enviados \(3\)/i }));
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith('/batches/b1/items?status=SENT', {
+        method: 'DELETE',
+      }),
+    );
+  });
+
   describe('lote pausado', () => {
     const paused = {
       ...batch,

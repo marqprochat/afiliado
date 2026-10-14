@@ -137,7 +137,7 @@ describe('products + queue', () => {
       .items.filter((i: { productId: string }) => ids.includes(i.productId))
       .map((i: { status: string }) => i.status);
     expect(statuses).toEqual(['PENDING_ENRICH', 'PENDING_ENRICH']);
-    // limpa a fila para não interferir no teste de limite abaixo
+    // limpa a fila para não interferir no teste de fila abaixo
     for (const i of q.json().items) {
       await app.inject({ method: 'DELETE', url: `/api/v1/queue/${i.id}`, headers: { cookie } });
     }
@@ -176,13 +176,7 @@ describe('products + queue', () => {
     expect(r.json().error).toEqual({ code: 'MARKETPLACE_ERROR', message: 'api down' });
     spy.mockRestore();
   });
-  it('fila: adiciona, lista, respeita limite, seleciona, remove', async () => {
-    await app.inject({
-      method: 'PUT',
-      url: '/api/v1/settings',
-      headers: { cookie },
-      payload: { queueLimit: 2 },
-    });
+  it('fila: adiciona, lista, sem limite, seleciona, remove', async () => {
     const add = await app.inject({
       method: 'POST',
       url: '/api/v1/queue',
@@ -201,16 +195,17 @@ describe('products + queue', () => {
     const third = await prisma.product.findFirstOrThrow({
       where: { tenantId: t.tenantId, id: { notIn: ids } },
     });
-    const full = await app.inject({
+    const more = await app.inject({
       method: 'POST',
       url: '/api/v1/queue',
       headers: { cookie },
       payload: { productIds: [third.id] },
     });
-    expect(full.statusCode).toBe(400);
-    expect(full.json().error.code).toBe('QUEUE_FULL');
+    expect(more.statusCode).toBe(201);
+    expect(more.json()).toEqual({ added: 1, count: 3 });
     const list = await app.inject({ method: 'GET', url: '/api/v1/queue', headers: { cookie } });
-    expect(list.json()).toMatchObject({ limit: 2, count: 2 });
+    expect(list.json()).toMatchObject({ count: 3 });
+    expect(list.json().limit).toBeUndefined();
     expect(list.json().items[0].product.title).toBeTruthy();
     const qid = list.json().items[0].id;
     const sel = await app.inject({
@@ -228,7 +223,7 @@ describe('products + queue', () => {
     expect(del.statusCode).toBe(204);
     expect(
       (await app.inject({ method: 'GET', url: '/api/v1/queue', headers: { cookie } })).json().count,
-    ).toBe(1);
+    ).toBe(2);
   });
 });
 

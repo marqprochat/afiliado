@@ -12,7 +12,6 @@ function renderWithClient(ui: React.ReactElement) {
 
 const settings = {
   window: { startTime: '00:00', endTime: '23:59', timezone: 'America/Sao_Paulo', enabled: true },
-  queueLimit: 500,
   globalRateLimitPerMin: 6,
   subIdPattern: 'x',
 };

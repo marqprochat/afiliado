@@ -45,7 +45,7 @@ export function QueueTable({
           className="text-xs text-muted-foreground"
           title="Inclui produtos que já estão em lotes"
         >
-          fila {data.count}/{data.limit}
+          fila {data.count}
         </span>
         <Button
           size="sm"

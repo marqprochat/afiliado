@@ -205,7 +205,71 @@ describe('batches', () => {
   });
   it('overview agrega estado', async () => {
     const r = await app.inject({ method: 'GET', url: '/api/v1/overview', headers: { cookie } });
-    expect(r.json()).toMatchObject({ shopee: 'UNCONFIGURED', queue: { count: 2, limit: 500 } });
+    expect(r.json()).toMatchObject({ shopee: 'UNCONFIGURED', queue: { count: 2 } });
+    expect(r.json().queue.limit).toBeUndefined();
     expect(r.json().wa.some((s: { id: string }) => s.id === sessionId)).toBe(true);
+  });
+  it('limpar enviados apaga só os itens SENT do lote, sem pausar, e tira o produto da triagem', async () => {
+    // nenhum outro lote ativo segurando os produtos
+    await prisma.batch.updateMany({
+      where: { tenantId: t.tenantId },
+      data: { status: 'CANCELLED' },
+    });
+    const [sentP, pendingP] = await prisma.queueItem.findMany({
+      where: { tenantId: t.tenantId },
+      orderBy: { addedAt: 'asc' },
+    });
+    await prisma.queueItem.updateMany({ where: { id: sentP!.id }, data: { status: 'SENT' } });
+    const b = await prisma.batch.create({
+      data: {
+        tenantId: t.tenantId,
+        sessionId,
+        templateId,
+        name: 'Lote limpar',
+        groupJids: ['g1@g.us'],
+        intervalMin: 5,
+        status: 'RUNNING',
+        items: {
+          create: [
+            { productId: sentP!.productId, order: 0, runAt: new Date(), status: 'SENT' },
+            { productId: pendingP!.productId, order: 1, runAt: new Date(), status: 'PENDING' },
+          ],
+        },
+      },
+      include: { items: true },
+    });
+    const sentItem = b.items.find((i) => i.status === 'SENT')!;
+    await prisma.sendLog.create({
+      data: { tenantId: t.tenantId, batchItemId: sentItem.id, groupJid: 'g1@g.us', status: 'SENT' },
+    });
+
+    const bad = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/batches/${b.id}/items`,
+      headers: { cookie },
+    });
+    expect(bad.statusCode).toBe(400);
+
+    const r = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/batches/${b.id}/items?status=SENT`,
+      headers: { cookie },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ removed: 1 });
+    const left = await prisma.batchItem.findMany({ where: { batchId: b.id } });
+    expect(left.map((i) => i.status)).toEqual(['PENDING']);
+    // histórico de envio preservado
+    expect(await prisma.sendLog.count({ where: { tenantId: t.tenantId } })).toBe(1);
+    // o produto enviado sai da triagem; o pendente continua na fila
+    const queue = await prisma.queueItem.findMany({ where: { tenantId: t.tenantId } });
+    expect(queue.map((q) => q.id)).toEqual([pendingP!.id]);
+
+    const again = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/batches/${b.id}/items?status=SENT`,
+      headers: { cookie },
+    });
+    expect(again.json()).toEqual({ removed: 0 });
   });
 });

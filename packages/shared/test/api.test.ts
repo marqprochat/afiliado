@@ -38,12 +38,12 @@ describe('api schemas', () => {
   });
   it('settingsUpdate valida HH:mm', () => {
     expect(() => settingsUpdateSchema.parse({ window: { startTime: '7:30' } })).toThrow();
-    expect(settingsUpdateSchema.parse({ window: { startTime: '07:30' }, queueLimit: 100 })).toEqual(
-      {
-        window: { startTime: '07:30' },
-        queueLimit: 100,
-      },
-    );
+    expect(
+      settingsUpdateSchema.parse({ window: { startTime: '07:30' }, globalRateLimitPerMin: 10 }),
+    ).toEqual({
+      window: { startTime: '07:30' },
+      globalRateLimitPerMin: 10,
+    });
   });
   it('waConnect exige phone no modo pair', () => {
     expect(() => waConnectSchema.parse({ mode: 'pair' })).toThrow();
@@ -96,7 +96,9 @@ describe('api schemas', () => {
     });
     it('rejeita mais de 20 lotes e posição inválida', () => {
       const many = Array.from({ length: 21 }, (_, i) => `b${i}`);
-      expect(batchShareSchema.safeParse({ productIds: ['p1'], batchIds: many }).success).toBe(false);
+      expect(batchShareSchema.safeParse({ productIds: ['p1'], batchIds: many }).success).toBe(
+        false,
+      );
       expect(
         batchShareSchema.safeParse({ productIds: ['p1'], batchIds: ['b1'], position: 'meio' })
           .success,
@@ -104,4 +106,3 @@ describe('api schemas', () => {
     });
   });
 });
-

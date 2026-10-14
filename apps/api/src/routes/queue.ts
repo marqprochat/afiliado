@@ -2,7 +2,6 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError, queueAddSchema, queueSelectSchema } from '@afilados/shared';
 import { requireAuth } from '../plugins/auth';
-import { getSettings } from '../lib/settings';
 import { toApiProduct } from '../lib/products';
 import { enqueueMlLinksPrewarm } from '../lib/ml-links';
 
@@ -20,27 +19,24 @@ export async function queueRoutes(app: FastifyInstance) {
 
   app.get('/queue', async (req) => {
     // A lista mostra só o que ainda não foi para um lote (o resto vive no gerenciador do lote);
-    // `count` segue contando tudo, pois é o que consome o limite da fila.
-    const [items, settings, count] = await Promise.all([
+    // `count` segue contando tudo, inclusive o que já está em lotes.
+    const [items, count] = await Promise.all([
       req.db.queueItem.findMany({
         where: { product: { batchItems: { none: { batch: { status: { not: 'CANCELLED' } } } } } },
         include: { product: true },
         orderBy: { addedAt: 'asc' },
       }),
-      getSettings(req.db),
       req.db.queueItem.count(),
     ]);
     return {
       items: items.map((i) => ({ ...i, product: toApiProduct(i.product) })),
-      limit: settings.queueLimit,
       count,
     };
   });
 
   app.post('/queue', async (req, reply) => {
     const { productIds } = queueAddSchema.parse(req.body);
-    const [settings, count, existing, products] = await Promise.all([
-      getSettings(req.db),
+    const [count, existing, products] = await Promise.all([
       req.db.queueItem.count(),
       req.db.queueItem.findMany({
         where: { productId: { in: productIds } },
@@ -54,9 +50,6 @@ export async function queueRoutes(app: FastifyInstance) {
     const have = new Set(existing.map((e) => e.productId));
     const validRows = products.filter((p) => !have.has(p.id));
     const valid = validRows.map((p) => p.id);
-    if (count + valid.length > settings.queueLimit) {
-      throw new ApiError('QUEUE_FULL', `Fila cheia (${count}/${settings.queueLimit})`, 400);
-    }
     if (valid.length) {
       await req.db.queueItem.createMany({
         // @ts-expect-error tenantId é injetado pela extensão forTenant

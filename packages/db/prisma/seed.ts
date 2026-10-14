@@ -48,7 +48,6 @@ async function main() {
   }
 
   const settings: Record<string, unknown> = {
-    queueLimit: 500,
     globalRateLimitPerMin: 6,
     subIdPattern: '{yyyyMMdd}-{batchId}',
   };
