@@ -71,17 +71,13 @@ beforeAll(async () => {
     })
   ).id;
   const otherSessionId = (
-    await prisma.waSession.create({
-      data: { tenantId: otherTenantId, label: 's2', status: 'CONNECTED' },
-    })
+    await prisma.waSession.create({ data: { tenantId: otherTenantId, label: 's2', status: 'CONNECTED' } })
   ).id;
   const otherBatch = await prisma.batch.create({
     data: {
       tenantId: otherTenantId,
       sessionId: otherSessionId,
-      templateId: (
-        await prisma.template.create({ data: { tenantId: otherTenantId, name: 't2', body: 'x' } })
-      ).id,
+      templateId: (await prisma.template.create({ data: { tenantId: otherTenantId, name: 't2', body: 'x' } })).id,
       name: 'Batch foreign',
       groupJids: ['g2@g.us'],
       intervalMin: 1,
@@ -110,13 +106,7 @@ describe('sendTelegram com texto livre', () => {
   it('envia só texto quando não há imagem', async () => {
     sendMessage.mockClear();
     sendPhoto.mockClear();
-    await sendTelegram(deps, {
-      tenantId,
-      botId,
-      chatId: '-1',
-      templateId,
-      customText: 'Aviso geral',
-    });
+    await sendTelegram(deps, { tenantId, botId, chatId: '-1', templateId, customText: 'Aviso geral' });
     expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(sendPhoto).not.toHaveBeenCalled();
     expect(sendMessage.mock.calls[0]).toEqual(['-1', expect.stringContaining('Aviso geral')]);
@@ -248,10 +238,7 @@ describe('sendTelegram com texto livre', () => {
     expect(sendPhotoBuffer).not.toHaveBeenCalled();
     expect(sendPhoto).not.toHaveBeenCalled();
     expect(sendMessage).toHaveBeenCalledTimes(1);
-    expect(sendMessage.mock.calls[0]).toEqual([
-      '-100123',
-      expect.stringContaining('Texto sem imagem alheia'),
-    ]);
+    expect(sendMessage.mock.calls[0]).toEqual(['-100123', expect.stringContaining('Texto sem imagem alheia')]);
   });
 
   it('customImageItemId inexistente ou sem bytes: envia apenas texto sem quebrar', async () => {
@@ -269,10 +256,7 @@ describe('sendTelegram com texto livre', () => {
     expect(sendPhotoBuffer).not.toHaveBeenCalled();
     expect(sendPhoto).not.toHaveBeenCalled();
     expect(sendMessage).toHaveBeenCalledTimes(1);
-    expect(sendMessage.mock.calls[0]).toEqual([
-      '-100123',
-      expect.stringContaining('Item que nao existe'),
-    ]);
+    expect(sendMessage.mock.calls[0]).toEqual(['-100123', expect.stringContaining('Item que nao existe')]);
 
     // Item sem bytes
     const textOnlyBatch = await prisma.batch.create({

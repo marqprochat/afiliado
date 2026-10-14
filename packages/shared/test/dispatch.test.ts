@@ -81,15 +81,14 @@ describe('manualSendSchema', () => {
     expect(
       manualSendSchema.safeParse({ text: 'x'.repeat(MANUAL_TEXT_MAX + 1), ...targets }).success,
     ).toBe(false);
-    expect(
-      manualSendSchema.safeParse({ text: 'ok', imageUrl: 'nao-url', ...targets }).success,
-    ).toBe(false);
+    expect(manualSendSchema.safeParse({ text: 'ok', imageUrl: 'nao-url', ...targets }).success).toBe(
+      false,
+    );
   });
 });
 
 describe('manualSendSchema.imageUrl (só http/https)', () => {
-  const parse = (imageUrl: string) =>
-    manualSendSchema.safeParse({ text: 'ok', imageUrl, ...targets }).success;
+  const parse = (imageUrl: string) => manualSendSchema.safeParse({ text: 'ok', imageUrl, ...targets }).success;
   it('aceita https e http', () => {
     expect(parse('https://cdn.example.com/a.jpg')).toBe(true);
     expect(parse('http://cdn.example.com/a.jpg')).toBe(true);
@@ -102,15 +101,9 @@ describe('manualSendSchema.imageUrl (só http/https)', () => {
 });
 
 describe('manualSendSchema: upload de arquivo de imagem', () => {
-  const validJpegBase64 = Buffer.from([
-    0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
-  ]).toString('base64');
-  const validPngBase64 = Buffer.from([
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
-  ]).toString('base64');
-  const validWebpBase64 = Buffer.from([
-    0x52, 0x49, 0x46, 0x46, 0x20, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
-  ]).toString('base64');
+  const validJpegBase64 = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]).toString('base64');
+  const validPngBase64 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]).toString('base64');
+  const validWebpBase64 = Buffer.from([0x52, 0x49, 0x46, 0x46, 0x20, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]).toString('base64');
 
   it('aceita imagem válida em JPEG, PNG e WebP', () => {
     expect(

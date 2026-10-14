@@ -249,10 +249,7 @@ describe('sendOffer', () => {
       });
       const enqueued: unknown[] = [];
       const { item } = await makeBatch({ telegramChatIds: [chatId] });
-      await sendOffer(
-        { ...deps, enqueueTelegram: async (job) => void enqueued.push(job) },
-        item.id,
-      );
+      await sendOffer({ ...deps, enqueueTelegram: async (job) => void enqueued.push(job) }, item.id);
       expect(enqueued).toEqual([]);
     } finally {
       await prisma.tenant.deleteMany({ where: { id: otherTenant.id } });
@@ -379,7 +376,9 @@ describe('sendOffer', () => {
     expect(msg).toEqual({ kind: 'text', text: '*Aviso* do dia' });
     const updated = await prisma.batchItem.findUniqueOrThrow({ where: { id: itemId } });
     expect(updated.status).toBe('SENT');
-    expect((await prisma.batch.findUniqueOrThrow({ where: { id: batch.id } })).status).toBe('DONE');
+    expect((await prisma.batch.findUniqueOrThrow({ where: { id: batch.id } })).status).toBe(
+      'DONE',
+    );
   });
 
   it('mensagem livre com imagem vira imagem com legenda', async () => {
@@ -688,32 +687,16 @@ describe('sendOffer', () => {
     it('com IA ativa: o CTA entra na legenda e no job do telegram (gerado 1x por item)', async () => {
       await setAi(ctaStored());
       const bot = await prisma.telegramBot.create({
-        data: {
-          tenantId,
-          label: 'BotCta',
-          encryptedToken: encryptJson({ token: 'x' }),
-          status: 'OK',
-        },
+        data: { tenantId, label: 'BotCta', encryptedToken: encryptJson({ token: 'x' }), status: 'OK' },
       });
       await prisma.telegramChat.create({
-        data: {
-          tenantId,
-          botId: bot.id,
-          chatId: '-100777',
-          title: 'VIP',
-          kind: 'supergroup',
-          botIsAdmin: true,
-        },
+        data: { tenantId, botId: bot.id, chatId: '-100777', title: 'VIP', kind: 'supergroup', botIsAdmin: true },
       });
       const generateCta = vi.fn(async () => 'Nossaaa! Que oportunidade pra comprar esse fone! 🔥');
       const enqueued: { cta?: string }[] = [];
       const { item } = await makeBatch({ templateId: ctaTemplateId, telegramChatIds: ['-100777'] });
       await sendOffer(
-        {
-          ...deps,
-          generateCta: generateCta as never,
-          enqueueTelegram: async (j) => void enqueued.push(j),
-        },
+        { ...deps, generateCta: generateCta as never, enqueueTelegram: async (j) => void enqueued.push(j) },
         item.id,
       );
       expect(generateCta).toHaveBeenCalledTimes(1);
@@ -733,19 +716,13 @@ describe('sendOffer', () => {
       const enqueued: { cta?: string }[] = [];
       const { batch, item } = await makeBatch({ templateId: ctaTemplateId });
       const r = await sendOffer(
-        {
-          ...deps,
-          generateCta: generateCta as never,
-          enqueueTelegram: async (j) => void enqueued.push(j),
-        },
+        { ...deps, generateCta: generateCta as never, enqueueTelegram: async (j) => void enqueued.push(j) },
         item.id,
       );
       expect(r).toEqual({ outcome: 'sent', groups: 2 });
       const first = gateway.sent[0]!.msg;
       expect(first.kind === 'image' && first.caption).toBe('*Fone* R$ 99,90');
-      expect((await prisma.batch.findUniqueOrThrow({ where: { id: batch.id } })).status).toBe(
-        'DONE',
-      );
+      expect((await prisma.batch.findUniqueOrThrow({ where: { id: batch.id } })).status).toBe('DONE');
       expect(enqueued.every((j) => j.cta === undefined)).toBe(true);
     });
 
@@ -768,3 +745,4 @@ describe('sendOffer', () => {
     });
   });
 });
+

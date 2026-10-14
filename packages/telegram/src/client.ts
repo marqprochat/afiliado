@@ -140,11 +140,7 @@ export class TelegramClient {
     const form = new FormData();
     form.append('chat_id', chatId);
     const extension = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
-    form.append(
-      'photo',
-      new Blob([buffer as unknown as BlobPart], { type: mime }),
-      `photo.${extension}`,
-    );
+    form.append('photo', new Blob([buffer as unknown as BlobPart], { type: mime }), `photo.${extension}`);
     if (caption) {
       form.append('caption', caption);
       form.append('parse_mode', 'HTML');
