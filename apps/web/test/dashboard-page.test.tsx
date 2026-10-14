@@ -17,6 +17,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams('period=7d'),
 }));
 vi.mock('@/lib/api', () => ({ apiFetch: vi.fn() }));
+vi.mock('@/components/ui/select', () => import('./select-mock'));
 import { apiFetch } from '@/lib/api';
 const apiFetchMock = vi.mocked(apiFetch);
 
@@ -75,7 +76,7 @@ describe('DashboardClient', () => {
     await screen.findByRole('option', { name: 'Grupo 1' });
     fireEvent.click(screen.getByRole('button', { name: '30 dias' }));
     expect(push).toHaveBeenLastCalledWith('/dashboard', { scroll: false });
-    fireEvent.change(screen.getByLabelText('Grupo'), { target: { value: 'g1@g.us' } });
+    fireEvent.click(screen.getByRole('option', { name: 'Grupo 1' }));
     expect(push).toHaveBeenLastCalledWith('/dashboard?period=7d&groupJid=g1%40g.us', {
       scroll: false,
     });

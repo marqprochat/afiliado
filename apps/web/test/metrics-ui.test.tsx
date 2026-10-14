@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
+
+vi.mock('@/components/ui/select', () => import('./select-mock'));
 import { FilterBar } from '@/components/metrics/filter-bar';
 import { KpiCards } from '@/components/metrics/kpi-cards';
 import { MetricsSection } from '@/components/metrics/metrics-section';
@@ -130,11 +132,10 @@ describe('FilterBar', () => {
 
   it('filtra por grupo e volta para todos', () => {
     const h = setup();
-    const select = screen.getByLabelText('Grupo');
-    expect(within(select).getByRole('option', { name: 'Todos os grupos' })).toBeInTheDocument();
-    fireEvent.change(select, { target: { value: 'g1@g.us' } });
+    expect(screen.getByRole('combobox', { name: 'Grupo' })).toHaveTextContent('Todos os grupos');
+    fireEvent.click(screen.getByRole('option', { name: 'Grupo 1' }));
     expect(h.onGroup).toHaveBeenLastCalledWith('g1@g.us');
-    fireEvent.change(select, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('option', { name: 'Todos os grupos' }));
     expect(h.onGroup).toHaveBeenLastCalledWith(null);
   });
 

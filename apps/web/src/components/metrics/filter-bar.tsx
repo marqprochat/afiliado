@@ -2,7 +2,16 @@
 import { useState } from 'react';
 import type { MetricsGroupOption, MetricsPeriod } from '@afilados/shared';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import type { MetricsFilters } from '@/lib/metrics-filters';
+
+const ALL_GROUPS = '__all__';
 
 type QuickPeriod = Exclude<MetricsPeriod, 'custom'>;
 
@@ -32,6 +41,10 @@ export function FilterBar({
   const [customOpen, setCustomOpen] = useState(filters.period === 'custom');
   const [fromDay, setFromDay] = useState(filters.fromDay);
   const [toDay, setToDay] = useState(filters.toDay);
+  const groupItems = [
+    { value: ALL_GROUPS, label: 'Todos os grupos' },
+    ...groupOptions.map((g) => ({ value: g.jid, label: g.name })),
+  ];
 
   return (
     <div className="sticky top-0 z-10 flex flex-wrap items-end gap-3 border-b border-border bg-background/95 py-3 backdrop-blur">
@@ -90,19 +103,22 @@ export function FilterBar({
         </form>
       )}
 
-      <select
-        aria-label="Grupo"
-        className={`${fieldClass} ml-auto min-w-48`}
-        value={filters.groupJid ?? ''}
-        onChange={(e) => onGroup(e.target.value || null)}
+      <Select
+        value={filters.groupJid ?? ALL_GROUPS}
+        items={groupItems}
+        onValueChange={(v) => onGroup(!v || v === ALL_GROUPS ? null : String(v))}
       >
-        <option value="">Todos os grupos</option>
-        {groupOptions.map((g) => (
-          <option key={g.jid} value={g.jid}>
-            {g.name}
-          </option>
-        ))}
-      </select>
+        <SelectTrigger aria-label="Grupo" className="ml-auto min-w-48">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent alignItemWithTrigger={false}>
+          {groupItems.map((g) => (
+            <SelectItem key={g.value} value={g.value}>
+              {g.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

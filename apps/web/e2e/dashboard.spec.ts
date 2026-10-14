@@ -30,7 +30,8 @@ test('dashboard: abre, troca período e filtra por grupo', async ({ page }) => {
   );
   await expect(page.getByTestId('kpi-joins')).toHaveText('3');
 
-  await page.getByLabel('Grupo', { exact: true }).selectOption({ label: 'Grupo E2E Destino' });
+  await page.getByRole('combobox', { name: 'Grupo', exact: true }).click();
+  await page.getByRole('option', { name: 'Grupo E2E Destino' }).click();
   await expect(page).toHaveURL(/groupJid=e2e-dest%40g\.us/);
   await expect(page.getByTestId('kpi-joins')).toHaveText('0');
 
