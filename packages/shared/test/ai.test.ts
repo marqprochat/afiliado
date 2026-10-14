@@ -25,7 +25,10 @@ describe('ai schemas', () => {
     expect(() => aiSettingsUpdateSchema.parse({ extraInstructions: 'x'.repeat(501) })).toThrow();
   });
   it('teste aceita productId opcional', () => {
-    expect(aiTestSchema.parse({ productId: 'p1', model: 'm' })).toEqual({ productId: 'p1', model: 'm' });
+    expect(aiTestSchema.parse({ productId: 'p1', model: 'm' })).toEqual({
+      productId: 'p1',
+      model: 'm',
+    });
     expect(aiTestSchema.parse({})).toEqual({});
   });
   it('AI_ERROR é um código de erro da API', () => {

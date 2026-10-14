@@ -1,5 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
-import { sanitizeCta, buildCtaPrompt, generateCta, AiCtaError, type AiCtaConfig } from '../src/ai-cta';
+import {
+  sanitizeCta,
+  buildCtaPrompt,
+  generateCta,
+  AiCtaError,
+  type AiCtaConfig,
+} from '../src/ai-cta';
 import { formatBRL } from '../src/money';
 import type { ProductData } from '@afilados/shared';
 
@@ -93,7 +99,10 @@ describe('buildCtaPrompt', () => {
   it('tom e instruções extras entram no system', () => {
     const urgente = buildCtaPrompt(product, { ...config, tone: 'urgente' }).system;
     expect(urgente).toMatch(/urgente/i);
-    const extra = buildCtaPrompt(product, { ...config, extraInstructions: 'Fale como um gamer.' }).system;
+    const extra = buildCtaPrompt(product, {
+      ...config,
+      extraInstructions: 'Fale como um gamer.',
+    }).system;
     expect(extra.trimEnd().endsWith('Fale como um gamer.')).toBe(true);
   });
 });
@@ -104,8 +113,13 @@ const allow = async () => undefined;
 
 describe('generateCta', () => {
   it('chama /chat/completions com auth, corpo OpenAI e redirect:error; devolve CTA limpo', async () => {
-    const fetchMock = vi.fn(async () => okBody('"Nossaaa! Que oportunidade pra comprar esse fone! 🔥"'));
-    const cta = await generateCta(product, config, { validateBaseUrl: allow, fetch: fetchMock as never });
+    const fetchMock = vi.fn(async () =>
+      okBody('"Nossaaa! Que oportunidade pra comprar esse fone! 🔥"'),
+    );
+    const cta = await generateCta(product, config, {
+      validateBaseUrl: allow,
+      fetch: fetchMock as never,
+    });
     expect(cta).toBe('Nossaaa! Que oportunidade pra comprar esse fone! 🔥');
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
@@ -120,8 +134,14 @@ describe('generateCta', () => {
   });
   it('normaliza barra final na baseUrl', async () => {
     const fetchMock = vi.fn(async () => okBody('Oferta top 🔥'));
-    await generateCta(product, { ...config, baseUrl: 'https://router.example.com/v1/' }, { validateBaseUrl: allow, fetch: fetchMock as never });
-    expect((fetchMock.mock.calls[0] as unknown as [string])[0]).toBe('https://router.example.com/v1/chat/completions');
+    await generateCta(
+      product,
+      { ...config, baseUrl: 'https://router.example.com/v1/' },
+      { validateBaseUrl: allow, fetch: fetchMock as never },
+    );
+    expect((fetchMock.mock.calls[0] as unknown as [string])[0]).toBe(
+      'https://router.example.com/v1/chat/completions',
+    );
   });
   it('baseUrl bloqueada: AiCtaError(blocked) e nenhuma chamada de rede', async () => {
     const fetchMock = vi.fn();
@@ -137,7 +157,9 @@ describe('generateCta', () => {
   });
   it('401 não tenta de novo', async () => {
     const fetchMock = vi.fn(async () => new Response('{}', { status: 401 }));
-    await expect(generateCta(product, config, { validateBaseUrl: allow, fetch: fetchMock as never })).rejects.toMatchObject({ kind: 'http', status: 401 });
+    await expect(
+      generateCta(product, config, { validateBaseUrl: allow, fetch: fetchMock as never }),
+    ).rejects.toMatchObject({ kind: 'http', status: 401 });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
   it('500 seguido de 200: 1 retry e sucesso', async () => {
@@ -145,28 +167,43 @@ describe('generateCta', () => {
       .fn()
       .mockResolvedValueOnce(new Response('{}', { status: 500 }))
       .mockResolvedValueOnce(okBody('Corre! 🔥'));
-    await expect(generateCta(product, config, { validateBaseUrl: allow, fetch: fetchMock as never })).resolves.toBe('Corre! 🔥');
+    await expect(
+      generateCta(product, config, { validateBaseUrl: allow, fetch: fetchMock as never }),
+    ).resolves.toBe('Corre! 🔥');
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
   it('500 duas vezes: falha após 1 retry (2 chamadas)', async () => {
     const fetchMock = vi.fn(async () => new Response('{}', { status: 503 }));
-    await expect(generateCta(product, config, { validateBaseUrl: allow, fetch: fetchMock as never })).rejects.toMatchObject({ kind: 'http', status: 503 });
+    await expect(
+      generateCta(product, config, { validateBaseUrl: allow, fetch: fetchMock as never }),
+    ).rejects.toMatchObject({ kind: 'http', status: 503 });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
   it('timeout: aborta, kind=timeout', async () => {
     const hang = vi.fn(
       (_u: string, init: RequestInit) =>
-        new Promise((_res, rej) => init.signal?.addEventListener('abort', () => rej(new Error('aborted')))),
+        new Promise((_res, rej) =>
+          init.signal?.addEventListener('abort', () => rej(new Error('aborted'))),
+        ),
     );
     await expect(
-      generateCta(product, config, { validateBaseUrl: allow, fetch: hang as never, timeoutMs: 20, retries: 0 }),
+      generateCta(product, config, {
+        validateBaseUrl: allow,
+        fetch: hang as never,
+        timeoutMs: 20,
+        retries: 0,
+      }),
     ).rejects.toMatchObject({ kind: 'timeout' });
   });
   it('erro de rede: kind=network e a mensagem não vaza a apiKey', async () => {
     const fetchMock = vi.fn(async () => {
       throw new Error('connect ECONNREFUSED Bearer sk-test-1234');
     });
-    const err = await generateCta(product, config, { validateBaseUrl: allow, fetch: fetchMock as never, retries: 0 }).catch((e) => e);
+    const err = await generateCta(product, config, {
+      validateBaseUrl: allow,
+      fetch: fetchMock as never,
+      retries: 0,
+    }).catch((e) => e);
     expect(err).toBeInstanceOf(AiCtaError);
     expect(err.kind).toBe('network');
     expect(err.message).not.toContain('sk-test-1234');
@@ -179,42 +216,62 @@ describe('generateCta', () => {
       () => new Response('<html>', { status: 200 }),
     ]) {
       const fetchMock = vi.fn(async () => make());
-      await expect(generateCta(product, config, { validateBaseUrl: allow, fetch: fetchMock as never })).rejects.toMatchObject({ kind: 'invalid' });
+      await expect(
+        generateCta(product, config, { validateBaseUrl: allow, fetch: fetchMock as never }),
+      ).rejects.toMatchObject({ kind: 'invalid' });
       expect(fetchMock).toHaveBeenCalledTimes(2);
     }
   });
   it('envia max_tokens >= 1024 independente de maxChars para acomodar reasoning_tokens', async () => {
     const fetchMock = vi.fn(async () => okBody('Oferta top 🔥'));
-    await generateCta(product, { ...config, maxChars: 40 }, { validateBaseUrl: allow, fetch: fetchMock as never });
+    await generateCta(
+      product,
+      { ...config, maxChars: 40 },
+      { validateBaseUrl: allow, fetch: fetchMock as never },
+    );
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     const body = JSON.parse(init.body as string);
     expect(body.max_tokens).toBeGreaterThanOrEqual(1024);
   });
   it('rejeita resposta truncada com finish_reason length ou max_tokens com kind=invalid', async () => {
     for (const finish_reason of ['length', 'max_tokens']) {
-      const fetchMock = vi.fn(async () =>
-        new Response(
-          JSON.stringify({
-            choices: [{ message: { content: 'Frase incompleta cortada no' }, finish_reason }],
-          }),
-          { status: 200 },
-        ),
+      const fetchMock = vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              choices: [{ message: { content: 'Frase incompleta cortada no' }, finish_reason }],
+            }),
+            { status: 200 },
+          ),
       );
       await expect(
-        generateCta(product, config, { validateBaseUrl: allow, fetch: fetchMock as never, retries: 0 }),
+        generateCta(product, config, {
+          validateBaseUrl: allow,
+          fetch: fetchMock as never,
+          retries: 0,
+        }),
       ).rejects.toMatchObject({ kind: 'invalid' });
     }
   });
   it('aceita resposta normal com finish_reason stop', async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          choices: [{ message: { content: 'Oferta incrível aproveite agora! 🔥' }, finish_reason: 'stop' }],
-        }),
-        { status: 200 },
-      ),
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: { content: 'Oferta incrível aproveite agora! 🔥' },
+                finish_reason: 'stop',
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
     );
-    const result = await generateCta(product, config, { validateBaseUrl: allow, fetch: fetchMock as never });
+    const result = await generateCta(product, config, {
+      validateBaseUrl: allow,
+      fetch: fetchMock as never,
+    });
     expect(result).toBe('Oferta incrível aproveite agora! 🔥');
   });
 });

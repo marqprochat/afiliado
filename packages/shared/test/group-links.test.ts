@@ -157,7 +157,8 @@ describe('group-links shared helpers', () => {
     });
 
     it('valida groupImageBase64 com formato correto', () => {
-      const validBase64 = 'data:image/jpeg;base64,' + Buffer.from('fake-image-bytes').toString('base64');
+      const validBase64 =
+        'data:image/jpeg;base64,' + Buffer.from('fake-image-bytes').toString('base64');
       const parsed = groupLinkCreateSchema.parse({
         sessionId: 'sess-123',
         slug: 'promos-foto',
@@ -194,4 +195,3 @@ describe('group-links shared helpers', () => {
     });
   });
 });
-

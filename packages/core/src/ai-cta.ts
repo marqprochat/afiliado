@@ -132,7 +132,8 @@ async function requestOnce(
       });
     } catch {
       // Mensagem fixa de propósito: o erro original pode conter a chave/URL.
-      if (ctrl.signal.aborted) throw new AiCtaError('timeout', `IA não respondeu em ${timeoutMs}ms`);
+      if (ctrl.signal.aborted)
+        throw new AiCtaError('timeout', `IA não respondeu em ${timeoutMs}ms`);
       throw new AiCtaError('network', 'falha de rede ao chamar a IA');
     }
     if (!res.ok) throw new AiCtaError('http', `IA respondeu HTTP ${res.status}`, res.status);

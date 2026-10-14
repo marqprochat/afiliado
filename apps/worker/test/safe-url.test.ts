@@ -9,8 +9,12 @@ const publicLookup = lookupTo('203.0.113.10');
 
 describe('assertPublicHttpUrl', () => {
   it('aceita host público http e https', async () => {
-    await expect(assertPublicHttpUrl('https://cdn.example.com/a.jpg', publicLookup)).resolves.toBeInstanceOf(URL);
-    await expect(assertPublicHttpUrl('http://cdn.example.com/a.jpg', publicLookup)).resolves.toBeInstanceOf(URL);
+    await expect(
+      assertPublicHttpUrl('https://cdn.example.com/a.jpg', publicLookup),
+    ).resolves.toBeInstanceOf(URL);
+    await expect(
+      assertPublicHttpUrl('http://cdn.example.com/a.jpg', publicLookup),
+    ).resolves.toBeInstanceOf(URL);
   });
 
   it.each([
@@ -46,7 +50,9 @@ describe('assertPublicHttpUrl', () => {
   });
 
   it('rejeita hostname que resolve para IP privado (mesmo com um IP público junto)', async () => {
-    await expect(assertPublicHttpUrl('https://evil.example/a.jpg', lookupTo('10.1.2.3'))).rejects.toThrow(/privad|bloquead/i);
+    await expect(
+      assertPublicHttpUrl('https://evil.example/a.jpg', lookupTo('10.1.2.3')),
+    ).rejects.toThrow(/privad|bloquead/i);
     await expect(
       assertPublicHttpUrl('https://evil.example/a.jpg', lookupTo('203.0.113.10', '127.0.0.1')),
     ).rejects.toThrow();
@@ -54,7 +60,9 @@ describe('assertPublicHttpUrl', () => {
 
   it('rejeita esquemas que não são http(s) e URL inválida', async () => {
     await expect(assertPublicHttpUrl('file:///etc/passwd', publicLookup)).rejects.toThrow();
-    await expect(assertPublicHttpUrl('ftp://cdn.example.com/a.jpg', publicLookup)).rejects.toThrow();
+    await expect(
+      assertPublicHttpUrl('ftp://cdn.example.com/a.jpg', publicLookup),
+    ).rejects.toThrow();
     await expect(assertPublicHttpUrl('not a url', publicLookup)).rejects.toThrow();
   });
 

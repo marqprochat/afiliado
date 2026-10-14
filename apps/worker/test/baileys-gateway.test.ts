@@ -114,19 +114,26 @@ describe('BaileysGateway.sendMessage com imagem por URL (anti-SSRF)', () => {
     'http://127.0.0.1:8080/x.jpg',
     'http://10.0.0.5/a.jpg',
     'http://localhost/a.jpg',
-  ])('URL bloqueada %s: nunca vai ao Baileys como image.url; legenda sai como texto', async (url) => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    const { gw, sock } = await open();
-    await gw.sendMessage(sessionId, jid, { kind: 'image', imageUrl: url, caption: 'Legenda' } as never);
-    expect(fetchSpy).not.toHaveBeenCalled();
-    for (const call of sock.sendMessage.mock.calls as unknown[][]) {
-      expect(JSON.stringify(call[1])).not.toContain('"url"');
-      expect((call[1] as { image?: unknown }).image).toBeUndefined();
-    }
-    expect(sock.sendMessage).toHaveBeenCalledWith(jid, { text: 'Legenda' });
-    fetchSpy.mockRestore();
-    await gw.stopAll();
-  });
+  ])(
+    'URL bloqueada %s: nunca vai ao Baileys como image.url; legenda sai como texto',
+    async (url) => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+      const { gw, sock } = await open();
+      await gw.sendMessage(sessionId, jid, {
+        kind: 'image',
+        imageUrl: url,
+        caption: 'Legenda',
+      } as never);
+      expect(fetchSpy).not.toHaveBeenCalled();
+      for (const call of sock.sendMessage.mock.calls as unknown[][]) {
+        expect(JSON.stringify(call[1])).not.toContain('"url"');
+        expect((call[1] as { image?: unknown }).image).toBeUndefined();
+      }
+      expect(sock.sendMessage).toHaveBeenCalledWith(jid, { text: 'Legenda' });
+      fetchSpy.mockRestore();
+      await gw.stopAll();
+    },
+  );
 
   it('URL pública com download ok usa o buffer', async () => {
     const fetchSpy = vi
@@ -139,7 +146,10 @@ describe('BaileysGateway.sendMessage com imagem por URL (anti-SSRF)', () => {
       caption: 'Legenda',
     } as never);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const arg = (sock.sendMessage.mock.calls as unknown[][])[0]![1] as { image: unknown; caption: string };
+    const arg = (sock.sendMessage.mock.calls as unknown[][])[0]![1] as {
+      image: unknown;
+      caption: string;
+    };
     expect(Buffer.isBuffer(arg.image)).toBe(true);
     expect(arg.caption).toBe('Legenda');
     fetchSpy.mockRestore();
