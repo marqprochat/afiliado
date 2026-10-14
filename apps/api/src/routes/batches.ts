@@ -502,6 +502,30 @@ export async function batchesRoutes(app: FastifyInstance) {
     return { results };
   });
 
+  /** Apaga do lote os itens já enviados (os registros de envio continuam no histórico). */
+  app.delete('/batches/:id/items', async (req) => {
+    z.object({ status: z.literal('SENT') }).parse(req.query);
+    const b = await findBatch(req);
+    const sent = b.items.filter((i) => i.status === 'SENT');
+    if (sent.length === 0) return { removed: 0 };
+    const r = await req.db.batchItem.deleteMany({
+      where: { batchId: b.id, id: { in: sent.map((i) => i.id) }, status: 'SENT' },
+    });
+    // Sem o item no lote o produto voltaria para a triagem como "Enviado"; sai junto,
+    // a menos que ainda esteja em outro lote ativo.
+    const productIds = sent.map((i) => i.productId).filter((p): p is string => !!p);
+    if (productIds.length) {
+      await req.db.queueItem.deleteMany({
+        where: {
+          productId: { in: productIds },
+          status: 'SENT',
+          product: { batchItems: { none: { batch: { status: { not: 'CANCELLED' } } } } },
+        },
+      });
+    }
+    return { removed: r.count };
+  });
+
   app.delete('/batches/:id/items/:itemId', async (req, reply) => {
     const { itemId } = z.object({ itemId: z.string().min(1) }).parse(req.params);
     const b = await findPausedBatch(req);

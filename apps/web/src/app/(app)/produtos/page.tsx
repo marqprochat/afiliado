@@ -142,8 +142,7 @@ export default function ProdutosPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Buscar Produtos</h1>
         <span className="rounded-md border border-border bg-surface px-3 py-1 text-sm">
-          Produtos salvos na fila <b className="text-brand">{queue?.count ?? 0}</b> /{' '}
-          {queue?.limit ?? '—'}
+          Produtos salvos na fila <b className="text-brand">{queue?.count ?? 0}</b>
         </span>
       </div>
       <div className="flex gap-2">

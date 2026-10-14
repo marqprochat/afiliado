@@ -27,7 +27,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         });
       }
     }
-    for (const key of ['queueLimit', 'globalRateLimitPerMin', 'subIdPattern'] as const) {
+    for (const key of ['globalRateLimitPerMin', 'subIdPattern'] as const) {
       if (body[key] !== undefined) await setSetting(req.db, req.tenantId, key, body[key]);
     }
     return payload(req);

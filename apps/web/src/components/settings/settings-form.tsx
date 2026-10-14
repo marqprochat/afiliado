@@ -29,15 +29,14 @@ export function SettingsForm({
       if (form.window[k] !== value.window[k]) w[k] = form.window[k];
     });
     if (Object.keys(w).length) patch.window = w as Partial<Settings['window']>;
-    (['queueLimit', 'globalRateLimitPerMin', 'subIdPattern'] as const).forEach((k) => {
+    (['globalRateLimitPerMin', 'subIdPattern'] as const).forEach((k) => {
       if (form[k] !== value[k]) (patch as Record<string, unknown>)[k] = form[k];
     });
     if (Object.keys(patch).length) onSave(patch);
   }
 
-  const num =
-    (k: 'queueLimit' | 'globalRateLimitPerMin') => (e: React.ChangeEvent<HTMLInputElement>) =>
-      setForm({ ...form, [k]: Number(e.target.value) });
+  const num = (k: 'globalRateLimitPerMin') => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm({ ...form, [k]: Number(e.target.value) });
   const win = (k: 'startTime' | 'endTime') => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, window: { ...form.window, [k]: e.target.value } });
 
@@ -69,16 +68,6 @@ export function SettingsForm({
           <Label htmlFor="enabled">Respeitar janela (bot “dorme” fora dela)</Label>
         </div>
       </fieldset>
-      <div>
-        <Label htmlFor="queueLimit">Limite da fila</Label>
-        <Input
-          id="queueLimit"
-          type="number"
-          min={1}
-          value={form.queueLimit}
-          onChange={num('queueLimit')}
-        />
-      </div>
       <div>
         <Label htmlFor="rate">Máximo de mensagens por minuto (por sessão)</Label>
         <Input

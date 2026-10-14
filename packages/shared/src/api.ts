@@ -18,7 +18,6 @@ export const settingsUpdateSchema = z.object({
     .object({ startTime: hhmm, endTime: hhmm, timezone: z.string().min(1), enabled: z.boolean() })
     .partial()
     .optional(),
-  queueLimit: z.number().int().min(1).max(5000).optional(),
   globalRateLimitPerMin: z.number().int().min(1).max(60).optional(),
   subIdPattern: z.string().min(1).max(50).optional(),
 });

@@ -127,7 +127,6 @@ const mockTemplates = [{ id: 't1', name: 'Padrão', body: '{link}', isDefault: t
 
 const mockSettings = {
   window: { startTime: '00:00', endTime: '23:59', timezone: 'America/Sao_Paulo', enabled: true },
-  queueLimit: 500,
   globalRateLimitPerMin: 6,
   subIdPattern: 'x',
 };

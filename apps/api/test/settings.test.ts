@@ -25,7 +25,6 @@ describe('settings', () => {
         timezone: 'America/Sao_Paulo',
         enabled: true,
       },
-      queueLimit: 500,
       globalRateLimitPerMin: 6,
       subIdPattern: '{yyyyMMdd}-{batchId}',
     });
@@ -35,14 +34,13 @@ describe('settings', () => {
       method: 'PUT',
       url: '/api/v1/settings',
       headers: { cookie },
-      payload: { window: { endTime: '22:00' }, queueLimit: 100 },
+      payload: { window: { endTime: '22:00' }, globalRateLimitPerMin: 10 },
     });
     expect(put.statusCode).toBe(200);
     const get = await app.inject({ method: 'GET', url: '/api/v1/settings', headers: { cookie } });
     expect(get.json()).toMatchObject({
       window: { startTime: '07:30', endTime: '22:00' },
-      queueLimit: 100,
-      globalRateLimitPerMin: 6,
+      globalRateLimitPerMin: 10,
     });
   });
   it('PUT com HH:mm inválido → 400', async () => {

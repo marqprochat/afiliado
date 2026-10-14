@@ -1,13 +1,11 @@
 import type { TenantClient, OperatingWindow } from '@afilados/db';
 
 export interface Settings {
-  queueLimit: number;
   globalRateLimitPerMin: number;
   subIdPattern: string;
 }
 
 export const SETTINGS_DEFAULTS: Settings = {
-  queueLimit: 500,
   globalRateLimitPerMin: 6,
   subIdPattern: '{yyyyMMdd}-{batchId}',
 };

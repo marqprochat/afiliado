@@ -36,7 +36,6 @@ export interface Me {
 }
 export interface Settings {
   window: { startTime: string; endTime: string; timezone: string; enabled: boolean };
-  queueLimit: number;
   globalRateLimitPerMin: number;
   subIdPattern: string;
 }
@@ -236,7 +235,6 @@ export interface QueueItem {
 }
 export interface QueueResponse {
   items: QueueItem[];
-  limit: number;
   count: number;
 }
 export interface Template {
@@ -316,7 +314,7 @@ export interface BatchDetail extends Omit<BatchSummary, 'total' | 'sent' | 'erro
 export interface Overview {
   wa: { id: string; label: string; status: WaSessionStatus; phone: string | null }[];
   shopee: 'UNCONFIGURED' | 'OK' | 'ERROR';
-  queue: { count: number; limit: number };
+  queue: { count: number };
   batches: {
     id: string;
     name: string;

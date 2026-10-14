@@ -233,7 +233,12 @@ function ItemsSection({
     () => apiFetch(`/batches/${batch.id}/retry`, { method: 'POST' }),
     { invalidate: [...INV, ['queue']], success: 'Itens com erro reenfileirados' },
   );
+  const clearSent = useApiMutation(
+    () => apiFetch(`/batches/${batch.id}/items?status=SENT`, { method: 'DELETE' }),
+    { invalidate: [...INV, ['queue']], success: 'Enviados removidos do lote' },
+  );
   const errorCount = done.filter((i) => i.status === 'ERROR').length;
+  const sentCount = done.filter((i) => i.status === 'SENT').length;
   const canRetry = batch.status !== 'CANCELLED';
 
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -281,10 +286,23 @@ function ItemsSection({
             Tentar novamente todos ({errorCount})
           </Button>
         )}
+        {sentCount > 0 && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="ml-auto"
+            disabled={clearSent.isPending || dirty}
+            title={dirty ? 'Salve a nova ordem antes de limpar os enviados' : undefined}
+            onClick={() => clearSent.mutate(undefined)}
+          >
+            <Trash2 className="size-3.5" />
+            Limpar enviados ({sentCount})
+          </Button>
+        )}
         {editable && dirty && (
           <Button
             size="sm"
-            className="ml-auto bg-brand text-white hover:bg-brand/90"
+            className={cn('bg-brand text-white hover:bg-brand/90', sentCount === 0 && 'ml-auto')}
             disabled={saveOrder.isPending}
             onClick={() => saveOrder.mutate(undefined)}
           >

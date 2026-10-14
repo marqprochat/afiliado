@@ -13,7 +13,7 @@ beforeEach(() => {
   apiFetchMock.mockReset();
   apiFetchMock.mockImplementation(async (path: string) => {
     if (path === '/marketplaces') return [{ kind: 'MERCADOLIVRE', hasMlApi: false }];
-    if (path === '/queue') return { items: [], limit: 100, count: 0 };
+    if (path === '/queue') return { items: [], count: 0 };
     if (path === '/products/search') return { products: [] };
     throw new Error(`unexpected call: ${path}`);
   });
