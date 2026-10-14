@@ -9,4 +9,6 @@ coverage/
 docs/
 .kilo/
 .claude/
+.pnpm-store/
+.corepack/
 packages/marketplaces/test/fixtures/
