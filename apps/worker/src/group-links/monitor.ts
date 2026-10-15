@@ -21,7 +21,13 @@ interface QueueLike {
   add(
     name: string,
     data: GroupLinkRotateJob,
-    opts: { jobId?: string; attempts: number; backoff: { type: string; delay: number } },
+    opts: {
+      jobId?: string;
+      attempts: number;
+      backoff: { type: string; delay: number };
+      removeOnComplete?: boolean;
+      removeOnFail?: number;
+    },
   ): Promise<unknown>;
 }
 
@@ -274,6 +280,10 @@ export class GroupLinkMonitor {
       ),
       attempts: 5,
       backoff: { type: 'exponential', delay: 10_000 },
+      // O link pode voltar a apontar para um grupo antigo; um job concluído com o mesmo jobId
+      // bloquearia a próxima rotação a partir dele. A idempotência fica no processor (fromGroupId).
+      removeOnComplete: true,
+      removeOnFail: 50,
     });
   }
 }

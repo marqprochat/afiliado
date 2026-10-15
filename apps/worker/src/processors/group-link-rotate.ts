@@ -4,6 +4,7 @@ import { prisma } from '@afilados/db';
 import { buildGroupName, type GroupLinkRotateJob } from '@afilados/shared';
 import { getRedis } from '../lib/redis';
 import { publishEvent } from '../lib/events';
+import { applyGroupLinkSettings } from '../group-links/settings';
 import type { WhatsAppGateway } from '../wa/gateway';
 
 const log = pino({ name: 'group-link-rotate' });
@@ -69,6 +70,66 @@ export function createGroupLinkRotateProcessor(deps: { gateway: WhatsAppGateway 
           data: { lastError: 'WA_NOT_CONNECTED' },
         });
         throw new Error('WA_NOT_CONNECTED');
+      }
+
+      // 1b. Se já existe um grupo criado e não lotado em espera (ex.: o link foi apontado de volta
+      // para um grupo anterior), só aponta o link para ele em vez de criar outro.
+      const rotateAt = Math.max(1, link.memberLimit - link.rotateMargin);
+      const standby = await prisma.managedGroup.findFirst({
+        where: {
+          groupLinkId: link.id,
+          status: 'STANDBY',
+          jid: { not: null },
+          memberCount: { lt: rotateAt },
+          ...(currentActive ? { id: { not: currentActive.id } } : {}),
+        },
+        orderBy: { sequence: 'asc' },
+      });
+      if (standby?.jid) {
+        let inviteLink = standby.inviteLink;
+        try {
+          inviteLink = `https://chat.whatsapp.com/${await gateway.getInviteCode(link.sessionId, standby.jid)}`;
+        } catch (err) {
+          log.warn({ err, jid: standby.jid }, 'falha ao atualizar convite do grupo em espera');
+          if (!inviteLink) throw err;
+        }
+        const now = new Date();
+        await prisma.$transaction(async (tx) => {
+          if (currentActive) {
+            await tx.managedGroup.updateMany({
+              where: { id: currentActive.id },
+              data: { status: 'FULL', filledAt: now },
+            });
+          }
+          await tx.managedGroup.updateMany({
+            where: { id: standby.id },
+            data: {
+              status: 'ACTIVE',
+              activatedAt: now,
+              inviteLink,
+              inviteSyncedAt: now,
+              filledAt: null,
+              lastError: null,
+            },
+          });
+          await tx.groupLink.updateMany({
+            where: { id: link.id },
+            data: { lastRotatedAt: now, lastError: null, status: 'ACTIVE' },
+          });
+        });
+        await getRedis().del(`grouplink:slug:${link.slug}`);
+        await publishEvent(link.tenantId, {
+          type: 'group-link.rotated',
+          groupLinkId: link.id,
+          newGroupId: standby.id,
+          sequence: standby.sequence,
+        });
+        await publishEvent(link.tenantId, { type: 'group-links.changed', tenantId: link.tenantId });
+        log.info(
+          { groupLinkId: link.id, jid: standby.jid, sequence: standby.sequence },
+          'Link apontado para grupo já existente em espera',
+        );
+        return { ok: true, groupLinkId: link.id, sequence: standby.sequence, jid: standby.jid };
       }
 
       // 2. Verifica taxa limite de rotações por hora
@@ -160,27 +221,11 @@ export function createGroupLinkRotateProcessor(deps: { gateway: WhatsAppGateway 
         });
       }
 
-      // 5. Configurações pós-criação
-      try {
-        if (link.groupDescription || link.announceOnly) {
-          await gateway.updateGroupSettings(link.sessionId, jid, {
-            ...(link.groupDescription ? { description: link.groupDescription } : {}),
-            announceOnly: link.announceOnly,
-          });
-        }
-      } catch (err) {
-        log.warn({ err, jid }, 'falha ao aplicar configurações pós-criação do grupo');
-      }
-
-      if (link.groupImageBase64) {
-        try {
-          const cleanBase64 = link.groupImageBase64.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
-          const imgBuf = Buffer.from(cleanBase64, 'base64');
-          await gateway.updateGroupPicture(link.sessionId, jid, imgBuf);
-        } catch (err) {
-          log.warn({ err, jid }, 'falha ao atualizar foto de perfil do grupo');
-        }
-      }
+      // 5. Configurações pós-criação (descrição, restrições e foto; o nome já nasce certo)
+      await applyGroupLinkSettings(gateway, link.sessionId, link, {
+        jid,
+        number: managedGroup.number,
+      });
 
       // 6. Obtenção do código de convite (obrigatório)
       let inviteCode: string | null = null;

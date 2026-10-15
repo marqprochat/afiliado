@@ -6,6 +6,7 @@ export const QUEUE_SEND_TELEGRAM = 'send-telegram';
 export const QUEUE_AWIN_IMPORT = 'awin-import';
 export const QUEUE_COUPON_SYNC = 'coupon-sync';
 export const QUEUE_GROUP_LINK_ROTATE = 'group-link-rotate';
+export const QUEUE_GROUP_LINK_SYNC = 'group-link-sync';
 export const QUEUE_ML_LINKS_PREWARM = 'ml-links-prewarm';
 export const QUEUE_METRICS_DAILY = 'metrics-daily';
 
@@ -95,6 +96,14 @@ export interface GroupLinkRotateJob {
   groupLinkId: string;
   fromGroupId: string | null;
   reason: 'threshold' | 'orphaned' | 'manual' | 'initial';
+}
+
+/** Reaplica nome/descrição/foto/restrições do link em todos os grupos já criados. */
+export interface GroupLinkSyncJob {
+  tenantId: string;
+  groupLinkId: string;
+  /** Campos alterados; vazio/ausente = reaplica tudo. */
+  fields?: string[];
 }
 
 export interface MlLinksPrewarmJob {
