@@ -157,4 +157,47 @@ describe('GroupLinkMonitor', () => {
 
     monitor.stop();
   });
+
+  it('falha transitória (timeout) na reconciliação não marca ORPHANED nem rotaciona', async () => {
+    const gateway = new FakeGateway();
+    gateway.getGroupSnapshot = async () => {
+      throw new Error('Timed Out');
+    };
+    const enqueued: GroupLinkRotateJob[] = [];
+    const queue = {
+      add: async (_n: string, data: GroupLinkRotateJob) => {
+        enqueued.push(data);
+      },
+    };
+    const monitor = new GroupLinkMonitor(gateway, { queue: queue as never });
+    await monitor.start();
+    await monitor.reconcileAll();
+
+    const after = await prisma.managedGroup.findFirst({ where: { id: managedGroupId } });
+    expect(after?.status).toBe('ACTIVE');
+    expect(enqueued).toHaveLength(0);
+    expect(monitor.getGroupEntry(sessionId, '123456@g.us')).toBeDefined();
+
+    monitor.stop();
+  });
+
+  it('grupo inexistente na reconciliação marca ORPHANED e enfileira rotação', async () => {
+    const gateway = new FakeGateway(); // sem snapshot -> GROUP_NOT_FOUND
+    const enqueued: GroupLinkRotateJob[] = [];
+    const queue = {
+      add: async (_n: string, data: GroupLinkRotateJob) => {
+        enqueued.push(data);
+      },
+    };
+    const monitor = new GroupLinkMonitor(gateway, { queue: queue as never });
+    await monitor.start();
+    await monitor.reconcileAll();
+
+    const after = await prisma.managedGroup.findFirst({ where: { id: managedGroupId } });
+    expect(after?.status).toBe('ORPHANED');
+    expect(enqueued[0]?.reason).toBe('orphaned');
+
+    await prisma.managedGroup.update({ where: { id: managedGroupId }, data: { status: 'ACTIVE' } });
+    monitor.stop();
+  });
 });

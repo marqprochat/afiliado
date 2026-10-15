@@ -25,6 +25,20 @@ interface QueueLike {
   ): Promise<unknown>;
 }
 
+/**
+ * Distingue "o grupo não existe/não temos acesso" de falhas transitórias do WhatsApp
+ * (timeout, conexão caída, rate limit). Só o primeiro caso justifica marcar ORPHANED e
+ * criar um grupo novo; o segundo deve apenas ser tentado de novo na próxima reconciliação.
+ */
+export function isGroupGoneError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { message?: unknown; output?: { statusCode?: unknown }; data?: unknown };
+  const status = e.output?.statusCode ?? e.data;
+  if (status === 404 || status === 403 || status === 410) return true;
+  const msg = typeof e.message === 'string' ? e.message : '';
+  return /item-not-found|forbidden|not-authorized|GROUP_NOT_FOUND/i.test(msg);
+}
+
 export class GroupLinkMonitor {
   /** sessionId -> jid -> CachedGroupLinkEntry */
   private cache = new Map<string, Map<string, CachedGroupLinkEntry>>();
@@ -220,9 +234,17 @@ export class GroupLinkMonitor {
         });
       }
     } catch (err) {
+      if (!isGroupGoneError(err)) {
+        // Timeout/queda de conexão não significa que o grupo sumiu: mantém ACTIVE e tenta no próximo ciclo.
+        log.warn(
+          { err, sessionId, jid, groupLinkId: entry.groupLinkId },
+          'Falha transitória na reconciliação do grupo; mantendo ACTIVE',
+        );
+        return;
+      }
       log.error(
         { err, sessionId, jid, groupLinkId: entry.groupLinkId },
-        'Falha na reconciliação do grupo; marcando ORPHANED',
+        'Grupo não encontrado na reconciliação; marcando ORPHANED',
       );
       await prisma.managedGroup.updateMany({
         where: { id: entry.managedGroupId },
