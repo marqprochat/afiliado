@@ -48,11 +48,7 @@ export function GroupLinkHistoryDialog({
   );
 
   const canPoint = (g: ManagedGroup) =>
-    g.status !== 'ACTIVE' &&
-    g.status !== 'CREATING' &&
-    g.status !== 'ORPHANED' &&
-    !!g.jid &&
-    g.memberCount < rotateAt;
+    g.status !== 'ACTIVE' && g.status !== 'CREATING' && !!g.jid && g.memberCount < rotateAt;
 
   const copyInvite = async (link: string) => {
     await copyToClipboard(link);
@@ -180,6 +176,14 @@ export function GroupLinkHistoryDialog({
           </strong>{' '}
           ({pointTarget?.memberCount}/{groupLink?.memberLimit} membros).
         </p>
+        {pointTarget?.status === 'ORPHANED' && (
+          <p className="text-amber-400">
+            Este grupo está marcado como ÓRFÃO
+            {pointTarget.lastError ? ` (${pointTarget.lastError})` : ''}. Se ele ainda existe no
+            WhatsApp e a conta é admin, volta a funcionar normalmente; se não existir, a próxima
+            verificação (até 5 min) o marca de novo e o link passa para outro grupo.
+          </p>
+        )}
         {activeGroup && (
           <p>
             O grupo atual <strong className="text-foreground">#{activeGroup.sequence}</strong>{' '}

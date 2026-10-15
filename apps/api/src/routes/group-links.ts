@@ -392,7 +392,9 @@ export async function groupLinksRoutes(app: FastifyInstance) {
     const target = await req.db.managedGroup.findFirst({ where: { id: groupId, groupLinkId: id } });
     if (!target) throw ApiError.notFound('Grupo não encontrado neste link');
     if (target.status === 'ACTIVE') return { ok: true, unchanged: true };
-    if (!target.jid || target.status === 'CREATING' || target.status === 'ORPHANED') {
+    // ORPHANED é permitido: a marcação pode ter vindo de uma falha transitória (ex.: timeout).
+    // Se o grupo realmente sumiu, a próxima reconciliação o marca de novo e rotaciona.
+    if (!target.jid || target.status === 'CREATING') {
       throw new ApiError('VALIDATION', 'Este grupo não está disponível no WhatsApp', 409);
     }
     const rotateAt = Math.max(1, link.memberLimit - link.rotateMargin);
