@@ -13,12 +13,15 @@ import {
   AlertTriangle,
   Users,
   Check,
+  ShieldCheck,
+  Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { GroupLinkHistoryDialog } from './group-link-history-dialog';
 import { GroupLinkFormDialog } from './group-link-form-dialog';
+import { ConfirmActionDialog } from './confirm-action-dialog';
 import { useApiMutation } from '@/lib/mutations';
 import { apiFetch } from '@/lib/api';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -32,6 +35,8 @@ export function GroupLinkCard({ link }: GroupLinkCardProps) {
   const [copied, setCopied] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [confirmRotate, setConfirmRotate] = useState(false);
+  const [confirmSync, setConfirmSync] = useState(false);
 
   const activeGroup = link.groups?.[0] ?? null;
   const currentMembers = activeGroup?.memberCount ?? 0;
@@ -57,9 +62,26 @@ export function GroupLinkCard({ link }: GroupLinkCardProps) {
       }),
     {
       invalidate: [['group-links']],
-      success: 'Rotação enfileirada com sucesso! O novo grupo será criado em instantes.',
+      success: 'Rotação enfileirada! O link será apontado para o próximo grupo em instantes.',
+      onSuccess: () => setConfirmRotate(false),
     },
   );
+
+  const syncMutation = useApiMutation(
+    () => apiFetch(`/group-links/${link.id}/sync`, { method: 'POST' }),
+    {
+      invalidate: [['group-links']],
+      success: 'Atualização enfileirada para todos os grupos deste link.',
+      onSuccess: () => setConfirmSync(false),
+    },
+  );
+
+  const restrictions = [
+    link.announceOnly && 'só admins enviam',
+    link.restrictEditInfo && 'só admins editam dados',
+    link.restrictAddMembers && 'só admins adicionam',
+    link.joinApproval && 'entrada com aprovação',
+  ].filter(Boolean) as string[];
 
   const reconcileMutation = useApiMutation(
     () =>
@@ -110,7 +132,10 @@ export function GroupLinkCard({ link }: GroupLinkCardProps) {
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1.5">
             <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant="outline" className="bg-brand/10 text-brand border-brand/30 text-xs font-bold">
+              <Badge
+                variant="outline"
+                className="bg-brand/10 text-brand border-brand/30 text-xs font-bold"
+              >
                 #{(link.displayOrder ?? 0) + 1} na Landpage
               </Badge>
               <h3 className="font-bold text-base text-foreground">{link.label}</h3>
@@ -172,6 +197,23 @@ export function GroupLinkCard({ link }: GroupLinkCardProps) {
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
           </div>
+        </div>
+
+        <div className="mt-2 flex items-center gap-1.5 flex-wrap text-[11px]">
+          <Lock
+            className={`h-3 w-3 ${restrictions.length ? 'text-emerald-400' : 'text-muted-foreground'}`}
+          />
+          {restrictions.length ? (
+            restrictions.map((r) => (
+              <Badge key={r} variant="outline" className="text-[10px] font-normal">
+                {r}
+              </Badge>
+            ))
+          ) : (
+            <span className="text-muted-foreground">
+              Sem restrições — membros podem alterar o grupo
+            </span>
+          )}
         </div>
 
         {/* Link Público com Botão Copiar */}
@@ -304,8 +346,19 @@ export function GroupLinkCard({ link }: GroupLinkCardProps) {
               variant="outline"
               size="sm"
               className="h-7 text-xs gap-1"
+              disabled={syncMutation.isPending}
+              onClick={() => setConfirmSync(true)}
+              title="Reaplica nome, descrição, foto e restrições em todos os grupos do link"
+            >
+              <ShieldCheck className="h-3 w-3" />
+              Reaplicar em todos
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1"
               disabled={rotateMutation.isPending}
-              onClick={() => rotateMutation.mutate(undefined)}
+              onClick={() => setConfirmRotate(true)}
             >
               <RotateCw className={`h-3 w-3 ${rotateMutation.isPending ? 'animate-spin' : ''}`} />
               Forçar Rotação
@@ -334,6 +387,45 @@ export function GroupLinkCard({ link }: GroupLinkCardProps) {
       <GroupLinkHistoryDialog groupLink={link} open={showHistory} onOpenChange={setShowHistory} />
 
       <GroupLinkFormDialog open={showEdit} onOpenChange={setShowEdit} editItem={link} />
+
+      <ConfirmActionDialog
+        open={confirmRotate}
+        onOpenChange={setConfirmRotate}
+        title="Forçar rotação do grupo?"
+        confirmLabel="Forçar rotação"
+        confirmPhrase="ROTACIONAR"
+        pending={rotateMutation.isPending}
+        onConfirm={() => rotateMutation.mutate(undefined)}
+      >
+        <p>
+          O grupo ativo{' '}
+          <strong className="text-foreground">
+            {activeGroup ? `${activeGroup.name} (${currentMembers}/${memberLimit})` : '—'}
+          </strong>{' '}
+          será marcado como <strong className="text-foreground">CHEIO</strong> e deixará de receber
+          novas entradas pelo link.
+        </p>
+        <p>
+          Se já existir um grupo criado em espera, o link passa a apontar para ele; caso contrário,
+          um novo grupo (#{link.startNumber + link.nextSequence - 1}) será criado no WhatsApp.
+        </p>
+        <p>Para voltar a um grupo anterior, use o Histórico → “Apontar link aqui”.</p>
+      </ConfirmActionDialog>
+
+      <ConfirmActionDialog
+        open={confirmSync}
+        onOpenChange={setConfirmSync}
+        title="Reaplicar configurações em todos os grupos?"
+        confirmLabel="Reaplicar"
+        pending={syncMutation.isPending}
+        onConfirm={() => syncMutation.mutate(undefined)}
+      >
+        <p>
+          Nome, descrição, foto e restrições atuais deste link serão aplicados em todos os{' '}
+          {link._count?.groups ?? 0} grupo(s), incluindo os cheios. Grupos adotados serão renomeados
+          para o padrão do link.
+        </p>
+      </ConfirmActionDialog>
     </>
   );
 }

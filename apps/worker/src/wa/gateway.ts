@@ -56,6 +56,19 @@ export interface GroupSnapshot {
   inviteCode: string | null;
 }
 
+export interface GroupSettingsUpdate {
+  subject?: string;
+  description?: string;
+  /** Só admins enviam mensagens. */
+  announceOnly?: boolean;
+  /** Só admins editam nome, descrição e foto. */
+  restrictEditInfo?: boolean;
+  /** Só admins adicionam participantes. */
+  restrictAddMembers?: boolean;
+  /** Entradas precisam de aprovação de admin. */
+  joinApproval?: boolean;
+}
+
 export interface WhatsAppGateway {
   isConnected(sessionId: string): boolean;
   sendMessage(
@@ -79,11 +92,7 @@ export interface WhatsAppGateway {
     action: GroupParticipantAction,
     participantPhones: string[],
   ): Promise<void>;
-  updateGroupSettings(
-    sessionId: string,
-    jid: string,
-    settings: { subject?: string; description?: string; announceOnly?: boolean },
-  ): Promise<void>;
+  updateGroupSettings(sessionId: string, jid: string, settings: GroupSettingsUpdate): Promise<void>;
   getInviteCode(sessionId: string, jid: string, revoke?: boolean): Promise<string>;
   getGroupDetails(sessionId: string, jid: string): Promise<GroupDetails>;
   getGroupSnapshot(sessionId: string, jid: string): Promise<GroupSnapshot>;

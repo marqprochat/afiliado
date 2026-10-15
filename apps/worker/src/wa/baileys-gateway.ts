@@ -25,6 +25,7 @@ import type {
   GroupParticipantsUpdateEvent,
   GroupSnapshot,
   GroupParticipantAction,
+  GroupSettingsUpdate,
 } from './gateway';
 
 interface Live {
@@ -614,7 +615,7 @@ export class BaileysGateway implements WhatsAppGateway {
   async updateGroupSettings(
     sessionId: string,
     jid: string,
-    settings: { subject?: string; description?: string; announceOnly?: boolean },
+    settings: GroupSettingsUpdate,
   ): Promise<void> {
     const l = this.liveOrThrow(sessionId);
     if (settings.subject !== undefined) await l.sock.groupUpdateSubject(jid, settings.subject);
@@ -626,6 +627,18 @@ export class BaileysGateway implements WhatsAppGateway {
         jid,
         settings.announceOnly ? 'announcement' : 'not_announcement',
       );
+    }
+    if (settings.restrictEditInfo !== undefined) {
+      await l.sock.groupSettingUpdate(jid, settings.restrictEditInfo ? 'locked' : 'unlocked');
+    }
+    if (settings.restrictAddMembers !== undefined) {
+      await l.sock.groupMemberAddMode(
+        jid,
+        settings.restrictAddMembers ? 'admin_add' : 'all_member_add',
+      );
+    }
+    if (settings.joinApproval !== undefined) {
+      await l.sock.groupJoinApprovalMode(jid, settings.joinApproval ? 'on' : 'off');
     }
     this.groupCache.delete(jid);
   }

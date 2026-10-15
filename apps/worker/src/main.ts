@@ -16,6 +16,8 @@ import {
   type AwinImportJob,
   type CouponSyncJob,
   type GroupLinkRotateJob,
+  type GroupLinkSyncJob,
+  QUEUE_GROUP_LINK_SYNC,
   type MlLinksPrewarmJob,
   type MetricsDailyJob,
   type MirrorMessageJob,
@@ -42,6 +44,7 @@ import { createAwinImportProcessor } from './processors/awin-import';
 import { createCouponSyncProcessor } from './processors/coupon-sync';
 import { createMetricsDailyProcessor, scheduleMetricsDaily } from './processors/metrics-daily';
 import { createGroupLinkRotateProcessor } from './processors/group-link-rotate';
+import { createGroupLinkSyncProcessor } from './processors/group-link-sync';
 import { createMlLinksPrewarmProcessor } from './processors/ml-links-prewarm';
 import { GroupLinkMonitor } from './group-links/monitor';
 import { GroupMemberRecorder } from './metrics/group-member-recorder';
@@ -110,6 +113,12 @@ const groupLinkRotateWorker = new Worker<GroupLinkRotateJob>(
   createGroupLinkRotateProcessor({ gateway }),
   { connection: getRedis(), concurrency: 1 },
 );
+// Reaplica nome/descrição/foto/restrições do link em todos os grupos já criados.
+const groupLinkSyncWorker = new Worker<GroupLinkSyncJob>(
+  QUEUE_GROUP_LINK_SYNC,
+  createGroupLinkSyncProcessor({ gateway }),
+  { connection: getRedis(), concurrency: 1 },
+);
 // Gera links meli.la em lote (20 por chamada) com pausas; uma execução por vez para não estressar o painel do ML.
 const mlLinksPrewarmWorker = new Worker<MlLinksPrewarmJob>(
   QUEUE_ML_LINKS_PREWARM,
@@ -132,6 +141,7 @@ for (const w of [
   awinImportWorker,
   couponSyncWorker,
   groupLinkRotateWorker,
+  groupLinkSyncWorker,
   mlLinksPrewarmWorker,
   metricsDailyWorker,
 ]) {
@@ -234,6 +244,7 @@ async function shutdown() {
       awinImportWorker.close(),
       couponSyncWorker.close(),
       groupLinkRotateWorker.close(),
+      groupLinkSyncWorker.close(),
       mlLinksPrewarmWorker.close(),
       metricsDailyWorker.close(),
     ]);

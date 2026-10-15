@@ -34,6 +34,7 @@ import {
 import { publishEvent } from '../lib/events';
 import { getRedis } from '../lib/redis';
 import { TokenBucket, jitter, waitForToken } from '../lib/rate-limit';
+import { expandLinkedGroupJids } from '../group-links/settings';
 import type { OutgoingMessage, WhatsAppGateway } from '../wa/gateway';
 import {
   resolveShortLinks as resolveShortLinksImpl,
@@ -88,6 +89,10 @@ export async function mirrorMessage(
   if (!rule || !rule.enabled) return { outcome: 'skipped', reason: 'rule-disabled' };
 
   const tenantId = rule.tenantId;
+  // Grupos de um mesmo link são vinculados; nunca devolve a mensagem para um grupo de origem.
+  const targetJids = (
+    await expandLinkedGroupJids(tenantId, rule.sessionId, rule.targetJids)
+  ).filter((j) => rule.targetJids.includes(j) || !rule.sourceJids.includes(j));
   const text = pickText(jobData.message);
   const isShortenerUrl = (url: string): boolean => {
     try {
@@ -121,7 +126,7 @@ export async function mirrorMessage(
     const reason: 'no-links' | 'short-link-unresolved' = hasUnresolvedShortLink
       ? 'short-link-unresolved'
       : 'no-links';
-    for (const targetJid of rule.targetJids) {
+    for (const targetJid of targetJids) {
       const logRow = await prisma.mirrorLog.create({
         data: {
           tenantId,
@@ -318,7 +323,7 @@ export async function mirrorMessage(
   const dedupSince = new Date(t.getTime() - rule.dedupHours * 3600_000);
   let mirroredCount = 0;
 
-  for (const targetJid of rule.targetJids) {
+  for (const targetJid of targetJids) {
     // Dedup check
     const dup = await prisma.mirrorLog.findFirst({
       where: {

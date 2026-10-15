@@ -190,6 +190,9 @@ export const groupLinkCreateSchema = z.object({
   maxRotationsPerHour: z.coerce.number().int().min(1).max(60).default(3),
   groupDescription: z.string().trim().max(2048).nullable().optional(),
   announceOnly: z.boolean().default(false),
+  restrictEditInfo: z.boolean().default(false),
+  restrictAddMembers: z.boolean().default(false),
+  joinApproval: z.boolean().default(false),
   seedParticipants: z.array(waPhone).max(50).default([]),
   groupImageBase64: groupImageBase64Schema,
   fallbackUrl: z
@@ -213,6 +216,9 @@ export const groupLinkUpdateSchema = z.object({
   maxRotationsPerHour: z.coerce.number().int().min(1).max(60).optional(),
   groupDescription: z.string().trim().max(2048).nullable().optional(),
   announceOnly: z.boolean().optional(),
+  restrictEditInfo: z.boolean().optional(),
+  restrictAddMembers: z.boolean().optional(),
+  joinApproval: z.boolean().optional(),
   seedParticipants: z.array(waPhone).max(50).optional(),
   groupImageBase64: groupImageBase64Schema,
   fallbackUrl: z
@@ -234,3 +240,22 @@ export const groupLinkReorderSchema = z.object({
 export const groupLinkRotateSchema = z.object({
   reason: z.enum(['manual', 'threshold', 'orphaned', 'initial']).default('manual'),
 });
+
+export const groupLinkPointSchema = z.object({
+  groupId: z.string().min(1),
+});
+
+/** Campos do link que, ao mudar, precisam ser reaplicados em todos os grupos já criados. */
+export const GROUP_LINK_SYNC_FIELDS = [
+  'baseName',
+  'customText',
+  'textPosition',
+  'numberPrefix',
+  'groupDescription',
+  'announceOnly',
+  'restrictEditInfo',
+  'restrictAddMembers',
+  'joinApproval',
+  'groupImageBase64',
+] as const;
+export type GroupLinkSyncField = (typeof GROUP_LINK_SYNC_FIELDS)[number];

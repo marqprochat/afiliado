@@ -3,19 +3,32 @@ import { z } from 'zod';
 import { prisma } from '@afilados/db';
 import {
   ApiError,
+  GROUP_LINK_SYNC_FIELDS,
   QUEUE_GROUP_LINK_ROTATE,
+  QUEUE_GROUP_LINK_SYNC,
   buildGroupName,
   groupLinkCreateSchema,
+  groupLinkPointSchema,
   groupLinkReorderSchema,
   groupLinkRotateSchema,
   groupLinkUpdateSchema,
   isValidSlug,
   type GroupLinkRotateJob,
+  type GroupLinkSyncJob,
 } from '@afilados/shared';
 import { requireAuth } from '../plugins/auth';
 import { getQueue, getRedis } from '../lib/redis';
 
 const idParam = z.object({ id: z.string().min(1) });
+
+async function enqueueGroupLinkSync(tenantId: string, groupLinkId: string, fields?: string[]) {
+  const queue = getQueue<GroupLinkSyncJob>(QUEUE_GROUP_LINK_SYNC);
+  await queue.add(
+    'sync',
+    { tenantId, groupLinkId, ...(fields ? { fields } : {}) },
+    { attempts: 3, backoff: { type: 'exponential', delay: 15_000 } },
+  );
+}
 const slugQuery = z.object({ slug: z.string().min(1) });
 
 export async function groupLinksRoutes(app: FastifyInstance) {
@@ -48,10 +61,7 @@ export async function groupLinksRoutes(app: FastifyInstance) {
   // Lista todos os links fixos do tenant
   app.get('/group-links', async (req) => {
     const links = await req.db.groupLink.findMany({
-      orderBy: [
-        { displayOrder: 'asc' },
-        { createdAt: 'desc' },
-      ],
+      orderBy: [{ displayOrder: 'asc' }, { createdAt: 'desc' }],
       include: {
         session: { select: { id: true, label: true, phone: true, status: true } },
         groups: {
@@ -75,8 +85,8 @@ export async function groupLinksRoutes(app: FastifyInstance) {
         prisma.groupLink.updateMany({
           where: { id, tenantId: req.tenantId },
           data: { displayOrder: index },
-        })
-      )
+        }),
+      ),
     );
 
     await req.server.events.publish(req.tenantId, {
@@ -127,6 +137,9 @@ export async function groupLinksRoutes(app: FastifyInstance) {
         maxRotationsPerHour: body.maxRotationsPerHour,
         groupDescription: body.groupDescription ?? null,
         announceOnly: body.announceOnly,
+        restrictEditInfo: body.restrictEditInfo,
+        restrictAddMembers: body.restrictAddMembers,
+        joinApproval: body.joinApproval,
         seedParticipants: body.seedParticipants,
         groupImageBase64: body.groupImageBase64 || null,
         fallbackUrl: body.fallbackUrl || null,
@@ -173,6 +186,14 @@ export async function groupLinksRoutes(app: FastifyInstance) {
         where: { id: link.id },
         data: { nextSequence: 2 },
       });
+      // Grupo adotado recebe descrição, foto e restrições do link (mantém o nome original).
+      await enqueueGroupLinkSync(
+        req.tenantId,
+        link.id,
+        GROUP_LINK_SYNC_FIELDS.filter(
+          (f) => !['baseName', 'customText', 'textPosition', 'numberPrefix'].includes(f),
+        ),
+      );
     } else {
       // Enfileira criação inicial do primeiro grupo
       const queue = getQueue<GroupLinkRotateJob>(QUEUE_GROUP_LINK_ROTATE);
@@ -253,6 +274,11 @@ export async function groupLinksRoutes(app: FastifyInstance) {
           : {}),
         ...(body.groupDescription !== undefined ? { groupDescription: body.groupDescription } : {}),
         ...(body.announceOnly !== undefined ? { announceOnly: body.announceOnly } : {}),
+        ...(body.restrictEditInfo !== undefined ? { restrictEditInfo: body.restrictEditInfo } : {}),
+        ...(body.restrictAddMembers !== undefined
+          ? { restrictAddMembers: body.restrictAddMembers }
+          : {}),
+        ...(body.joinApproval !== undefined ? { joinApproval: body.joinApproval } : {}),
         ...(body.seedParticipants !== undefined ? { seedParticipants: body.seedParticipants } : {}),
         ...(body.groupImageBase64 !== undefined
           ? { groupImageBase64: body.groupImageBase64 || null }
@@ -263,6 +289,18 @@ export async function groupLinksRoutes(app: FastifyInstance) {
         ...(body.displayOrder !== undefined ? { displayOrder: body.displayOrder } : {}),
       },
     });
+
+    // Propaga para todos os grupos já criados apenas o que de fato mudou.
+    const normalized: Record<string, unknown> = {
+      ...body,
+      ...(body.groupImageBase64 !== undefined
+        ? { groupImageBase64: body.groupImageBase64 || null }
+        : {}),
+    };
+    const changed = GROUP_LINK_SYNC_FIELDS.filter(
+      (f) => normalized[f] !== undefined && normalized[f] !== (link as Record<string, unknown>)[f],
+    );
+    if (changed.length > 0) await enqueueGroupLinkSync(req.tenantId, id, [...changed]);
 
     await getRedis().del(`grouplink:slug:${link.slug}`);
     await req.server.events.publish(req.tenantId, {
@@ -332,6 +370,76 @@ export async function groupLinksRoutes(app: FastifyInstance) {
     );
 
     return reply.status(202).send({ queued: true });
+  });
+
+  // Reaplica nome, descrição, foto e restrições em todos os grupos do link
+  app.post('/group-links/:id/sync', async (req, reply) => {
+    const { id } = idParam.parse(req.params);
+    const link = await req.db.groupLink.findFirst({ where: { id } });
+    if (!link) throw ApiError.notFound('Link não encontrado');
+    await enqueueGroupLinkSync(req.tenantId, id);
+    return reply.status(202).send({ queued: true });
+  });
+
+  // Aponta o link para um grupo específico já criado (ex.: voltar para o #1 que ainda não lotou).
+  // O grupo ativo atual fica em espera (STANDBY) e será reaproveitado na próxima rotação.
+  app.post('/group-links/:id/point', async (req) => {
+    const { id } = idParam.parse(req.params);
+    const { groupId } = groupLinkPointSchema.parse(req.body);
+    const link = await req.db.groupLink.findFirst({ where: { id } });
+    if (!link) throw ApiError.notFound('Link não encontrado');
+
+    const target = await req.db.managedGroup.findFirst({ where: { id: groupId, groupLinkId: id } });
+    if (!target) throw ApiError.notFound('Grupo não encontrado neste link');
+    if (target.status === 'ACTIVE') return { ok: true, unchanged: true };
+    if (!target.jid || target.status === 'CREATING' || target.status === 'ORPHANED') {
+      throw new ApiError('VALIDATION', 'Este grupo não está disponível no WhatsApp', 409);
+    }
+    const rotateAt = Math.max(1, link.memberLimit - link.rotateMargin);
+    if (target.memberCount >= rotateAt) {
+      throw new ApiError(
+        'VALIDATION',
+        `Este grupo já tem ${target.memberCount} membros (troca em ${rotateAt}); escolha outro ou aumente o limite`,
+        409,
+      );
+    }
+
+    const now = new Date();
+    await prisma.$transaction(async (tx) => {
+      const current = await tx.managedGroup.findMany({
+        where: { groupLinkId: id, status: 'ACTIVE' },
+      });
+      for (const g of current) {
+        await tx.managedGroup.updateMany({
+          where: { id: g.id },
+          data:
+            g.memberCount >= rotateAt
+              ? { status: 'FULL', filledAt: g.filledAt ?? now }
+              : { status: 'STANDBY' },
+        });
+      }
+      await tx.managedGroup.updateMany({
+        where: { id: target.id },
+        data: { status: 'ACTIVE', activatedAt: now, filledAt: null, lastError: null },
+      });
+      await tx.groupLink.updateMany({
+        where: { id, tenantId: req.tenantId },
+        data: { lastRotatedAt: now, lastError: null },
+      });
+    });
+
+    await getRedis().del(`grouplink:slug:${link.slug}`);
+    await req.server.events.publish(req.tenantId, {
+      type: 'group-link.rotated',
+      groupLinkId: id,
+      newGroupId: target.id,
+      sequence: target.sequence,
+    });
+    await req.server.events.publish(req.tenantId, {
+      type: 'group-links.changed',
+      tenantId: req.tenantId,
+    });
+    return { ok: true };
   });
 
   // Dispara reconciliação imediata do grupo ativo

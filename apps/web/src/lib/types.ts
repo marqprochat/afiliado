@@ -476,6 +476,9 @@ export interface GroupLink {
   maxRotationsPerHour: number;
   groupDescription: string | null;
   announceOnly: boolean;
+  restrictEditInfo: boolean;
+  restrictAddMembers: boolean;
+  joinApproval: boolean;
   seedParticipants: string[];
   groupImageBase64?: string | null;
   fallbackUrl: string | null;

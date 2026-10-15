@@ -1,6 +1,15 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { Check, AlertCircle, Link2, Sparkles, Image as ImageIcon, Trash2, Upload } from 'lucide-react';
+import {
+  Check,
+  AlertCircle,
+  Link2,
+  Sparkles,
+  Image as ImageIcon,
+  Trash2,
+  Upload,
+  Lock,
+} from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,6 +56,9 @@ export function GroupLinkFormDialog({
   const [maxRotationsPerHour, setMaxRotationsPerHour] = useState(3);
   const [groupDescription, setGroupDescription] = useState('');
   const [announceOnly, setAnnounceOnly] = useState(false);
+  const [restrictEditInfo, setRestrictEditInfo] = useState(false);
+  const [restrictAddMembers, setRestrictAddMembers] = useState(false);
+  const [joinApproval, setJoinApproval] = useState(false);
   const [seedParticipantsText, setSeedParticipantsText] = useState('');
   const [fallbackUrl, setFallbackUrl] = useState('');
   const [groupImageBase64, setGroupImageBase64] = useState<string | null>(null);
@@ -71,6 +83,9 @@ export function GroupLinkFormDialog({
       setMaxRotationsPerHour(editItem.maxRotationsPerHour || 3);
       setGroupDescription(editItem.groupDescription || '');
       setAnnounceOnly(editItem.announceOnly || false);
+      setRestrictEditInfo(editItem.restrictEditInfo || false);
+      setRestrictAddMembers(editItem.restrictAddMembers || false);
+      setJoinApproval(editItem.joinApproval || false);
       setSeedParticipantsText(editItem.seedParticipants?.join('\n') || '');
       setFallbackUrl(editItem.fallbackUrl || '');
       setGroupImageBase64(editItem.groupImageBase64 || null);
@@ -88,6 +103,9 @@ export function GroupLinkFormDialog({
       setMaxRotationsPerHour(3);
       setGroupDescription('');
       setAnnounceOnly(false);
+      setRestrictEditInfo(true);
+      setRestrictAddMembers(true);
+      setJoinApproval(false);
       setSeedParticipantsText('');
       setFallbackUrl('');
       setGroupImageBase64(null);
@@ -176,6 +194,9 @@ export function GroupLinkFormDialog({
         maxRotationsPerHour,
         groupDescription: groupDescription.trim() || null,
         announceOnly,
+        restrictEditInfo,
+        restrictAddMembers,
+        joinApproval,
         seedParticipants,
         groupImageBase64: groupImageBase64 || null,
         fallbackUrl: fallbackUrl.trim() || null,
@@ -195,6 +216,9 @@ export function GroupLinkFormDialog({
         maxRotationsPerHour,
         groupDescription: groupDescription.trim() || null,
         announceOnly,
+        restrictEditInfo,
+        restrictAddMembers,
+        joinApproval,
         seedParticipants,
         groupImageBase64: groupImageBase64 || undefined,
         fallbackUrl: fallbackUrl.trim() || null,
@@ -532,14 +556,91 @@ export function GroupLinkFormDialog({
 
           {/* Seção 5: Configurações Avançadas */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between rounded-lg border border-border p-3">
-              <div className="space-y-0.5">
-                <Label htmlFor="gl-announce">Somente Administradores Enviam Mensagens</Label>
-                <div className="text-xs text-muted-foreground">
-                  Configura o grupo automaticamente no modo de avisos (anúncios)
+            <div className="rounded-lg border border-border p-3 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Lock className="h-3.5 w-3.5 text-brand" />
+                  Restrições dos Grupos (WhatsApp)
+                </div>
+                <div className="flex gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      setAnnounceOnly(true);
+                      setRestrictEditInfo(true);
+                      setRestrictAddMembers(true);
+                    }}
+                  >
+                    Restringir tudo
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      setAnnounceOnly(false);
+                      setRestrictEditInfo(false);
+                      setRestrictAddMembers(false);
+                      setJoinApproval(false);
+                    }}
+                  >
+                    Liberar tudo
+                  </Button>
                 </div>
               </div>
-              <Switch id="gl-announce" checked={announceOnly} onCheckedChange={setAnnounceOnly} />
+
+              {(
+                [
+                  [
+                    'gl-announce',
+                    'Somente administradores enviam mensagens',
+                    'Modo de avisos: membros só leem.',
+                    announceOnly,
+                    setAnnounceOnly,
+                  ],
+                  [
+                    'gl-lock-info',
+                    'Somente administradores editam os dados do grupo',
+                    'Bloqueia nome, descrição, foto e mensagens temporárias para membros.',
+                    restrictEditInfo,
+                    setRestrictEditInfo,
+                  ],
+                  [
+                    'gl-lock-add',
+                    'Somente administradores adicionam participantes',
+                    'Membros não conseguem adicionar outras pessoas.',
+                    restrictAddMembers,
+                    setRestrictAddMembers,
+                  ],
+                  [
+                    'gl-approval',
+                    'Aprovar entrada de novos membros',
+                    'Quem entra pelo convite fica pendente até um admin aprovar (reduz a entrada automática pelo link).',
+                    joinApproval,
+                    setJoinApproval,
+                  ],
+                ] as const
+              ).map(([id, title, hint, checked, set]) => (
+                <div key={id} className="flex items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <Label htmlFor={id}>{title}</Label>
+                    <div className="text-xs text-muted-foreground">{hint}</div>
+                  </div>
+                  <Switch id={id} checked={checked} onCheckedChange={set} />
+                </div>
+              ))}
+
+              {editItem && (
+                <div className="text-[11px] text-muted-foreground border-t border-border pt-2">
+                  Ao salvar, nome, descrição, foto e restrições alterados são aplicados em{' '}
+                  <strong className="text-foreground">todos os grupos deste link</strong>, inclusive
+                  os já criados e cheios.
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

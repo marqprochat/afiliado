@@ -1,11 +1,15 @@
 'use client';
-import { Copy, ExternalLink, Users } from 'lucide-react';
+import { useState } from 'react';
+import { Copy, ExternalLink, Link2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { copyToClipboard } from '@/lib/clipboard';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useGroupLinkHistory } from '@/lib/queries';
+import { useApiMutation } from '@/lib/mutations';
+import { apiFetch } from '@/lib/api';
+import { ConfirmActionDialog } from './confirm-action-dialog';
 import type { GroupLink, ManagedGroup, ManagedGroupStatus } from '@/lib/types';
 
 interface GroupLinkHistoryDialogProps {
@@ -19,7 +23,7 @@ const STATUS_BADGES: Record<ManagedGroupStatus, React.ReactNode> = {
   FULL: <Badge className="bg-blue-500/15 text-blue-400 border-blue-500/30">CHEIO</Badge>,
   ORPHANED: <Badge className="bg-red-500/15 text-red-400 border-red-500/30">ÓRFÃO</Badge>,
   CREATING: <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30">CRIANDO</Badge>,
-  STANDBY: <Badge className="bg-gray-500/15 text-gray-400 border-gray-500/30">STANDBY</Badge>,
+  STANDBY: <Badge className="bg-gray-500/15 text-gray-400 border-gray-500/30">EM ESPERA</Badge>,
 };
 
 export function GroupLinkHistoryDialog({
@@ -28,6 +32,27 @@ export function GroupLinkHistoryDialog({
   onOpenChange,
 }: GroupLinkHistoryDialogProps) {
   const { data: groups = [], isLoading } = useGroupLinkHistory(groupLink?.id ?? null);
+
+  const [pointTarget, setPointTarget] = useState<ManagedGroup | null>(null);
+  const rotateAt = groupLink ? Math.max(1, groupLink.memberLimit - groupLink.rotateMargin) : 0;
+  const activeGroup = groups.find((g) => g.status === 'ACTIVE') ?? null;
+
+  const pointMutation = useApiMutation(
+    (groupId: string) =>
+      apiFetch(`/group-links/${groupLink?.id}/point`, { method: 'POST', json: { groupId } }),
+    {
+      invalidate: [['group-links']],
+      success: 'Link apontado para o grupo selecionado!',
+      onSuccess: () => setPointTarget(null),
+    },
+  );
+
+  const canPoint = (g: ManagedGroup) =>
+    g.status !== 'ACTIVE' &&
+    g.status !== 'CREATING' &&
+    g.status !== 'ORPHANED' &&
+    !!g.jid &&
+    g.memberCount < rotateAt;
 
   const copyInvite = async (link: string) => {
     await copyToClipboard(link);
@@ -49,7 +74,14 @@ export function GroupLinkHistoryDialog({
           <code className="bg-surface-2 px-1.5 py-0.5 rounded text-foreground">
             /g/{groupLink?.slug}
           </code>{' '}
-          • Limite por grupo: {groupLink?.memberLimit} membros
+          • Limite por grupo: {groupLink?.memberLimit} membros • Troca em {rotateAt}
+        </div>
+        <div className="text-xs text-muted-foreground mb-3 rounded-md border border-border bg-surface-2/60 p-2.5">
+          Todos os grupos deste link são <strong className="text-foreground">vinculados</strong>:
+          qualquer envio para um deles também vai para os demais. Use{' '}
+          <strong className="text-foreground">Apontar link aqui</strong> para fazer o link voltar a
+          encher um grupo que ainda tem vagas — o grupo atual fica em espera e é reaproveitado na
+          próxima troca, sem criar um novo.
         </div>
 
         {isLoading ? (
@@ -93,6 +125,18 @@ export function GroupLinkHistoryDialog({
                 </div>
 
                 <div className="flex items-center gap-2 self-end md:self-center">
+                  {canPoint(group) && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="h-8 text-xs gap-1.5"
+                      disabled={pointMutation.isPending}
+                      onClick={() => setPointTarget(group)}
+                    >
+                      <Link2 className="h-3.5 w-3.5" />
+                      Apontar link aqui
+                    </Button>
+                  )}
                   {group.inviteLink && (
                     <>
                       <Button
@@ -120,6 +164,31 @@ export function GroupLinkHistoryDialog({
           </div>
         )}
       </DialogContent>
+
+      <ConfirmActionDialog
+        open={!!pointTarget}
+        onOpenChange={(o) => !o && setPointTarget(null)}
+        title="Apontar o link para outro grupo?"
+        confirmLabel="Apontar link"
+        pending={pointMutation.isPending}
+        onConfirm={() => pointTarget && pointMutation.mutate(pointTarget.id)}
+      >
+        <p>
+          O link <code className="text-foreground">/g/{groupLink?.slug}</code> passará a levar para{' '}
+          <strong className="text-foreground">
+            #{pointTarget?.sequence} {pointTarget?.name}
+          </strong>{' '}
+          ({pointTarget?.memberCount}/{groupLink?.memberLimit} membros).
+        </p>
+        {activeGroup && (
+          <p>
+            O grupo atual <strong className="text-foreground">#{activeGroup.sequence}</strong>{' '}
+            {activeGroup.memberCount >= rotateAt
+              ? 'já atingiu a margem e será marcado como CHEIO.'
+              : 'ficará em ESPERA e será reaproveitado quando este encher (nenhum grupo novo é criado).'}
+          </p>
+        )}
+      </ConfirmActionDialog>
     </Dialog>
   );
 }

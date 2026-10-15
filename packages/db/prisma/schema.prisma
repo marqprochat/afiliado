@@ -721,6 +721,12 @@ model GroupLink {
   maxRotationsPerHour Int               @default(3)
   groupDescription    String?
   announceOnly        Boolean           @default(false)
+  /// Só admins editam nome, descrição e foto do grupo ("locked" no WhatsApp).
+  restrictEditInfo    Boolean           @default(false)
+  /// Só admins adicionam participantes.
+  restrictAddMembers  Boolean           @default(false)
+  /// Entradas pelo convite precisam de aprovação de um admin.
+  joinApproval        Boolean           @default(false)
   seedParticipants    String[]          @default([])
   groupImageBase64    String?
   fallbackUrl         String?

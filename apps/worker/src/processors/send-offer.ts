@@ -26,6 +26,7 @@ import { resolveCachedAffiliateLink } from '../lib/ml-links';
 import { enqueueSendTelegram } from '../lib/queue-helpers';
 import { getRedis } from '../lib/redis';
 import { TokenBucket, jitter, waitForToken } from '../lib/rate-limit';
+import { expandLinkedGroupJids } from '../group-links/settings';
 import type { OutgoingMessage, WhatsAppGateway } from '../wa/gateway';
 
 const log = pino({ name: 'send-offer' });
@@ -393,7 +394,9 @@ async function sendPlainMessages(
   const done = new Set(existing.map((l) => l.groupJid));
   let sentCount = 0;
   let first = true;
-  for (const groupJid of batch.groupJids) {
+  // Grupos de um mesmo link são vinculados: enviar para um envia para todos.
+  const groupJids = await expandLinkedGroupJids(tenantId, batch.sessionId, batch.groupJids);
+  for (const groupJid of groupJids) {
     if (done.has(groupJid)) continue;
     if (!first) await sleep(jitter(GROUP_GAP_MS, 0.15, rng));
     first = false;
