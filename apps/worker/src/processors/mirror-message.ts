@@ -90,6 +90,7 @@ export async function mirrorMessage(
   });
   if (!rule || !rule.enabled) return { outcome: 'skipped', reason: 'rule-disabled' };
   if (!(await isTenantActive(rule.tenantId))) {
+    log.info({ tenantId: rule.tenantId }, 'tenant inativo; envio ignorado');
     return { outcome: 'skipped', reason: 'tenant-inactive' };
   }
 

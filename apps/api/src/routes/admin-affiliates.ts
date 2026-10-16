@@ -2,7 +2,13 @@ import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { hash } from '@node-rs/argon2';
-import { prisma, DEFAULT_SETTINGS, DEFAULT_TEMPLATE, type MarketplaceKind } from '@afilados/db';
+import {
+  Prisma,
+  prisma,
+  DEFAULT_SETTINGS,
+  DEFAULT_TEMPLATE,
+  type MarketplaceKind,
+} from '@afilados/db';
 import {
   ApiError,
   MARKETPLACE_KINDS,
@@ -67,23 +73,34 @@ async function toRow(tenantId: string) {
   };
 }
 
+type Db = Prisma.TransactionClient | typeof prisma;
+
+/** P2002 (unique) em user.email → 409; qualquer outro erro segue adiante. */
+function mapEmailConflict(e: unknown): never {
+  if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+    throw ApiError.conflict('E-mail já cadastrado');
+  }
+  throw e;
+}
+
 async function applySubIds(
+  db: Db,
   tenantId: string,
   subIds: Record<string, string | undefined> | undefined,
 ) {
   for (const [kind, raw] of Object.entries(subIds ?? {})) {
     if (raw === undefined || !MARKETPLACE_KINDS.includes(kind as MarketplaceKind)) continue;
     const value = raw.trim() || null;
-    const existing = await prisma.marketplaceConnection.findFirst({
+    const existing = await db.marketplaceConnection.findFirst({
       where: { tenantId, kind: kind as MarketplaceKind },
     });
     if (existing) {
-      await prisma.marketplaceConnection.update({
+      await db.marketplaceConnection.update({
         where: { id: existing.id },
         data: { subId: value },
       });
     } else if (value) {
-      await prisma.marketplaceConnection.create({
+      await db.marketplaceConnection.create({
         data: { tenantId, kind: kind as MarketplaceKind, subId: value },
       });
     }
@@ -101,7 +118,16 @@ export async function adminAffiliatesRoutes(app: FastifyInstance) {
       throw ApiError.validation('Nenhuma sessão de impersonação ativa');
     }
     const admin = await validateSession(adminToken);
-    if (!admin || admin.user.id !== req.impersonatorUserId) throw ApiError.unauthorized();
+    if (!admin || admin.user.id !== req.impersonatorUserId) {
+      // Cookie do admin inválido/forjado: derruba a sessão de impersonação e limpa os cookies
+      // para o usuário não ficar preso numa sessão sem saída.
+      await destroySession(current);
+      reply.clearCookie(SESSION_COOKIE, { path: '/' });
+      reply.clearCookie(ADMIN_SESSION_COOKIE, { path: '/' });
+      return reply
+        .status(401)
+        .send({ error: { code: 'UNAUTHORIZED', message: 'Não autenticado' } });
+    }
     await destroySession(current);
     reply.setCookie(SESSION_COOKIE, adminToken, sessionCookieOptions(admin.expiresAt));
     reply.clearCookie(ADMIN_SESSION_COOKIE, { path: '/' });
@@ -128,23 +154,25 @@ export async function adminAffiliatesRoutes(app: FastifyInstance) {
       }
       const password = body.password ?? generatePassword();
       const passwordHash = await hash(password);
-      const tenantId = await prisma.$transaction(async (tx) => {
-        const tenant = await tx.tenant.create({
-          data: { name: body.name, parentTenantId: req.tenantId },
-        });
-        await tx.user.create({
-          data: { tenantId: tenant.id, email, name: body.name, role: 'OWNER', passwordHash },
-        });
-        await tx.operatingWindow.create({ data: { tenantId: tenant.id } });
-        await tx.template.create({
-          data: { tenantId: tenant.id, name: 'Padrão', body: DEFAULT_TEMPLATE, isDefault: true },
-        });
-        for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
-          await tx.setting.create({ data: { tenantId: tenant.id, key, value: value as object } });
-        }
-        return tenant.id;
-      });
-      await applySubIds(tenantId, body.subIds);
+      const tenantId = await prisma
+        .$transaction(async (tx) => {
+          const tenant = await tx.tenant.create({
+            data: { name: body.name, parentTenantId: req.tenantId },
+          });
+          await tx.user.create({
+            data: { tenantId: tenant.id, email, name: body.name, role: 'OWNER', passwordHash },
+          });
+          await tx.operatingWindow.create({ data: { tenantId: tenant.id } });
+          await tx.template.create({
+            data: { tenantId: tenant.id, name: 'Padrão', body: DEFAULT_TEMPLATE, isDefault: true },
+          });
+          for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
+            await tx.setting.create({ data: { tenantId: tenant.id, key, value: value as object } });
+          }
+          await applySubIds(tx, tenant.id, body.subIds);
+          return tenant.id;
+        })
+        .catch(mapEmailConflict);
       const row = await toRow(tenantId);
       return reply.status(201).send(body.password ? row : { ...row, initialPassword: password });
     });
@@ -156,16 +184,15 @@ export async function adminAffiliatesRoutes(app: FastifyInstance) {
       if (body.email && body.email.toLowerCase() !== user.email) {
         const taken = await prisma.user.findUnique({ where: { email: body.email.toLowerCase() } });
         if (taken) throw ApiError.conflict('E-mail já cadastrado');
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { email: body.email.toLowerCase() },
-        });
+        await prisma.user
+          .update({ where: { id: user.id }, data: { email: body.email.toLowerCase() } })
+          .catch(mapEmailConflict);
       }
       if (body.name) {
         await prisma.tenant.update({ where: { id }, data: { name: body.name } });
         await prisma.user.update({ where: { id: user.id }, data: { name: body.name } });
       }
-      await applySubIds(id, body.subIds);
+      await applySubIds(prisma, id, body.subIds);
       return toRow(id);
     });
 
@@ -177,6 +204,13 @@ export async function adminAffiliatesRoutes(app: FastifyInstance) {
       if (!active) {
         await prisma.session.deleteMany({
           where: { user: { tenantId: id }, impersonatorUserId: null },
+        });
+      } else {
+        // Jobs descartados enquanto inativo deixam lotes parados em andamento; pausa para o
+        // afiliado retomar com o botão existente (que re-enfileira os itens).
+        await prisma.batch.updateMany({
+          where: { tenantId: id, status: { in: ['SCHEDULED', 'RUNNING'] } },
+          data: { status: 'PAUSED' },
         });
       }
       return reply.status(204).send();

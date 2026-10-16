@@ -91,7 +91,10 @@ export async function sendOffer(
   }
   if (item.status === 'SENT') return { outcome: 'skipped', reason: 'missing' };
   const tenantId = batch.tenantId;
-  if (!(await isTenantActive(tenantId))) return { outcome: 'skipped', reason: 'tenant-inactive' };
+  if (!(await isTenantActive(tenantId))) {
+    log.info({ tenantId }, 'tenant inativo; envio ignorado');
+    return { outcome: 'skipped', reason: 'tenant-inactive' };
+  }
 
   const [windowRow, settings, resolved] = await Promise.all([
     prisma.operatingWindow.findUnique({ where: { tenantId } }),

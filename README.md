@@ -71,7 +71,7 @@ pnpm --filter @afilados/web e2e
 
 ## Afiliados
 
-O usuário marcado como SuperAdmin (`admin@dudurochatec.com` na migração; o usuário do seed em instalações novas) cria afiliados em **Afiliados** no painel. Cada afiliado é um tenant filho: tem login próprio e WhatsApp, grupos, fila, lotes e extensão separados, mas usa as credenciais de marketplace e a chave de IA do SuperAdmin. Em **Marketplaces** o afiliado informa só o SubID/tracking ID/etiqueta/loja de cada plataforma. Desativar um afiliado bloqueia login e envios; reativar libera. "Entrar como" abre a conta do afiliado com uma faixa "Voltar ao admin".
+O usuário marcado como SuperAdmin (`admin@dudurochatec.com` na migração; o usuário do seed em instalações novas) cria afiliados em **Afiliados** no painel. Cada afiliado é um tenant filho: tem login próprio e WhatsApp, grupos, fila, lotes e extensão separados, mas usa as credenciais de marketplace e a chave de IA do SuperAdmin. Em **Marketplaces** o afiliado informa só o SubID/tracking ID/etiqueta/loja de cada plataforma. Desativar um afiliado bloqueia login e envios; reativar libera (os lotes que estavam em andamento ficam pausados para o afiliado retomar). "Entrar como" abre a conta do afiliado com uma faixa "Voltar ao admin".
 
 ## Deploy no VPS
 

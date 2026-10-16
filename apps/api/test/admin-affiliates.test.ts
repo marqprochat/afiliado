@@ -188,6 +188,105 @@ describe('admin/affiliates', () => {
     expect(back).toMatchObject({ tenant: { id: admin.tenantId }, impersonating: null });
   });
 
+  it('voltar ao admin: sessão normal (não impersonada) → 400', async () => {
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/impersonation/stop',
+      headers: { cookie: adminCookie },
+    });
+    expect(r.statusCode).toBe(400);
+  });
+
+  it('voltar ao admin: cookie de admin forjado → 401 e a sessão de impersonação é destruída', async () => {
+    const e = email();
+    const c = (
+      await post('/admin/affiliates', { name: 'Forja', email: e, password: 'senha-forte-1' })
+    ).json();
+    const imp = await post(`/admin/affiliates/${c.id}/impersonate`, {});
+    const session = cookiesOf(imp)
+      .map((s) => s.split(';')[0]!)
+      .find((s) => s.startsWith('afilados_session='))!;
+    const header = `${session}; afilados_admin_session=token-forjado`;
+    const stop = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/impersonation/stop',
+      headers: { cookie: header },
+    });
+    expect(stop.statusCode).toBe(401);
+    const cleared = cookiesOf(stop);
+    expect(cleared.some((s) => s.startsWith('afilados_session=;'))).toBe(true);
+    expect(cleared.some((s) => s.startsWith('afilados_admin_session=;'))).toBe(true);
+    const me = await app.inject({ method: 'GET', url: '/api/v1/me', headers: { cookie: session } });
+    expect(me.statusCode).toBe(401);
+  });
+
+  it('voltar ao admin feliz também limpa o cookie afilados_admin_session', async () => {
+    const e = email();
+    const c = (
+      await post('/admin/affiliates', { name: 'Limpa', email: e, password: 'senha-forte-1' })
+    ).json();
+    const imp = await post(`/admin/affiliates/${c.id}/impersonate`, {});
+    const header = cookiesOf(imp)
+      .map((s) => s.split(';')[0]!)
+      .join('; ');
+    const stop = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/impersonation/stop',
+      headers: { cookie: header },
+    });
+    expect(stop.statusCode).toBe(204);
+    expect(cookiesOf(stop).some((s) => s.startsWith('afilados_admin_session=;'))).toBe(true);
+  });
+
+  it('reativar pausa lotes SCHEDULED/RUNNING e não toca nos DONE', async () => {
+    const e = email();
+    const c = (
+      await post('/admin/affiliates', { name: 'Lotes', email: e, password: 'senha-forte-1' })
+    ).json();
+    const session = await prisma.waSession.create({
+      data: { tenantId: c.id, label: 's', status: 'CONNECTED' },
+    });
+    const template = await prisma.template.findFirstOrThrow({ where: { tenantId: c.id } });
+    const mk = (status: 'SCHEDULED' | 'RUNNING' | 'DONE') =>
+      prisma.batch.create({
+        data: {
+          tenantId: c.id,
+          sessionId: session.id,
+          templateId: template.id,
+          name: `Lote ${status}`,
+          groupJids: ['g1@g.us'],
+          intervalMin: 10,
+          status,
+        },
+      });
+    const [sched, running, done] = await Promise.all([mk('SCHEDULED'), mk('RUNNING'), mk('DONE')]);
+    expect((await post(`/admin/affiliates/${c.id}/active`, { active: false })).statusCode).toBe(
+      204,
+    );
+    expect((await post(`/admin/affiliates/${c.id}/active`, { active: true })).statusCode).toBe(204);
+    const status = async (id: string) =>
+      (await prisma.batch.findUniqueOrThrow({ where: { id } })).status;
+    expect(await status(sched.id)).toBe('PAUSED');
+    expect(await status(running.id)).toBe('PAUSED');
+    expect(await status(done.id)).toBe('DONE');
+  });
+
+  it('PATCH com e-mail de outro usuário → 409', async () => {
+    const e1 = email();
+    const e2 = email();
+    await post('/admin/affiliates', { name: 'A', email: e1, password: 'senha-forte-1' });
+    const b = (
+      await post('/admin/affiliates', { name: 'B', email: e2, password: 'senha-forte-1' })
+    ).json();
+    const r = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/admin/affiliates/${b.id}`,
+      headers: { cookie: adminCookie },
+      payload: { email: e1.toUpperCase() },
+    });
+    expect(r.statusCode).toBe(409);
+  });
+
   it('isolamento: afiliado só vê os próprios templates', async () => {
     const e = email();
     const c = (
