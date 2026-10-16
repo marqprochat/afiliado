@@ -67,7 +67,6 @@ describe('AffiliatesClient', () => {
     renderPage();
     await screen.findByText('João');
     fireEvent.click(screen.getByRole('button', { name: /desativar/i }));
-    await new Promise((r) => setTimeout(r, 20));
     expect(confirmMock).toHaveBeenCalledTimes(1);
     expect(apiFetchMock).not.toHaveBeenCalledWith('/admin/affiliates/a1/active', expect.anything());
   });
@@ -140,7 +139,6 @@ describe('AffiliatesClient', () => {
     renderPage();
     await screen.findByText('João');
     fireEvent.click(screen.getByRole('button', { name: /redefinir senha/i }));
-    await new Promise((r) => setTimeout(r, 20));
     expect(apiFetchMock).not.toHaveBeenCalledWith(
       '/admin/affiliates/a1/reset-password',
       expect.anything(),

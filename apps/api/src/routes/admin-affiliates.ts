@@ -224,8 +224,9 @@ export async function adminAffiliatesRoutes(app: FastifyInstance) {
         // Conexões em tempo real abertas também caem (a sessão que as autenticou já foi apagada).
         app.events.closeTenant(id);
       } else if (!tenant.active) {
-        // Só ao reativar de fato (inativo → ativo). Jobs descartados enquanto inativo deixam lotes parados em andamento; pausa para o
-        // afiliado retomar com o botão existente (que re-enfileira os itens).
+        // Só ao reativar de fato (inativo → ativo). Jobs descartados enquanto inativo deixam lotes
+        // parados em andamento; pausa para o afiliado retomar com o botão existente (que
+        // re-enfileira os itens).
         await prisma.batch.updateMany({
           where: { tenantId: id, status: { in: ['SCHEDULED', 'RUNNING'] } },
           data: { status: 'PAUSED' },

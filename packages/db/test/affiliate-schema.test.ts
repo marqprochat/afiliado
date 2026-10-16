@@ -6,7 +6,7 @@ afterAll(async () => {
   // Robusto a testes que falham antes de registrar o id: limpa também por prefixo de nome
   // (afiliados primeiro, por causa do Restrict em parentTenantId).
   try {
-    const byName = { name: { startsWith: 'aff-' } };
+    const byName = { name: { startsWith: 'aff-schema-' } };
     await prisma.tenant.deleteMany({
       where: { OR: [{ id: { in: tenantIds } }, byName], parentTenantId: { not: null } },
     });
@@ -18,9 +18,9 @@ afterAll(async () => {
 
 describe('schema de afiliados', () => {
   it('tenant nasce ativo e sem pai; afiliado aponta para o pai', async () => {
-    const parent = await prisma.tenant.create({ data: { name: 'aff-parent' } });
+    const parent = await prisma.tenant.create({ data: { name: 'aff-schema-parent' } });
     const child = await prisma.tenant.create({
-      data: { name: 'aff-child', parentTenantId: parent.id },
+      data: { name: 'aff-schema-child', parentTenantId: parent.id },
     });
     tenantIds.push(parent.id, child.id);
     expect(parent.active).toBe(true);
@@ -29,9 +29,9 @@ describe('schema de afiliados', () => {
   });
 
   it('não exclui o tenant pai enquanto houver afiliado', async () => {
-    const parent = await prisma.tenant.create({ data: { name: 'aff-parent2' } });
+    const parent = await prisma.tenant.create({ data: { name: 'aff-schema-parent2' } });
     const child = await prisma.tenant.create({
-      data: { name: 'aff-child2', parentTenantId: parent.id },
+      data: { name: 'aff-schema-child2', parentTenantId: parent.id },
     });
     tenantIds.push(parent.id, child.id);
     // P2003 = violação de chave estrangeira (onDelete: Restrict), não qualquer erro.
@@ -41,7 +41,7 @@ describe('schema de afiliados', () => {
   });
 
   it('User.isSuperAdmin nasce false; subId é opcional; Session guarda impersonatorUserId', async () => {
-    const t = await prisma.tenant.create({ data: { name: 'aff-user' } });
+    const t = await prisma.tenant.create({ data: { name: 'aff-schema-user' } });
     tenantIds.push(t.id);
     const u = await prisma.user.create({
       data: { tenantId: t.id, email: `${t.id}@t.local`, name: 'U', passwordHash: 'x' },
