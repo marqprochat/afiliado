@@ -4,16 +4,25 @@ import { AiSettingsForm } from '@/components/settings/ai-settings-form';
 import type { AiSettings, AiSettingsPatch } from '@/lib/types';
 
 const value: AiSettings = {
-  enabled: false, baseUrl: 'https://vps.exemplo.com/v1', model: 'combo',
-  hasApiKey: true, apiKeyHint: '••••1234',
-  extraInstructions: '', tone: 'empolgado', emojiLevel: 'medio', maxChars: 140, temperature: 0.9,
+  enabled: false,
+  baseUrl: 'https://vps.exemplo.com/v1',
+  model: 'combo',
+  hasApiKey: true,
+  apiKeyHint: '••••1234',
+  extraInstructions: '',
+  tone: 'empolgado',
+  emojiLevel: 'medio',
+  maxChars: 140,
+  temperature: 0.9,
 };
 const noTest = vi.fn(async (_draft?: AiSettingsPatch) => ({ cta: 'x', latencyMs: 1 }));
 
 describe('AiSettingsForm', () => {
   it('mostra os valores atuais e a máscara da chave no placeholder (nunca a chave)', () => {
     render(<AiSettingsForm value={value} onSave={vi.fn()} onTest={noTest} />);
-    expect((screen.getByLabelText(/base url/i) as HTMLInputElement).value).toBe('https://vps.exemplo.com/v1');
+    expect((screen.getByLabelText(/base url/i) as HTMLInputElement).value).toBe(
+      'https://vps.exemplo.com/v1',
+    );
     expect((screen.getByLabelText(/modelo/i) as HTMLInputElement).value).toBe('combo');
     const key = screen.getByLabelText(/api key/i) as HTMLInputElement;
     expect(key.type).toBe('password');
@@ -48,20 +57,31 @@ describe('AiSettingsForm', () => {
     fireEvent.change(screen.getByLabelText(/emojis/i), { target: { value: 'muitos' } });
     fireEvent.change(screen.getByLabelText(/máx.*caracteres/i), { target: { value: '100' } });
     fireEvent.change(screen.getByLabelText(/temperature/i), { target: { value: '1.2' } });
-    fireEvent.change(screen.getByLabelText(/instruções extras/i), { target: { value: 'Fale como gamer' } });
+    fireEvent.change(screen.getByLabelText(/instruções extras/i), {
+      target: { value: 'Fale como gamer' },
+    });
     fireEvent.click(screen.getByRole('button', { name: /salvar/i }));
     expect(onSave).toHaveBeenCalledWith({
-      tone: 'urgente', emojiLevel: 'muitos', maxChars: 100, temperature: 1.2, extraInstructions: 'Fale como gamer',
+      tone: 'urgente',
+      emojiLevel: 'muitos',
+      maxChars: 100,
+      temperature: 1.2,
+      extraInstructions: 'Fale como gamer',
     });
   });
   it('Testar envia o rascunho do formulário e mostra o CTA e a latência', async () => {
-    const onTest = vi.fn(async (_draft: AiSettingsPatch) => ({ cta: 'Nossaaa! Que fone! 🔥', latencyMs: 812 }));
+    const onTest = vi.fn(async (_draft: AiSettingsPatch) => ({
+      cta: 'Nossaaa! Que fone! 🔥',
+      latencyMs: 812,
+    }));
     render(<AiSettingsForm value={value} onSave={vi.fn()} onTest={onTest} />);
     fireEvent.change(screen.getByLabelText(/modelo/i), { target: { value: 'rascunho' } });
     fireEvent.click(screen.getByRole('button', { name: /testar/i }));
     expect(await screen.findByText(/Nossaaa! Que fone! 🔥/)).toBeTruthy();
     expect(screen.getByText(/812/)).toBeTruthy();
-    expect(onTest).toHaveBeenCalledWith(expect.objectContaining({ model: 'rascunho', baseUrl: value.baseUrl }));
+    expect(onTest).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'rascunho', baseUrl: value.baseUrl }),
+    );
     expect(onTest.mock.calls[0]![0]).not.toHaveProperty('apiKey');
   });
   it('Testar mostra a mensagem de erro', async () => {
@@ -75,7 +95,21 @@ describe('AiSettingsForm', () => {
   it('IA gerenciada: esconde conexão e nunca envia baseUrl/model/apiKey', async () => {
     const onSave = vi.fn();
     const onTest = vi.fn(async (_d?: AiSettingsPatch) => ({ cta: 'x', latencyMs: 1 }));
-    render(<AiSettingsForm value={{ ...value, baseUrl: '', model: '', hasApiKey: false, apiKeyHint: null, managed: true, available: true }} onSave={onSave} onTest={onTest} />);
+    render(
+      <AiSettingsForm
+        value={{
+          ...value,
+          baseUrl: '',
+          model: '',
+          hasApiKey: false,
+          apiKeyHint: null,
+          managed: true,
+          available: true,
+        }}
+        onSave={onSave}
+        onTest={onTest}
+      />,
+    );
     expect(screen.queryByLabelText(/base url/i)).toBeNull();
     expect(screen.queryByLabelText(/api key/i)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /testar/i }));
@@ -86,13 +120,47 @@ describe('AiSettingsForm', () => {
     expect(draft).not.toHaveProperty('apiKey');
   });
   it('IA gerenciada sem disponibilidade: Switch desabilitado e aviso do administrador', () => {
-    render(<AiSettingsForm value={{ ...value, baseUrl: '', model: '', hasApiKey: false, apiKeyHint: null, managed: true, available: false }} onSave={vi.fn()} onTest={noTest} />);
-    expect(screen.getByRole('switch', { name: /ativar cta com ia/i })).toHaveAttribute('aria-disabled', 'true');
+    render(
+      <AiSettingsForm
+        value={{
+          ...value,
+          baseUrl: '',
+          model: '',
+          hasApiKey: false,
+          apiKeyHint: null,
+          managed: true,
+          available: false,
+        }}
+        onSave={vi.fn()}
+        onTest={noTest}
+      />,
+    );
+    expect(screen.getByRole('switch', { name: /ativar cta com ia/i })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
     expect(screen.getByText(/a ia ainda não foi configurada pelo administrador/i)).toBeTruthy();
   });
   it('IA gerenciada disponível: Switch habilitado e aviso de conexão gerenciada', () => {
-    render(<AiSettingsForm value={{ ...value, baseUrl: '', model: '', hasApiKey: false, apiKeyHint: null, managed: true, available: true }} onSave={vi.fn()} onTest={noTest} />);
-    expect(screen.getByRole('switch', { name: /ativar cta com ia/i })).not.toHaveAttribute('aria-disabled', 'true');
+    render(
+      <AiSettingsForm
+        value={{
+          ...value,
+          baseUrl: '',
+          model: '',
+          hasApiKey: false,
+          apiKeyHint: null,
+          managed: true,
+          available: true,
+        }}
+        onSave={vi.fn()}
+        onTest={noTest}
+      />,
+    );
+    expect(screen.getByRole('switch', { name: /ativar cta com ia/i })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
     expect(screen.getByText(/gerenciada pelo administrador/i)).toBeTruthy();
   });
 });
