@@ -1,7 +1,7 @@
 # Afiliados (SaaS sem pagamento) — Design
 
 **Data:** 2026-10-16
-**Status:** aprovado em brainstorming, aguardando revisão do spec
+**Status:** aprovado; plano em docs/superpowers/plans/2026-10-16-afiliados-saas.md
 
 ## Objetivo
 
