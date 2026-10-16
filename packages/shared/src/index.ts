@@ -15,3 +15,4 @@ export * from './group-links';
 export * from './dispatch';
 export * from './ai';
 export * from './metrics';
+export * from './affiliates';
