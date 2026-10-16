@@ -50,6 +50,18 @@ describe('AffiliateMarketplaces', () => {
       }),
     );
   });
+  it('salva o identificador aparado', async () => {
+    renderIt();
+    const input = await screen.findByLabelText(/subid.*shopee/i);
+    fireEvent.change(input, { target: { value: ' joao ' } });
+    fireEvent.click(screen.getByRole('button', { name: /salvar shopee/i }));
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith('/marketplaces/SHOPEE', {
+        method: 'PUT',
+        json: { subId: 'joao' },
+      }),
+    );
+  });
   it('erro ao carregar mostra mensagem e "Tentar de novo" refaz a consulta', async () => {
     let fail = true;
     apiFetchMock.mockImplementation(async (path: string) => {

@@ -85,4 +85,14 @@ describe('AiSettingsForm', () => {
     expect(draft).not.toHaveProperty('model');
     expect(draft).not.toHaveProperty('apiKey');
   });
+  it('IA gerenciada sem disponibilidade: Switch desabilitado e aviso do administrador', () => {
+    render(<AiSettingsForm value={{ ...value, baseUrl: '', model: '', hasApiKey: false, apiKeyHint: null, managed: true, available: false }} onSave={vi.fn()} onTest={noTest} />);
+    expect(screen.getByRole('switch', { name: /ativar cta com ia/i })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText(/a ia ainda não foi configurada pelo administrador/i)).toBeTruthy();
+  });
+  it('IA gerenciada disponível: Switch habilitado e aviso de conexão gerenciada', () => {
+    render(<AiSettingsForm value={{ ...value, baseUrl: '', model: '', hasApiKey: false, apiKeyHint: null, managed: true, available: true }} onSave={vi.fn()} onTest={noTest} />);
+    expect(screen.getByRole('switch', { name: /ativar cta com ia/i })).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText(/gerenciada pelo administrador/i)).toBeTruthy();
+  });
 });

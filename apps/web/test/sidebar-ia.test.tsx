@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Sidebar } from '@/components/app-shell/sidebar';
 
@@ -30,6 +30,7 @@ function renderSidebar() {
       <Sidebar />
     </QueryClientProvider>,
   );
+  return qc;
 }
 beforeEach(() => apiFetchMock.mockReset());
 
@@ -48,9 +49,9 @@ describe('Sidebar', () => {
   });
   it('não mostra "Afiliados" para usuário comum', async () => {
     mockMe(false);
-    renderSidebar();
-    await vi.waitFor(() => expect(apiFetchMock).toHaveBeenCalledWith('/me'));
-    await new Promise((r) => setTimeout(r, 20));
+    const qc = renderSidebar();
+    // espera estável: /me resolvido e já refletido no cache (sem espera fixa)
+    await waitFor(() => expect(qc.getQueryData(['me'])).toBeDefined());
     expect(screen.queryByRole('link', { name: /afiliados/i })).toBeNull();
   });
 });
