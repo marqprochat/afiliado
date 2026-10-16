@@ -22,12 +22,13 @@ async function main() {
 
   await prisma.user.upsert({
     where: { email },
-    update: {},
+    update: { isSuperAdmin: true },
     create: {
       tenantId: tenant.id,
       email,
       name: 'Admin',
       role: 'OWNER',
+      isSuperAdmin: true,
       passwordHash: await hash(password),
     },
   });

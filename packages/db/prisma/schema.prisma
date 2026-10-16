@@ -13,6 +13,11 @@ model Tenant {
   name      String
   createdAt DateTime @default(now())
 
+  parentTenantId String?
+  parent         Tenant?  @relation("TenantParent", fields: [parentTenantId], references: [id], onDelete: Restrict)
+  children       Tenant[] @relation("TenantParent")
+  active         Boolean  @default(true)
+
   users                User[]
   waSessions           WaSession[]
   waGroups             WaGroup[]
@@ -41,6 +46,8 @@ model Tenant {
   groupMemberEvents    GroupMemberEvent[]
   groupSnapshots       GroupSnapshot[]
   linkClickEvents      LinkClickEvent[]
+
+  @@index([parentTenantId])
 }
 
 enum UserRole {
@@ -56,6 +63,7 @@ model User {
   passwordHash String
   name         String
   role         UserRole  @default(OWNER)
+  isSuperAdmin Boolean   @default(false)
   createdAt    DateTime  @default(now())
   sessions     Session[]
 }
@@ -65,6 +73,7 @@ model Session {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
+  impersonatorUserId String?
 }
 
 // Reservado para F7
@@ -182,6 +191,7 @@ model MarketplaceConnection {
   kind                 MarketplaceKind
   encryptedCredentials Bytes?
   affiliateTag         String?
+  subId                String?
   status               ConnectionStatus @default(UNCONFIGURED)
   lastCheckedAt        DateTime?
   lastError            String?
