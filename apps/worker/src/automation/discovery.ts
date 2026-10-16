@@ -1,4 +1,4 @@
-import { prisma, decryptJson } from '@afilados/db';
+import { prisma, decryptJson, resolveConnection } from '@afilados/db';
 import type { AutomationRule } from '@afilados/db';
 import {
   createShopeeAdapter,
@@ -173,9 +173,7 @@ async function discoverShopee(
   keyword: string,
   deps: DiscoveryDeps,
 ): Promise<ProductData[]> {
-  const conn = await prisma.marketplaceConnection.findFirst({
-    where: { tenantId: rule.tenantId, kind: 'SHOPEE' },
-  });
+  const { row: conn } = await resolveConnection(rule.tenantId, 'SHOPEE');
   if (!conn?.encryptedCredentials) return [];
   const creds = decryptJson<ShopeeCredentials>(Buffer.from(conn.encryptedCredentials));
   const search =
@@ -199,9 +197,7 @@ async function discoverAliexpress(
   keyword: string,
   deps: DiscoveryDeps,
 ): Promise<ProductData[]> {
-  const conn = await prisma.marketplaceConnection.findFirst({
-    where: { tenantId: rule.tenantId, kind: 'ALIEXPRESS' },
-  });
+  const { row: conn } = await resolveConnection(rule.tenantId, 'ALIEXPRESS');
   if (!conn?.encryptedCredentials) return [];
   const creds = decryptJson<AliexpressCredentials>(Buffer.from(conn.encryptedCredentials));
   const search =

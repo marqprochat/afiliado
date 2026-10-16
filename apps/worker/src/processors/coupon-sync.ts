@@ -1,6 +1,6 @@
 import type { Job } from 'bullmq';
 import pino from 'pino';
-import { prisma, decryptJson } from '@afilados/db';
+import { prisma, decryptJson, resolveConnection } from '@afilados/db';
 import type { CouponSyncJob } from '@afilados/shared';
 import {
   fetchAliexpressPromoCodes,
@@ -40,9 +40,7 @@ export function createCouponSyncProcessor(deps: CouponSyncProcessorDeps = {}) {
     const results: CouponSyncResult[] = [];
 
     // 1. AliExpress
-    const aliConn = await prisma.marketplaceConnection.findFirst({
-      where: { tenantId, kind: 'ALIEXPRESS' },
-    });
+    const { row: aliConn } = await resolveConnection(tenantId, 'ALIEXPRESS');
 
     if (aliConn?.encryptedCredentials) {
       try {
@@ -97,9 +95,7 @@ export function createCouponSyncProcessor(deps: CouponSyncProcessorDeps = {}) {
     }
 
     // 2. Awin
-    const awinConn = await prisma.marketplaceConnection.findFirst({
-      where: { tenantId, kind: 'AWIN' },
-    });
+    const { row: awinConn } = await resolveConnection(tenantId, 'AWIN');
 
     if (awinConn?.encryptedCredentials) {
       try {

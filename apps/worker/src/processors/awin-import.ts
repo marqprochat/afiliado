@@ -1,6 +1,6 @@
 import type { Job } from 'bullmq';
 import pino from 'pino';
-import { prisma, decryptJson } from '@afilados/db';
+import { prisma, decryptJson, resolveConnection } from '@afilados/db';
 import {
   downloadFeed as downloadFeedReal,
   listDatafeeds as listDatafeedsReal,
@@ -116,7 +116,7 @@ export async function importAwinCatalog(
   const listDatafeeds = deps.listDatafeeds ?? listDatafeedsReal;
   const downloadFeed = deps.downloadFeed ?? downloadFeedReal;
 
-  const conn = await prisma.marketplaceConnection.findFirst({ where: { tenantId, kind: 'AWIN' } });
+  const { row: conn } = await resolveConnection(tenantId, 'AWIN');
   if (!conn?.encryptedCredentials) return [];
   const creds = decryptJson<AwinCredentials>(Buffer.from(conn.encryptedCredentials));
   if (!creds.feedListUrl || !creds.feedIds?.length) return [];

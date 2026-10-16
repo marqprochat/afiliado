@@ -1,7 +1,7 @@
 import type { Job } from 'bullmq';
 import pino from 'pino';
 import { createHash } from 'node:crypto';
-import { prisma, decryptJson } from '@afilados/db';
+import { prisma, decryptJson, resolveConnection } from '@afilados/db';
 import {
   createShopeeAdapter,
   getAliexpressAdapter,
@@ -51,18 +51,14 @@ async function fetchViaAdapter(
   url: string,
 ): Promise<ProductData | null> {
   if (kind === 'SHOPEE') {
-    const conn = await prisma.marketplaceConnection.findFirst({
-      where: { tenantId, kind: 'SHOPEE' },
-    });
+    const { row: conn } = await resolveConnection(tenantId, 'SHOPEE');
     if (!conn?.encryptedCredentials) throw new Error('Shopee não configurada para este tenant');
     const creds = decryptJson<ShopeeCredentials>(Buffer.from(conn.encryptedCredentials));
     const list = await createShopeeAdapter().fetchByUrls(creds, [url]);
     return list[0] ?? null;
   }
   if (kind === 'ALIEXPRESS') {
-    const conn = await prisma.marketplaceConnection.findFirst({
-      where: { tenantId, kind: 'ALIEXPRESS' },
-    });
+    const { row: conn } = await resolveConnection(tenantId, 'ALIEXPRESS');
     if (conn?.encryptedCredentials) {
       try {
         const creds = decryptJson<AliexpressCredentials>(Buffer.from(conn.encryptedCredentials));

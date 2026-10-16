@@ -1,4 +1,5 @@
-import { prisma, decryptJson, encryptJson } from '@afilados/db';
+import { prisma, decryptJson, encryptJson, resolveConnection } from '@afilados/db';
+import { applyAffiliateTag } from '@afilados/core';
 import type { TagCredentials } from '@afilados/shared';
 import {
   MlApiError,
@@ -21,7 +22,7 @@ export async function loadTagCredentials(
   tenantId: string,
   kind: 'MERCADOLIVRE' | 'AMAZON' | 'MAGALU',
 ): Promise<TagCredentials> {
-  const row = await prisma.marketplaceConnection.findFirst({ where: { tenantId, kind } });
+  const { row } = await resolveConnection(tenantId, kind);
   const creds = row?.encryptedCredentials
     ? decryptJson<TagCredentials>(Buffer.from(row.encryptedCredentials))
     : {};
@@ -31,8 +32,18 @@ export async function loadTagCredentials(
   return creds;
 }
 
+/** Credenciais por tag já com a etiqueta do afiliado (quando houver) — usadas na geração de link. */
+export async function loadTagCredentialsForLink(
+  tenantId: string,
+  kind: 'MERCADOLIVRE' | 'AMAZON' | 'MAGALU',
+): Promise<TagCredentials> {
+  const creds = await loadTagCredentials(tenantId, kind);
+  const { subId } = await resolveConnection(tenantId, kind);
+  return applyAffiliateTag(creds, subId);
+}
+
 export async function loadAwinCredentials(tenantId: string): Promise<AwinCredentials> {
-  const row = await prisma.marketplaceConnection.findFirst({ where: { tenantId, kind: 'AWIN' } });
+  const { row } = await resolveConnection(tenantId, 'AWIN');
   const creds = row?.encryptedCredentials
     ? decryptJson<AwinCredentials>(Buffer.from(row.encryptedCredentials))
     : ({} as Partial<AwinCredentials>);
@@ -48,9 +59,7 @@ export async function loadAwinCredentials(tenantId: string): Promise<AwinCredent
 }
 
 export async function loadAliexpressCredentials(tenantId: string): Promise<AliexpressCredentials> {
-  const row = await prisma.marketplaceConnection.findFirst({
-    where: { tenantId, kind: 'ALIEXPRESS' },
-  });
+  const { row } = await resolveConnection(tenantId, 'ALIEXPRESS');
   const creds = row?.encryptedCredentials
     ? decryptJson<AliexpressCredentials>(Buffer.from(row.encryptedCredentials))
     : ({} as Partial<AliexpressCredentials>);
@@ -75,9 +84,7 @@ function mlOAuthConfig(): MlOAuthConfig | null {
 }
 
 async function readMlRow(tenantId: string) {
-  const row = await prisma.marketplaceConnection.findFirst({
-    where: { tenantId, kind: 'MERCADOLIVRE' },
-  });
+  const { row } = await resolveConnection(tenantId, 'MERCADOLIVRE');
   const creds = row?.encryptedCredentials
     ? decryptJson<TagCredentials>(Buffer.from(row.encryptedCredentials))
     : {};
@@ -133,7 +140,7 @@ export async function loadMlApiCredentials(tenantId: string): Promise<TagCredent
   const cfg = mlOAuthConfig();
   if (!row || !creds.mlApi?.refreshToken || !cfg) return creds;
   try {
-    const { accessToken, tokens } = await ensureMlTokenWithLock(tenantId, creds.mlApi, cfg);
+    const { accessToken, tokens } = await ensureMlTokenWithLock(row.tenantId, creds.mlApi, cfg);
     return { ...creds, mlApi: { ...tokens, accessToken } };
   } catch (err) {
     if (err instanceof MlApiError && err.code === 'ML_API_UNAUTHORIZED') {
