@@ -31,8 +31,10 @@ export type {
 };
 
 export interface Me {
-  user: { id: string; email: string; name: string; role: string };
+  user: { id: string; email: string; name: string; role: string; isSuperAdmin: boolean };
   tenant: { id: string; name: string };
+  isAffiliate: boolean;
+  impersonating: { by: string } | null;
 }
 export interface Settings {
   window: { startTime: string; endTime: string; timezone: string; enabled: boolean };
@@ -47,6 +49,8 @@ export interface AiSettings {
   model: string;
   hasApiKey: boolean;
   apiKeyHint: string | null;
+  managed?: boolean;
+  available?: boolean;
   extraInstructions: string;
   tone: AiTone;
   emojiLevel: AiEmojiLevel;
@@ -108,6 +112,7 @@ export interface MarketplaceConnection {
   mattTool: string | null;
   /** Etiqueta de afiliado do ML usada no gerador meli.la (vazio = padrão da conta). */
   mlAffiliateTag?: string | null;
+  subId?: string | null;
   amazonClientId: string | null;
   hasAmazonApiSecret: boolean;
   hasAwinFeedListUrl: boolean;
@@ -493,4 +498,17 @@ export interface GroupLink {
   session?: { id: string; label: string; phone: string | null; status: WaSessionStatus };
   groups?: ManagedGroup[];
   _count?: { groups: number };
+}
+
+export interface AffiliateRow {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  active: boolean;
+  createdAt: string;
+  waConnected: boolean;
+  groups: number;
+  sends7d: number;
+  subIds: Partial<Record<MarketplaceKind, string>>;
 }

@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiFetch } from '@/lib/api';
+import { useMe } from '@/lib/queries';
 
 const PRINCIPAL = [
   { href: '/', label: 'Visão Geral', icon: Home },
@@ -78,6 +79,8 @@ function Group({ title, items, path }: { title: string; items: typeof PRINCIPAL;
 
 export function Sidebar() {
   const path = usePathname();
+  const { data: me } = useMe();
+  const principal = PRINCIPAL.filter((i) => i.href !== '/afiliados' || me?.user.isSuperAdmin);
   async function logout() {
     await apiFetch('/auth/logout', { method: 'POST' });
     window.location.assign('/login');
@@ -88,7 +91,7 @@ export function Sidebar() {
         <Settings className="h-5 w-5 text-brand" /> Afilados
       </div>
       <nav className="flex-1 overflow-y-auto">
-        <Group title="Principal" items={PRINCIPAL} path={path} />
+        <Group title="Principal" items={principal} path={path} />
         <Group title="Configurações" items={CONFIG} path={path} />
       </nav>
       <button
