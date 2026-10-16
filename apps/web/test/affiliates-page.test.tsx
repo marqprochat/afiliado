@@ -147,6 +147,18 @@ describe('AffiliatesClient', () => {
     );
   });
   it('editar envia PATCH sem password, apara SubIDs e envia vazio como ""', async () => {
+    apiFetchMock.mockImplementation(async (path: string, init?: { method?: string }) => {
+      if (path === '/me')
+        return {
+          user: { isSuperAdmin: true },
+          tenant: {},
+          isAffiliate: false,
+          impersonating: null,
+        };
+      if (path === '/admin/affiliates/a1' && init?.method === 'PATCH') return row;
+      if (path === '/admin/affiliates') return [row];
+      return undefined;
+    });
     renderPage();
     await screen.findByText('João');
     fireEvent.click(screen.getByRole('button', { name: /editar joão/i }));
