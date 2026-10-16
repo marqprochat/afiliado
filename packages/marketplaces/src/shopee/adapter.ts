@@ -199,11 +199,11 @@ export function createShopeeAdapter(
       return out;
     },
 
-    async toAffiliateLink(creds, url, subId): Promise<string> {
+    async toAffiliateLink(creds, url, subId, extraSubIds): Promise<string> {
       if (mock) return shortLinkFixture.data.generateShortLink.shortLink;
       const res = await client(creds).request<ShortLinkResponse>(SHORT_LINK_MUTATION, {
         originUrl: url,
-        subIds: subId ? [subId] : [],
+        subIds: [subId, ...(extraSubIds ?? [])].filter((s): s is string => Boolean(s)),
       });
       return res.generateShortLink.shortLink;
     },

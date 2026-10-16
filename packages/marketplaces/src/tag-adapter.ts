@@ -219,7 +219,7 @@ export function createTagAdapter(
       }
       // Amazon: link curto oficial via SiteStripe (sessão), com fallback para link por tag
       if (kind === 'AMAZON' && creds.amazonSession?.cookies) {
-        const cacheKey = `AMAZON:${url}`;
+        const cacheKey = `AMAZON:${creds.tag?.trim() ?? ''}:${url}`;
         const cached = officialLinkCache.get(cacheKey);
         if (cached && cached.expiresAt > Date.now()) return cached.link;
         try {

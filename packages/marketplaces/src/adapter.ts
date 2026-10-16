@@ -29,5 +29,6 @@ export interface MarketplaceAdapter<C = unknown> {
   /** Só marketplaces com API de busca (Shopee). */
   search?(creds: C, query: SearchQuery): Promise<ProductData[]>;
   fetchByUrls(creds: C, urls: string[]): Promise<ProductData[]>;
-  toAffiliateLink(creds: C, url: string, subId?: string): Promise<string>;
+  /** `extraSubIds` só é usado pela Shopee (subIds = [subId, ...extraSubIds]); os demais ignoram. */
+  toAffiliateLink(creds: C, url: string, subId?: string, extraSubIds?: string[]): Promise<string>;
 }
