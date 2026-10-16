@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { prisma, forTenant } from '@afilados/db';
+import { prisma, forTenant, getParentTenantId } from '@afilados/db';
 import {
   couponVerifySchema,
   extensionCaptureSchema,
@@ -379,6 +379,9 @@ export async function extensionRoutes(app: FastifyInstance) {
   // e nunca são devolvidos pela API (só o syncedAt, via publicConnection).
   app.post('/extension/session', async (req) => {
     const { tenantId } = await authenticateExtension(req);
+    if (await getParentTenantId(tenantId)) {
+      throw ApiError.forbidden('Sessões de marketplace são gerenciadas pelo administrador');
+    }
     const { marketplaceKind, cookies } = extensionSessionSchema.parse(req.body);
     const db = forTenant(tenantId);
 

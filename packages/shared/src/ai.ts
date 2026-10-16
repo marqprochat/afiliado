@@ -41,6 +41,10 @@ export interface PublicAiSettings {
   emojiLevel: AiEmojiLevel;
   maxChars: number;
   temperature: number;
+  /** Conta de afiliado: a conexão de IA é do administrador (baseUrl/model/chave ocultos). */
+  managed: boolean;
+  /** A IA efetiva (própria ou herdada do admin) está completa e utilizável. */
+  available: boolean;
 }
 
 const fields = {

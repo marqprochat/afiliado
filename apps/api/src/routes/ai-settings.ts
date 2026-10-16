@@ -7,6 +7,7 @@ import {
   SAMPLE_PRODUCT,
   applyPatch,
   assertComplete,
+  effectiveAi,
   loadStoredAi,
   productRowToData,
   saveStoredAi,
@@ -22,23 +23,34 @@ async function assertSafeBaseUrl(url: string) {
   }
 }
 
+function rejectCredentials(isAffiliate: boolean, patch: Record<string, unknown>) {
+  if (isAffiliate && (patch.baseUrl !== undefined || patch.model !== undefined || patch.apiKey !== undefined)) {
+    throw ApiError.forbidden('A conexão de IA é gerenciada pelo administrador');
+  }
+}
+
 export async function aiSettingsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireAuth);
 
-  app.get('/settings/ai', async (req) => toPublicAi(await loadStoredAi(req.db)));
+  app.get('/settings/ai', async (req) => {
+    const own = await loadStoredAi(req.db);
+    return toPublicAi(await effectiveAi(req.db, own), req.isAffiliate);
+  });
 
   app.put('/settings/ai', async (req) => {
     const patch = aiSettingsUpdateSchema.parse(req.body);
+    rejectCredentials(req.isAffiliate, patch);
     const next = applyPatch(await loadStoredAi(req.db), patch);
-    if (next.baseUrl) await assertSafeBaseUrl(next.baseUrl);
-    if (next.enabled) assertComplete(next, 'Para ativar');
+    if (next.baseUrl && !req.isAffiliate) await assertSafeBaseUrl(next.baseUrl);
+    if (next.enabled) assertComplete(await effectiveAi(req.db, next), 'Para ativar');
     await saveStoredAi(req.db, req.tenantId, next);
-    return toPublicAi(next);
+    return toPublicAi(await effectiveAi(req.db, next), req.isAffiliate);
   });
 
   app.post('/settings/ai/test', async (req) => {
     const { productId, ...draft } = aiTestSchema.parse(req.body);
-    const merged = applyPatch(await loadStoredAi(req.db), draft);
+    rejectCredentials(req.isAffiliate, draft);
+    const merged = await effectiveAi(req.db, applyPatch(await loadStoredAi(req.db), draft));
     assertComplete(merged, 'Para testar');
     await assertSafeBaseUrl(merged.baseUrl);
     let product = SAMPLE_PRODUCT;

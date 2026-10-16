@@ -34,6 +34,7 @@ describe('settings/ai', () => {
     expect(res.json()).toEqual({
       enabled: false, baseUrl: '', model: '', hasApiKey: false, apiKeyHint: null,
       extraInstructions: '', tone: 'empolgado', emojiLevel: 'medio', maxChars: 140, temperature: 0.9,
+      managed: false, available: false,
     });
   });
   it('PUT enabled=true sem baseUrl/model/apiKey → 400', async () => {

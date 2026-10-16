@@ -1,4 +1,12 @@
-import { decryptJson, encryptJson, type Product, type TenantClient } from '@afilados/db';
+import {
+  decryptJson,
+  encryptJson,
+  getParentTenantId,
+  mergeAffiliateAi,
+  prisma,
+  type Product,
+  type TenantClient,
+} from '@afilados/db';
 import type { AiCtaConfig } from '@afilados/core';
 import {
   AI_DEFAULTS,
@@ -39,20 +47,31 @@ function readApiKey(stored: StoredAiConfig): string | null {
   }
 }
 
-export function toPublicAi(s: StoredAiConfig): PublicAiSettings {
+export function toPublicAi(s: StoredAiConfig, managed = false): PublicAiSettings {
   const key = readApiKey(s);
+  const available = Boolean(s.baseUrl && s.model && s.encryptedApiKey);
   return {
     enabled: s.enabled,
-    baseUrl: s.baseUrl,
-    model: s.model,
-    hasApiKey: Boolean(s.encryptedApiKey),
-    apiKeyHint: s.encryptedApiKey ? `••••${key ? key.slice(-4) : ''}` : null,
+    baseUrl: managed ? '' : s.baseUrl,
+    model: managed ? '' : s.model,
+    hasApiKey: managed ? false : Boolean(s.encryptedApiKey),
+    apiKeyHint: managed ? null : s.encryptedApiKey ? `••••${key ? key.slice(-4) : ''}` : null,
     extraInstructions: s.extraInstructions ?? AI_DEFAULTS.extraInstructions,
     tone: s.tone ?? AI_DEFAULTS.tone,
     emojiLevel: s.emojiLevel ?? AI_DEFAULTS.emojiLevel,
     maxChars: s.maxChars ?? AI_DEFAULTS.maxChars,
     temperature: s.temperature ?? AI_DEFAULTS.temperature,
+    managed,
+    available,
   };
+}
+
+/** Configuração efetiva: afiliado recebe as credenciais de IA do tenant pai. */
+export async function effectiveAi(db: TenantClient, own: StoredAiConfig): Promise<StoredAiConfig> {
+  const parentId = await getParentTenantId(db.$tenantId);
+  if (!parentId) return own;
+  const row = await prisma.setting.findFirst({ where: { tenantId: parentId, key: AI_KEY } });
+  return mergeAffiliateAi(own, row?.value as StoredAiConfig | undefined);
 }
 
 /** Aplica um patch parcial; `apiKey` vazia/ausente mantém a chave atual. */

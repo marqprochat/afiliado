@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { decryptJson } from '@afilados/db';
+import { decryptJson, resolveConnections } from '@afilados/db';
 import {
   ApiError,
   MARKETPLACE_KINDS,
@@ -13,14 +13,16 @@ import {
   SESSION_FIELD_BY_KIND,
   type AwinImportJob,
 } from '@afilados/shared';
-import { requireAuth } from '../plugins/auth';
+import { forbidAffiliate, requireAuth } from '../plugins/auth';
 import {
   getAdapter,
   getShopeeAdapter,
   loadAliexpressCredentials,
   loadAwinCredentials,
+  publicAffiliateConnection,
   publicConnection,
   selectableAwinFeeds,
+  setAffiliateSubId,
   upsertMarketplaceCredentials,
 } from '../lib/marketplaces';
 import { getQueue, getQueueEvents } from '../lib/redis';
@@ -35,6 +37,19 @@ export async function marketplacesRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireAuth);
 
   app.get('/marketplaces', async (req) => {
+    if (req.isAffiliate) {
+      const [owner, own] = await Promise.all([
+        resolveConnections(req.tenantId),
+        req.db.marketplaceConnection.findMany(),
+      ]);
+      return MARKETPLACE_KINDS.map((kind) =>
+        publicAffiliateConnection(
+          owner.get(kind)?.row ?? null,
+          own.find((r) => r.kind === kind) ?? null,
+          kind,
+        ),
+      );
+    }
     const rows = await req.db.marketplaceConnection.findMany();
     const mlLinkBatchError = await readMlLinkBatchError(req.tenantId);
     return MARKETPLACE_KINDS.map((kind) => {
@@ -45,6 +60,15 @@ export async function marketplacesRoutes(app: FastifyInstance) {
 
   app.put('/marketplaces/:kind', async (req) => {
     const { kind } = kindParams.parse(req.params);
+    if (req.isAffiliate) {
+      const { subId } = z.object({ subId: z.string().trim().max(60) }).strict().parse(req.body);
+      await setAffiliateSubId(req.db, kind, subId);
+      const [owner, own] = await Promise.all([
+        resolveConnections(req.tenantId),
+        req.db.marketplaceConnection.findFirst({ where: { kind } }),
+      ]);
+      return publicAffiliateConnection(owner.get(kind)?.row ?? null, own, kind);
+    }
     const body = marketplaceUpdateSchema.parse(req.body);
     const row = await upsertMarketplaceCredentials(
       req.db,
@@ -112,7 +136,7 @@ export async function marketplacesRoutes(app: FastifyInstance) {
     return publicConnection(row, kind);
   });
 
-  app.post('/marketplaces/:kind/check', async (req) => {
+  app.post('/marketplaces/:kind/check', { preHandler: forbidAffiliate }, async (req) => {
     const { kind } = kindParams.parse(req.params);
     const row = await req.db.marketplaceConnection.findFirst({ where: { kind } });
     if (!row?.encryptedCredentials)
@@ -139,7 +163,7 @@ export async function marketplacesRoutes(app: FastifyInstance) {
     );
   });
 
-  app.post('/marketplaces/:kind/session', async (req) => {
+  app.post('/marketplaces/:kind/session', { preHandler: forbidAffiliate }, async (req) => {
     const { kind } = kindParams.parse(req.params);
     if (!supportsSessionCookie(kind)) {
       throw new ApiError('MARKETPLACE_ERROR', `${kind} não aceita cookie de sessão`, 400);
@@ -164,9 +188,11 @@ export async function marketplacesRoutes(app: FastifyInstance) {
   });
 
   // API oficial do Mercado Livre: OAuth (o app fica no .env; aqui só o fluxo de autorização)
-  app.post('/marketplaces/mercadolivre/oauth/start', async (req) => startMlOAuth(req.tenantId));
+  app.post('/marketplaces/mercadolivre/oauth/start', { preHandler: forbidAffiliate }, async (req) =>
+    startMlOAuth(req.tenantId),
+  );
 
-  app.post('/marketplaces/mercadolivre/oauth/callback', async (req) => {
+  app.post('/marketplaces/mercadolivre/oauth/callback', { preHandler: forbidAffiliate }, async (req) => {
     const { code, state } = mlOAuthCallbackSchema.parse(req.body);
     await completeMlOAuth(req.db, req.tenantId, code, state);
     return publicConnection(
@@ -175,7 +201,7 @@ export async function marketplacesRoutes(app: FastifyInstance) {
     );
   });
 
-  app.delete('/marketplaces/mercadolivre/oauth', async (req) => {
+  app.delete('/marketplaces/mercadolivre/oauth', { preHandler: forbidAffiliate }, async (req) => {
     const row = await upsertMarketplaceCredentials(
       req.db,
       'MERCADOLIVRE',
@@ -188,7 +214,7 @@ export async function marketplacesRoutes(app: FastifyInstance) {
     return publicConnection(row, 'MERCADOLIVRE');
   });
 
-  app.get('/marketplaces/awin/feeds', async (req) => {
+  app.get('/marketplaces/awin/feeds', { preHandler: forbidAffiliate }, async (req) => {
     const creds = await loadAwinCredentials(req.db);
     let entries;
     try {
