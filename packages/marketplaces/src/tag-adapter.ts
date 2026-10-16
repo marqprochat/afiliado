@@ -223,7 +223,11 @@ export function createTagAdapter(
         const cached = officialLinkCache.get(cacheKey);
         if (cached && cached.expiresAt > Date.now()) return cached.link;
         try {
-          const link = await amazonOfficialLink(url, creds.amazonSession.cookies, creds.tag ?? '');
+          const link = await amazonOfficialLink(
+            url,
+            creds.amazonSession.cookies,
+            creds.tag?.trim() ?? '',
+          );
           officialLinkCache.set(cacheKey, { link, expiresAt: Date.now() + OFFICIAL_LINK_TTL_MS });
           return link;
         } catch (err) {

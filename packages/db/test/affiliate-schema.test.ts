@@ -3,11 +3,17 @@ import { prisma } from '../src/index';
 
 const tenantIds: string[] = [];
 afterAll(async () => {
-  await prisma.tenant.deleteMany({
-    where: { id: { in: tenantIds }, parentTenantId: { not: null } },
-  });
-  await prisma.tenant.deleteMany({ where: { id: { in: tenantIds } } });
-  await prisma.$disconnect();
+  // Robusto a testes que falham antes de registrar o id: limpa também por prefixo de nome
+  // (afiliados primeiro, por causa do Restrict em parentTenantId).
+  try {
+    const byName = { name: { startsWith: 'aff-' } };
+    await prisma.tenant.deleteMany({
+      where: { OR: [{ id: { in: tenantIds } }, byName], parentTenantId: { not: null } },
+    });
+    await prisma.tenant.deleteMany({ where: { OR: [{ id: { in: tenantIds } }, byName] } });
+  } finally {
+    await prisma.$disconnect();
+  }
 });
 
 describe('schema de afiliados', () => {
@@ -28,7 +34,10 @@ describe('schema de afiliados', () => {
       data: { name: 'aff-child2', parentTenantId: parent.id },
     });
     tenantIds.push(parent.id, child.id);
-    await expect(prisma.tenant.delete({ where: { id: parent.id } })).rejects.toThrow();
+    // P2003 = violação de chave estrangeira (onDelete: Restrict), não qualquer erro.
+    await expect(prisma.tenant.delete({ where: { id: parent.id } })).rejects.toMatchObject({
+      code: 'P2003',
+    });
   });
 
   it('User.isSuperAdmin nasce false; subId é opcional; Session guarda impersonatorUserId', async () => {

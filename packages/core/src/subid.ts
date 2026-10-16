@@ -34,6 +34,9 @@ export interface LinkSubIds {
 /**
  * SubIDs de um link gerado por API. Com identificador de afiliado: Shopee leva ele + o padrão
  * data/lote; AliExpress/Awin levam só ele. Sem identificador: comportamento antigo (só o padrão).
+ *
+ * `patternSubId` deve vir de `generateSubId`, que já o devolve sanitizado; aqui só o identificador
+ * do afiliado é sanitizado.
  */
 export function composeLinkSubIds(
   kind: 'SHOPEE' | 'ALIEXPRESS' | 'AWIN',

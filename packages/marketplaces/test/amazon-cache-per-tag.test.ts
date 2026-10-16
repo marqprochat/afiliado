@@ -18,4 +18,18 @@ describe('cache do link oficial da Amazon', () => {
     );
     expect(gen).toHaveBeenCalledTimes(2);
   });
+
+  it('passa ao gerador a tag aparada (a mesma usada na chave do cache)', async () => {
+    const gen = vi.fn(
+      async (_u: string, _c: Record<string, string>, storeId: string) =>
+        `https://amzn.to/${storeId}`,
+    );
+    const a = createTagAdapter('AMAZON', { amazonOfficialLink: gen });
+    const session = { cookies: { a: '1' }, syncedAt: '2026-10-16T00:00:00Z' };
+    await a.toAffiliateLink(
+      { amazonSession: session, tag: '  trim-20  ' },
+      'https://www.amazon.com.br/dp/B0TESTTRIM1',
+    );
+    expect(gen).toHaveBeenCalledWith(expect.any(String), session.cookies, 'trim-20');
+  });
 });

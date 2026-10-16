@@ -1,4 +1,8 @@
 -- AlterTable
+-- Não é parte da feature de afiliados: é o drift pré-existente do Prisma. `Coupon.updatedAt` é
+-- `@updatedAt` (valor gerado pelo client), mas a migração 20260925120000_coupon_system adicionou a
+-- coluna com DEFAULT CURRENT_TIMESTAMP (para preencher linhas antigas); o `migrate dev` detecta a
+-- diferença e a remove aqui, junto com as demais mudanças.
 ALTER TABLE "Coupon" ALTER COLUMN "updatedAt" DROP DEFAULT;
 
 -- AlterTable

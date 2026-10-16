@@ -8,7 +8,7 @@ export const DEFAULT_TEMPLATE = `🔥 *{titulo}*
 
 👉 {link}`;
 
-export const DEFAULT_SETTINGS: Record<string, unknown> = {
+export const DEFAULT_SETTINGS: Readonly<Record<string, unknown>> = Object.freeze({
   globalRateLimitPerMin: 6,
   subIdPattern: '{yyyyMMdd}-{batchId}',
-};
+});
