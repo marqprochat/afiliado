@@ -44,7 +44,7 @@ function Row({ kind, saved }: { kind: MarketplaceKind; saved: string }) {
 }
 
 export function AffiliateMarketplaces() {
-  const { data, isPending } = useMarketplaces();
+  const { data, isPending, isError, refetch } = useMarketplaces();
   return (
     <div className="space-y-6">
       <div>
@@ -53,7 +53,14 @@ export function AffiliateMarketplaces() {
           As APIs são do administrador. Informe só o seu identificador em cada plataforma.
         </p>
       </div>
-      {isPending || !data ? (
+      {isError ? (
+        <div className="space-y-2">
+          <p className="text-sm text-red-400">Não foi possível carregar os marketplaces.</p>
+          <Button type="button" variant="outline" onClick={() => refetch()}>
+            Tentar de novo
+          </Button>
+        </div>
+      ) : isPending || !data ? (
         <p className="text-sm text-muted-foreground">Carregando…</p>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

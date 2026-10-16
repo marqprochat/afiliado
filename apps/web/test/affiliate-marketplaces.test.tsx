@@ -50,4 +50,20 @@ describe('AffiliateMarketplaces', () => {
       }),
     );
   });
+  it('erro ao carregar mostra mensagem e "Tentar de novo" refaz a consulta', async () => {
+    let fail = true;
+    apiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/marketplaces') {
+        if (fail) throw new Error('boom');
+        return list;
+      }
+      return { ok: true };
+    });
+    renderIt();
+    expect(await screen.findByText(/não foi possível carregar/i)).toBeTruthy();
+    expect(screen.queryByText(/carregando/i)).toBeNull();
+    fail = false;
+    fireEvent.click(screen.getByRole('button', { name: /tentar de novo/i }));
+    expect(await screen.findAllByRole('textbox')).toHaveLength(6);
+  });
 });
