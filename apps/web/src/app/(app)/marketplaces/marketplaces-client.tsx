@@ -121,7 +121,8 @@ function RootMarketplaces() {
 }
 
 export function MarketplacesClient() {
-  const { data: me } = useMe();
+  const { data: me, isPending } = useMe();
+  if (isPending) return <p className="text-sm text-muted-foreground">Carregando…</p>;
   if (me?.isAffiliate) return <AffiliateMarketplaces />;
   return <RootMarketplaces />;
 }

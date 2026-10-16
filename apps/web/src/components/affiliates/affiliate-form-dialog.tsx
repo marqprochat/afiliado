@@ -48,12 +48,13 @@ export function AffiliateFormDialog({
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    const clean = Object.fromEntries(
-      Object.entries(subIds).filter(
-        ([k, v]) =>
-          (initial ? true : Boolean(v?.trim())) && MARKETPLACE_KINDS.includes(k as MarketplaceKind),
-      ),
-    ) as Partial<Record<MarketplaceKind, string>>;
+    const clean: Partial<Record<MarketplaceKind, string>> = {};
+    for (const [k, v] of Object.entries(subIds)) {
+      if (!MARKETPLACE_KINDS.includes(k as MarketplaceKind)) continue;
+      const t = (v ?? '').trim();
+      // Na edição, vazio é enviado como '' (remove o identificador); na criação, é omitido.
+      if (initial || t) clean[k as MarketplaceKind] = t;
+    }
     onSubmit({
       name: name.trim(),
       email: email.trim(),
@@ -129,8 +130,12 @@ export function AffiliateFormDialog({
                     <Input
                       id={`aff-sub-${kind}`}
                       value={subIds[kind] ?? ''}
+                      aria-describedby={`aff-sub-${kind}-help`}
                       onChange={(e) => setSubIds({ ...subIds, [kind]: e.target.value })}
                     />
+                    <p id={`aff-sub-${kind}-help`} className="mt-1 text-xs text-muted-foreground">
+                      {f.help}
+                    </p>
                   </div>
                 );
               })}

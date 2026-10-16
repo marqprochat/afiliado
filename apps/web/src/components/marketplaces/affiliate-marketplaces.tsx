@@ -26,7 +26,7 @@ function Row({ kind, saved }: { kind: MarketplaceKind; saved: string }) {
         <Input id={`sub-${kind}`} value={value} onChange={(e) => setValue(e.target.value)} />
         <Button
           type="button"
-          onClick={() => save.mutate(value)}
+          onClick={() => save.mutate(value.trim())}
           disabled={save.isPending}
           aria-label={`Salvar ${name}`}
         >

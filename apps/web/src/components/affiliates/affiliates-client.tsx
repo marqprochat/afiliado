@@ -54,12 +54,26 @@ export function AffiliatesClient() {
       }),
     { onSuccess: (out, a) => setResetResult({ name: a.name, password: out.password }) },
   );
+  function confirmDeactivate(a: AffiliateRow) {
+    if (!a.active) return toggle.mutate(a);
+    if (window.confirm(`Desativar ${a.name}? O afiliado perde o acesso e os envios param.`))
+      toggle.mutate(a);
+  }
+  function confirmReset(a: AffiliateRow) {
+    if (window.confirm(`Redefinir a senha de ${a.name}? A senha atual deixa de valer.`)) {
+      setResetResult(null);
+      reset.mutate(a);
+    }
+  }
   const impersonate = useApiMutation(
     (a: AffiliateRow) => apiFetch(`/admin/affiliates/${a.id}/impersonate`, { method: 'POST' }),
     { onSuccess: () => window.location.assign('/') },
   );
 
-  if (me && !isAdmin) {
+  if (!me) {
+    return <p className="text-sm text-muted-foreground">Carregando…</p>;
+  }
+  if (!isAdmin) {
     return <p className="text-sm text-muted-foreground">Área restrita ao SuperAdmin.</p>;
   }
 
@@ -75,6 +89,7 @@ export function AffiliatesClient() {
         <Button
           onClick={() => {
             setCreatedPassword(null);
+            setResetResult(null);
             setEditing('new');
           }}
         >
@@ -83,9 +98,15 @@ export function AffiliatesClient() {
       </div>
 
       {resetResult && (
-        <p className="rounded-lg border border-border bg-surface p-3 text-sm">
-          Nova senha de {resetResult.name}: <code>{resetResult.password}</code> (exibida só agora).
-        </p>
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface p-3 text-sm">
+          <p>
+            Nova senha de {resetResult.name}: <code>{resetResult.password}</code> (exibida só
+            agora).
+          </p>
+          <Button size="sm" variant="outline" onClick={() => setResetResult(null)}>
+            Fechar
+          </Button>
+        </div>
       )}
 
       <Table>
@@ -111,26 +132,45 @@ export function AffiliatesClient() {
               <TableCell>{a.groups}</TableCell>
               <TableCell>{a.sends7d}</TableCell>
               <TableCell>{formatDateTime(a.createdAt)}</TableCell>
-              <TableCell className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={() => impersonate.mutate(a)}>
-                  Entrar como
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setCreatedPassword(null);
-                    setEditing(a);
-                  }}
-                >
-                  Editar
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => toggle.mutate(a)}>
-                  {a.active ? 'Desativar' : 'Ativar'}
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => reset.mutate(a)}>
-                  Redefinir senha
-                </Button>
+              <TableCell>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    aria-label={`Entrar como ${a.name}`}
+                    onClick={() => impersonate.mutate(a)}
+                  >
+                    Entrar como
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    aria-label={`Editar ${a.name}`}
+                    onClick={() => {
+                      setCreatedPassword(null);
+                      setResetResult(null);
+                      setEditing(a);
+                    }}
+                  >
+                    Editar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    aria-label={`${a.active ? 'Desativar' : 'Ativar'} ${a.name}`}
+                    onClick={() => confirmDeactivate(a)}
+                  >
+                    {a.active ? 'Desativar' : 'Ativar'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    aria-label={`Redefinir senha de ${a.name}`}
+                    onClick={() => confirmReset(a)}
+                  >
+                    Redefinir senha
+                  </Button>
+                </div>
               </TableCell>
             </TableRow>
           ))}
