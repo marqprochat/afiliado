@@ -1,8 +1,16 @@
 import type { Job } from 'bullmq';
 import { DelayedError } from 'bullmq';
 import pino from 'pino';
-import { prisma, decryptJson } from '@afilados/db';
 import {
+  prisma,
+  decryptJson,
+  resolveConnection,
+  resolveSettings,
+  isTenantActive,
+} from '@afilados/db';
+import {
+  applyAffiliateTag,
+  composeLinkSubIds,
   generateCta,
   generateSubId,
   isEligibleCoupon,
@@ -49,7 +57,7 @@ export interface SendOfferDeps {
 
 export type SendOfferResult =
   | { outcome: 'sent'; groups: number }
-  | { outcome: 'skipped'; reason: 'batch-inactive' | 'missing' }
+  | { outcome: 'skipped'; reason: 'batch-inactive' | 'missing' | 'tenant-inactive' }
   | { outcome: 'rescheduled'; runAt: Date };
 
 const GROUP_GAP_MS = 4_000;
@@ -83,18 +91,17 @@ export async function sendOffer(
   }
   if (item.status === 'SENT') return { outcome: 'skipped', reason: 'missing' };
   const tenantId = batch.tenantId;
+  if (!(await isTenantActive(tenantId))) return { outcome: 'skipped', reason: 'tenant-inactive' };
 
-  const [windowRow, settingsRows, conn] = await Promise.all([
+  const [windowRow, settings, resolved] = await Promise.all([
     prisma.operatingWindow.findUnique({ where: { tenantId } }),
-    prisma.setting.findMany({ where: { tenantId } }),
+    resolveSettings(tenantId),
     product && product.source !== 'MANUAL'
-      ? prisma.marketplaceConnection.findFirst({ where: { tenantId, kind: product.source } })
+      ? resolveConnection(tenantId, product.source)
       : Promise.resolve(null),
   ]);
-  const settings = Object.fromEntries(settingsRows.map((s) => [s.key, s.value])) as Record<
-    string,
-    unknown
-  >;
+  const conn = resolved?.row ?? null;
+  const affiliateSubId = resolved?.subId ?? null;
   const ratePerMin = Number(settings.globalRateLimitPerMin ?? 6);
   const subIdPattern = String(settings.subIdPattern ?? '{yyyyMMdd}-{batchId}');
   const window = windowRow
@@ -196,19 +203,29 @@ export async function sendOffer(
     let affiliateLink = product.originalUrl;
     if (product.source === 'SHOPEE' && conn?.encryptedCredentials) {
       const creds = decryptJson<ShopeeCredentials>(Buffer.from(conn.encryptedCredentials));
-      const subId = generateSubId(subIdPattern, {
+      const pattern = generateSubId(subIdPattern, {
         now: t,
         batchId: batch.id,
         timezone: window.timezone,
       });
-      affiliateLink = await deps.shopee.toAffiliateLink(creds, product.originalUrl, subId);
+      const { subId, extraSubIds } = composeLinkSubIds('SHOPEE', affiliateSubId, pattern);
+      affiliateLink = await deps.shopee.toAffiliateLink(
+        creds,
+        product.originalUrl,
+        subId,
+        extraSubIds,
+      );
     } else if (product.source === 'AWIN' && conn?.encryptedCredentials) {
       const creds = decryptJson<AwinCredentials>(Buffer.from(conn.encryptedCredentials));
-      const subId = generateSubId(subIdPattern, {
-        now: t,
-        batchId: batch.id,
-        timezone: window.timezone,
-      });
+      const subId = composeLinkSubIds(
+        'AWIN',
+        affiliateSubId,
+        generateSubId(subIdPattern, {
+          now: t,
+          batchId: batch.id,
+          timezone: window.timezone,
+        }),
+      ).subId;
       try {
         affiliateLink = await deps.awin.toAffiliateLink(creds, product.originalUrl, subId);
       } catch (err) {
@@ -219,11 +236,15 @@ export async function sendOffer(
       }
     } else if (product.source === 'ALIEXPRESS' && conn?.encryptedCredentials) {
       const creds = decryptJson<AliexpressCredentials>(Buffer.from(conn.encryptedCredentials));
-      const subId = generateSubId(subIdPattern, {
-        now: t,
-        batchId: batch.id,
-        timezone: window.timezone,
-      });
+      const subId = composeLinkSubIds(
+        'ALIEXPRESS',
+        affiliateSubId,
+        generateSubId(subIdPattern, {
+          now: t,
+          batchId: batch.id,
+          timezone: window.timezone,
+        }),
+      ).subId;
       try {
         const adapter = deps.aliexpress ?? getAliexpressAdapter();
         affiliateLink = await adapter.toAffiliateLink(creds, product.originalUrl, subId);
@@ -240,7 +261,10 @@ export async function sendOffer(
       product.source !== 'MANUAL' &&
       conn?.encryptedCredentials
     ) {
-      const creds = decryptJson<TagCredentials>(Buffer.from(conn.encryptedCredentials));
+      const creds = applyAffiliateTag(
+        decryptJson<TagCredentials>(Buffer.from(conn.encryptedCredentials)),
+        affiliateSubId,
+      );
       try {
         const source = product.source;
         affiliateLink = await resolveCachedAffiliateLink({

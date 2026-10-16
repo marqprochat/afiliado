@@ -11,7 +11,7 @@ import {
   type BatchLinkResult,
   type PrewarmResult,
 } from '@afilados/marketplaces';
-import { loadTagCredentials } from '../lib/marketplace-credentials';
+import { loadTagCredentialsForLink } from '../lib/marketplace-credentials';
 import { normalizeMlTag, redisLinkStore, type LinkStore } from '../lib/ml-links';
 
 const log = pino({ name: 'ml-links-prewarm' });
@@ -33,7 +33,7 @@ export async function runMlLinksPrewarm(
   deps: MlLinksPrewarmDeps,
   { tenantId, urls }: MlLinksPrewarmJob,
 ): Promise<PrewarmResult | { skipped: 'sem-sessao' | 'em-cache' }> {
-  const creds = await (deps.loadCredentials ?? ((id) => loadTagCredentials(id, 'MERCADOLIVRE')))(
+  const creds = await (deps.loadCredentials ?? ((id) => loadTagCredentialsForLink(id, 'MERCADOLIVRE')))(
     tenantId,
   );
   const cookies = creds.mlSession?.cookies;

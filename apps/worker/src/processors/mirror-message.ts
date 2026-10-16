@@ -1,7 +1,7 @@
 import type { Job } from 'bullmq';
 import { DelayedError } from 'bullmq';
 import pino from 'pino';
-import { prisma, decryptJson } from '@afilados/db';
+import { prisma, decryptJson, resolveConnections, isTenantActive } from '@afilados/db';
 import {
   extractStoreLinks,
   extractUrls,
@@ -14,6 +14,8 @@ import {
   renderTemplate,
   rewriteLinks,
   generateSubId,
+  applyAffiliateTag,
+  composeLinkSubIds,
   type StoreLink,
 } from '@afilados/core';
 import {
@@ -57,7 +59,7 @@ export interface MirrorMessageDeps {
 export type MirrorMessageResult =
   | { outcome: 'mirrored'; count: number }
   | { outcome: 'discarded'; reason: 'no-links' | 'short-link-unresolved' }
-  | { outcome: 'skipped'; reason: 'rule-disabled' | 'missing' }
+  | { outcome: 'skipped'; reason: 'rule-disabled' | 'missing' | 'tenant-inactive' }
   | { outcome: 'rescheduled'; runAt: Date };
 
 interface ResolvedLink {
@@ -87,6 +89,9 @@ export async function mirrorMessage(
     include: { template: true },
   });
   if (!rule || !rule.enabled) return { outcome: 'skipped', reason: 'rule-disabled' };
+  if (!(await isTenantActive(rule.tenantId))) {
+    return { outcome: 'skipped', reason: 'tenant-inactive' };
+  }
 
   const tenantId = rule.tenantId;
   // Grupos de um mesmo link são vinculados; nunca devolve a mensagem para um grupo de origem.
@@ -150,10 +155,10 @@ export async function mirrorMessage(
     return { outcome: 'discarded', reason };
   }
 
-  const [windowRow, settingsRows, connections] = await Promise.all([
+  const [windowRow, settingsRows, connMap] = await Promise.all([
     prisma.operatingWindow.findUnique({ where: { tenantId } }),
     prisma.setting.findMany({ where: { tenantId } }),
-    prisma.marketplaceConnection.findMany({ where: { tenantId } }),
+    resolveConnections(tenantId),
   ]);
   const settings = Object.fromEntries(settingsRows.map((s) => [s.key, s.value])) as Record<
     string,
@@ -175,25 +180,32 @@ export async function mirrorMessage(
     return { outcome: 'rescheduled', runAt };
   }
 
-  const connMap = new Map(connections.map((c) => [c.kind, c]));
   const replacements = new Map<string, string>();
   const convertedByTarget = new Map<string, string>();
   const unsupportedStores = new Set<string>();
 
   for (const storeLink of resolvedLinks) {
     const kind = storeLink.parsed.source;
-    const conn = connMap.get(kind);
+    const resolved = connMap.get(kind);
+    const conn = resolved?.row ?? null;
+    const affiliateSubId = resolved?.subId ?? null;
     try {
       if (kind === 'SHOPEE') {
         if (conn?.encryptedCredentials) {
           const creds = decryptJson<ShopeeCredentials>(Buffer.from(conn.encryptedCredentials));
-          const subId = generateSubId('{yyyyMMdd}-mirror-' + rule.id, {
+          const pattern = generateSubId('{yyyyMMdd}-mirror-' + rule.id, {
             now: t,
             batchId: rule.id,
             timezone: window.timezone,
           });
+          const { subId, extraSubIds } = composeLinkSubIds('SHOPEE', affiliateSubId, pattern);
           const adapter = adapterGetter('SHOPEE') as MarketplaceAdapter<ShopeeCredentials>;
-          const affLink = await adapter.toAffiliateLink(creds, storeLink.targetUrl, subId);
+          const affLink = await adapter.toAffiliateLink(
+            creds,
+            storeLink.targetUrl,
+            subId,
+            extraSubIds,
+          );
           replacements.set(storeLink.textUrl, affLink);
           convertedByTarget.set(storeLink.targetUrl, affLink);
         } else {
@@ -204,11 +216,15 @@ export async function mirrorMessage(
       } else if (kind === 'ALIEXPRESS') {
         if (conn?.encryptedCredentials) {
           const creds = decryptJson<AliexpressCredentials>(Buffer.from(conn.encryptedCredentials));
-          const subId = generateSubId('{yyyyMMdd}-mirror-' + rule.id, {
-            now: t,
-            batchId: rule.id,
-            timezone: window.timezone,
-          });
+          const subId = composeLinkSubIds(
+            'ALIEXPRESS',
+            affiliateSubId,
+            generateSubId('{yyyyMMdd}-mirror-' + rule.id, {
+              now: t,
+              batchId: rule.id,
+              timezone: window.timezone,
+            }),
+          ).subId;
           const adapter = adapterGetter('ALIEXPRESS') as MarketplaceAdapter<AliexpressCredentials>;
           const affLink = await adapter.toAffiliateLink(creds, storeLink.targetUrl, subId);
           replacements.set(storeLink.textUrl, affLink);
@@ -220,7 +236,10 @@ export async function mirrorMessage(
         }
       } else {
         if (conn?.encryptedCredentials) {
-          const creds = decryptJson<TagCredentials>(Buffer.from(conn.encryptedCredentials));
+          const creds = applyAffiliateTag(
+            decryptJson<TagCredentials>(Buffer.from(conn.encryptedCredentials)),
+            affiliateSubId,
+          );
           if (hasTagCredentials(kind, creds)) {
             const adapter = adapterGetter(kind) as MarketplaceAdapter<TagCredentials>;
             const affLink = await adapter.toAffiliateLink(creds, storeLink.targetUrl);
@@ -257,7 +276,7 @@ export async function mirrorMessage(
         (await prisma.template.findFirst({ where: { tenantId } }));
     }
     const allShopee = resolvedLinks.every((l) => l.parsed.source === 'SHOPEE');
-    const shopeeConn = connMap.get('SHOPEE');
+    const shopeeConn = connMap.get('SHOPEE')?.row ?? null;
     if (allShopee && template && shopeeConn?.encryptedCredentials) {
       try {
         const creds = decryptJson<ShopeeCredentials>(Buffer.from(shopeeConn.encryptedCredentials));

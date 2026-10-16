@@ -1,7 +1,15 @@
 import type { Job } from 'bullmq';
 import pino from 'pino';
-import { prisma, decryptJson } from '@afilados/db';
 import {
+  prisma,
+  decryptJson,
+  resolveConnection,
+  resolveSettings,
+  isTenantActive,
+} from '@afilados/db';
+import {
+  applyAffiliateTag,
+  composeLinkSubIds,
   generateSubId,
   isEligibleCoupon,
   renderCouponTemplate,
@@ -39,10 +47,10 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
   const resolveTagAdapter = deps.getTagAdapter ?? getTagAdapter;
   const makeClient = deps.makeClient ?? ((token: string) => new TelegramClient(token));
 
-  const [bot, template, settingsRows] = await Promise.all([
+  const [bot, template, settings] = await Promise.all([
     prisma.telegramBot.findUnique({ where: { id: job.botId } }),
     prisma.template.findUnique({ where: { id: job.templateId } }),
-    prisma.setting.findMany({ where: { tenantId: job.tenantId } }),
+    resolveSettings(job.tenantId),
   ]);
   if (!bot || !template) return;
   if (bot.tenantId !== job.tenantId || template.tenantId !== job.tenantId) {
@@ -52,10 +60,10 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
     );
     return;
   }
-  const settings = Object.fromEntries(settingsRows.map((s) => [s.key, s.value])) as Record<
-    string,
-    unknown
-  >;
+  if (!(await isTenantActive(job.tenantId))) {
+    log.info({ tenantId: job.tenantId }, 'tenant inativo; envio ao Telegram ignorado');
+    return;
+  }
   const subIdPattern = String(settings.subIdPattern ?? '{yyyyMMdd}-{batchId}');
   const { token } = decryptJson<{ token: string }>(Buffer.from(bot.encryptedToken));
   const client = makeClient(token);
@@ -87,20 +95,28 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
     } else if (job.productId) {
       const product = await prisma.product.findUnique({ where: { id: job.productId } });
       if (!product) return;
-      const conn =
-        product.source !== 'MANUAL'
-          ? await prisma.marketplaceConnection.findFirst({
-              where: { tenantId: job.tenantId, kind: product.source },
-            })
-          : null;
+      const resolved =
+        product.source !== 'MANUAL' ? await resolveConnection(job.tenantId, product.source) : null;
+      const conn = resolved?.row ?? null;
+      const affiliateSubId = resolved?.subId ?? null;
       let affiliateLink = product.originalUrl;
       if (product.source === 'SHOPEE' && conn?.encryptedCredentials) {
         const creds = decryptJson<ShopeeCredentials>(Buffer.from(conn.encryptedCredentials));
-        const subId = generateSubId(subIdPattern, { now: t, batchId: job.botId });
-        affiliateLink = await deps.shopee.toAffiliateLink(creds, product.originalUrl, subId);
+        const pattern = generateSubId(subIdPattern, { now: t, batchId: job.botId });
+        const { subId, extraSubIds } = composeLinkSubIds('SHOPEE', affiliateSubId, pattern);
+        affiliateLink = await deps.shopee.toAffiliateLink(
+          creds,
+          product.originalUrl,
+          subId,
+          extraSubIds,
+        );
       } else if (product.source === 'AWIN' && conn?.encryptedCredentials) {
         const creds = decryptJson<AwinCredentials>(Buffer.from(conn.encryptedCredentials));
-        const subId = generateSubId(subIdPattern, { now: t, batchId: job.botId });
+        const subId = composeLinkSubIds(
+          'AWIN',
+          affiliateSubId,
+          generateSubId(subIdPattern, { now: t, batchId: job.botId }),
+        ).subId;
         try {
           affiliateLink = await deps.awin.toAffiliateLink(creds, product.originalUrl, subId);
         } catch (err) {
@@ -111,7 +127,11 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
         }
       } else if (product.source === 'ALIEXPRESS' && conn?.encryptedCredentials) {
         const creds = decryptJson<AliexpressCredentials>(Buffer.from(conn.encryptedCredentials));
-        const subId = generateSubId(subIdPattern, { now: t, batchId: job.botId });
+        const subId = composeLinkSubIds(
+          'ALIEXPRESS',
+          affiliateSubId,
+          generateSubId(subIdPattern, { now: t, batchId: job.botId }),
+        ).subId;
         try {
           const adapter = deps.aliexpress ?? getAliexpressAdapter();
           affiliateLink = await adapter.toAffiliateLink(creds, product.originalUrl, subId);
@@ -128,7 +148,10 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
         product.source !== 'MANUAL' &&
         conn?.encryptedCredentials
       ) {
-        const creds = decryptJson<TagCredentials>(Buffer.from(conn.encryptedCredentials));
+        const creds = applyAffiliateTag(
+          decryptJson<TagCredentials>(Buffer.from(conn.encryptedCredentials)),
+          affiliateSubId,
+        );
         try {
           const source = product.source;
           affiliateLink = await resolveCachedAffiliateLink({

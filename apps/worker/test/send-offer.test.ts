@@ -746,3 +746,77 @@ describe('sendOffer', () => {
   });
 });
 
+describe('sendOffer com afiliado', () => {
+  async function setup(opts: { subId?: string; source?: 'SHOPEE' | 'MAGALU' }) {
+    const source = opts.source ?? 'SHOPEE';
+    const owner = await prisma.tenant.create({ data: { name: 'so-owner' } });
+    const aff = await prisma.tenant.create({ data: { name: 'so-aff', parentTenantId: owner.id } });
+    await prisma.marketplaceConnection.create({
+      data: { tenantId: owner.id, kind: source, status: 'OK',
+        encryptedCredentials: encryptJson(source === 'SHOPEE' ? { appId: 'a', secret: 's' } : { tag: 'lojadono' }) },
+    });
+    if (opts.subId) {
+      await prisma.marketplaceConnection.create({ data: { tenantId: aff.id, kind: source, subId: opts.subId } });
+    }
+    const session = await prisma.waSession.create({ data: { tenantId: aff.id, label: 's', status: 'CONNECTED' } });
+    const template = await prisma.template.create({ data: { tenantId: aff.id, name: 't', body: '{link}' } });
+    const product = await prisma.product.create({
+      data: { tenantId: aff.id, source, externalId: '9', title: 'P', price: 10, images: ['https://img/x.jpg'],
+        originalUrl: source === 'SHOPEE' ? 'https://shopee.com.br/product/1/9' : 'https://www.magazineluiza.com.br/p/abc/', raw: {} },
+    });
+    const batch = await prisma.batch.create({
+      data: { tenantId: aff.id, sessionId: session.id, templateId: template.id, name: 'b', groupJids: ['g1@g.us'],
+        telegramChatIds: [], intervalMin: 1, mediaMode: 'IMAGE', status: 'SCHEDULED',
+        items: { create: [{ productId: product.id, order: 0, runAt: new Date() }] } },
+      include: { items: true },
+    });
+    const cleanup = async () => {
+      await prisma.batch.deleteMany({ where: { tenantId: aff.id } });
+      await prisma.tenant.deleteMany({ where: { id: aff.id } });
+      await prisma.tenant.deleteMany({ where: { id: owner.id } });
+    };
+    return { batch, item: batch.items[0]!, cleanup, aff };
+  }
+
+  it('Shopee: subIds = [identificador do afiliado, padrão data/lote]', async () => {
+    const { batch, item, cleanup } = await setup({ subId: 'joao' });
+    try {
+      const toAffiliateLink = vi.fn(async () => 'https://s.shopee.com.br/AFF');
+      await sendOffer({ ...deps, shopee: { ...createShopeeAdapter({ mock: true }), toAffiliateLink } }, item.id);
+      expect(toAffiliateLink).toHaveBeenCalledWith(
+        expect.objectContaining({ appId: 'a' }),
+        'https://shopee.com.br/product/1/9',
+        'joao',
+        [`20260914${batch.id}`],
+      );
+    } finally { await cleanup(); }
+  });
+
+  it('Shopee sem identificador: só o padrão (sem extras)', async () => {
+    const { batch, item, cleanup } = await setup({});
+    try {
+      const toAffiliateLink = vi.fn(async () => 'https://s.shopee.com.br/AFF');
+      await sendOffer({ ...deps, shopee: { ...createShopeeAdapter({ mock: true }), toAffiliateLink } }, item.id);
+      expect(toAffiliateLink).toHaveBeenCalledWith(expect.anything(), expect.any(String), `20260914${batch.id}`, []);
+    } finally { await cleanup(); }
+  });
+
+  it('Magalu: a loja do afiliado vira a tag das credenciais do dono', async () => {
+    const { item, cleanup } = await setup({ subId: 'lojajoao', source: 'MAGALU' });
+    try {
+      const toAffiliateLink = vi.fn(async () => 'https://www.magazinevoce.com.br/lojajoao/p/abc/');
+      const getTagAdapter = (() => ({ kind: 'MAGALU', toAffiliateLink })) as never;
+      await sendOffer({ ...deps, getTagAdapter }, item.id);
+      expect(toAffiliateLink).toHaveBeenCalledWith(expect.objectContaining({ tag: 'lojajoao' }), expect.any(String));
+    } finally { await cleanup(); }
+  });
+
+  it('tenant inativo: não envia', async () => {
+    const { item, cleanup, aff } = await setup({ subId: 'joao' });
+    try {
+      await prisma.tenant.update({ where: { id: aff.id }, data: { active: false } });
+      const r = await sendOffer(deps, item.id);
+      expect(r).toEqual({ outcome: 'skipped', reason: 'tenant-inactive' });
+    } finally { await cleanup(); }
+  });
+});
