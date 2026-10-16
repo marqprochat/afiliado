@@ -54,6 +54,17 @@ export async function validateSession(token: string): Promise<ValidSession | nul
   const { tenant, ...user } = s.user;
   // Conta desativada perde o acesso; só o SuperAdmin (sessão de impersonação) ainda entra.
   if (!tenant.active && !s.impersonatorUserId) return null;
+  if (s.impersonatorUserId) {
+    // Sessão de impersonação só vale enquanto o impersonador ainda existir e for SuperAdmin.
+    const impersonator = await prisma.user.findUnique({
+      where: { id: s.impersonatorUserId },
+      select: { isSuperAdmin: true },
+    });
+    if (!impersonator?.isSuperAdmin) {
+      await prisma.session.deleteMany({ where: { id: s.id } });
+      return null;
+    }
+  }
   return {
     user,
     tenantId: user.tenantId,

@@ -48,7 +48,8 @@ function readApiKey(stored: StoredAiConfig): string | null {
 }
 
 export function toPublicAi(s: StoredAiConfig, managed = false): PublicAiSettings {
-  const key = readApiKey(s);
+  // Afiliado não vê nada da chave: nem decifra.
+  const key = managed ? null : readApiKey(s);
   const available = Boolean(s.baseUrl && s.model && s.encryptedApiKey);
   return {
     enabled: s.enabled,

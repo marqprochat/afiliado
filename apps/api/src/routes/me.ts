@@ -16,7 +16,8 @@ export async function meRoutes(app: FastifyInstance) {
       user: { id: u.id, email: u.email, name: u.name, role: u.role, isSuperAdmin: u.isSuperAdmin },
       tenant: { id: tenant.id, name: tenant.name },
       isAffiliate: req.isAffiliate,
-      impersonating: impersonator ? { by: impersonator.name } : null,
+      // Admin apagado durante a impersonação: o banner ainda precisa aparecer (sessão é de impersonação).
+      impersonating: req.impersonatorUserId ? { by: impersonator?.name ?? 'Administrador' } : null,
     };
   });
 }

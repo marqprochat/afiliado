@@ -73,12 +73,22 @@ async function toRow(tenantId: string) {
   };
 }
 
+/** Mesmas opções do Set-Cookie (path, secure, sameSite, httpOnly), sem `expires`. */
+function clearCookieOptions() {
+  const { expires: _expires, ...opts } = sessionCookieOptions(new Date());
+  return opts;
+}
+
 type Db = Prisma.TransactionClient | typeof prisma;
 
-/** P2002 (unique) em user.email → 409; qualquer outro erro segue adiante. */
-function mapEmailConflict(e: unknown): never {
+/** P2002 (unique) no campo email → 409; qualquer outro erro (inclusive outro P2002) segue adiante. */
+export function mapEmailConflict(e: unknown): never {
   if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-    throw ApiError.conflict('E-mail já cadastrado');
+    const target = e.meta?.target;
+    const hitsEmail = Array.isArray(target)
+      ? target.includes('email')
+      : typeof target === 'string' && target.includes('email');
+    if (hitsEmail) throw ApiError.conflict('E-mail já cadastrado');
   }
   throw e;
 }
@@ -122,15 +132,15 @@ export async function adminAffiliatesRoutes(app: FastifyInstance) {
       // Cookie do admin inválido/forjado: derruba a sessão de impersonação e limpa os cookies
       // para o usuário não ficar preso numa sessão sem saída.
       await destroySession(current);
-      reply.clearCookie(SESSION_COOKIE, { path: '/' });
-      reply.clearCookie(ADMIN_SESSION_COOKIE, { path: '/' });
+      reply.clearCookie(SESSION_COOKIE, clearCookieOptions());
+      reply.clearCookie(ADMIN_SESSION_COOKIE, clearCookieOptions());
       return reply
         .status(401)
         .send({ error: { code: 'UNAUTHORIZED', message: 'Não autenticado' } });
     }
     await destroySession(current);
     reply.setCookie(SESSION_COOKIE, adminToken, sessionCookieOptions(admin.expiresAt));
-    reply.clearCookie(ADMIN_SESSION_COOKIE, { path: '/' });
+    reply.clearCookie(ADMIN_SESSION_COOKIE, clearCookieOptions());
     return reply.status(204).send();
   });
 
@@ -181,32 +191,40 @@ export async function adminAffiliatesRoutes(app: FastifyInstance) {
       const { id } = idParam.parse(req.params);
       const body = affiliateUpdateSchema.parse(req.body);
       const { user } = await loadAffiliate(req.tenantId, id);
-      if (body.email && body.email.toLowerCase() !== user.email) {
-        const taken = await prisma.user.findUnique({ where: { email: body.email.toLowerCase() } });
+      const newEmail = body.email?.toLowerCase();
+      if (newEmail && newEmail !== user.email) {
+        const taken = await prisma.user.findUnique({ where: { email: newEmail } });
         if (taken) throw ApiError.conflict('E-mail já cadastrado');
-        await prisma.user
-          .update({ where: { id: user.id }, data: { email: body.email.toLowerCase() } })
-          .catch(mapEmailConflict);
       }
-      if (body.name) {
-        await prisma.tenant.update({ where: { id }, data: { name: body.name } });
-        await prisma.user.update({ where: { id: user.id }, data: { name: body.name } });
-      }
-      await applySubIds(prisma, id, body.subIds);
+      // Tudo ou nada: um e-mail duplicado (ou outra falha) não pode deixar nome/SubIDs pela metade.
+      await prisma
+        .$transaction(async (tx) => {
+          if (newEmail && newEmail !== user.email) {
+            await tx.user.update({ where: { id: user.id }, data: { email: newEmail } });
+          }
+          if (body.name) {
+            await tx.tenant.update({ where: { id }, data: { name: body.name } });
+            await tx.user.update({ where: { id: user.id }, data: { name: body.name } });
+          }
+          await applySubIds(tx, id, body.subIds);
+        })
+        .catch(mapEmailConflict);
       return toRow(id);
     });
 
     admin.post('/admin/affiliates/:id/active', async (req, reply) => {
       const { id } = idParam.parse(req.params);
       const { active } = affiliateActiveSchema.parse(req.body);
-      await loadAffiliate(req.tenantId, id);
+      const { tenant } = await loadAffiliate(req.tenantId, id);
       await prisma.tenant.update({ where: { id }, data: { active } });
       if (!active) {
         await prisma.session.deleteMany({
           where: { user: { tenantId: id }, impersonatorUserId: null },
         });
-      } else {
-        // Jobs descartados enquanto inativo deixam lotes parados em andamento; pausa para o
+        // Conexões em tempo real abertas também caem (a sessão que as autenticou já foi apagada).
+        app.events.closeTenant(id);
+      } else if (!tenant.active) {
+        // Só ao reativar de fato (inativo → ativo). Jobs descartados enquanto inativo deixam lotes parados em andamento; pausa para o
         // afiliado retomar com o botão existente (que re-enfileira os itens).
         await prisma.batch.updateMany({
           where: { tenantId: id, status: { in: ['SCHEDULED', 'RUNNING'] } },

@@ -32,6 +32,17 @@ export class EventHub {
     this.sockets.get(tenantId)?.delete(ws);
   }
 
+  /**
+   * Fecha os WebSockets abertos do tenant (ex.: conta desativada). Só alcança os sockets deste
+   * processo; o cliente reconecta e a sessão já invalidada o barra no handshake.
+   */
+  closeTenant(tenantId: string, code = 4403, reason = 'Conta desativada') {
+    const set = this.sockets.get(tenantId);
+    if (!set) return;
+    for (const ws of [...set]) ws.close(code, reason);
+    this.sockets.delete(tenantId);
+  }
+
   /** Publica no Redis (chega a todos os processos da API, inclusive este). */
   async publish(tenantId: string, event: RealtimeEvent) {
     await getRedis().publish(REDIS_EVENTS_CHANNEL, JSON.stringify({ tenantId, event }));

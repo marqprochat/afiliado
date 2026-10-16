@@ -262,6 +262,8 @@ export function publicAffiliateConnection(
     subId: own?.subId ?? null,
     lastCheckedAt: owner?.lastCheckedAt ?? null,
     lastError: null,
+    // O afiliado não conecta a API do ML (rota 403); não expõe se o servidor tem o app configurado.
+    mlApiAvailable: false,
   };
 }
 
