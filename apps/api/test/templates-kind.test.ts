@@ -34,7 +34,11 @@ const call = (method: 'POST' | 'PUT', url: string, payload: Record<string, unkno
 
 describe('templates com kind', () => {
   it('cria template de cupom e devolve kind', async () => {
-    const r = await call('POST', '/templates', { name: 'Meu cupom', body: '{codigo}', kind: 'COUPON' });
+    const r = await call('POST', '/templates', {
+      name: 'Meu cupom',
+      body: '{codigo}',
+      kind: 'COUPON',
+    });
     expect(r.statusCode).toBe(201);
     expect(r.json().kind).toBe('COUPON');
   });
@@ -45,8 +49,13 @@ describe('templates com kind', () => {
   });
 
   it('PUT sem kind preserva o kind existente', async () => {
-    const created = (await call('POST', '/templates', { name: 'Manter', body: '{codigo}', kind: 'COUPON' })).json();
-    const r = await call('PUT', `/templates/${created.id}`, { name: 'Manter 2', body: '{codigo} {loja}' });
+    const created = (
+      await call('POST', '/templates', { name: 'Manter', body: '{codigo}', kind: 'COUPON' })
+    ).json();
+    const r = await call('PUT', `/templates/${created.id}`, {
+      name: 'Manter 2',
+      body: '{codigo} {loja}',
+    });
     expect(r.statusCode).toBe(200);
     expect(r.json().kind).toBe('COUPON');
     expect(r.json().name).toBe('Manter 2');
@@ -60,7 +69,7 @@ describe('prévia de template de cupom', () => {
       kind: 'COUPON',
     });
     expect(r.statusCode).toBe(200);
-    expect(r.json().text).toBe('AFILIADO10 na SHOPEE');
+    expect(r.json().text).toBe('AFILIADO10 na Shopee');
   });
 
   it('com couponId usa o cupom cadastrado', async () => {
@@ -73,7 +82,11 @@ describe('prévia de template de cupom', () => {
   });
 
   it('couponId inexistente → 404', async () => {
-    const r = await call('POST', '/templates/preview', { body: '{codigo}', kind: 'COUPON', couponId: 'nao-existe' });
+    const r = await call('POST', '/templates/preview', {
+      body: '{codigo}',
+      kind: 'COUPON',
+      couponId: 'nao-existe',
+    });
     expect(r.statusCode).toBe(404);
   });
 
