@@ -2,8 +2,10 @@ import { hash } from '@node-rs/argon2';
 import { prisma } from '@afilados/db';
 import type { FastifyInstance } from 'fastify';
 
-export async function createTenantWithUser(name = 'T') {
-  const tenant = await prisma.tenant.create({ data: { name } });
+export async function createTenantWithUser(name = 'T', parentTenantId?: string) {
+  const tenant = await prisma.tenant.create({
+    data: { name, ...(parentTenantId ? { parentTenantId } : {}) },
+  });
   const email = `${tenant.id}@test.local`;
   const password = 'senha-forte-123';
   const user = await prisma.user.create({
@@ -17,6 +19,11 @@ export async function createTenantWithUser(name = 'T') {
 }
 
 export async function cleanupTenant(tenantId: string) {
+  const children = await prisma.tenant.findMany({
+    where: { parentTenantId: tenantId },
+    select: { id: true },
+  });
+  for (const c of children) await cleanupTenant(c.id);
   // BatchItem.productId é ON DELETE RESTRICT, então lotes (e seus itens, via
   // cascade de Batch) precisam ser removidos antes do Product cascatear do Tenant.
   await prisma.batch.deleteMany({ where: { tenantId } });

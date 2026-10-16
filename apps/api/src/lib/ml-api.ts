@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { decryptJson, type TenantClient } from '@afilados/db';
+import { decryptJson, forTenant, resolveConnection, type TenantClient } from '@afilados/db';
 import {
   MlApiError,
   buildMlAuthUrl,
@@ -126,16 +126,17 @@ export async function completeMlOAuth(
 }
 
 async function readCreds(db: TenantClient) {
-  const row = await db.marketplaceConnection.findFirst({ where: { kind: 'MERCADOLIVRE' } });
+  const { row } = await resolveConnection(db.$tenantId, 'MERCADOLIVRE');
   const creds = row?.encryptedCredentials
     ? decryptJson<TagCredentials>(Buffer.from(row.encryptedCredentials))
     : {};
   return { row, creds };
 }
 
-async function saveTokens(db: TenantClient, tokens: MlApiTokens): Promise<void> {
+/** Grava sempre no tenant dono das credenciais (o refresh_token é único e compartilhado). */
+async function saveTokens(ownerTenantId: string, tokens: MlApiTokens): Promise<void> {
   await upsertMarketplaceCredentials(
-    db,
+    forTenant(ownerTenantId),
     'MERCADOLIVRE',
     (prev) => ({ ...prev, mlApi: tokens }),
     (_merged, existing) => ({ status: existing?.status ?? 'OK' }),
@@ -159,7 +160,7 @@ async function ensureWithLock(
     try {
       // Reler depois de pegar o lock: outro processo pode ter renovado nesse meio tempo.
       const latest = (await readCreds(db)).creds.mlApi ?? tokens;
-      return await ensureMlAccessToken(latest, cfg, (t) => saveTokens(db, t));
+      return await ensureMlAccessToken(latest, cfg, (t) => saveTokens(tenantId, t));
     } finally {
       await redis.del(key);
     }
@@ -192,7 +193,7 @@ export async function loadMlApiCredentials(db: TenantClient): Promise<TagCredent
     return { ...creds, mlApi: { ...tokens, accessToken } };
   } catch (err) {
     if (err instanceof MlApiError && err.code === 'ML_API_UNAUTHORIZED') {
-      await db.marketplaceConnection.updateMany({
+      await forTenant(row.tenantId).marketplaceConnection.updateMany({
         where: { id: row.id },
         data: {
           lastCheckedAt: new Date(),

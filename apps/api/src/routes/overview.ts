@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { resolveConnection } from '@afilados/db';
 import { requireAuth } from '../plugins/auth';
 
 export async function overviewRoutes(app: FastifyInstance) {
@@ -7,10 +8,7 @@ export async function overviewRoutes(app: FastifyInstance) {
   app.get('/overview', async (req) => {
     const [wa, shopee, queueCount, batches, errors] = await Promise.all([
       req.db.waSession.findMany({ select: { id: true, label: true, status: true, phone: true } }),
-      req.db.marketplaceConnection.findFirst({
-        where: { kind: 'SHOPEE' },
-        select: { status: true },
-      }),
+      resolveConnection(req.tenantId, 'SHOPEE'),
       req.db.queueItem.count(),
       req.db.batch.findMany({
         where: { status: { in: ['SCHEDULED', 'RUNNING', 'PAUSED'] } },
@@ -25,7 +23,7 @@ export async function overviewRoutes(app: FastifyInstance) {
     ]);
     return {
       wa,
-      shopee: shopee?.status ?? 'UNCONFIGURED',
+      shopee: shopee.row?.status ?? 'UNCONFIGURED',
       queue: { count: queueCount },
       batches: batches.map((b) => ({
         id: b.id,

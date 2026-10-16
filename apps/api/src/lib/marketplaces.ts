@@ -1,6 +1,7 @@
 import {
   decryptJson,
   encryptJson,
+  resolveConnection,
   type ConnectionStatus,
   type MarketplaceConnection,
   type TenantClient,
@@ -51,6 +52,7 @@ export function publicConnection(
     kind,
     status: row?.status ?? 'UNCONFIGURED',
     affiliateTag: row?.affiliateTag ?? null,
+    subId: row?.subId ?? null,
     appId: creds?.appId ?? null,
     hasSecret: Boolean(creds?.secret),
     mattWord: creds?.mattWord ?? null,
@@ -83,7 +85,7 @@ export function publicConnection(
 }
 
 export async function loadShopeeCredentials(db: TenantClient) {
-  const row = await db.marketplaceConnection.findFirst({ where: { kind: 'SHOPEE' } });
+  const { row } = await resolveConnection(db.$tenantId, 'SHOPEE');
   if (!row?.encryptedCredentials) {
     throw new ApiError('SHOPEE_UNCONFIGURED', 'Configure a API da Shopee em Configurações', 400);
   }
@@ -96,7 +98,7 @@ export async function loadTagCredentials(
   db: TenantClient,
   kind: 'AMAZON' | 'MAGALU' | 'MERCADOLIVRE',
 ) {
-  const row = await db.marketplaceConnection.findFirst({ where: { kind } });
+  const { row } = await resolveConnection(db.$tenantId, kind);
   const creds = row?.encryptedCredentials
     ? decryptJson<TagCredentials>(Buffer.from(row.encryptedCredentials))
     : {};
@@ -121,7 +123,7 @@ export async function loadTagCredentials(
 }
 
 export async function loadAwinCredentials(db: TenantClient): Promise<AwinCredentials> {
-  const row = await db.marketplaceConnection.findFirst({ where: { kind: 'AWIN' } });
+  const { row } = await resolveConnection(db.$tenantId, 'AWIN');
   const creds = row?.encryptedCredentials
     ? decryptJson<AwinCredentials>(Buffer.from(row.encryptedCredentials))
     : ({} as Partial<AwinCredentials>);
@@ -141,7 +143,7 @@ export async function loadAwinCredentials(db: TenantClient): Promise<AwinCredent
 }
 
 export async function loadAliexpressCredentials(db: TenantClient): Promise<AliexpressCredentials> {
-  const row = await db.marketplaceConnection.findFirst({ where: { kind: 'ALIEXPRESS' } });
+  const { row } = await resolveConnection(db.$tenantId, 'ALIEXPRESS');
   const creds = row?.encryptedCredentials
     ? decryptJson<AliexpressCredentials>(Buffer.from(row.encryptedCredentials))
     : ({} as Partial<AliexpressCredentials>);
@@ -219,3 +221,33 @@ export function selectableAwinFeeds(feeds: AwinFeedListEntry[]): AwinFeedListEnt
 }
 
 export { getAdapter, getAwinAdapter, getTagAdapter, getAliexpressAdapter };
+
+/** Visão do afiliado: status do marketplace (do dono) + o identificador dele; nada de credenciais. */
+export function publicAffiliateConnection(
+  owner: MarketplaceConnection | null,
+  own: MarketplaceConnection | null,
+  kind: MarketplaceConnection['kind'],
+) {
+  return {
+    ...publicConnection(null, kind),
+    status: owner?.status ?? 'UNCONFIGURED',
+    subId: own?.subId ?? null,
+    lastCheckedAt: owner?.lastCheckedAt ?? null,
+    lastError: null,
+  };
+}
+
+export async function setAffiliateSubId(
+  db: TenantClient,
+  kind: MarketplaceConnection['kind'],
+  subId: string,
+) {
+  const value = subId.trim() || null;
+  const existing = await db.marketplaceConnection.findFirst({ where: { kind } });
+  if (existing) {
+    await db.marketplaceConnection.updateMany({ where: { id: existing.id }, data: { subId: value } });
+  } else {
+    // @ts-expect-error tenantId é injetado pela extensão forTenant
+    await db.marketplaceConnection.create({ data: { kind, subId: value } });
+  }
+}

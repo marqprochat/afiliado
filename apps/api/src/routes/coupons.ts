@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { decryptJson, type Prisma } from '@afilados/db';
+import { decryptJson, resolveConnection, type Prisma } from '@afilados/db';
 import { isEligibleCoupon, parseCouponsFromText } from '@afilados/core';
 import type { AliexpressCredentials, AwinCredentials } from '@afilados/marketplaces';
 import {
@@ -234,9 +234,9 @@ export async function couponsRoutes(app: FastifyInstance) {
   });
 
   app.post('/coupons/sync', async (req) => {
-    const [aliConn, awinConn] = await Promise.all([
-      req.db.marketplaceConnection.findFirst({ where: { kind: 'ALIEXPRESS' } }),
-      req.db.marketplaceConnection.findFirst({ where: { kind: 'AWIN' } }),
+    const [{ row: aliConn }, { row: awinConn }] = await Promise.all([
+      resolveConnection(req.tenantId, 'ALIEXPRESS'),
+      resolveConnection(req.tenantId, 'AWIN'),
     ]);
 
     const aliCreds = aliConn?.encryptedCredentials

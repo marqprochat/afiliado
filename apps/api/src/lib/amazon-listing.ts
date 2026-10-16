@@ -1,4 +1,4 @@
-import { decryptJson, type TenantClient } from '@afilados/db';
+import { decryptJson, resolveConnection, type TenantClient } from '@afilados/db';
 import {
   AmazonListingError,
   fetchAmazonListing,
@@ -25,7 +25,7 @@ export function toAmazonListingSource(
 export async function loadAmazonSessionCookies(
   db: TenantClient,
 ): Promise<Record<string, string> | undefined> {
-  const row = await db.marketplaceConnection.findFirst({ where: { kind: 'AMAZON' } });
+  const { row } = await resolveConnection(db.$tenantId, 'AMAZON');
   if (!row?.encryptedCredentials) return undefined;
   const creds = decryptJson<TagCredentials>(Buffer.from(row.encryptedCredentials));
   const cookies = creds.amazonSession?.cookies;
