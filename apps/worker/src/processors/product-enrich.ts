@@ -65,7 +65,10 @@ async function fetchViaAdapter(
         const list = await getAliexpressAdapter().fetchByUrls(creds, [url]);
         if (list[0]) return list[0];
       } catch (err) {
-        log.warn({ err, url }, 'Falha na API oficial do AliExpress; tentando fallback por raspagem');
+        log.warn(
+          { err, url },
+          'Falha na API oficial do AliExpress; tentando fallback por raspagem',
+        );
       }
     }
     return await scrapeAliexpress(url);

@@ -249,7 +249,10 @@ describe('sendOffer', () => {
       });
       const enqueued: unknown[] = [];
       const { item } = await makeBatch({ telegramChatIds: [chatId] });
-      await sendOffer({ ...deps, enqueueTelegram: async (job) => void enqueued.push(job) }, item.id);
+      await sendOffer(
+        { ...deps, enqueueTelegram: async (job) => void enqueued.push(job) },
+        item.id,
+      );
       expect(enqueued).toEqual([]);
     } finally {
       await prisma.tenant.deleteMany({ where: { id: otherTenant.id } });
@@ -376,9 +379,7 @@ describe('sendOffer', () => {
     expect(msg).toEqual({ kind: 'text', text: '*Aviso* do dia' });
     const updated = await prisma.batchItem.findUniqueOrThrow({ where: { id: itemId } });
     expect(updated.status).toBe('SENT');
-    expect((await prisma.batch.findUniqueOrThrow({ where: { id: batch.id } })).status).toBe(
-      'DONE',
-    );
+    expect((await prisma.batch.findUniqueOrThrow({ where: { id: batch.id } })).status).toBe('DONE');
   });
 
   it('mensagem livre com imagem vira imagem com legenda', async () => {
@@ -687,16 +688,32 @@ describe('sendOffer', () => {
     it('com IA ativa: o CTA entra na legenda e no job do telegram (gerado 1x por item)', async () => {
       await setAi(ctaStored());
       const bot = await prisma.telegramBot.create({
-        data: { tenantId, label: 'BotCta', encryptedToken: encryptJson({ token: 'x' }), status: 'OK' },
+        data: {
+          tenantId,
+          label: 'BotCta',
+          encryptedToken: encryptJson({ token: 'x' }),
+          status: 'OK',
+        },
       });
       await prisma.telegramChat.create({
-        data: { tenantId, botId: bot.id, chatId: '-100777', title: 'VIP', kind: 'supergroup', botIsAdmin: true },
+        data: {
+          tenantId,
+          botId: bot.id,
+          chatId: '-100777',
+          title: 'VIP',
+          kind: 'supergroup',
+          botIsAdmin: true,
+        },
       });
       const generateCta = vi.fn(async () => 'Nossaaa! Que oportunidade pra comprar esse fone! 🔥');
       const enqueued: { cta?: string }[] = [];
       const { item } = await makeBatch({ templateId: ctaTemplateId, telegramChatIds: ['-100777'] });
       await sendOffer(
-        { ...deps, generateCta: generateCta as never, enqueueTelegram: async (j) => void enqueued.push(j) },
+        {
+          ...deps,
+          generateCta: generateCta as never,
+          enqueueTelegram: async (j) => void enqueued.push(j),
+        },
         item.id,
       );
       expect(generateCta).toHaveBeenCalledTimes(1);
@@ -716,13 +733,19 @@ describe('sendOffer', () => {
       const enqueued: { cta?: string }[] = [];
       const { batch, item } = await makeBatch({ templateId: ctaTemplateId });
       const r = await sendOffer(
-        { ...deps, generateCta: generateCta as never, enqueueTelegram: async (j) => void enqueued.push(j) },
+        {
+          ...deps,
+          generateCta: generateCta as never,
+          enqueueTelegram: async (j) => void enqueued.push(j),
+        },
         item.id,
       );
       expect(r).toEqual({ outcome: 'sent', groups: 2 });
       const first = gateway.sent[0]!.msg;
       expect(first.kind === 'image' && first.caption).toBe('*Fone* R$ 99,90');
-      expect((await prisma.batch.findUniqueOrThrow({ where: { id: batch.id } })).status).toBe('DONE');
+      expect((await prisma.batch.findUniqueOrThrow({ where: { id: batch.id } })).status).toBe(
+        'DONE',
+      );
       expect(enqueued.every((j) => j.cta === undefined)).toBe(true);
     });
 
@@ -752,22 +775,54 @@ describe('sendOffer com afiliado', () => {
     const owner = await prisma.tenant.create({ data: { name: 'so-owner' } });
     const aff = await prisma.tenant.create({ data: { name: 'so-aff', parentTenantId: owner.id } });
     await prisma.marketplaceConnection.create({
-      data: { tenantId: owner.id, kind: source, status: 'OK',
-        encryptedCredentials: encryptJson(source === 'SHOPEE' ? { appId: 'a', secret: 's' } : { tag: 'lojadono' }) },
+      data: {
+        tenantId: owner.id,
+        kind: source,
+        status: 'OK',
+        encryptedCredentials: encryptJson(
+          source === 'SHOPEE' ? { appId: 'a', secret: 's' } : { tag: 'lojadono' },
+        ),
+      },
     });
     if (opts.subId) {
-      await prisma.marketplaceConnection.create({ data: { tenantId: aff.id, kind: source, subId: opts.subId } });
+      await prisma.marketplaceConnection.create({
+        data: { tenantId: aff.id, kind: source, subId: opts.subId },
+      });
     }
-    const session = await prisma.waSession.create({ data: { tenantId: aff.id, label: 's', status: 'CONNECTED' } });
-    const template = await prisma.template.create({ data: { tenantId: aff.id, name: 't', body: '{link}' } });
+    const session = await prisma.waSession.create({
+      data: { tenantId: aff.id, label: 's', status: 'CONNECTED' },
+    });
+    const template = await prisma.template.create({
+      data: { tenantId: aff.id, name: 't', body: '{link}' },
+    });
     const product = await prisma.product.create({
-      data: { tenantId: aff.id, source, externalId: '9', title: 'P', price: 10, images: ['https://img/x.jpg'],
-        originalUrl: source === 'SHOPEE' ? 'https://shopee.com.br/product/1/9' : 'https://www.magazineluiza.com.br/p/abc/', raw: {} },
+      data: {
+        tenantId: aff.id,
+        source,
+        externalId: '9',
+        title: 'P',
+        price: 10,
+        images: ['https://img/x.jpg'],
+        originalUrl:
+          source === 'SHOPEE'
+            ? 'https://shopee.com.br/product/1/9'
+            : 'https://www.magazineluiza.com.br/p/abc/',
+        raw: {},
+      },
     });
     const batch = await prisma.batch.create({
-      data: { tenantId: aff.id, sessionId: session.id, templateId: template.id, name: 'b', groupJids: ['g1@g.us'],
-        telegramChatIds: [], intervalMin: 1, mediaMode: 'IMAGE', status: 'SCHEDULED',
-        items: { create: [{ productId: product.id, order: 0, runAt: new Date() }] } },
+      data: {
+        tenantId: aff.id,
+        sessionId: session.id,
+        templateId: template.id,
+        name: 'b',
+        groupJids: ['g1@g.us'],
+        telegramChatIds: [],
+        intervalMin: 1,
+        mediaMode: 'IMAGE',
+        status: 'SCHEDULED',
+        items: { create: [{ productId: product.id, order: 0, runAt: new Date() }] },
+      },
       include: { items: true },
     });
     const cleanup = async () => {
@@ -782,23 +837,38 @@ describe('sendOffer com afiliado', () => {
     const { batch, item, cleanup } = await setup({ subId: 'joao' });
     try {
       const toAffiliateLink = vi.fn(async () => 'https://s.shopee.com.br/AFF');
-      await sendOffer({ ...deps, shopee: { ...createShopeeAdapter({ mock: true }), toAffiliateLink } }, item.id);
+      await sendOffer(
+        { ...deps, shopee: { ...createShopeeAdapter({ mock: true }), toAffiliateLink } },
+        item.id,
+      );
       expect(toAffiliateLink).toHaveBeenCalledWith(
         expect.objectContaining({ appId: 'a' }),
         'https://shopee.com.br/product/1/9',
         'joao',
         [`20260914${batch.id}`],
       );
-    } finally { await cleanup(); }
+    } finally {
+      await cleanup();
+    }
   });
 
   it('Shopee sem identificador: só o padrão (sem extras)', async () => {
     const { batch, item, cleanup } = await setup({});
     try {
       const toAffiliateLink = vi.fn(async () => 'https://s.shopee.com.br/AFF');
-      await sendOffer({ ...deps, shopee: { ...createShopeeAdapter({ mock: true }), toAffiliateLink } }, item.id);
-      expect(toAffiliateLink).toHaveBeenCalledWith(expect.anything(), expect.any(String), `20260914${batch.id}`, []);
-    } finally { await cleanup(); }
+      await sendOffer(
+        { ...deps, shopee: { ...createShopeeAdapter({ mock: true }), toAffiliateLink } },
+        item.id,
+      );
+      expect(toAffiliateLink).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.any(String),
+        `20260914${batch.id}`,
+        [],
+      );
+    } finally {
+      await cleanup();
+    }
   });
 
   it('Magalu: a loja do afiliado vira a tag das credenciais do dono', async () => {
@@ -807,8 +877,13 @@ describe('sendOffer com afiliado', () => {
       const toAffiliateLink = vi.fn(async () => 'https://www.magazinevoce.com.br/lojajoao/p/abc/');
       const getTagAdapter = (() => ({ kind: 'MAGALU', toAffiliateLink })) as never;
       await sendOffer({ ...deps, getTagAdapter }, item.id);
-      expect(toAffiliateLink).toHaveBeenCalledWith(expect.objectContaining({ tag: 'lojajoao' }), expect.any(String));
-    } finally { await cleanup(); }
+      expect(toAffiliateLink).toHaveBeenCalledWith(
+        expect.objectContaining({ tag: 'lojajoao' }),
+        expect.any(String),
+      );
+    } finally {
+      await cleanup();
+    }
   });
 
   it('tenant inativo: não envia', async () => {
@@ -817,6 +892,8 @@ describe('sendOffer com afiliado', () => {
       await prisma.tenant.update({ where: { id: aff.id }, data: { active: false } });
       const r = await sendOffer(deps, item.id);
       expect(r).toEqual({ outcome: 'skipped', reason: 'tenant-inactive' });
-    } finally { await cleanup(); }
+    } finally {
+      await cleanup();
+    }
   });
 });
