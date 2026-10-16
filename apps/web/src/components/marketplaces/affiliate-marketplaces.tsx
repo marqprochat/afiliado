@@ -24,7 +24,12 @@ function Row({ kind, saved }: { kind: MarketplaceKind; saved: string }) {
       <Label htmlFor={`sub-${kind}`}>{`${f.label} ${name}`}</Label>
       <div className="mt-1 flex gap-2">
         <Input id={`sub-${kind}`} value={value} onChange={(e) => setValue(e.target.value)} />
-        <Button type="button" onClick={() => save.mutate(value)} disabled={save.isPending} aria-label={`Salvar ${name}`}>
+        <Button
+          type="button"
+          onClick={() => save.mutate(value)}
+          disabled={save.isPending}
+          aria-label={`Salvar ${name}`}
+        >
           Salvar
         </Button>
       </div>
@@ -51,17 +56,20 @@ export function AffiliateMarketplaces() {
       {isPending || !data ? (
         <p className="text-sm text-muted-foreground">Carregando…</p>
       ) : (
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {MARKETPLACE_KINDS.map((kind) => {
-          const conn = data.find((m) => m.kind === kind);
-          return (
-            <div key={kind} className="space-y-2">
-              <StatusPill label={MARKETPLACE_CONFIGS[kind].label} status={conn?.status ?? 'UNCONFIGURED'} />
-              <Row key={`${kind}-${conn?.subId ?? ''}`} kind={kind} saved={conn?.subId ?? ''} />
-            </div>
-          );
-        })}
-      </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {MARKETPLACE_KINDS.map((kind) => {
+            const conn = data.find((m) => m.kind === kind);
+            return (
+              <div key={kind} className="space-y-2">
+                <StatusPill
+                  label={MARKETPLACE_CONFIGS[kind].label}
+                  status={conn?.status ?? 'UNCONFIGURED'}
+                />
+                <Row key={`${kind}-${conn?.subId ?? ''}`} kind={kind} saved={conn?.subId ?? ''} />
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

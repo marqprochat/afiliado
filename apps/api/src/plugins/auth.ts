@@ -53,6 +53,8 @@ export async function requireSuperAdmin(req: FastifyRequest, _reply: FastifyRepl
 
 export async function forbidAffiliate(req: FastifyRequest, _reply: FastifyReply) {
   if (req.isAffiliate) {
-    throw ApiError.forbidden('Indisponível para contas de afiliado: as credenciais são do administrador');
+    throw ApiError.forbidden(
+      'Indisponível para contas de afiliado: as credenciais são do administrador',
+    );
   }
 }

@@ -1,10 +1,20 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import {
-  prisma, forTenant, encryptJson, resolveConnection, resolveConnections, resolveSettings,
-  mergeAffiliateAi, isTenantActive, listTenantsWithCredentials,
+  prisma,
+  forTenant,
+  encryptJson,
+  resolveConnection,
+  resolveConnections,
+  resolveSettings,
+  mergeAffiliateAi,
+  isTenantActive,
+  listTenantsWithCredentials,
 } from '../src/index';
 
-let root: string; let aff: string; let affNoRow: string; let inactive: string;
+let root: string;
+let aff: string;
+let affNoRow: string;
+let inactive: string;
 const rootCreds = encryptJson({ appId: 'root-app', secret: 'root-secret' });
 
 beforeAll(async () => {
@@ -17,15 +27,28 @@ beforeAll(async () => {
   await prisma.marketplaceConnection.create({
     data: { tenantId: root, kind: 'SHOPEE', encryptedCredentials: rootCreds, status: 'OK' },
   });
-  await prisma.marketplaceConnection.create({ data: { tenantId: aff, kind: 'SHOPEE', subId: ' joao ' } });
+  await prisma.marketplaceConnection.create({
+    data: { tenantId: aff, kind: 'SHOPEE', subId: ' joao ' },
+  });
   await prisma.setting.create({
     data: {
-      tenantId: root, key: 'ai',
-      value: { enabled: false, baseUrl: 'https://vps/v1', model: 'combo', encryptedApiKey: 'KEY', tone: 'urgente' },
+      tenantId: root,
+      key: 'ai',
+      value: {
+        enabled: false,
+        baseUrl: 'https://vps/v1',
+        model: 'combo',
+        encryptedApiKey: 'KEY',
+        tone: 'urgente',
+      },
     },
   });
   await prisma.setting.create({
-    data: { tenantId: aff, key: 'ai', value: { enabled: true, baseUrl: 'https://evil', model: 'x', tone: 'divertido' } },
+    data: {
+      tenantId: aff,
+      key: 'ai',
+      value: { enabled: true, baseUrl: 'https://evil', model: 'x', tone: 'divertido' },
+    },
   });
 });
 afterAll(async () => {
@@ -62,16 +85,29 @@ describe('IA e settings', () => {
       { enabled: true, baseUrl: 'x', model: 'y', encryptedApiKey: 'MINE', tone: 'divertido' },
       { enabled: false, baseUrl: 'https://vps/v1', model: 'combo', encryptedApiKey: 'KEY' },
     );
-    expect(m).toMatchObject({ enabled: true, baseUrl: 'https://vps/v1', model: 'combo', encryptedApiKey: 'KEY', tone: 'divertido' });
+    expect(m).toMatchObject({
+      enabled: true,
+      baseUrl: 'https://vps/v1',
+      model: 'combo',
+      encryptedApiKey: 'KEY',
+      tone: 'divertido',
+    });
   });
   it('mergeAffiliateAi sem pai configurado deixa incompleto', () => {
     expect(mergeAffiliateAi({ enabled: true, baseUrl: '', model: '' }, undefined)).toEqual({
-      enabled: true, baseUrl: '', model: '',
+      enabled: true,
+      baseUrl: '',
+      model: '',
     });
   });
   it('resolveSettings: afiliado herda credencial de IA; raiz não muda', async () => {
     const a = (await resolveSettings(aff)).ai as Record<string, unknown>;
-    expect(a).toMatchObject({ enabled: true, baseUrl: 'https://vps/v1', encryptedApiKey: 'KEY', tone: 'divertido' });
+    expect(a).toMatchObject({
+      enabled: true,
+      baseUrl: 'https://vps/v1',
+      encryptedApiKey: 'KEY',
+      tone: 'divertido',
+    });
     const r = (await resolveSettings(root)).ai as Record<string, unknown>;
     expect(r).toMatchObject({ baseUrl: 'https://vps/v1', tone: 'urgente' });
   });

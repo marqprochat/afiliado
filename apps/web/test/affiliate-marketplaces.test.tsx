@@ -9,15 +9,25 @@ import { apiFetch } from '@/lib/api';
 const apiFetchMock = vi.mocked(apiFetch);
 
 const kinds = ['SHOPEE', 'MERCADOLIVRE', 'AMAZON', 'MAGALU', 'AWIN', 'ALIEXPRESS'];
-const list = kinds.map((kind) => ({ kind, status: 'OK', subId: kind === 'SHOPEE' ? 'joao' : null }));
+const list = kinds.map((kind) => ({
+  kind,
+  status: 'OK',
+  subId: kind === 'SHOPEE' ? 'joao' : null,
+}));
 
 beforeEach(() => {
   apiFetchMock.mockReset();
-  apiFetchMock.mockImplementation(async (path: string) => (path === '/marketplaces' ? list : { ok: true }));
+  apiFetchMock.mockImplementation(async (path: string) =>
+    path === '/marketplaces' ? list : { ok: true },
+  );
 });
 function renderIt() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={qc}><AffiliateMarketplaces /></QueryClientProvider>);
+  return render(
+    <QueryClientProvider client={qc}>
+      <AffiliateMarketplaces />
+    </QueryClientProvider>,
+  );
 }
 
 describe('AffiliateMarketplaces', () => {
@@ -34,7 +44,10 @@ describe('AffiliateMarketplaces', () => {
     fireEvent.change(input, { target: { value: 'joao-20' } });
     fireEvent.click(screen.getByRole('button', { name: /salvar amazon/i }));
     await waitFor(() =>
-      expect(apiFetchMock).toHaveBeenCalledWith('/marketplaces/AMAZON', { method: 'PUT', json: { subId: 'joao-20' } }),
+      expect(apiFetchMock).toHaveBeenCalledWith('/marketplaces/AMAZON', {
+        method: 'PUT',
+        json: { subId: 'joao-20' },
+      }),
     );
   });
 });

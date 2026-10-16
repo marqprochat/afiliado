@@ -4,13 +4,22 @@ import { z } from 'zod';
 import { hash } from '@node-rs/argon2';
 import { prisma, DEFAULT_SETTINGS, DEFAULT_TEMPLATE, type MarketplaceKind } from '@afilados/db';
 import {
-  ApiError, MARKETPLACE_KINDS, affiliateActiveSchema, affiliateCreateSchema,
-  affiliateResetPasswordSchema, affiliateUpdateSchema,
+  ApiError,
+  MARKETPLACE_KINDS,
+  affiliateActiveSchema,
+  affiliateCreateSchema,
+  affiliateResetPasswordSchema,
+  affiliateUpdateSchema,
 } from '@afilados/shared';
 import { requireAuth, requireSuperAdmin } from '../plugins/auth';
 import {
-  ADMIN_SESSION_COOKIE, IMPERSONATION_TTL_MS, SESSION_COOKIE, createSession, destroySession,
-  sessionCookieOptions, validateSession,
+  ADMIN_SESSION_COOKIE,
+  IMPERSONATION_TTL_MS,
+  SESSION_COOKIE,
+  createSession,
+  destroySession,
+  sessionCookieOptions,
+  validateSession,
 } from '../lib/session';
 
 const idParam = z.object({ id: z.string().min(1) });
@@ -30,8 +39,14 @@ async function loadAffiliate(adminTenantId: string, id: string) {
 async function toRow(tenantId: string) {
   const [tenant, user, conns, wa, groups, sends] = await Promise.all([
     prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } }),
-    prisma.user.findFirstOrThrow({ where: { tenantId, role: 'OWNER' }, orderBy: { createdAt: 'asc' } }),
-    prisma.marketplaceConnection.findMany({ where: { tenantId, subId: { not: null } }, select: { kind: true, subId: true } }),
+    prisma.user.findFirstOrThrow({
+      where: { tenantId, role: 'OWNER' },
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.marketplaceConnection.findMany({
+      where: { tenantId, subId: { not: null } },
+      select: { kind: true, subId: true },
+    }),
     prisma.waSession.count({ where: { tenantId, status: 'CONNECTED' } }),
     prisma.waGroup.count({ where: { tenantId } }),
     prisma.sendLog.count({
@@ -39,13 +54,23 @@ async function toRow(tenantId: string) {
     }),
   ]);
   return {
-    id: tenant.id, userId: user.id, name: tenant.name, email: user.email, active: tenant.active,
-    createdAt: tenant.createdAt, waConnected: wa > 0, groups, sends7d: sends,
+    id: tenant.id,
+    userId: user.id,
+    name: tenant.name,
+    email: user.email,
+    active: tenant.active,
+    createdAt: tenant.createdAt,
+    waConnected: wa > 0,
+    groups,
+    sends7d: sends,
     subIds: Object.fromEntries(conns.filter((c) => c.subId).map((c) => [c.kind, c.subId])),
   };
 }
 
-async function applySubIds(tenantId: string, subIds: Record<string, string | undefined> | undefined) {
+async function applySubIds(
+  tenantId: string,
+  subIds: Record<string, string | undefined> | undefined,
+) {
   for (const [kind, raw] of Object.entries(subIds ?? {})) {
     if (raw === undefined || !MARKETPLACE_KINDS.includes(kind as MarketplaceKind)) continue;
     const value = raw.trim() || null;
@@ -53,7 +78,10 @@ async function applySubIds(tenantId: string, subIds: Record<string, string | und
       where: { tenantId, kind: kind as MarketplaceKind },
     });
     if (existing) {
-      await prisma.marketplaceConnection.update({ where: { id: existing.id }, data: { subId: value } });
+      await prisma.marketplaceConnection.update({
+        where: { id: existing.id },
+        data: { subId: value },
+      });
     } else if (value) {
       await prisma.marketplaceConnection.create({
         data: { tenantId, kind: kind as MarketplaceKind, subId: value },
@@ -101,7 +129,9 @@ export async function adminAffiliatesRoutes(app: FastifyInstance) {
       const password = body.password ?? generatePassword();
       const passwordHash = await hash(password);
       const tenantId = await prisma.$transaction(async (tx) => {
-        const tenant = await tx.tenant.create({ data: { name: body.name, parentTenantId: req.tenantId } });
+        const tenant = await tx.tenant.create({
+          data: { name: body.name, parentTenantId: req.tenantId },
+        });
         await tx.user.create({
           data: { tenantId: tenant.id, email, name: body.name, role: 'OWNER', passwordHash },
         });
@@ -126,7 +156,10 @@ export async function adminAffiliatesRoutes(app: FastifyInstance) {
       if (body.email && body.email.toLowerCase() !== user.email) {
         const taken = await prisma.user.findUnique({ where: { email: body.email.toLowerCase() } });
         if (taken) throw ApiError.conflict('E-mail já cadastrado');
-        await prisma.user.update({ where: { id: user.id }, data: { email: body.email.toLowerCase() } });
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { email: body.email.toLowerCase() },
+        });
       }
       if (body.name) {
         await prisma.tenant.update({ where: { id }, data: { name: body.name } });
@@ -142,7 +175,9 @@ export async function adminAffiliatesRoutes(app: FastifyInstance) {
       await loadAffiliate(req.tenantId, id);
       await prisma.tenant.update({ where: { id }, data: { active } });
       if (!active) {
-        await prisma.session.deleteMany({ where: { user: { tenantId: id }, impersonatorUserId: null } });
+        await prisma.session.deleteMany({
+          where: { user: { tenantId: id }, impersonatorUserId: null },
+        });
       }
       return reply.status(204).send();
     });
@@ -152,7 +187,10 @@ export async function adminAffiliatesRoutes(app: FastifyInstance) {
       const body = affiliateResetPasswordSchema.parse(req.body ?? {});
       const { user } = await loadAffiliate(req.tenantId, id);
       const password = body.password ?? generatePassword();
-      await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hash(password) } });
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: await hash(password) },
+      });
       await prisma.session.deleteMany({ where: { userId: user.id } });
       return { password };
     });
@@ -168,7 +206,11 @@ export async function adminAffiliatesRoutes(app: FastifyInstance) {
         impersonatorUserId: req.user!.id,
         ttlMs: IMPERSONATION_TTL_MS,
       });
-      reply.setCookie(ADMIN_SESSION_COOKIE, adminToken, sessionCookieOptions(adminSession.expiresAt));
+      reply.setCookie(
+        ADMIN_SESSION_COOKIE,
+        adminToken,
+        sessionCookieOptions(adminSession.expiresAt),
+      );
       reply.setCookie(SESSION_COOKIE, token, sessionCookieOptions(expiresAt));
       return reply.status(204).send();
     });

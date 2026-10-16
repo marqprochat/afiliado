@@ -24,7 +24,10 @@ async function assertSafeBaseUrl(url: string) {
 }
 
 function rejectCredentials(isAffiliate: boolean, patch: Record<string, unknown>) {
-  if (isAffiliate && (patch.baseUrl !== undefined || patch.model !== undefined || patch.apiKey !== undefined)) {
+  if (
+    isAffiliate &&
+    (patch.baseUrl !== undefined || patch.model !== undefined || patch.apiKey !== undefined)
+  ) {
     throw ApiError.forbidden('A conexão de IA é gerenciada pelo administrador');
   }
 }

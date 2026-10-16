@@ -34,7 +34,10 @@ describe('SubID de afiliado', () => {
     });
   });
   it('AliExpress e Awin: só o afiliado', () => {
-    expect(composeLinkSubIds('ALIEXPRESS', 'joao', 'x')).toEqual({ subId: 'joao', extraSubIds: [] });
+    expect(composeLinkSubIds('ALIEXPRESS', 'joao', 'x')).toEqual({
+      subId: 'joao',
+      extraSubIds: [],
+    });
     expect(composeLinkSubIds('AWIN', '  ', 'x')).toEqual({ subId: 'x', extraSubIds: [] });
   });
   it('applyAffiliateTag troca a tag só quando há identificador', () => {

@@ -14,7 +14,11 @@ export function ImpersonationBanner() {
       <span>
         Acessando como <strong>{me.tenant.name}</strong>
       </span>
-      <button type="button" onClick={back} className="rounded-md border border-amber-400/50 px-2 py-0.5 hover:bg-amber-500/20">
+      <button
+        type="button"
+        onClick={back}
+        className="rounded-md border border-amber-400/50 px-2 py-0.5 hover:bg-amber-500/20"
+      >
         Voltar ao admin
       </button>
     </div>

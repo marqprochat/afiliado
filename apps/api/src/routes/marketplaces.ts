@@ -61,7 +61,10 @@ export async function marketplacesRoutes(app: FastifyInstance) {
   app.put('/marketplaces/:kind', async (req) => {
     const { kind } = kindParams.parse(req.params);
     if (req.isAffiliate) {
-      const { subId } = z.object({ subId: z.string().trim().max(60) }).strict().parse(req.body);
+      const { subId } = z
+        .object({ subId: z.string().trim().max(60) })
+        .strict()
+        .parse(req.body);
       await setAffiliateSubId(req.db, kind, subId);
       const [owner, own] = await Promise.all([
         resolveConnections(req.tenantId),
@@ -192,14 +195,18 @@ export async function marketplacesRoutes(app: FastifyInstance) {
     startMlOAuth(req.tenantId),
   );
 
-  app.post('/marketplaces/mercadolivre/oauth/callback', { preHandler: forbidAffiliate }, async (req) => {
-    const { code, state } = mlOAuthCallbackSchema.parse(req.body);
-    await completeMlOAuth(req.db, req.tenantId, code, state);
-    return publicConnection(
-      await req.db.marketplaceConnection.findFirst({ where: { kind: 'MERCADOLIVRE' } }),
-      'MERCADOLIVRE',
-    );
-  });
+  app.post(
+    '/marketplaces/mercadolivre/oauth/callback',
+    { preHandler: forbidAffiliate },
+    async (req) => {
+      const { code, state } = mlOAuthCallbackSchema.parse(req.body);
+      await completeMlOAuth(req.db, req.tenantId, code, state);
+      return publicConnection(
+        await req.db.marketplaceConnection.findFirst({ where: { kind: 'MERCADOLIVRE' } }),
+        'MERCADOLIVRE',
+      );
+    },
+  );
 
   app.delete('/marketplaces/mercadolivre/oauth', { preHandler: forbidAffiliate }, async (req) => {
     const row = await upsertMarketplaceCredentials(

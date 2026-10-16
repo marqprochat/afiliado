@@ -32,7 +32,11 @@ import type {
 import type { MarketplaceKind } from '@afilados/shared';
 
 export const useAffiliates = (enabled = true) =>
-  useQuery({ queryKey: ['admin', 'affiliates'], enabled, queryFn: () => apiFetch<AffiliateRow[]>('/admin/affiliates') });
+  useQuery({
+    queryKey: ['admin', 'affiliates'],
+    enabled,
+    queryFn: () => apiFetch<AffiliateRow[]>('/admin/affiliates'),
+  });
 export const useMe = () => useQuery({ queryKey: ['me'], queryFn: () => apiFetch<Me>('/me') });
 export const useOverview = () =>
   useQuery({

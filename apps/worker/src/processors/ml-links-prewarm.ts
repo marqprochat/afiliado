@@ -33,9 +33,9 @@ export async function runMlLinksPrewarm(
   deps: MlLinksPrewarmDeps,
   { tenantId, urls }: MlLinksPrewarmJob,
 ): Promise<PrewarmResult | { skipped: 'sem-sessao' | 'em-cache' }> {
-  const creds = await (deps.loadCredentials ?? ((id) => loadTagCredentialsForLink(id, 'MERCADOLIVRE')))(
-    tenantId,
-  );
+  const creds = await (
+    deps.loadCredentials ?? ((id) => loadTagCredentialsForLink(id, 'MERCADOLIVRE'))
+  )(tenantId);
   const cookies = creds.mlSession?.cookies;
   if (!cookies || Object.keys(cookies).length === 0) {
     log.info({ tenantId }, 'sem sessão do ML sincronizada; pré-aquecimento ignorado');

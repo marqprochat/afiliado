@@ -73,7 +73,12 @@ export function mergeAffiliateAi(
   own: StoredAiConfig | undefined,
   parent: StoredAiConfig | undefined,
 ): StoredAiConfig {
-  const { baseUrl: _b, model: _m, encryptedApiKey: _k, ...ownRest } = (own ?? {}) as Partial<StoredAiConfig>;
+  const {
+    baseUrl: _b,
+    model: _m,
+    encryptedApiKey: _k,
+    ...ownRest
+  } = (own ?? {}) as Partial<StoredAiConfig>;
   return {
     ...ownRest,
     enabled: own?.enabled ?? false,

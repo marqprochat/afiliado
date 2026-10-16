@@ -68,15 +68,24 @@ describe('afiliado (worker)', () => {
     const aff = await prisma.tenant.create({ data: { name: 'w-aff', parentTenantId: owner.id } });
     try {
       await prisma.marketplaceConnection.create({
-        data: { tenantId: owner.id, kind: 'MERCADOLIVRE',
-          encryptedCredentials: encryptJson({ tag: 'dono', mattWord: 'm', mattTool: '1' }) },
+        data: {
+          tenantId: owner.id,
+          kind: 'MERCADOLIVRE',
+          encryptedCredentials: encryptJson({ tag: 'dono', mattWord: 'm', mattTool: '1' }),
+        },
       });
       await prisma.marketplaceConnection.create({
         data: { tenantId: aff.id, kind: 'MERCADOLIVRE', subId: 'joaoml' },
       });
       await prisma.marketplaceConnection.create({
-        data: { tenantId: owner.id, kind: 'AWIN',
-          encryptedCredentials: encryptJson({ feedListUrl: 'https://ui.awin.com/feedList/x', feedIds: ['f'] }) },
+        data: {
+          tenantId: owner.id,
+          kind: 'AWIN',
+          encryptedCredentials: encryptJson({
+            feedListUrl: 'https://ui.awin.com/feedList/x',
+            feedIds: ['f'],
+          }),
+        },
       });
       expect((await loadTagCredentialsForLink(aff.id, 'MERCADOLIVRE')).tag).toBe('joaoml');
       expect((await loadTagCredentials(aff.id, 'MERCADOLIVRE')).tag).toBe('dono');

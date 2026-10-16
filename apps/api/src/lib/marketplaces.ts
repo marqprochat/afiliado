@@ -245,7 +245,10 @@ export async function setAffiliateSubId(
   const value = subId.trim() || null;
   const existing = await db.marketplaceConnection.findFirst({ where: { kind } });
   if (existing) {
-    await db.marketplaceConnection.updateMany({ where: { id: existing.id }, data: { subId: value } });
+    await db.marketplaceConnection.updateMany({
+      where: { id: existing.id },
+      data: { subId: value },
+    });
   } else {
     // @ts-expect-error tenantId é injetado pela extensão forTenant
     await db.marketplaceConnection.create({ data: { kind, subId: value } });

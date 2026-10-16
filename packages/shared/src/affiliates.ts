@@ -3,7 +3,12 @@ import { z } from 'zod';
 const id = () => z.string().trim().max(60).optional();
 export const affiliateSubIdsSchema = z
   .object({
-    SHOPEE: id(), ALIEXPRESS: id(), AWIN: id(), AMAZON: id(), MERCADOLIVRE: id(), MAGALU: id(),
+    SHOPEE: id(),
+    ALIEXPRESS: id(),
+    AWIN: id(),
+    AMAZON: id(),
+    MERCADOLIVRE: id(),
+    MAGALU: id(),
   })
   .strict();
 
@@ -19,4 +24,6 @@ export const affiliateUpdateSchema = z.object({
   subIds: affiliateSubIdsSchema.optional(),
 });
 export const affiliateActiveSchema = z.object({ active: z.boolean() });
-export const affiliateResetPasswordSchema = z.object({ password: z.string().min(8).max(100).optional() });
+export const affiliateResetPasswordSchema = z.object({
+  password: z.string().min(8).max(100).optional(),
+});

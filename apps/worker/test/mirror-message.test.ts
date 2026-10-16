@@ -449,25 +449,51 @@ describe('mirrorMessage processor', () => {
 
   it('afiliado: link Amazon espelhado com a tracking ID do afiliado (credencial do dono)', async () => {
     const owner = await prisma.tenant.create({ data: { name: 'mirror-owner' } });
-    const aff = await prisma.tenant.create({ data: { name: 'mirror-aff', parentTenantId: owner.id } });
+    const aff = await prisma.tenant.create({
+      data: { name: 'mirror-aff', parentTenantId: owner.id },
+    });
     try {
       await prisma.marketplaceConnection.create({
-        data: { tenantId: owner.id, kind: 'AMAZON', encryptedCredentials: encryptJson({ tag: 'dono-20' }), status: 'OK' },
+        data: {
+          tenantId: owner.id,
+          kind: 'AMAZON',
+          encryptedCredentials: encryptJson({ tag: 'dono-20' }),
+          status: 'OK',
+        },
       });
-      await prisma.marketplaceConnection.create({ data: { tenantId: aff.id, kind: 'AMAZON', subId: 'joao-20' } });
+      await prisma.marketplaceConnection.create({
+        data: { tenantId: aff.id, kind: 'AMAZON', subId: 'joao-20' },
+      });
       const sess = await prisma.waSession.create({ data: { tenantId: aff.id, label: 's' } });
       const rule = await prisma.mirrorRule.create({
-        data: { tenantId: aff.id, sessionId: sess.id, sourceJids: ['s@g.us'], targetJids: ['t1@g.us'],
-          mode: 'CLONE', mediaMode: 'PREVIEW', enabled: true },
+        data: {
+          tenantId: aff.id,
+          sessionId: sess.id,
+          sourceJids: ['s@g.us'],
+          targetJids: ['t1@g.us'],
+          mode: 'CLONE',
+          mediaMode: 'PREVIEW',
+          enabled: true,
+        },
       });
-      const res = await mirrorMessage({ gateway: fakeGateway, sleep: async () => {} }, {
-        tenantId: aff.id, ruleId: rule.id, sessionId: sess.id, sourceJid: 's@g.us', msgId: 'M-aff',
-        message: { message: { conversation: 'Olha: https://www.amazon.com.br/dp/B0ABCDEF12' } },
-      });
+      const res = await mirrorMessage(
+        { gateway: fakeGateway, sleep: async () => {} },
+        {
+          tenantId: aff.id,
+          ruleId: rule.id,
+          sessionId: sess.id,
+          sourceJid: 's@g.us',
+          msgId: 'M-aff',
+          message: { message: { conversation: 'Olha: https://www.amazon.com.br/dp/B0ABCDEF12' } },
+        },
+      );
       expect(res).toEqual({ outcome: 'mirrored', count: 1 });
       expect(fakeGateway.sendMessage).toHaveBeenCalledWith(
-        sess.id, 't1@g.us',
-        expect.objectContaining({ text: 'Olha: https://www.amazon.com.br/dp/B0ABCDEF12?tag=joao-20' }),
+        sess.id,
+        't1@g.us',
+        expect.objectContaining({
+          text: 'Olha: https://www.amazon.com.br/dp/B0ABCDEF12?tag=joao-20',
+        }),
         { dedupeEcho: true },
       );
     } finally {

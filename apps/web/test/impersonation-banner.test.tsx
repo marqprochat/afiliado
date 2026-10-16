@@ -9,13 +9,22 @@ const apiFetchMock = vi.mocked(apiFetch);
 
 function renderBanner() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={qc}><ImpersonationBanner /></QueryClientProvider>);
+  return render(
+    <QueryClientProvider client={qc}>
+      <ImpersonationBanner />
+    </QueryClientProvider>,
+  );
 }
 beforeEach(() => apiFetchMock.mockReset());
 
 describe('ImpersonationBanner', () => {
   it('não aparece fora da impersonação', async () => {
-    apiFetchMock.mockResolvedValue({ user: { name: 'Fulano', isSuperAdmin: false }, tenant: { name: 'T' }, isAffiliate: true, impersonating: null });
+    apiFetchMock.mockResolvedValue({
+      user: { name: 'Fulano', isSuperAdmin: false },
+      tenant: { name: 'T' },
+      isAffiliate: true,
+      impersonating: null,
+    });
     renderBanner();
     await waitFor(() => expect(apiFetchMock).toHaveBeenCalled());
     expect(screen.queryByText(/acessando como/i)).toBeNull();
@@ -25,13 +34,20 @@ describe('ImpersonationBanner', () => {
     vi.stubGlobal('location', { assign });
     apiFetchMock.mockImplementation(async (path: string) =>
       path === '/me'
-        ? { user: { name: 'Fulano' }, tenant: { name: 'Loja do Fulano' }, isAffiliate: true, impersonating: { by: 'Admin' } }
+        ? {
+            user: { name: 'Fulano' },
+            tenant: { name: 'Loja do Fulano' },
+            isAffiliate: true,
+            impersonating: { by: 'Admin' },
+          }
         : undefined,
     );
     renderBanner();
     expect(await screen.findByText(/acessando como/i)).toHaveTextContent('Loja do Fulano');
     fireEvent.click(screen.getByRole('button', { name: /voltar ao admin/i }));
-    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledWith('/admin/impersonation/stop', { method: 'POST' }));
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith('/admin/impersonation/stop', { method: 'POST' }),
+    );
     await waitFor(() => expect(assign).toHaveBeenCalledWith('/afiliados'));
   });
 });

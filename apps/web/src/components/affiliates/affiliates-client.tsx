@@ -1,7 +1,14 @@
 'use client';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { apiFetch } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { useApiMutation } from '@/lib/mutations';
@@ -21,7 +28,10 @@ export function AffiliatesClient() {
     (p: AffiliatePayload) =>
       editing && editing !== 'new'
         ? apiFetch<AffiliateRow>(`/admin/affiliates/${editing.id}`, { method: 'PATCH', json: p })
-        : apiFetch<AffiliateRow & { initialPassword?: string }>('/admin/affiliates', { method: 'POST', json: p }),
+        : apiFetch<AffiliateRow & { initialPassword?: string }>('/admin/affiliates', {
+            method: 'POST',
+            json: p,
+          }),
     {
       invalidate: [['admin', 'affiliates']],
       onSuccess: (out) => {
@@ -38,7 +48,10 @@ export function AffiliatesClient() {
   );
   const reset = useApiMutation(
     (a: AffiliateRow) =>
-      apiFetch<{ password: string }>(`/admin/affiliates/${a.id}/reset-password`, { method: 'POST', json: {} }),
+      apiFetch<{ password: string }>(`/admin/affiliates/${a.id}/reset-password`, {
+        method: 'POST',
+        json: {},
+      }),
     { onSuccess: (out, a) => setResetResult({ name: a.name, password: out.password }) },
   );
   const impersonate = useApiMutation(
@@ -59,7 +72,14 @@ export function AffiliatesClient() {
             Contas que usam as suas APIs, com WhatsApp, grupos e fila próprios.
           </p>
         </div>
-        <Button onClick={() => { setCreatedPassword(null); setEditing('new'); }}>Novo afiliado</Button>
+        <Button
+          onClick={() => {
+            setCreatedPassword(null);
+            setEditing('new');
+          }}
+        >
+          Novo afiliado
+        </Button>
       </div>
 
       {resetResult && (
@@ -92,10 +112,25 @@ export function AffiliatesClient() {
               <TableCell>{a.sends7d}</TableCell>
               <TableCell>{formatDateTime(a.createdAt)}</TableCell>
               <TableCell className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={() => impersonate.mutate(a)}>Entrar como</Button>
-                <Button size="sm" variant="outline" onClick={() => { setCreatedPassword(null); setEditing(a); }}>Editar</Button>
-                <Button size="sm" variant="outline" onClick={() => toggle.mutate(a)}>{a.active ? 'Desativar' : 'Ativar'}</Button>
-                <Button size="sm" variant="outline" onClick={() => reset.mutate(a)}>Redefinir senha</Button>
+                <Button size="sm" variant="outline" onClick={() => impersonate.mutate(a)}>
+                  Entrar como
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setCreatedPassword(null);
+                    setEditing(a);
+                  }}
+                >
+                  Editar
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => toggle.mutate(a)}>
+                  {a.active ? 'Desativar' : 'Ativar'}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => reset.mutate(a)}>
+                  Redefinir senha
+                </Button>
               </TableCell>
             </TableRow>
           ))}
@@ -106,7 +141,12 @@ export function AffiliatesClient() {
         <AffiliateFormDialog
           key={editing === 'new' ? 'new' : editing.id}
           open
-          onOpenChange={(v) => { if (!v) { setEditing(null); setCreatedPassword(null); } }}
+          onOpenChange={(v) => {
+            if (!v) {
+              setEditing(null);
+              setCreatedPassword(null);
+            }
+          }}
           {...(editing !== 'new' ? { initial: editing } : {})}
           pending={save.isPending}
           onSubmit={(p) => save.mutate(p)}

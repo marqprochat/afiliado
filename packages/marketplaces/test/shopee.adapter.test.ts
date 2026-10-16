@@ -123,8 +123,13 @@ describe('ShopeeAdapter (real, fetch falso)', () => {
 describe('ShopeeAdapter toAffiliateLink com extraSubIds', () => {
   it('envia subId + extraSubIds em subIds', async () => {
     const fetchImpl = fakeFetch([short]);
-    const adapter = createShopeeAdapter({ mock: false, fetchImpl: fetchImpl as unknown as typeof fetch });
-    await adapter.toAffiliateLink(creds, 'https://shopee.com.br/product/1/2', 'joao', ['20261016lote']);
+    const adapter = createShopeeAdapter({
+      mock: false,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await adapter.toAffiliateLink(creds, 'https://shopee.com.br/product/1/2', 'joao', [
+      '20261016lote',
+    ]);
     const body = JSON.parse(String(fetchImpl.mock.calls[0]![1]!.body));
     expect(body.variables.subIds).toEqual(['joao', '20261016lote']);
   });

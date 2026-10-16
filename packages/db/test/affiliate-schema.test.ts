@@ -3,7 +3,9 @@ import { prisma } from '../src/index';
 
 const tenantIds: string[] = [];
 afterAll(async () => {
-  await prisma.tenant.deleteMany({ where: { id: { in: tenantIds }, parentTenantId: { not: null } } });
+  await prisma.tenant.deleteMany({
+    where: { id: { in: tenantIds }, parentTenantId: { not: null } },
+  });
   await prisma.tenant.deleteMany({ where: { id: { in: tenantIds } } });
   await prisma.$disconnect();
 });
@@ -41,7 +43,12 @@ describe('schema de afiliados', () => {
     });
     expect(c.subId).toBe('joao');
     const s = await prisma.session.create({
-      data: { id: `s-${t.id}`, userId: u.id, expiresAt: new Date(Date.now() + 1000), impersonatorUserId: u.id },
+      data: {
+        id: `s-${t.id}`,
+        userId: u.id,
+        expiresAt: new Date(Date.now() + 1000),
+        impersonatorUserId: u.id,
+      },
     });
     expect(s.impersonatorUserId).toBe(u.id);
   });
