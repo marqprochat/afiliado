@@ -72,4 +72,17 @@ describe('AiSettingsForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /testar/i }));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/HTTP 401/));
   });
+  it('IA gerenciada: esconde conexão e nunca envia baseUrl/model/apiKey', async () => {
+    const onSave = vi.fn();
+    const onTest = vi.fn(async (_d?: AiSettingsPatch) => ({ cta: 'x', latencyMs: 1 }));
+    render(<AiSettingsForm value={{ ...value, baseUrl: '', model: '', hasApiKey: false, apiKeyHint: null, managed: true, available: true }} onSave={onSave} onTest={onTest} />);
+    expect(screen.queryByLabelText(/base url/i)).toBeNull();
+    expect(screen.queryByLabelText(/api key/i)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /testar/i }));
+    await waitFor(() => expect(onTest).toHaveBeenCalled());
+    const draft = onTest.mock.calls[0]![0]!;
+    expect(draft).not.toHaveProperty('baseUrl');
+    expect(draft).not.toHaveProperty('model');
+    expect(draft).not.toHaveProperty('apiKey');
+  });
 });

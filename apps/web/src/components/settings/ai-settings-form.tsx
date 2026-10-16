@@ -48,6 +48,7 @@ export function AiSettingsForm({
     temperature: value.temperature,
     apiKey: '',
   });
+  const managed = value.managed === true;
   const [test, setTest] = useState<TestState>({ status: 'idle' });
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm({ ...form, [k]: v });
 
@@ -58,8 +59,12 @@ export function AiSettingsForm({
     return patch as AiSettingsPatch;
   }
   function draft(): AiSettingsPatch {
-    const { apiKey, ...rest } = form;
-    return { ...rest, ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}) };
+    const { apiKey, baseUrl, model, ...rest } = form;
+    return {
+      ...rest,
+      ...(managed ? {} : { baseUrl, model }),
+      ...(apiKey.trim() && !managed ? { apiKey: apiKey.trim() } : {}),
+    };
   }
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -82,6 +87,7 @@ export function AiSettingsForm({
           id="ai-enabled"
           aria-label="Ativar CTA com IA"
           checked={form.enabled}
+          disabled={managed && !value.available}
           onCheckedChange={(v) => set('enabled', v)}
         />
         <Label htmlFor="ai-enabled">Ativar CTA com IA</Label>
@@ -91,29 +97,37 @@ export function AiSettingsForm({
         falhar, a mensagem é enviada sem CTA.
       </p>
 
-      <fieldset className="grid gap-3 rounded-lg border border-border p-4">
-        <legend className="px-1 text-sm font-medium">Conexão (9Router)</legend>
-        <div>
-          <Label htmlFor="ai-base-url">Base URL</Label>
-          <Input id="ai-base-url" placeholder="https://seu-vps/v1" value={form.baseUrl} onChange={(e) => set('baseUrl', e.target.value)} />
-        </div>
-        <div>
-          <Label htmlFor="ai-model">Modelo (nome do combo)</Label>
-          <Input id="ai-model" value={form.model} onChange={(e) => set('model', e.target.value)} />
-        </div>
-        <div>
-          <Label htmlFor="ai-key">API key</Label>
-          <Input
-            id="ai-key"
-            type="password"
-            autoComplete="off"
-            placeholder={value.apiKeyHint ?? 'sk-…'}
-            value={form.apiKey}
-            onChange={(e) => set('apiKey', e.target.value)}
-          />
-          <p className="mt-1 text-xs text-muted-foreground">Deixe em branco para manter a chave atual.</p>
-        </div>
-      </fieldset>
+      {managed ? (
+        <p className="text-sm text-muted-foreground">
+          {value.available
+            ? 'A conexão de IA é gerenciada pelo administrador.'
+            : 'A IA ainda não foi configurada pelo administrador.'}
+        </p>
+      ) : (
+        <fieldset className="grid gap-3 rounded-lg border border-border p-4">
+          <legend className="px-1 text-sm font-medium">Conexão (9Router)</legend>
+          <div>
+            <Label htmlFor="ai-base-url">Base URL</Label>
+            <Input id="ai-base-url" placeholder="https://seu-vps/v1" value={form.baseUrl} onChange={(e) => set('baseUrl', e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="ai-model">Modelo (nome do combo)</Label>
+            <Input id="ai-model" value={form.model} onChange={(e) => set('model', e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="ai-key">API key</Label>
+            <Input
+              id="ai-key"
+              type="password"
+              autoComplete="off"
+              placeholder={value.apiKeyHint ?? 'sk-…'}
+              value={form.apiKey}
+              onChange={(e) => set('apiKey', e.target.value)}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">Deixe em branco para manter a chave atual.</p>
+          </div>
+        </fieldset>
+      )}
 
       <details className="rounded-lg border border-border p-4">
         <summary className="cursor-pointer text-sm font-medium">Avançado (opcional)</summary>

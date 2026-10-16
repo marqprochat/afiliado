@@ -6,16 +6,17 @@ import { Button } from '@/components/ui/button';
 import { StatusPill } from '@/components/app-shell/status-pill';
 import { apiFetch } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
-import { useMarketplaces } from '@/lib/queries';
+import { useMarketplaces, useMe } from '@/lib/queries';
 import {
   MarketplaceDrawer,
   type MarketplaceSubmitPayload,
   type MarketplaceFeedback,
 } from '@/components/marketplaces/marketplace-drawer';
 import { MARKETPLACE_CONFIGS } from '@/components/marketplaces/marketplace-config';
+import { AffiliateMarketplaces } from '@/components/marketplaces/affiliate-marketplaces';
 import type { MarketplaceConnection } from '@/lib/types';
 
-export function MarketplacesClient() {
+function RootMarketplaces() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: marketplaces = [], refetch } = useMarketplaces();
@@ -117,4 +118,10 @@ export function MarketplacesClient() {
       )}
     </div>
   );
+}
+
+export function MarketplacesClient() {
+  const { data: me } = useMe();
+  if (me?.isAffiliate) return <AffiliateMarketplaces />;
+  return <RootMarketplaces />;
 }
