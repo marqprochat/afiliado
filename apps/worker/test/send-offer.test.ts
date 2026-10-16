@@ -770,7 +770,22 @@ describe('sendOffer', () => {
 });
 
 describe('sendOffer com afiliado', () => {
-  async function setup(opts: { subId?: string; source?: 'SHOPEE' | 'MAGALU' }) {
+  const CREDS_BY_SOURCE = {
+    SHOPEE: { appId: 'a', secret: 's' },
+    MAGALU: { tag: 'lojadono' },
+    AWIN: { feedListUrl: 'https://ui.awin.com/feedList/x', feedIds: ['f'] },
+    ALIEXPRESS: { appKey: 'k', appSecret: 's', trackingId: 'dono-track' },
+  };
+  const URL_BY_SOURCE = {
+    SHOPEE: 'https://shopee.com.br/product/1/9',
+    MAGALU: 'https://www.magazineluiza.com.br/p/abc/',
+    AWIN: 'https://loja.com.br/produto/9',
+    ALIEXPRESS: 'https://pt.aliexpress.com/item/1005001.html',
+  };
+  async function setup(opts: {
+    subId?: string;
+    source?: 'SHOPEE' | 'MAGALU' | 'AWIN' | 'ALIEXPRESS';
+  }) {
     const source = opts.source ?? 'SHOPEE';
     const owner = await prisma.tenant.create({ data: { name: 'so-owner' } });
     const aff = await prisma.tenant.create({ data: { name: 'so-aff', parentTenantId: owner.id } });
@@ -779,9 +794,7 @@ describe('sendOffer com afiliado', () => {
         tenantId: owner.id,
         kind: source,
         status: 'OK',
-        encryptedCredentials: encryptJson(
-          source === 'SHOPEE' ? { appId: 'a', secret: 's' } : { tag: 'lojadono' },
-        ),
+        encryptedCredentials: encryptJson(CREDS_BY_SOURCE[source]),
       },
     });
     if (opts.subId) {
@@ -803,10 +816,7 @@ describe('sendOffer com afiliado', () => {
         title: 'P',
         price: 10,
         images: ['https://img/x.jpg'],
-        originalUrl:
-          source === 'SHOPEE'
-            ? 'https://shopee.com.br/product/1/9'
-            : 'https://www.magazineluiza.com.br/p/abc/',
+        originalUrl: URL_BY_SOURCE[source],
         raw: {},
       },
     });
@@ -883,6 +893,74 @@ describe('sendOffer com afiliado', () => {
       );
     } finally {
       await cleanup();
+    }
+  });
+
+  it('Awin: o 3º argumento do link é o identificador do afiliado (não o padrão data/lote)', async () => {
+    const { item, cleanup } = await setup({ subId: 'joaoawin', source: 'AWIN' });
+    try {
+      const toAffiliateLink = vi.fn(
+        async () => 'https://www.awin1.com/cread.php?clickref=joaoawin',
+      );
+      const awin = { ...createAwinAdapter(), toAffiliateLink };
+      const r = await sendOffer({ ...deps, awin }, item.id);
+      expect(r.outcome).toBe('sent');
+      expect(toAffiliateLink).toHaveBeenCalledWith(
+        expect.objectContaining({ feedIds: ['f'] }),
+        'https://loja.com.br/produto/9',
+        'joaoawin',
+      );
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('AliExpress: o 3º argumento do link é o identificador do afiliado', async () => {
+    const { item, cleanup } = await setup({ subId: 'joaoali', source: 'ALIEXPRESS' });
+    try {
+      const toAffiliateLink = vi.fn(async () => 'https://s.click.aliexpress.com/e/_x');
+      const aliexpress = {
+        kind: 'ALIEXPRESS' as const,
+        checkConnection: async () => ({ ok: true }),
+        fetchByUrls: async () => [],
+        toAffiliateLink,
+      };
+      const r = await sendOffer({ ...deps, aliexpress }, item.id);
+      expect(r.outcome).toBe('sent');
+      expect(toAffiliateLink).toHaveBeenCalledWith(
+        expect.objectContaining({ trackingId: 'dono-track' }),
+        'https://pt.aliexpress.com/item/1005001.html',
+        'joaoali',
+      );
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('Awin e AliExpress sem identificador: cai no padrão data/lote (comportamento antigo)', async () => {
+    for (const source of ['AWIN', 'ALIEXPRESS'] as const) {
+      const { batch, item, cleanup } = await setup({ source });
+      try {
+        const toAffiliateLink = vi.fn(async () => 'https://link/x');
+        const base = {
+          checkConnection: async () => ({ ok: true }),
+          fetchByUrls: async () => [],
+          toAffiliateLink,
+        };
+        await sendOffer(
+          source === 'AWIN'
+            ? { ...deps, awin: { kind: 'AWIN' as const, ...base } }
+            : { ...deps, aliexpress: { kind: 'ALIEXPRESS' as const, ...base } },
+          item.id,
+        );
+        expect(toAffiliateLink).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.any(String),
+          `20260914${batch.id}`,
+        );
+      } finally {
+        await cleanup();
+      }
     }
   });
 

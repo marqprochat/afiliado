@@ -18,18 +18,26 @@ import { getRedis } from './redis';
  * Só é preciso de verdade para a Amazon (Creators API) — Mercado Livre e Magalu continuam
  * raspando HTML por URL e não usam nada daqui, mas a função aceita os três por uniformidade.
  */
-export async function loadTagCredentials(
+/** Uma única resolução da conexão (dono, no caso de afiliado) + o SubID do próprio tenant. */
+async function resolveTagCredentials(
   tenantId: string,
   kind: 'MERCADOLIVRE' | 'AMAZON' | 'MAGALU',
-): Promise<TagCredentials> {
-  const { row } = await resolveConnection(tenantId, kind);
+): Promise<{ creds: TagCredentials; subId: string | null }> {
+  const { row, subId } = await resolveConnection(tenantId, kind);
   const creds = row?.encryptedCredentials
     ? decryptJson<TagCredentials>(Buffer.from(row.encryptedCredentials))
     : {};
   if (kind === 'AMAZON' && (!creds.amazonApi?.clientId || !creds.amazonApi?.clientSecret)) {
     throw new Error('AMAZON: configure Client ID/Secret da Creators API');
   }
-  return creds;
+  return { creds, subId };
+}
+
+export async function loadTagCredentials(
+  tenantId: string,
+  kind: 'MERCADOLIVRE' | 'AMAZON' | 'MAGALU',
+): Promise<TagCredentials> {
+  return (await resolveTagCredentials(tenantId, kind)).creds;
 }
 
 /** Credenciais por tag já com a etiqueta do afiliado (quando houver) — usadas na geração de link. */
@@ -37,8 +45,7 @@ export async function loadTagCredentialsForLink(
   tenantId: string,
   kind: 'MERCADOLIVRE' | 'AMAZON' | 'MAGALU',
 ): Promise<TagCredentials> {
-  const creds = await loadTagCredentials(tenantId, kind);
-  const { subId } = await resolveConnection(tenantId, kind);
+  const { creds, subId } = await resolveTagCredentials(tenantId, kind);
   return applyAffiliateTag(creds, subId);
 }
 

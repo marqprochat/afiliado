@@ -1,6 +1,6 @@
 import type { Job } from 'bullmq';
 import pino from 'pino';
-import { prisma, decryptJson, resolveConnection } from '@afilados/db';
+import { prisma, decryptJson, resolveConnection, isTenantActive } from '@afilados/db';
 import {
   downloadFeed as downloadFeedReal,
   listDatafeeds as listDatafeedsReal,
@@ -115,6 +115,12 @@ export async function importAwinCatalog(
 ): Promise<AwinImportFeedResult[]> {
   const listDatafeeds = deps.listDatafeeds ?? listDatafeedsReal;
   const downloadFeed = deps.downloadFeed ?? downloadFeedReal;
+
+  // Job já enfileirado quando a conta foi desativada: não importa nada.
+  if (!(await isTenantActive(tenantId))) {
+    log.warn({ tenantId }, 'tenant inativo — importação Awin ignorada');
+    return [];
+  }
 
   const { row: conn } = await resolveConnection(tenantId, 'AWIN');
   if (!conn?.encryptedCredentials) return [];

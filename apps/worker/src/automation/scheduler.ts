@@ -67,10 +67,17 @@ export class AutomationScheduler {
     }
     this.ticking = true;
     try {
+      // Só os tenants das regras carregadas (sem regras, nem consulta).
+      const tenantIds = [...new Set(this.rules.map((r) => r.tenantId))];
       const inactive = new Set(
-        (await prisma.tenant.findMany({ where: { active: false }, select: { id: true } })).map(
-          (t) => t.id,
-        ),
+        tenantIds.length === 0
+          ? []
+          : (
+              await prisma.tenant.findMany({
+                where: { active: false, id: { in: tenantIds } },
+                select: { id: true },
+              })
+            ).map((t) => t.id),
       );
       for (const rule of this.rules) {
         if (inactive.has(rule.tenantId)) continue;

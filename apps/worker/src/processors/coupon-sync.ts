@@ -1,6 +1,6 @@
 import type { Job } from 'bullmq';
 import pino from 'pino';
-import { prisma, decryptJson, resolveConnection } from '@afilados/db';
+import { prisma, decryptJson, resolveConnection, isTenantActive } from '@afilados/db';
 import type { CouponSyncJob } from '@afilados/shared';
 import {
   fetchAliexpressPromoCodes,
@@ -38,6 +38,12 @@ export function createCouponSyncProcessor(deps: CouponSyncProcessorDeps = {}) {
     const now = getNow();
     const runStartedAt = now;
     const results: CouponSyncResult[] = [];
+
+    // Job já enfileirado quando a conta foi desativada: não sincroniza nada.
+    if (!(await isTenantActive(tenantId))) {
+      log.warn({ tenantId }, 'tenant inativo — sincronização de cupons ignorada');
+      return results;
+    }
 
     // 1. AliExpress
     const { row: aliConn } = await resolveConnection(tenantId, 'ALIEXPRESS');
