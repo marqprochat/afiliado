@@ -1,5 +1,5 @@
 import pino from 'pino';
-import { prisma } from '@afilados/db';
+import { listTenantsWithCredentials } from '@afilados/db';
 import { enqueueCouponSync } from '../lib/queue-helpers';
 
 const log = pino({ name: 'coupon-sync-scheduler' });
@@ -40,16 +40,7 @@ export class CouponSyncScheduler {
   }
 
   async tick() {
-    const conns = await prisma.marketplaceConnection.findMany({
-      where: {
-        kind: { in: ['ALIEXPRESS', 'AWIN'] },
-        encryptedCredentials: { not: null },
-      },
-      select: { tenantId: true },
-    });
-
-    const tenantIds = Array.from(new Set(conns.map((c) => c.tenantId)));
-    for (const tenantId of tenantIds) {
+    for (const tenantId of await listTenantsWithCredentials(['ALIEXPRESS', 'AWIN'])) {
       await this.enqueue(tenantId);
     }
   }

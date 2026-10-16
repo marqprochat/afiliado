@@ -21,6 +21,67 @@ afterAll(async () => {
 });
 
 describe('AutomationScheduler', () => {
+  it('não processa regra habilitada de tenant inativo', async () => {
+    const inactive = await prisma.tenant.create({
+      data: { name: 'automation-inactive-test', active: false },
+    });
+    try {
+      const sess = await prisma.waSession.create({
+        data: { tenantId: inactive.id, label: 's', status: 'CONNECTED' },
+      });
+      const tpl = await prisma.template.create({
+        data: { tenantId: inactive.id, name: 't', body: '{titulo} {link}' },
+      });
+      const rule = await prisma.automationRule.create({
+        data: {
+          tenantId: inactive.id,
+          name: 'r-inativo',
+          enabled: true,
+          marketplaces: ['SHOPEE'],
+          keywords: ['fone'],
+          blockedKeywords: [],
+          intervalMin: 5,
+          sessionId: sess.id,
+          groupJids: ['g1@g.us'],
+          templateId: tpl.id,
+        },
+      });
+      const product = await prisma.product.create({
+        data: {
+          tenantId: inactive.id,
+          source: 'SHOPEE',
+          title: 'Fone Inativo',
+          price: 50,
+          images: ['https://x/1.png'],
+          originalUrl: 'https://shopee.com.br/p/inativo',
+          raw: {},
+        },
+      });
+      await prisma.automationQueueItem.create({
+        data: {
+          tenantId: inactive.id,
+          ruleId: rule.id,
+          kind: 'PRODUCT',
+          productId: product.id,
+          manual: true,
+        },
+      });
+      const enqueued: string[] = [];
+      const discoverCalls: string[] = [];
+      const scheduler = new AutomationScheduler({
+        enqueue: async (_t, batchItemId) => void enqueued.push(batchItemId),
+        discover: async (r) => void discoverCalls.push(r.id),
+      });
+      await scheduler.reload();
+      await scheduler.tick();
+      expect(enqueued).toEqual([]);
+      expect(discoverCalls).toEqual([]);
+      expect(await prisma.automationLog.count({ where: { ruleId: rule.id } })).toBe(0);
+    } finally {
+      await prisma.tenant.deleteMany({ where: { id: inactive.id } });
+    }
+  });
+
   it('despacha item manual antes de descobrir automaticamente', async () => {
     const rule = await prisma.automationRule.create({
       data: {

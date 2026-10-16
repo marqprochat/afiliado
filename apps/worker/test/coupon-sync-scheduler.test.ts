@@ -30,6 +30,33 @@ describe('CouponSyncScheduler.tick', () => {
   });
 });
 
+describe('CouponSyncScheduler.tick (afiliados)', () => {
+  it('inclui afiliados ativos do dono e ignora inativos', async () => {
+    const owner = await prisma.tenant.create({ data: { name: 'cs-owner' } });
+    const on = await prisma.tenant.create({ data: { name: 'cs-on', parentTenantId: owner.id } });
+    const off = await prisma.tenant.create({
+      data: { name: 'cs-off', parentTenantId: owner.id, active: false },
+    });
+    try {
+      await prisma.marketplaceConnection.create({
+        data: {
+          tenantId: owner.id,
+          kind: 'ALIEXPRESS',
+          encryptedCredentials: encryptJson({ appKey: 'k', appSecret: 's', trackingId: 't' }),
+        },
+      });
+      const enqueued: string[] = [];
+      const scheduler = new CouponSyncScheduler({ enqueue: async (t) => void enqueued.push(t) });
+      await scheduler.tick();
+      expect(enqueued).toEqual(expect.arrayContaining([owner.id, on.id]));
+      expect(enqueued).not.toContain(off.id);
+    } finally {
+      await prisma.tenant.deleteMany({ where: { id: { in: [on.id, off.id] } } });
+      await prisma.tenant.deleteMany({ where: { id: owner.id } });
+    }
+  });
+});
+
 describe('CouponSyncScheduler.start', () => {
   it('dispara um tick imediato ao iniciar', async () => {
     const enqueued: string[] = [];

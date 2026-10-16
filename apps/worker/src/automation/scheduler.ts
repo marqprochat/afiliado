@@ -67,7 +67,13 @@ export class AutomationScheduler {
     }
     this.ticking = true;
     try {
+      const inactive = new Set(
+        (await prisma.tenant.findMany({ where: { active: false }, select: { id: true } })).map(
+          (t) => t.id,
+        ),
+      );
       for (const rule of this.rules) {
+        if (inactive.has(rule.tenantId)) continue;
         await this.tickRule(rule).catch((e) =>
           log.error({ ruleId: rule.id, err: e }, 'falha ao processar regra de automação'),
         );

@@ -32,6 +32,33 @@ describe('AwinImportScheduler.tick', () => {
   });
 });
 
+describe('AwinImportScheduler.tick (afiliados)', () => {
+  it('inclui afiliados ativos do dono e ignora inativos', async () => {
+    const owner = await prisma.tenant.create({ data: { name: 'as-owner' } });
+    const on = await prisma.tenant.create({ data: { name: 'as-on', parentTenantId: owner.id } });
+    const off = await prisma.tenant.create({
+      data: { name: 'as-off', parentTenantId: owner.id, active: false },
+    });
+    try {
+      await prisma.marketplaceConnection.create({
+        data: {
+          tenantId: owner.id,
+          kind: 'AWIN',
+          encryptedCredentials: encryptJson({ feedListUrl: 'https://ui.awin.com/feedList/x' }),
+        },
+      });
+      const enqueued: string[] = [];
+      const scheduler = new AwinImportScheduler({ enqueue: async (t) => void enqueued.push(t) });
+      await scheduler.tick();
+      expect(enqueued).toEqual(expect.arrayContaining([owner.id, on.id]));
+      expect(enqueued).not.toContain(off.id);
+    } finally {
+      await prisma.tenant.deleteMany({ where: { id: { in: [on.id, off.id] } } });
+      await prisma.tenant.deleteMany({ where: { id: owner.id } });
+    }
+  });
+});
+
 describe('AwinImportScheduler.start', () => {
   it('dispara um tick imediato ao iniciar, sem esperar o intervalo', async () => {
     const enqueued: string[] = [];

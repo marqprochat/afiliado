@@ -1,5 +1,5 @@
 import pino from 'pino';
-import { prisma } from '@afilados/db';
+import { listTenantsWithCredentials } from '@afilados/db';
 import { enqueueAwinImport } from '../lib/queue-helpers';
 
 const log = pino({ name: 'awin-import-scheduler' });
@@ -44,11 +44,7 @@ export class AwinImportScheduler {
   }
 
   async tick() {
-    const conns = await prisma.marketplaceConnection.findMany({
-      where: { kind: 'AWIN', encryptedCredentials: { not: null } },
-      select: { tenantId: true },
-    });
-    for (const { tenantId } of conns) {
+    for (const tenantId of await listTenantsWithCredentials(['AWIN'])) {
       await this.enqueue(tenantId);
     }
   }
