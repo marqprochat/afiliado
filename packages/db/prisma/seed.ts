@@ -1,15 +1,6 @@
 import { hash } from '@node-rs/argon2';
 import { prisma } from '../src/index';
-
-const DEFAULT_TEMPLATE = `🔥 *{titulo}*
-
-{#preco_antigo}~De {preco_antigo}~{/preco_antigo}
-💰 *Por {preco}* {desconto}
-{#frete_gratis}{frete_gratis}{/frete_gratis}
-{#cupom}🎟️ Cupom: *{cupom}*{/cupom}
-{#oferta_relampago}{oferta_relampago}{/oferta_relampago}
-
-👉 {link}`;
+import { DEFAULT_TEMPLATE, DEFAULT_SETTINGS } from '../src/defaults';
 
 async function main() {
   const email = process.env.SEED_USER_EMAIL;
@@ -48,10 +39,7 @@ async function main() {
     });
   }
 
-  const settings: Record<string, unknown> = {
-    globalRateLimitPerMin: 6,
-    subIdPattern: '{yyyyMMdd}-{batchId}',
-  };
+  const settings = DEFAULT_SETTINGS;
   for (const [key, value] of Object.entries(settings)) {
     await prisma.setting.upsert({
       where: { tenantId_key: { tenantId: tenant.id, key } },

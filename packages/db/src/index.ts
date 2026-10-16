@@ -1,11 +1,10 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from './client';
 
 export * from '@prisma/client';
 export * from './crypto';
-
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
-export const prisma = globalForPrisma.prisma ?? new PrismaClient();
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+export * from './affiliate';
+export * from './defaults';
+export { prisma };
 
 /** Modelos que possuem coluna tenantId e devem ser filtrados automaticamente. */
 const TENANT_MODELS = new Set([
@@ -70,7 +69,7 @@ const UNSAFE_OPS = new Set(['findUnique', 'findUniqueOrThrow', 'update', 'delete
  * escopado deve usar `// @ts-expect-error` no site da chamada ou passar `tenantId` explicitamente.
  */
 export function forTenant(tenantId: string) {
-  return prisma.$extends({
+  const scoped = prisma.$extends({
     query: {
       $allModels: {
         async $allOperations({ model, operation, args, query }) {
@@ -97,5 +96,6 @@ export function forTenant(tenantId: string) {
       },
     },
   });
+  return scoped.$extends({ client: { $tenantId: tenantId } });
 }
 export type TenantClient = ReturnType<typeof forTenant>;
