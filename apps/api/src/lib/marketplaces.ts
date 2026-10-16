@@ -84,10 +84,34 @@ export function publicConnection(
   };
 }
 
+export const MARKETPLACE_UNAVAILABLE_MESSAGE = 'Marketplace indisponível, fale com o administrador';
+
+/**
+ * Erro de credencial ausente/incompleta. Afiliado não tem tela nem poder para corrigir
+ * a credencial do SuperAdmin: recebe mensagem genérica e o detalhe técnico vai só para o log.
+ */
+export function credentialError(
+  isAffiliate: boolean,
+  tenantId: string,
+  code: 'SHOPEE_UNCONFIGURED' | 'MARKETPLACE_ERROR',
+  message: string,
+) {
+  if (!isAffiliate) return new ApiError(code, message, 400);
+  console.warn(
+    `[marketplaces] credencial indisponível para afiliado tenantId=${tenantId}: ${message}`,
+  );
+  return new ApiError('MARKETPLACE_UNAVAILABLE', MARKETPLACE_UNAVAILABLE_MESSAGE, 400);
+}
+
 export async function loadShopeeCredentials(db: TenantClient) {
-  const { row } = await resolveConnection(db.$tenantId, 'SHOPEE');
+  const { row, isAffiliate } = await resolveConnection(db.$tenantId, 'SHOPEE');
   if (!row?.encryptedCredentials) {
-    throw new ApiError('SHOPEE_UNCONFIGURED', 'Configure a API da Shopee em Configurações', 400);
+    throw credentialError(
+      isAffiliate,
+      db.$tenantId,
+      'SHOPEE_UNCONFIGURED',
+      'Configure a API da Shopee em Configurações',
+    );
   }
   const creds = decryptJson<ShopeeCredentials>(Buffer.from(row.encryptedCredentials));
   return { creds, affiliateTag: row.affiliateTag };
@@ -98,7 +122,7 @@ export async function loadTagCredentials(
   db: TenantClient,
   kind: 'AMAZON' | 'MAGALU' | 'MERCADOLIVRE',
 ) {
-  const { row } = await resolveConnection(db.$tenantId, kind);
+  const { row, isAffiliate } = await resolveConnection(db.$tenantId, kind);
   const creds = row?.encryptedCredentials
     ? decryptJson<TagCredentials>(Buffer.from(row.encryptedCredentials))
     : {};
@@ -106,32 +130,35 @@ export async function loadTagCredentials(
   // ML com sessão sincronizada gera o link oficial mesmo sem matt_word/matt_tool
   const hasMlSession = kind === 'MERCADOLIVRE' && Boolean(creds.mlSession?.cookies);
   if (missing.length && !hasMlSession) {
-    throw new ApiError(
+    throw credentialError(
+      isAffiliate,
+      db.$tenantId,
       'MARKETPLACE_ERROR',
       `${kind}: configure ${missing.join(', ')} em Configurações`,
-      400,
     );
   }
   if (kind === 'AMAZON' && (!creds.amazonApi?.clientId || !creds.amazonApi?.clientSecret)) {
-    throw new ApiError(
+    throw credentialError(
+      isAffiliate,
+      db.$tenantId,
       'MARKETPLACE_ERROR',
       'AMAZON: configure Client ID/Secret da Creators API em Configurações',
-      400,
     );
   }
   return creds;
 }
 
 export async function loadAwinCredentials(db: TenantClient): Promise<AwinCredentials> {
-  const { row } = await resolveConnection(db.$tenantId, 'AWIN');
+  const { row, isAffiliate } = await resolveConnection(db.$tenantId, 'AWIN');
   const creds = row?.encryptedCredentials
     ? decryptJson<AwinCredentials>(Buffer.from(row.encryptedCredentials))
     : ({} as Partial<AwinCredentials>);
   if (!creds.feedListUrl) {
-    throw new ApiError(
+    throw credentialError(
+      isAffiliate,
+      db.$tenantId,
       'MARKETPLACE_ERROR',
       'AWIN: cole o link da lista de feeds em Configurações',
-      400,
     );
   }
   return {
@@ -143,15 +170,16 @@ export async function loadAwinCredentials(db: TenantClient): Promise<AwinCredent
 }
 
 export async function loadAliexpressCredentials(db: TenantClient): Promise<AliexpressCredentials> {
-  const { row } = await resolveConnection(db.$tenantId, 'ALIEXPRESS');
+  const { row, isAffiliate } = await resolveConnection(db.$tenantId, 'ALIEXPRESS');
   const creds = row?.encryptedCredentials
     ? decryptJson<AliexpressCredentials>(Buffer.from(row.encryptedCredentials))
     : ({} as Partial<AliexpressCredentials>);
   if (!creds.appKey || !creds.appSecret || !creds.trackingId) {
-    throw new ApiError(
+    throw credentialError(
+      isAffiliate,
+      db.$tenantId,
       'MARKETPLACE_ERROR',
       'ALIEXPRESS: configure App Key, App Secret e Tracking ID em Configurações',
-      400,
     );
   }
   return creds as AliexpressCredentials;

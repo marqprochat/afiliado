@@ -4,6 +4,7 @@ import {
   loadShopeeCredentials,
   loadTagCredentials,
   loadAwinCredentials,
+  loadAliexpressCredentials,
 } from '../src/lib/marketplaces';
 import { createTenantWithUser, cleanupTenant } from './helpers';
 
@@ -68,5 +69,35 @@ describe('afiliado lê credenciais do pai', () => {
     } finally {
       await cleanupTenant(lonely.tenantId);
     }
+  });
+});
+
+describe('afiliado cujo dono não tem credencial (spec §6)', () => {
+  let bareOwner: Awaited<ReturnType<typeof createTenantWithUser>>;
+  let bareAff: Awaited<ReturnType<typeof createTenantWithUser>>;
+  beforeAll(async () => {
+    bareOwner = await createTenantWithUser('dono-sem-cred');
+    bareAff = await createTenantWithUser('afiliado-sem-cred', bareOwner.tenantId);
+  });
+  afterAll(async () => {
+    await cleanupTenant(bareOwner.tenantId);
+  });
+  const generic = {
+    code: 'MARKETPLACE_UNAVAILABLE',
+    message: /Marketplace indisponível, fale com o administrador/,
+  };
+  it('Shopee, tag, Awin e AliExpress → mensagem genérica', async () => {
+    const db = forTenant(bareAff.tenantId);
+    await expect(loadShopeeCredentials(db)).rejects.toMatchObject(generic);
+    await expect(loadTagCredentials(db, 'AMAZON')).rejects.toMatchObject(generic);
+    await expect(loadAwinCredentials(db)).rejects.toMatchObject(generic);
+    await expect(loadAliexpressCredentials(db)).rejects.toMatchObject(generic);
+  });
+  it('raiz sem credencial mantém as mensagens antigas', async () => {
+    const db = forTenant(bareOwner.tenantId);
+    await expect(loadShopeeCredentials(db)).rejects.toMatchObject({ code: 'SHOPEE_UNCONFIGURED' });
+    await expect(loadTagCredentials(db, 'AMAZON')).rejects.toThrow(/AMAZON: configure/);
+    await expect(loadAwinCredentials(db)).rejects.toThrow(/AWIN: cole o link/);
+    await expect(loadAliexpressCredentials(db)).rejects.toThrow(/ALIEXPRESS: configure/);
   });
 });

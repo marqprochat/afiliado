@@ -45,7 +45,8 @@ export async function aiSettingsRoutes(app: FastifyInstance) {
     rejectCredentials(req.isAffiliate, patch);
     const next = applyPatch(await loadStoredAi(req.db), patch);
     if (next.baseUrl && !req.isAffiliate) await assertSafeBaseUrl(next.baseUrl);
-    if (next.enabled) assertComplete(await effectiveAi(req.db, next), 'Para ativar');
+    if (next.enabled)
+      assertComplete(await effectiveAi(req.db, next), 'Para ativar', req.isAffiliate);
     await saveStoredAi(req.db, req.tenantId, next);
     return toPublicAi(await effectiveAi(req.db, next), req.isAffiliate);
   });
@@ -54,7 +55,7 @@ export async function aiSettingsRoutes(app: FastifyInstance) {
     const { productId, ...draft } = aiTestSchema.parse(req.body);
     rejectCredentials(req.isAffiliate, draft);
     const merged = await effectiveAi(req.db, applyPatch(await loadStoredAi(req.db), draft));
-    assertComplete(merged, 'Para testar');
+    assertComplete(merged, 'Para testar', req.isAffiliate);
     await assertSafeBaseUrl(merged.baseUrl);
     let product = SAMPLE_PRODUCT;
     if (productId) {

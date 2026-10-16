@@ -97,3 +97,35 @@ describe('IA gerenciada', () => {
     expect(ownRow.value).not.toHaveProperty('baseUrl', 'https://x');
   });
 });
+
+describe('indisponibilidade para o afiliado (spec §6)', () => {
+  it('dono sem Shopee: rota real devolve 400 MARKETPLACE_UNAVAILABLE genérico', async () => {
+    const bareOwner = await createTenantWithUser('dono-vazio');
+    const bareAff = await createTenantWithUser('afiliado-vazio', bareOwner.tenantId);
+    try {
+      const c = await loginCookie(app, bareAff.email, bareAff.password);
+      const r = await app.inject({
+        method: 'POST',
+        url: '/api/v1/products/search',
+        headers: { cookie: c },
+        payload: { source: 'SHOPEE', mode: 'trending' },
+      });
+      expect(r.statusCode).toBe(400);
+      expect(r.json().error).toMatchObject({
+        code: 'MARKETPLACE_UNAVAILABLE',
+        message: 'Marketplace indisponível, fale com o administrador',
+      });
+      // ativar IA sem IA do dono
+      const ai = await app.inject({
+        method: 'PUT',
+        url: '/api/v1/settings/ai',
+        headers: { cookie: c },
+        payload: { enabled: true },
+      });
+      expect(ai.statusCode).toBe(400);
+      expect(ai.json().error.message).toBe('A IA ainda não foi configurada pelo administrador');
+    } finally {
+      await cleanupTenant(bareOwner.tenantId);
+    }
+  });
+});

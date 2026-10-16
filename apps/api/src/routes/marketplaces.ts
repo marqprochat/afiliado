@@ -17,6 +17,7 @@ import { forbidAffiliate, requireAuth } from '../plugins/auth';
 import {
   getAdapter,
   getShopeeAdapter,
+  MARKETPLACE_UNAVAILABLE_MESSAGE,
   loadAliexpressCredentials,
   loadAwinCredentials,
   publicAffiliateConnection,
@@ -249,6 +250,10 @@ export async function marketplacesRoutes(app: FastifyInstance) {
       return { categories };
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
+      if (req.isAffiliate) {
+        req.log.warn({ tenantId: req.tenantId, err: message }, 'aliexpress/categories falhou');
+        throw new ApiError('MARKETPLACE_UNAVAILABLE', MARKETPLACE_UNAVAILABLE_MESSAGE, 502);
+      }
       throw new ApiError('MARKETPLACE_ERROR', message, 502);
     }
   });
@@ -292,7 +297,16 @@ export async function marketplacesRoutes(app: FastifyInstance) {
         totalImported,
         totalRemoved,
         failedCount: failed.length,
-        feeds: results,
+        feeds: req.isAffiliate
+          ? results.map((r) => {
+              if (!r.error) return r;
+              req.log.warn(
+                { tenantId: req.tenantId, feedId: r.feedId, err: r.error },
+                'awin import falhou',
+              );
+              return { ...r, error: MARKETPLACE_UNAVAILABLE_MESSAGE };
+            })
+          : results,
       };
     } catch {
       // Timeout (feed grande) ou job perdido: cai no fluxo assíncrono anterior — o worker

@@ -87,8 +87,9 @@ export function applyPatch(stored: StoredAiConfig, patch: AiSettingsUpdateBody):
   return next;
 }
 
-export function assertComplete(c: StoredAiConfig, what: string) {
+export function assertComplete(c: StoredAiConfig, what: string, isAffiliate = false) {
   if (!c.baseUrl || !c.model || !c.encryptedApiKey) {
+    if (isAffiliate) throw ApiError.validation('A IA ainda não foi configurada pelo administrador');
     throw ApiError.validation(`${what}: informe Base URL, Modelo e API key`);
   }
 }
