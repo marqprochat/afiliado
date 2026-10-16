@@ -51,6 +51,7 @@ async function authenticateExtension(
       });
 
       if (tokenRow) {
+        if (!tokenRow.tenant.active) throw new ApiError('ACCOUNT_DISABLED', 'Conta desativada', 403);
         // Atualiza lastUsedAt em background
         void prisma.apiToken.update({
           where: { id: tokenRow.id },

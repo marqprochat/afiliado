@@ -9,6 +9,8 @@ declare module 'fastify' {
     user: User | null;
     tenantId: string;
     db: TenantClient;
+    isAffiliate: boolean;
+    impersonatorUserId: string | null;
   }
 }
 
@@ -16,6 +18,8 @@ export const authPlugin = fp(async (app: FastifyInstance) => {
   app.decorateRequest('user', null);
   app.decorateRequest('tenantId', '');
   app.decorateRequest('db', null as unknown as TenantClient);
+  app.decorateRequest('isAffiliate', false);
+  app.decorateRequest('impersonatorUserId', null);
   app.addHook('onRequest', async (req, reply) => {
     const token = req.cookies[SESSION_COOKIE];
     if (!token) return;
@@ -30,10 +34,25 @@ export const authPlugin = fp(async (app: FastifyInstance) => {
     }
     req.user = s.user;
     req.tenantId = s.tenantId;
+    req.isAffiliate = s.isAffiliate;
+    req.impersonatorUserId = s.impersonatorUserId;
     req.db = forTenant(s.tenantId);
   });
 });
 
 export async function requireAuth(req: FastifyRequest, _reply: FastifyReply) {
   if (!req.user) throw ApiError.unauthorized();
+}
+
+export async function requireSuperAdmin(req: FastifyRequest, _reply: FastifyReply) {
+  if (!req.user) throw ApiError.unauthorized();
+  if (!req.user.isSuperAdmin || req.impersonatorUserId) {
+    throw ApiError.forbidden('Acesso restrito ao SuperAdmin');
+  }
+}
+
+export async function forbidAffiliate(req: FastifyRequest, _reply: FastifyReply) {
+  if (req.isAffiliate) {
+    throw ApiError.forbidden('Indisponível para contas de afiliado: as credenciais são do administrador');
+  }
 }

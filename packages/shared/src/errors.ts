@@ -1,5 +1,7 @@
 export const API_ERROR_CODES = [
   'UNAUTHORIZED',
+  'FORBIDDEN',
+  'ACCOUNT_DISABLED',
   'VALIDATION',
   'CONFLICT',
   'NOT_FOUND',
@@ -28,6 +30,9 @@ export class ApiError extends Error {
   }
   static unauthorized(msg = 'Não autenticado') {
     return new ApiError('UNAUTHORIZED', msg, 401);
+  }
+  static forbidden(msg = 'Sem permissão') {
+    return new ApiError('FORBIDDEN', msg, 403);
   }
   static notFound(msg = 'Não encontrado') {
     return new ApiError('NOT_FOUND', msg, 404);
