@@ -34,6 +34,7 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
   const [feedback, setFeedback] = useState<{ message: string; ok: boolean } | null>(null);
   const [activeImport, setActiveImport] = useState<{
     jobId: string;
+    state?: string;
     progress?: AwinImportProgress;
   } | null>(null);
 
@@ -92,7 +93,9 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
         }
         const progress = typeof status.progress === 'object' ? status.progress : undefined;
         setActiveImport((current) =>
-          current?.jobId === activeImport.jobId ? { ...current, progress } : current,
+          current?.jobId === activeImport.jobId
+            ? { ...current, state: status.state, progress }
+            : current,
         );
       } catch (err) {
         if (cancelled) return;
@@ -178,7 +181,7 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
       }>('/marketplaces/awin/import', { method: 'POST' });
       if (res.queued && res.jobId) {
         window.sessionStorage.setItem('awin-import-job', res.jobId);
-        setActiveImport({ jobId: res.jobId });
+        setActiveImport({ jobId: res.jobId, state: 'waiting' });
         setFeedback({
           message: 'Importação na fila. Acompanhando o andamento até concluir...',
           ok: true,
@@ -315,7 +318,13 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
               </div>
               {activeImport && (
                 <p className="text-xs text-muted-foreground">
-                  {!activeImport.progress ? 'Na fila, aguardando o worker iniciar...' : null}
+                  {!activeImport.progress
+                    ? activeImport.state === 'active'
+                      ? 'Worker iniciou o job; aguardando atualização de progresso...'
+                      : activeImport.state === 'delayed'
+                        ? 'Importação aguardando liberação da fila...'
+                        : 'Na fila, aguardando o worker iniciar...'
+                    : null}
                   {activeImport.progress && (
                     <>
                       {activeImport.progress.phase === 'listing'

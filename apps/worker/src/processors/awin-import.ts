@@ -231,10 +231,24 @@ export async function importAwinCatalog(
 
 export function createAwinImportProcessor(deps: AwinImportDeps = {}) {
   return async (job: Job<AwinImportJob>) => {
+    log.info(
+      { tenantId: job.data.tenantId, jobId: job.id },
+      'iniciando importação do catálogo Awin',
+    );
     const results = await importAwinCatalog(deps, job.data.tenantId, (progress) =>
       job.updateProgress(progress),
     );
     await job.updateProgress({ phase: 'completed', percent: 100 });
+    log.info(
+      {
+        tenantId: job.data.tenantId,
+        jobId: job.id,
+        feedCount: results.length,
+        imported: results.reduce((sum, feed) => sum + feed.imported, 0),
+        failedCount: results.filter((feed) => !feed.ok).length,
+      },
+      'importação do catálogo Awin concluída',
+    );
     return results;
   };
 }

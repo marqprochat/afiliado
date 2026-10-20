@@ -126,16 +126,29 @@ export async function marketplacesRoutes(app: FastifyInstance) {
                         }
                       : {}),
                   },
-      (merged, existing) => ({
-        status: 'UNCONFIGURED',
-        lastError: null,
-        affiliateTag:
-          kind === 'MERCADOLIVRE'
-            ? (merged.mattWord ?? null)
-            : kind === 'ALIEXPRESS'
-              ? (merged.trackingId ?? null)
-              : (body.affiliateTag ?? existing?.affiliateTag ?? null),
-      }),
+      (merged, existing) => {
+        const onlyAwinFeedSelection =
+          kind === 'AWIN' &&
+          body.feedIds !== undefined &&
+          body.feedListUrl === undefined &&
+          body.publisherId === undefined &&
+          body.offersApiToken === undefined;
+        return {
+          status: onlyAwinFeedSelection ? (existing?.status ?? 'UNCONFIGURED') : 'UNCONFIGURED',
+          ...(onlyAwinFeedSelection
+            ? {
+                lastError: existing?.lastError ?? null,
+                lastCheckedAt: existing?.lastCheckedAt ?? null,
+              }
+            : { lastError: null }),
+          affiliateTag:
+            kind === 'MERCADOLIVRE'
+              ? (merged.mattWord ?? null)
+              : kind === 'ALIEXPRESS'
+                ? (merged.trackingId ?? null)
+                : (body.affiliateTag ?? existing?.affiliateTag ?? null),
+        };
+      },
     );
     return publicConnection(row, kind);
   });
