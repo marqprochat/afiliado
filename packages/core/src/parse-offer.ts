@@ -1,5 +1,5 @@
 import { extractUrls } from './links';
-import { parseCouponsFromText } from './coupon-parse';
+import { parseCouponsFromText, extractCodesFromBlock } from './coupon-parse';
 
 export interface ParsedOffer {
   title?: string;
@@ -24,23 +24,18 @@ function parseBrlAmount(raw: string): number | undefined {
 export function parseOfferText(text: string): ParsedOffer {
   const urls = extractUrls(text);
 
-  // 1. Cupom: primeiro tenta via parseCouponsFromText
+  // 1. Cupom: primeiro tenta via parseCouponsFromText ou extractCodesFromBlock
   let coupon: string | undefined;
   const parsedCoupons = parseCouponsFromText(text);
   if (parsedCoupons.length > 0 && parsedCoupons[0]?.code) {
     coupon = parsedCoupons[0].code.toUpperCase();
   } else {
-    const couponMatch = text.match(
-      /(?:🎟️|🎫|🏷️)?\s*(?:cupom|c[uú]pom|c[oó]digo|voucher|vale)\s*(?:de\s*desconto)?\s*[:=»\-–—]?\s*[*_`"']?([A-Za-z0-9_\-\.]{3,30})[*_`"']?/i,
-    );
-    if (couponMatch && couponMatch[1]) {
-      const candidate = couponMatch[1].trim().replace(/^[*_`"']+|[*_`"']+$/g, '');
-      const reserved = ['AQUI', 'LINK', 'DESCONTO', 'OFERTA', 'FRETE', 'GRATIS'];
-      if (!reserved.includes(candidate.toUpperCase())) {
-        coupon = candidate.toUpperCase();
-      }
+    const blockCodes = extractCodesFromBlock(text, urls);
+    if (blockCodes.length > 0) {
+      coupon = blockCodes[0];
     }
   }
+
 
   // 2. Preço original (De: ...)
   let originalPrice: number | undefined;

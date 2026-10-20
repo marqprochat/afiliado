@@ -11,14 +11,18 @@ export interface CouponCandidate {
   sourceUrl: string | null;
 }
 
-const STOPLIST = new Set([
+export const STOPLIST = new Set([
   'OFF',
   'FRETE',
   'GRATIS',
   'GRÁTIS',
   'PIX',
   'BLACK',
+  'FRIDAY',
+  'PRIME',
+  'DAY',
   'HOJE',
+  'AGORA',
   'CUPOM',
   'CUPONS',
   'CUPON',
@@ -26,11 +30,16 @@ const STOPLIST = new Set([
   'CÓDIGO',
   'CODE',
   'VOUCHER',
+  'VALE',
   'DESCONTO',
+  'DESCONTOS',
   'PROMO',
   'PROMOÇÃO',
   'PROMOCAO',
+  'PROMOCOES',
+  'PROMOÇÕES',
   'LINK',
+  'LINKS',
   'AQUI',
   'CONFIRA',
   'APROVEITE',
@@ -41,17 +50,63 @@ const STOPLIST = new Set([
   'SHOPEE',
   'AMAZON',
   'MAGALU',
+  'MAGAZINE',
+  'LUIZA',
+  'MERCADO',
+  'LIVRE',
   'MERCADOLIVRE',
   'ALIEXPRESS',
   'SITE',
+  'SITES',
   'APP',
+  'APLICATIVO',
   'CHECKOUT',
   'COMPRA',
   'COMPRAS',
+  'COMPRE',
+  'CLIQUE',
+  'ACESSE',
+  'PEGAR',
+  'PEGUE',
+  'ATIVE',
+  'ATIVAR',
   'TUDO',
   'TODO',
   'TODOS',
   'TODAS',
+  'TODA',
+  'NOVO',
+  'NOVA',
+  'NOVOS',
+  'NOVAS',
+  'LIMITE',
+  'VALOR',
+  'PREÇO',
+  'PRECO',
+  'SOCIAL',
+  'LISTA',
+  'LISTAS',
+  'DIRETO',
+  'DIRETA',
+  'OFERTA',
+  'OFERTAS',
+  'CORRE',
+  'ATENÇÃO',
+  'ATENCAO',
+  'IMPERDÍVEL',
+  'IMPERDIVEL',
+  'EXCLUSIVO',
+  'EXCLUSIVA',
+  'REGRAS',
+  'PAGINA',
+  'PÁGINA',
+  'CARRINHO',
+  'BOLETO',
+  'CARTAO',
+  'CARTÃO',
+  'REAIS',
+  'PORCENTO',
+  'TESTE',
 ]);
 
 function parseBRL(raw: string): number | null {
@@ -134,39 +189,89 @@ function parseExpiresAt(text: string, now: Date): string | null {
   return `${year}-${pad(month)}-${pad(day)}T23:59:59.999-03:00`;
 }
 
-function extractCodesFromBlock(block: string, urls: string[]): string[] {
-  const rawTokens: string[] = [];
+export function extractCodesFromBlock(block: string, urls: string[]): string[] {
+  const candidates: Array<{ code: string; score: number }> = [];
+  const seen = new Set<string>();
 
-  // Padrão 1: Palavra-chave explícita seguida de loja opcional, pontuação e código
-  const explicitPattern =
-    /(?:cupom|cupon|c[óo]digo|code|voucher|use(?:\s+o)?)\s*(?:(?:da|do|na|no|de)?\s*(?:shopee|amazon|magalu|magazine\s*luiza|mercado\s*livre|mercadolivre|meli|aliexpress|app|voucher|cupom))*\s*(?:[:=–—-]|\b|\s|[🔥💥👉👇⚡])+[`'*"]?([A-Za-z0-9][A-Za-z0-9_-]{2,39})[`'*"]?/gi;
-  let match: RegExpExecArray | null;
-  while ((match = explicitPattern.exec(block)) !== null) {
-    if (match[1]) rawTokens.push(match[1]);
+  function addCandidate(raw: string, baseScore: number) {
+    const code = raw.trim().toUpperCase().replace(/^[*_`"'«»<>()#]+|[*_`"'«»<>()#]+$/g, '');
+    if (code.length < 3 || code.length > 40) return;
+    if (/^\d+$/.test(code)) return; // descarta números puros
+    if (STOPLIST.has(code)) return; // descarta palavras comuns de anúncio
+    for (const url of urls) {
+      if (url.toUpperCase().includes(code)) return; // descarta substrings exatas de URL
+    }
+    if (seen.has(code)) return;
+    seen.add(code);
+
+    let score = baseScore;
+    const hasDigits = /\d/.test(code);
+    const hasLetters = /[A-Z]/.test(code);
+
+    // Mistura de letras e números: forte indício de cupom alfanumérico (ex: 40SITETODO, VEM10, MELI30)
+    if (hasDigits && hasLetters) {
+      score += 50;
+    }
+
+    // Termina com OFF (ex: 40OFF, MELI30OFF)
+    if (code.endsWith('OFF')) {
+      score += 20;
+    }
+
+    candidates.push({ code, score });
   }
 
-  // Padrão 2: Tokens destacados entre crases, asteriscos ou aspas se o bloco/linha tiver contexto de cupom
-  if (/cupom|cupon|c[óo]digo|voucher|desconto|use|checkout/i.test(block)) {
-    const formattedPattern = /(?:[`*"])([A-Za-z0-9][A-Za-z0-9_-]{2,39})(?:[`*"])/g;
+  // Padrão 1: Emoji de Cupom (ex: 🎟️ 40SITETODO)
+  const emojiPattern = /(?:🎟️|🎫|🏷️)\s*[`'*"]?([A-Za-z0-9][A-Za-z0-9_-]{2,39})[`'*"]?/gu;
+  let match: RegExpExecArray | null;
+  while ((match = emojiPattern.exec(block)) !== null) {
+    if (match[1]) addCandidate(match[1], 80);
+  }
+
+  // Padrão 2: Palavra-chave explícita com separador (ex: Cupom: 40SITETODO, Cupom - 40SITETODO)
+  const explicitWithSepPattern =
+    /(?:cupom|cupon|c[óo]digo|code|voucher|vale)\s*(?:de\s*desconto)?\s*(?:(?:da|do|na|no|de)?\s*(?:shopee|amazon|magalu|magazine\s*luiza|mercado\s*livre|mercadolivre|meli|aliexpress|app))*\s*[:=–—\-]\s*[`'*"]?([A-Za-z0-9][A-Za-z0-9_-]{2,39})[`'*"]?/gi;
+  while ((match = explicitWithSepPattern.exec(block)) !== null) {
+    if (match[1]) addCandidate(match[1], 75);
+  }
+
+  // Padrão 3: Tokens destacados entre formatação (*ABC*, `ABC`, "ABC")
+  if (/cupom|cupon|c[óo]digo|voucher|desconto|use|checkout|🎟️|🎫|🏷️/i.test(block)) {
+    const formattedPattern = /(?:[`*_"])([A-Za-z0-9][A-Za-z0-9_-]{2,39})(?:[`*_"])/g;
     while ((match = formattedPattern.exec(block)) !== null) {
-      if (match[1]) rawTokens.push(match[1]);
+      if (match[1]) addCandidate(match[1], 60);
     }
   }
 
-  const validCodes = rawTokens
-    .map((c) => c.trim().toUpperCase())
-    .filter((c) => {
-      if (c.length < 3 || c.length > 40) return false;
-      if (/^\d+$/.test(c)) return false; // descarta números puros
-      if (STOPLIST.has(c)) return false;
-      // Descarta se for substring exata de alguma URL do bloco (ex: caminhos ou parâmetros)
-      for (const url of urls) {
-        if (url.toUpperCase().includes(c)) return false;
-      }
-      return true;
-    });
+  // Padrão 4: "use o cupom/voucher ABC"
+  const usePattern =
+    /(?:use(?:\s+o)?\s+(?:cupom|voucher|c[óo]digo)?)\s*[`'*"]?([A-Za-z0-9][A-Za-z0-9_-]{2,39})[`'*"]?/gi;
+  while ((match = usePattern.exec(block)) !== null) {
+    if (match[1]) addCandidate(match[1], 50);
+  }
 
-  return Array.from(new Set(validCodes));
+  // Padrão 5: Palavras-chave sem separador (ex: Cupom MELI30)
+  const explicitPattern =
+    /(?:cupom|cupon|c[óo]digo|code|voucher)\s*(?:(?:da|do|na|no|de)?\s*(?:shopee|amazon|magalu|magazine\s*luiza|mercado\s*livre|mercadolivre|meli|aliexpress|app))*\s+[`'*"]?([A-Za-z0-9][A-Za-z0-9_-]{2,39})[`'*"]?/gi;
+  while ((match = explicitPattern.exec(block)) !== null) {
+    if (match[1]) addCandidate(match[1], 40);
+  }
+
+  // Padrão 6: Varredura de tokens alfanuméricos que misturam letras e dígitos em linhas do bloco
+  if (/cupom|cupon|c[óo]digo|voucher|desconto|🎟️|🎫|🏷️/i.test(block)) {
+    const words = block.split(/[\s,;:!?)\]\n\r]+/);
+    for (const w of words) {
+      const clean = w.replace(/^[*_`"'«»<>()#]+|[*_`"'«»<>()#]+$/g, '');
+      if (/\d/.test(clean) && /[A-Za-z]/.test(clean) && clean.length >= 4 && clean.length <= 30) {
+        addCandidate(clean, 45);
+      }
+    }
+  }
+
+  // Ordena por maior pontuação (maior score primeiro)
+  candidates.sort((a, b) => b.score - a.score);
+
+  return candidates.map((c) => c.code);
 }
 
 export function parseCouponsFromText(

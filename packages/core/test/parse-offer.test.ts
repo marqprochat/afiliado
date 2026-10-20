@@ -61,4 +61,25 @@ https://www.magazineluiza.com.br/camisa/p/123`;
     expect(parsed.coupon).toBeUndefined();
     expect(parsed.urls).toEqual(['https://www.magazineluiza.com.br/camisa/p/123']);
   });
+
+  it('detecta cupom alfanumérico com emoji e ignora texto como NOVO CUPOM MERCADO LIVRE', () => {
+    const text = `🚨 NOVO CUPOM MERCADO LIVRE 🚨
+
+🎟️  40SITETODO
+40% OFF
+Limite de R$30 de desconto
+
+Ative pelo link:
+🔗 https://www.mercadolivre.com.br/social/promozonevip/lists`;
+
+    const parsed = parseOfferText(text);
+
+    expect(parsed.title).toBe('NOVO CUPOM MERCADO LIVRE');
+    expect(parsed.coupon).toBe('40SITETODO');
+    expect(parsed.discountPct).toBe(40);
+    expect(parsed.urls).toEqual([
+      'https://www.mercadolivre.com.br/social/promozonevip/lists',
+    ]);
+  });
 });
+
