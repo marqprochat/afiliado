@@ -278,7 +278,14 @@ export function createAwinImportProcessor(deps: AwinImportDeps = {}) {
       controller.signal,
     ).catch(async (err: unknown) => {
       clearInterval(cancelCheck);
-      if (!controller.signal.aborted) throw err;
+      if (!controller.signal.aborted) {
+        const error = err instanceof Error ? err.message : String(err);
+        await prisma.marketplaceConnection.updateMany({
+          where: { tenantId: job.data.tenantId, kind: 'AWIN' },
+          data: { status: 'ERROR', lastCheckedAt: new Date(), lastError: error.slice(0, 2000) },
+        });
+        throw err;
+      }
       await job.updateProgress({ phase: 'cancelled' });
       log.warn({ tenantId: job.data.tenantId, jobId: job.id }, 'Awin import cancelled');
       await getRedis().del(cancelKey);
@@ -287,6 +294,21 @@ export function createAwinImportProcessor(deps: AwinImportDeps = {}) {
     clearInterval(cancelCheck);
     if (controller.signal.aborted) return results;
     await getRedis().del(cancelKey);
+    const failedFeeds = results.filter((feed) => !feed.ok);
+    const connectionStatus = results.length > 0 && failedFeeds.length === 0 ? 'OK' : 'ERROR';
+    const lastError =
+      connectionStatus === 'OK'
+        ? null
+        : results.length === 0
+          ? 'Nenhum feed foi processado. Verifique as credenciais e os feeds selecionados.'
+          : failedFeeds
+              .map((feed) => `Feed ${feed.feedId}: ${feed.error ?? 'erro sem detalhe'}`)
+              .join('; ')
+              .slice(0, 2000);
+    await prisma.marketplaceConnection.updateMany({
+      where: { tenantId: job.data.tenantId, kind: 'AWIN' },
+      data: { status: connectionStatus, lastCheckedAt: new Date(), lastError },
+    });
     await job.updateProgress({ phase: 'completed', percent: 100 });
     log.info(
       {

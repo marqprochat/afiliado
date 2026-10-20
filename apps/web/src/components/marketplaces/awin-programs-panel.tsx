@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { apiFetch } from '@/lib/api';
@@ -25,6 +26,7 @@ type AwinImportProgress = {
 };
 
 export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
+  const queryClient = useQueryClient();
   const { data, isLoading, isError, error: feedsError, refetch, isFetching } = useAwinFeeds(true);
   const feeds = data?.feeds ?? [];
   const [filter, setFilter] = useState('');
@@ -88,6 +90,7 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
           showImportResult(status.result ?? []);
           window.sessionStorage.removeItem('awin-import-job');
           setActiveImport(null);
+          void queryClient.invalidateQueries({ queryKey: ['marketplaces'] });
           onImported?.();
           return;
         }
@@ -131,7 +134,7 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [activeImport?.jobId, onImported, showImportResult]);
+  }, [activeImport?.jobId, onImported, queryClient, showImportResult]);
 
   // Inicializa a seleção local a partir de `selected` do backend assim que os feeds chegam —
   // só uma vez, para não perder o que o usuário já mexeu em refetches subsequentes.
@@ -203,6 +206,7 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
       } else {
         const results = res.feeds ?? [];
         showImportResult(results);
+        void queryClient.invalidateQueries({ queryKey: ['marketplaces'] });
         onImported?.();
       }
     } catch (err) {
