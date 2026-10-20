@@ -258,6 +258,44 @@ export async function marketplacesRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get('/marketplaces/awin/import/:jobId', async (req) => {
+    const { jobId } = z.object({ jobId: z.string().min(1).max(200) }).parse(req.params);
+    if (!jobId.startsWith(`awin-import-${req.tenantId}-`)) {
+      throw new ApiError('NOT_FOUND', 'Importação não encontrada', 404);
+    }
+    const job = await getQueue<AwinImportJob>(QUEUE_AWIN_IMPORT).getJob(jobId);
+    if (!job) throw new ApiError('NOT_FOUND', 'Importação não encontrada ou expirada', 404);
+    const state = await job.getState();
+    const error =
+      state === 'failed'
+        ? req.isAffiliate
+          ? MARKETPLACE_UNAVAILABLE_MESSAGE
+          : job.failedReason || 'Falha na importação'
+        : undefined;
+    const result =
+      state === 'completed'
+        ? (job.returnvalue as {
+            feedId: string;
+            ok: boolean;
+            imported: number;
+            removed: number;
+            error?: string;
+          }[])
+        : undefined;
+    return {
+      jobId,
+      state,
+      progress: job.progress,
+      result:
+        req.isAffiliate && result
+          ? result.map((feed) =>
+              feed.error ? { ...feed, error: MARKETPLACE_UNAVAILABLE_MESSAGE } : feed,
+            )
+          : result,
+      error,
+    };
+  });
+
   app.post('/marketplaces/awin/import', async (req) => {
     // Valida as credenciais antes de enfileirar — sem isso, um tenant sem AWIN configurada
     // recebe { queued: true } mas o job roda e não faz nada (importAwinCatalog retorna []).
@@ -272,8 +310,8 @@ export async function marketplacesRoutes(app: FastifyInstance) {
       {
         jobId: `awin-import-${req.tenantId}-${Date.now()}`,
         attempts: 2,
-        removeOnComplete: true,
-        removeOnFail: 50,
+        removeOnComplete: { age: 24 * 60 * 60, count: 100 },
+        removeOnFail: { age: 7 * 24 * 60 * 60, count: 50 },
       },
     );
     // A espera precisa ficar abaixo do timeout de 30s do proxy do Next (rewrites): acima disso o
@@ -311,7 +349,7 @@ export async function marketplacesRoutes(app: FastifyInstance) {
     } catch {
       // Timeout (feed grande) ou job perdido: cai no fluxo assíncrono anterior — o worker
       // continua processando em background e o catálogo é atualizado de qualquer forma.
-      return { queued: true };
+      return { queued: true, jobId: job.id };
     }
   });
 }

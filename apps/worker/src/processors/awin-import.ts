@@ -28,6 +28,17 @@ export interface AwinImportFeedResult {
   error?: string;
 }
 
+export interface AwinImportProgress {
+  phase: 'listing' | 'downloading' | 'importing' | 'completed';
+  feedId?: string;
+  feedName?: string;
+  feedIndex?: number;
+  totalFeeds?: number;
+  processedRows?: number;
+  estimatedRows?: number | null;
+  percent?: number;
+}
+
 async function flushBatch(
   tenantId: string,
   feedId: string,
@@ -64,14 +75,37 @@ async function importFeed(
   feedId: string,
   entry: AwinFeedListEntry,
   downloadFeed: typeof downloadFeedReal,
+  progress?: (value: AwinImportProgress) => Promise<void>,
+  feedIndex = 1,
+  totalFeeds = 1,
 ): Promise<AwinImportFeedResult> {
   const runStartedAt = new Date();
   try {
+    await progress?.({
+      phase: 'downloading',
+      feedId,
+      feedName: entry.advertiserName,
+      feedIndex,
+      totalFeeds,
+      processedRows: 0,
+      estimatedRows: entry.productCount,
+    });
     const rows = await downloadFeed(entry.url);
     let imported = 0;
     let batch = new Map<string, AwinCatalogUpsertInput>();
+    let processedRows = 0;
+    await progress?.({
+      phase: 'importing',
+      feedId,
+      feedName: entry.advertiserName,
+      feedIndex,
+      totalFeeds,
+      processedRows,
+      estimatedRows: entry.productCount,
+    });
 
     for await (const row of rows) {
+      processedRows += 1;
       const input = mapAwinRow(row, entry);
       if (!input) continue;
       // Dedupe within the batch by externalId — last one wins.
@@ -81,6 +115,18 @@ async function importFeed(
         await flushBatch(tenantId, feedId, values, runStartedAt);
         imported += values.length;
         batch = new Map();
+        const ratio = entry.productCount ? Math.min(processedRows / entry.productCount, 1) : 0;
+        const percent = Math.min(99, Math.round(((feedIndex - 1 + ratio) / totalFeeds) * 100));
+        await progress?.({
+          phase: 'importing',
+          feedId,
+          feedName: entry.advertiserName,
+          feedIndex,
+          totalFeeds,
+          processedRows,
+          estimatedRows: entry.productCount,
+          percent,
+        });
       }
     }
     if (batch.size > 0) {
@@ -88,6 +134,17 @@ async function importFeed(
       await flushBatch(tenantId, feedId, values, runStartedAt);
       imported += values.length;
     }
+    const ratio = entry.productCount ? Math.min(processedRows / entry.productCount, 1) : 1;
+    await progress?.({
+      phase: 'importing',
+      feedId,
+      feedName: entry.advertiserName,
+      feedIndex,
+      totalFeeds,
+      processedRows,
+      estimatedRows: entry.productCount,
+      percent: Math.min(99, Math.round(((feedIndex - 1 + ratio) / totalFeeds) * 100)),
+    });
 
     if (imported === 0) {
       // Download vazio ou todas as linhas falharam mapAwinRow (coluna renomeada, arquivo
@@ -112,6 +169,7 @@ async function importFeed(
 export async function importAwinCatalog(
   deps: AwinImportDeps,
   tenantId: string,
+  progress?: (value: AwinImportProgress) => Promise<void>,
 ): Promise<AwinImportFeedResult[]> {
   const listDatafeeds = deps.listDatafeeds ?? listDatafeedsReal;
   const downloadFeed = deps.downloadFeed ?? downloadFeedReal;
@@ -127,6 +185,7 @@ export async function importAwinCatalog(
   const creds = decryptJson<AwinCredentials>(Buffer.from(conn.encryptedCredentials));
   if (!creds.feedListUrl || !creds.feedIds?.length) return [];
 
+  await progress?.({ phase: 'listing' });
   let feeds: AwinFeedListEntry[];
   try {
     feeds = await listDatafeeds(creds.feedListUrl);
@@ -143,7 +202,7 @@ export async function importAwinCatalog(
   );
   const results: AwinImportFeedResult[] = [];
 
-  for (const feedId of creds.feedIds) {
+  for (const [index, feedId] of creds.feedIds.entries()) {
     const entry = activeById.get(feedId);
     if (!entry) {
       results.push({
@@ -155,13 +214,27 @@ export async function importAwinCatalog(
       });
       continue;
     }
-    results.push(await importFeed(tenantId, feedId, entry, downloadFeed));
+    results.push(
+      await importFeed(
+        tenantId,
+        feedId,
+        entry,
+        downloadFeed,
+        progress,
+        index + 1,
+        creds.feedIds.length,
+      ),
+    );
   }
   return results;
 }
 
 export function createAwinImportProcessor(deps: AwinImportDeps = {}) {
   return async (job: Job<AwinImportJob>) => {
-    return importAwinCatalog(deps, job.data.tenantId);
+    const results = await importAwinCatalog(deps, job.data.tenantId, (progress) =>
+      job.updateProgress(progress),
+    );
+    await job.updateProgress({ phase: 'completed', percent: 100 });
+    return results;
   };
 }
