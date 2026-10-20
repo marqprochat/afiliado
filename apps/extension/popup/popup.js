@@ -24,6 +24,49 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnDiscover = document.getElementById('btn-discover');
   const discoverMsg = document.getElementById('discover-msg');
 
+  // Elementos das Abas
+  const tabBtnPage = document.getElementById('tab-btn-page');
+  const tabBtnGroup = document.getElementById('tab-btn-group');
+  const tabPageView = document.getElementById('tab-page-view');
+  const tabGroupView = document.getElementById('tab-group-view');
+
+  // Elementos da Aba "Colar de Grupo"
+  const groupTextInput = document.getElementById('group-text-input');
+  const btnProcessText = document.getElementById('btn-process-text');
+  const groupProcessMsg = document.getElementById('group-process-msg');
+  const groupParsedCard = document.getElementById('group-parsed-card');
+  const tagPrice = document.getElementById('tag-price');
+  const valPrice = document.getElementById('val-price');
+  const valOrig = document.getElementById('val-orig');
+  const valDisc = document.getElementById('val-disc');
+  const tagCoupon = document.getElementById('tag-coupon');
+  const valCoupon = document.getElementById('val-coupon');
+  const groupLinksReport = document.getElementById('group-links-report');
+  const btnToggleEdit = document.getElementById('btn-toggle-edit');
+  const groupPreviewBubble = document.getElementById('group-preview-bubble');
+  const groupEditTextarea = document.getElementById('group-edit-textarea');
+  const groupCaptureTarget = document.getElementById('group-capture-target');
+  const btnSendGroup = document.getElementById('btn-send-group');
+  const groupSendStatus = document.getElementById('group-send-status');
+
+  let currentParsedResult = null;
+  let isEditing = false;
+
+  // Alternância de Abas
+  tabBtnPage.addEventListener('click', () => {
+    tabBtnPage.classList.add('active');
+    tabBtnGroup.classList.remove('active');
+    tabPageView.classList.remove('hidden');
+    tabGroupView.classList.add('hidden');
+  });
+
+  tabBtnGroup.addEventListener('click', () => {
+    tabBtnGroup.classList.add('active');
+    tabBtnPage.classList.remove('active');
+    tabGroupView.classList.remove('hidden');
+    tabPageView.classList.add('hidden');
+  });
+
   function renderDiscovery(results) {
     if (!results || results.length === 0) {
       discoverMsg.textContent = 'Nenhuma palavra-chave de ML/Magalu nas automações ativas.';
@@ -136,13 +179,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let isAuthed = await checkAuth();
 
-  // --- Destino da captura: Fila de Triagem (padrão), uma automação ou um lote ativo ---
-  // O valor do <select> carrega o tipo: '' (Triagem), 'rule:<id>' ou 'batch:<id>'. O botão
-  // flutuante da página lê o mesmo destino de `lastCaptureTarget` no chrome.storage.
+  // --- Destinos de Envio: Fila de Triagem, Automações e Lotes (incluindo concluídos) ---
   let automationRules = [];
   let activeBatches = [];
 
-  const BATCH_STATUS_LABEL = { SCHEDULED: 'agendado', RUNNING: 'rodando', PAUSED: 'pausado' };
+  const BATCH_STATUS_LABEL = {
+    SCHEDULED: 'agendado',
+    RUNNING: 'rodando',
+    PAUSED: 'pausado',
+    DONE: 'concluído',
+  };
 
   function parseTarget(value) {
     if (value && value.startsWith('batch:')) return { kind: 'batch', id: value.slice(6) };
@@ -163,12 +209,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (t.kind === 'batch' && name) btnCapture.textContent = `⚡ Enviar para lote: ${name}`;
     else if (t.kind === 'rule' && name) btnCapture.textContent = `⚡ Enviar para: ${name}`;
     else btnCapture.textContent = '⚡ Enviar para Fila de Triagem';
+
     btnCaptureAll.textContent =
       t.kind === 'batch' && name
         ? `📦 Enviar todos da página para lote: ${name}`
         : t.kind === 'rule' && name
           ? `📦 Enviar todos da página para: ${name}`
           : '📦 Enviar todos da página para Fila de Triagem';
+
+    // Atualiza também o botão da aba "Colar de Grupo"
+    const gt = parseTarget(groupCaptureTarget.value);
+    const gname = findTargetName(groupCaptureTarget.value);
+    if (gt.kind === 'batch' && gname) btnSendGroup.textContent = `🚀 Enviar para lote: ${gname}`;
+    else if (gt.kind === 'rule' && gname) btnSendGroup.textContent = `🚀 Enviar para: ${gname}`;
+    else btnSendGroup.textContent = '🚀 Enviar para Fila de Triagem';
   }
 
   async function fetchJsonList(path) {
@@ -192,6 +246,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  function populateSelect(selectEl) {
+    selectEl.innerHTML = '';
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.textContent = 'Fila de Triagem';
+    selectEl.appendChild(defaultOpt);
+
+    function addGroup(label, items, toOption) {
+      if (items.length === 0) return;
+      const group = document.createElement('optgroup');
+      group.label = label;
+      for (const item of items) {
+        const opt = document.createElement('option');
+        const { value, text } = toOption(item);
+        opt.value = value;
+        opt.textContent = text;
+        group.appendChild(opt);
+      }
+      selectEl.appendChild(group);
+    }
+    addGroup('Automações', automationRules, (r) => ({ value: `rule:${r.id}`, text: r.name }));
+    addGroup('Lotes', activeBatches, (b) => ({
+      value: `batch:${b.id}`,
+      text: `${b.name} (${BATCH_STATUS_LABEL[b.status] || b.status} · ${b.pending} pendentes)`,
+    }));
+  }
+
   async function loadCaptureTargets() {
     if (!isAuthed) {
       captureTargetLabel.classList.add('hidden');
@@ -207,57 +288,283 @@ document.addEventListener('DOMContentLoaded', async () => {
       captureTargetLabel.classList.add('hidden');
       captureTarget.classList.add('hidden');
       captureTarget.innerHTML = '';
+      groupCaptureTarget.innerHTML = '';
       updateCaptureButtonLabel();
       return;
     }
 
     captureTargetLabel.classList.remove('hidden');
     captureTarget.classList.remove('hidden');
-    captureTarget.innerHTML = '';
-    const defaultOpt = document.createElement('option');
-    defaultOpt.value = '';
-    defaultOpt.textContent = 'Fila de Triagem';
-    captureTarget.appendChild(defaultOpt);
 
-    function addGroup(label, items, toOption) {
-      if (items.length === 0) return;
-      const group = document.createElement('optgroup');
-      group.label = label;
-      for (const item of items) {
-        const opt = document.createElement('option');
-        const { value, text } = toOption(item);
-        opt.value = value;
-        opt.textContent = text;
-        group.appendChild(opt);
-      }
-      captureTarget.appendChild(group);
-    }
-    addGroup('Automações', automationRules, (r) => ({ value: `rule:${r.id}`, text: r.name }));
-    addGroup('Lotes', activeBatches, (b) => ({
-      value: `batch:${b.id}`,
-      text: `${b.name} (${BATCH_STATUS_LABEL[b.status] || b.status} · ${b.pending} pendentes)`,
-    }));
+    populateSelect(captureTarget);
+    populateSelect(groupCaptureTarget);
 
     if (typeof chrome !== 'undefined' && chrome.storage) {
       const { lastCaptureTarget } = await chrome.storage.local.get(['lastCaptureTarget']);
-      // Formato antigo: string com o id da automação (sem prefixo).
       const saved =
         typeof lastCaptureTarget === 'string'
           ? lastCaptureTarget && `rule:${lastCaptureTarget}`
           : lastCaptureTarget && lastCaptureTarget.value;
-      if (saved && findTargetName(saved) !== undefined) captureTarget.value = saved;
-      // O destino salvo sumiu (lote concluído, automação desativada): volta para a Triagem.
-      else if (saved) await saveCaptureTarget();
+      if (saved && findTargetName(saved) !== undefined) {
+        captureTarget.value = saved;
+        groupCaptureTarget.value = saved;
+      } else if (saved) {
+        await saveCaptureTarget();
+      }
     }
     updateCaptureButtonLabel();
   }
 
   captureTarget.addEventListener('change', async () => {
+    groupCaptureTarget.value = captureTarget.value;
+    updateCaptureButtonLabel();
+    await saveCaptureTarget();
+  });
+
+  groupCaptureTarget.addEventListener('change', async () => {
+    captureTarget.value = groupCaptureTarget.value;
     updateCaptureButtonLabel();
     await saveCaptureTarget();
   });
 
   await loadCaptureTargets();
+
+  // --- Processamento de Mensagem de Outro Grupo ---
+  btnProcessText.addEventListener('click', async () => {
+    const text = groupTextInput.value.trim();
+    if (!text) {
+      groupProcessMsg.textContent = '❌ Cole um texto de promoção antes de processar.';
+      groupProcessMsg.className = 'msg msg-error';
+      return;
+    }
+
+    if (!isAuthed) {
+      groupProcessMsg.textContent = '❌ Conecte à sua conta antes de processar.';
+      groupProcessMsg.className = 'msg msg-error';
+      return;
+    }
+
+    btnProcessText.disabled = true;
+    groupProcessMsg.textContent = 'Processando texto e gerando seus links de afiliado...';
+    groupProcessMsg.className = 'msg';
+
+    try {
+      const res = await fetch(`${normalizeApiUrl(config.apiUrl)}/api/v1/extension/convert-text`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${config.apiToken}`,
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        groupProcessMsg.textContent = `❌ ${err?.error?.message || 'Falha ao processar texto'}`;
+        groupProcessMsg.className = 'msg msg-error';
+        btnProcessText.disabled = false;
+        return;
+      }
+
+      const data = await res.json();
+      currentParsedResult = data;
+
+      groupProcessMsg.textContent = '✅ Texto processado com sucesso!';
+      groupProcessMsg.className = 'msg msg-success';
+
+      renderParsedGroupOffer(data);
+    } catch {
+      groupProcessMsg.textContent = '❌ Erro de conexão com a API';
+      groupProcessMsg.className = 'msg msg-error';
+    } finally {
+      btnProcessText.disabled = false;
+    }
+  });
+
+  function renderParsedGroupOffer(data) {
+    const { detected, convertedText } = data;
+    groupParsedCard.classList.remove('hidden');
+
+    // Preço
+    if (detected.price) {
+      tagPrice.classList.remove('hidden');
+      valPrice.textContent = `R$ ${detected.price.toFixed(2).replace('.', ',')}`;
+      if (detected.originalPrice && detected.originalPrice > detected.price) {
+        valOrig.textContent = `De R$ ${detected.originalPrice.toFixed(2).replace('.', ',')}`;
+        valOrig.classList.remove('hidden');
+      } else {
+        valOrig.classList.add('hidden');
+      }
+      if (detected.discountPct) {
+        valDisc.textContent = `(${detected.discountPct}% OFF)`;
+        valDisc.classList.remove('hidden');
+      } else {
+        valDisc.classList.add('hidden');
+      }
+    } else {
+      tagPrice.classList.add('hidden');
+    }
+
+    // Cupom
+    if (detected.coupon) {
+      tagCoupon.classList.remove('hidden');
+      valCoupon.textContent = detected.coupon;
+    } else {
+      tagCoupon.classList.add('hidden');
+    }
+
+    // Relatório de Links
+    groupLinksReport.innerHTML = '';
+    const links = detected.links || [];
+    if (links.length === 0) {
+      const emptyDiv = document.createElement('div');
+      emptyDiv.className = 'empty-desc';
+      emptyDiv.textContent = 'Nenhum link de produto encontrado no texto.';
+      groupLinksReport.appendChild(emptyDiv);
+    } else {
+      for (const link of links) {
+        const item = document.createElement('div');
+        item.className = 'link-status-item';
+
+        const header = document.createElement('div');
+        header.className = 'link-status-header';
+
+        const title = document.createElement('strong');
+        title.textContent = link.marketplace !== 'UNKNOWN' ? link.marketplace : 'Link';
+        header.appendChild(title);
+
+        const badge = document.createElement('span');
+        if (link.converted) {
+          badge.className = 'link-status-badge-ok';
+          badge.textContent = '✓ Link Trocado';
+        } else {
+          badge.className = 'link-status-badge-warn';
+          badge.textContent = link.error || 'Não convertido';
+        }
+        header.appendChild(badge);
+        item.appendChild(header);
+
+        if (link.converted) {
+          const affUrl = document.createElement('div');
+          affUrl.className = 'link-converted-text';
+          affUrl.textContent = `⚡ Seu link: ${link.affiliateUrl}`;
+          item.appendChild(affUrl);
+        } else {
+          const rawUrl = document.createElement('div');
+          rawUrl.className = 'link-url-text';
+          rawUrl.textContent = link.originalUrl;
+          item.appendChild(rawUrl);
+        }
+
+        groupLinksReport.appendChild(item);
+      }
+    }
+
+    // Prévia e Edição Rápida
+    groupPreviewBubble.textContent = convertedText;
+    groupEditTextarea.value = convertedText;
+    isEditing = false;
+    groupPreviewBubble.classList.remove('hidden');
+    groupEditTextarea.classList.add('hidden');
+    btnToggleEdit.textContent = '✏️ Editar rápido';
+
+    updateCaptureButtonLabel();
+    groupSendStatus.textContent = '';
+  }
+
+  // Alternar edição rápida
+  btnToggleEdit.addEventListener('click', () => {
+    isEditing = !isEditing;
+    if (isEditing) {
+      groupPreviewBubble.classList.add('hidden');
+      groupEditTextarea.classList.remove('hidden');
+      btnToggleEdit.textContent = '👁️ Ver prévia';
+      groupEditTextarea.focus();
+    } else {
+      groupPreviewBubble.textContent = groupEditTextarea.value;
+      groupEditTextarea.classList.add('hidden');
+      groupPreviewBubble.classList.remove('hidden');
+      btnToggleEdit.textContent = '✏️ Editar rápido';
+    }
+  });
+
+  groupEditTextarea.addEventListener('input', () => {
+    groupPreviewBubble.textContent = groupEditTextarea.value;
+  });
+
+  // Enviar oferta copiada de grupo para Fila / Lote
+  btnSendGroup.addEventListener('click', async () => {
+    if (!currentParsedResult) return;
+
+    const target = parseTarget(groupCaptureTarget.value);
+    const name = findTargetName(groupCaptureTarget.value) ?? '';
+    const finalText = groupEditTextarea.value.trim() || groupPreviewBubble.textContent.trim();
+
+    // Identifica o link principal da mensagem
+    const detectedLinks = currentParsedResult.detected?.links || [];
+    const mainLink = detectedLinks.find((l) => l.converted) || detectedLinks[0];
+
+    const url = mainLink ? (mainLink.resolvedUrl || mainLink.originalUrl) : 'https://www.mercadolivre.com.br';
+    const marketplaceKind = mainLink && mainLink.marketplace !== 'UNKNOWN'
+      ? mainLink.marketplace
+      : 'MERCADOLIVRE';
+
+    const payload = {
+      url,
+      marketplaceKind,
+      title: currentParsedResult.detected?.title || 'Oferta copiada de grupo',
+      ...(currentParsedResult.detected?.price ? { price: currentParsedResult.detected.price } : {}),
+      ...(currentParsedResult.detected?.originalPrice ? { originalPrice: currentParsedResult.detected.originalPrice } : {}),
+      ...(currentParsedResult.detected?.discountPct ? { discountPct: currentParsedResult.detected.discountPct } : {}),
+      ...(currentParsedResult.detected?.coupon ? { couponCode: currentParsedResult.detected.coupon } : {}),
+      customText: finalText,
+      ...(target.kind === 'rule' ? { automationRuleId: target.id } : {}),
+      ...(target.kind === 'batch' ? { batchId: target.id } : {}),
+    };
+
+    btnSendGroup.disabled = true;
+    groupSendStatus.textContent = 'Enviando oferta...';
+    groupSendStatus.className = 'msg';
+
+    try {
+      const res = await fetch(`${normalizeApiUrl(config.apiUrl)}/api/v1/extension/capture`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${config.apiToken}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (target.kind === 'batch') {
+          groupSendStatus.textContent = data?.batchItem?.runAt
+            ? `✅ Mensagem adicionada ao lote "${name}" (agendado para envio)!`
+            : `✅ Mensagem adicionada ao lote "${name}"!`;
+        } else if (target.kind === 'rule') {
+          groupSendStatus.textContent = `✅ Mensagem adicionada à automação "${name}"!`;
+        } else {
+          groupSendStatus.textContent = '✅ Mensagem adicionada à Fila de Triagem!';
+        }
+        groupSendStatus.className = 'msg msg-success';
+        btnSendGroup.textContent = '✓ Enviado';
+        void loadCaptureTargets();
+      } else {
+        const err = await res.json().catch(() => null);
+        groupSendStatus.textContent = `❌ ${err?.error?.message || 'Falha ao enviar mensagem'}`;
+        groupSendStatus.className = 'msg msg-error';
+        btnSendGroup.disabled = false;
+        if (err?.error?.code === 'BATCH_INACTIVE' || res.status === 404) {
+          void loadCaptureTargets();
+        }
+      }
+    } catch {
+      groupSendStatus.textContent = '❌ Erro de conexão com a API';
+      groupSendStatus.className = 'msg msg-error';
+      btnSendGroup.disabled = false;
+    }
+  });
 
   // --- Sessão do Mercado Livre (cookies → link oficial meli.la) ---
   function fmtDate(iso) {
@@ -325,7 +632,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       isAuthed = ok;
       configMsg.textContent = 'Conectado com sucesso!';
       configMsg.className = 'msg msg-success';
-      // primeira sincronização da sessão ML logo após conectar
       chrome.runtime
         .sendMessage({ action: 'SYNC_ML_SESSION' })
         .then(renderMlSession)
@@ -359,7 +665,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    // Tenta obter metadados da página via content script
     try {
       const response = await chrome.tabs.sendMessage(tab.id, { action: 'GET_PRODUCT_DATA' });
       if (response && response.product) {
@@ -370,7 +675,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
       }
     } catch {
-      // Fallback: usa a URL para scraping no backend
       currentProduct = {
         url,
         marketplaceKind,
@@ -424,7 +728,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     extraEl.textContent = extras.join(' • ');
   }
 
-  // `batchPosition`: 'random' sorteia a posição do produto entre os pendentes do lote.
   function buildCapturePayload(product, target, batchPosition) {
     return {
       url: product.url,
@@ -443,7 +746,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
   }
 
-  // Enviar todos os produtos da página para o destino selecionado (Triagem, automação ou lote)
+  // Enviar todos os produtos da página para o destino selecionado
   btnCaptureAll.addEventListener('click', async () => {
     if (!currentProduct || currentTabId === null) return;
     const marketplaceKind = currentProduct.marketplaceKind;
@@ -506,7 +809,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         failed++;
         const err = await res.json().catch(() => null);
-        // O destino não existe mais: não adianta insistir nos demais.
         if (err?.error?.code === 'BATCH_INACTIVE' || res.status === 404) {
           abortReason = err?.error?.message || 'Destino indisponível';
           void loadCaptureTargets();
@@ -526,7 +828,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnCaptureAll.disabled = false;
   });
 
-  // Capturar oferta
+  // Capturar oferta da aba ativa
   btnCapture.addEventListener('click', async () => {
     if (!currentProduct) return;
     btnCapture.disabled = true;
@@ -552,7 +854,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const name = findTargetName(captureTarget.value) ?? '';
         if (target.kind === 'batch') {
           captureStatus.textContent = data?.batchItem?.runAt
-            ? `✅ Adicionado como próximo envio do lote "${name}"!`
+            ? `✅ Adicionado ao lote "${name}"!`
             : `✅ Adicionado ao lote "${name}" (pausado): sai primeiro quando for retomado.`;
         } else {
           const destino = target.kind === 'rule' ? `automação "${name}"` : 'Fila de Triagem';
@@ -560,15 +862,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         captureStatus.className = 'msg msg-success';
         btnCapture.textContent = '✓ Adicionado';
+        void loadCaptureTargets();
       } else {
         const err = await res.json().catch(() => null);
         captureStatus.textContent = `❌ ${err?.error?.message || 'Falha ao capturar oferta'}`;
         captureStatus.className = 'msg msg-error';
         btnCapture.disabled = false;
-        // Lote concluído/cancelado ou removido: atualiza a lista para ele sair do seletor.
         if (err?.error?.code === 'BATCH_INACTIVE' || res.status === 404) void loadCaptureTargets();
       }
-    } catch (e) {
+    } catch {
       captureStatus.textContent = '❌ Erro de conexão com a API';
       captureStatus.className = 'msg msg-error';
       btnCapture.disabled = false;

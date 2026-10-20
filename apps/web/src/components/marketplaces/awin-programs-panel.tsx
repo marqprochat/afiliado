@@ -7,7 +7,7 @@ import { useAwinFeeds } from '@/lib/queries';
 import type { AwinFeed } from '@/lib/types';
 
 export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
-  const { data, isLoading, isError, refetch } = useAwinFeeds(true);
+  const { data, isLoading, isError, error: feedsError, refetch, isFetching } = useAwinFeeds(true);
   const feeds = data?.feeds ?? [];
   const [filter, setFilter] = useState('');
   const [selected, setSelected] = useState<Set<string> | null>(null);
@@ -66,6 +66,7 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
         totalImported?: number;
         totalRemoved?: number;
         failedCount?: number;
+        feeds?: { feedId: string; ok: boolean; error?: string }[];
       }>('/marketplaces/awin/import', { method: 'POST' });
       if (res.queued) {
         setFeedback({
@@ -73,16 +74,27 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
           ok: true,
         });
       } else if (res.totalImported === 0) {
+        const errors = res.feeds?.filter((feed) => !feed.ok) ?? [];
+        const details = errors
+          .map((feed) => `Feed ${feed.feedId}: ${feed.error ?? 'erro sem detalhe'}`)
+          .join(' · ');
         setFeedback({
-          message:
-            'Nenhum produto foi encontrado nos feeds selecionados — verifique o link da lista de feeds ou os programas escolhidos.',
+          message: details
+            ? `Nenhum produto foi importado. Erros: ${details}`
+            : 'Nenhum produto foi encontrado nos feeds selecionados — verifique o link da lista de feeds ou os programas escolhidos.',
           ok: false,
         });
       } else {
-        const failedNote = res.failedCount ? ` (${res.failedCount} feed(s) com erro)` : '';
+        const failures = res.feeds?.filter((feed) => !feed.ok) ?? [];
+        const failureDetails = failures
+          .map((feed) => `Feed ${feed.feedId}: ${feed.error ?? 'erro sem detalhe'}`)
+          .join(' · ');
+        const failedNote = failures.length
+          ? ` ${failures.length} feed(s) falharam: ${failureDetails}`
+          : '';
         setFeedback({
-          message: `${res.totalImported} produto(s) importado(s) pelo link do feed${failedNote}.`,
-          ok: true,
+          message: `${res.totalImported} produto(s) importado(s) pelo link do feed.${failedNote}`,
+          ok: failures.length === 0,
         });
       }
       onImported?.();
@@ -100,9 +112,41 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
     <div className="rounded-lg border border-border bg-surface-2 p-3.5">
       <p className="mb-2 text-sm font-medium">Programas da Awin</p>
 
-      {isLoading && <p className="text-xs text-muted-foreground">Carregando programas...</p>}
+      {(isLoading || (isFetching && !data)) && (
+        <div role="status" aria-live="polite" className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Conectando à Awin e baixando a lista de programas...
+          </p>
+          <div
+            role="progressbar"
+            aria-label="Carregando programas da Awin"
+            className="h-1.5 overflow-hidden rounded-full bg-muted"
+          >
+            <div className="h-full w-1/3 animate-pulse rounded-full bg-primary" />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            O carregamento pode levar alguns minutos, dependendo da resposta da Awin.
+          </p>
+        </div>
+      )}
       {isError && (
-        <p className="text-xs text-red-400">Falha ao carregar os programas da sua conta Awin.</p>
+        <div role="alert" className="space-y-2 text-xs text-red-400">
+          <p className="font-medium">Não foi possível carregar a lista de programas da Awin.</p>
+          <p className="break-words">
+            Detalhe do erro:{' '}
+            {feedsError instanceof Error
+              ? feedsError.message
+              : 'A API não retornou uma descrição do erro.'}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isFetching}
+            onClick={() => void refetch()}
+          >
+            {isFetching ? 'Tentando novamente...' : 'Tentar novamente'}
+          </Button>
+        </div>
       )}
 
       {!isLoading && !isError && (
@@ -146,12 +190,30 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
               disabled={importing || effectiveSelected.size === 0}
               onClick={handleImport}
             >
-              {importing ? 'Importando...' : 'Importar agora'}
+              {importing ? 'Importando feeds selecionados...' : 'Importar agora'}
             </Button>
           </div>
 
+          {importing && (
+            <div role="status" aria-live="polite" className="mt-3 space-y-2">
+              <p className="text-xs text-muted-foreground">
+                A lista está sendo baixada e os produtos são salvos em lotes. O tempo depende do
+                tamanho dos feeds.
+              </p>
+              <div
+                role="progressbar"
+                aria-label="Importando produtos da Awin"
+                className="h-1.5 overflow-hidden rounded-full bg-muted"
+              >
+                <div className="h-full w-1/3 animate-pulse rounded-full bg-primary" />
+              </div>
+            </div>
+          )}
           {feedback && (
-            <p className={`mt-2 text-xs ${feedback.ok ? 'text-emerald-500' : 'text-red-400'}`}>
+            <p
+              role={feedback.ok ? 'status' : 'alert'}
+              className={`mt-2 break-words text-xs ${feedback.ok ? 'text-emerald-500' : 'text-red-400'}`}
+            >
               {feedback.message}
             </p>
           )}

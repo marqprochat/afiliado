@@ -14,8 +14,14 @@
       <div id="conn-pill" class="pill pill-off">Desconectado</div>
     </header>
 
+    <!-- Navegação por Abas -->
+    <nav class="tabs-nav">
+      <button id="tab-btn-page" class="tab-btn active">⚡ Página Atual</button>
+      <button id="tab-btn-group" class="tab-btn">📋 Colar de Grupo</button>
+    </nav>
+
     <main class="main">
-      <!-- Seção de Configuração / Conexão -->
+      <!-- Seção de Configuração / Conexão (Global) -->
       <div id="config-section" class="card">
         <div class="card-title">Conectar à Conta</div>
         <label class="label" for="api-url">URL da API</label>
@@ -34,70 +40,145 @@
         <div id="config-msg" class="msg"></div>
       </div>
 
-      <!-- Seção de Produto Detectado -->
-      <div id="product-section" class="card hidden">
-        <div class="card-header-flex">
-          <div class="card-title">Oferta Detectada</div>
-          <span id="market-badge" class="badge">SHOPEE</span>
-        </div>
+      <!-- VISÃO 1: Captura da Página Atual -->
+      <div id="tab-page-view">
+        <!-- Seção de Produto Detectado -->
+        <div id="product-section" class="card hidden">
+          <div class="card-header-flex">
+            <div class="card-title">Oferta Detectada</div>
+            <span id="market-badge" class="badge">SHOPEE</span>
+          </div>
 
-        <div class="product-preview">
-          <img id="p-img" class="p-img" src="" alt="Produto" />
-          <div class="p-details">
-            <div id="p-title" class="p-title">Carregando título...</div>
-            <div class="p-prices">
-              <span id="p-price" class="p-price">R$ 0,00</span>
-              <span id="p-orig" class="p-orig">R$ 0,00</span>
-              <span id="p-disc" class="p-disc">0% OFF</span>
+          <div class="product-preview">
+            <img id="p-img" class="p-img" src="" alt="Produto" />
+            <div class="p-details">
+              <div id="p-title" class="p-title">Carregando título...</div>
+              <div class="p-prices">
+                <span id="p-price" class="p-price">R$ 0,00</span>
+                <span id="p-orig" class="p-orig">R$ 0,00</span>
+                <span id="p-disc" class="p-disc">0% OFF</span>
+              </div>
+              <div id="p-extra" class="p-extra"></div>
             </div>
-            <div id="p-extra" class="p-extra"></div>
           </div>
+
+          <label id="capture-target-label" class="label" for="capture-target">Enviar para qual fila (lote)?</label>
+          <select id="capture-target" class="input"></select>
+
+          <button id="btn-capture" class="btn btn-action">⚡ Enviar para Fila de Triagem</button>
+          <div id="capture-status" class="msg"></div>
+
+          <button id="btn-capture-all" class="btn btn-primary">📦 Enviar todos da página</button>
+          <div id="capture-all-status" class="msg"></div>
         </div>
 
-        <label id="capture-target-label" class="label" for="capture-target">Enviar para</label>
-        <select id="capture-target" class="input"></select>
-
-        <button id="btn-capture" class="btn btn-action">⚡ Enviar para Fila de Triagem</button>
-        <div id="capture-status" class="msg"></div>
-
-        <button id="btn-capture-all" class="btn btn-primary">📦 Enviar todos da página</button>
-        <div id="capture-all-status" class="msg"></div>
-      </div>
-
-      <!-- Sessão do Mercado Livre (link oficial meli.la) -->
-      <div id="ml-session-section" class="card hidden">
-        <div class="card-header-flex">
-          <div class="card-title">Sessão Mercado Livre</div>
-          <span id="ml-session-pill" class="pill pill-off">Não sincronizada</span>
+        <!-- Sessão do Mercado Livre (link oficial meli.la) -->
+        <div id="ml-session-section" class="card hidden">
+          <div class="card-header-flex">
+            <div class="card-title">Sessão Mercado Livre</div>
+            <span id="ml-session-pill" class="pill pill-off">Não sincronizada</span>
+          </div>
+          <div id="ml-session-desc" class="empty-desc">
+            Com a sessão sincronizada o Afilados gera o link oficial (meli.la) automaticamente. Faça
+            login no Mercado Livre neste navegador e clique em sincronizar.
+          </div>
+          <button id="btn-sync-ml" class="btn btn-primary">🔄 Sincronizar sessão</button>
+          <div id="ml-session-msg" class="msg"></div>
         </div>
-        <div id="ml-session-desc" class="empty-desc">
-          Com a sessão sincronizada o Afilados gera o link oficial (meli.la) automaticamente. Faça
-          login no Mercado Livre neste navegador e clique em sincronizar.
-        </div>
-        <button id="btn-sync-ml" class="btn btn-primary">🔄 Sincronizar sessão</button>
-        <div id="ml-session-msg" class="msg"></div>
-      </div>
 
-      <!-- Descoberta por palavra-chave (ML/Magalu) feita neste navegador -->
-      <div id="discover-section" class="card hidden">
-        <div class="card-title">Descoberta neste navegador</div>
-        <div class="empty-desc">
-          Busca as palavras-chave das automações no Mercado Livre e Magalu usando este Chrome (o
-          servidor é bloqueado por essas lojas). Roda sozinha a cada 30 min com o Chrome aberto.
-        </div>
-        <button id="btn-discover" class="btn btn-primary">🔎 Descobrir agora</button>
-        <div id="discover-msg" class="msg"></div>
-      </div>
-
-      <!-- Seção de Página Não Compatível -->
-      <div id="unsupported-section" class="card hidden">
-        <div class="empty-state">
-          <span class="empty-icon">🔍</span>
-          <div class="empty-title">Nenhum produto detectado nesta aba</div>
+        <!-- Descoberta por palavra-chave (ML/Magalu) feita neste navegador -->
+        <div id="discover-section" class="card hidden">
+          <div class="card-title">Descoberta neste navegador</div>
           <div class="empty-desc">
-            Abra uma página de produto no Mercado Livre, Amazon, Magalu ou Shopee para capturar a
-            oferta.
+            Busca as palavras-chave das automações no Mercado Livre e Magalu usando este Chrome (o
+            servidor é bloqueado por essas lojas). Roda sozinha a cada 30 min com o Chrome aberto.
           </div>
+          <button id="btn-discover" class="btn btn-primary">🔎 Descobrir agora</button>
+          <div id="discover-msg" class="msg"></div>
+        </div>
+
+        <!-- Seção de Página Não Compatível -->
+        <div id="unsupported-section" class="card hidden">
+          <div class="empty-state">
+            <span class="empty-icon">🔍</span>
+            <div class="empty-title">Nenhum produto detectado nesta aba</div>
+            <div class="empty-desc">
+              Abra uma página de produto no Mercado Livre, Amazon, Magalu ou Shopee para capturar a
+              oferta. Ou use a aba <strong>Colar de Grupo</strong> acima para processar textos copiados.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VISÃO 2: Colar Mensagem de Outro Grupo -->
+      <div id="tab-group-view" class="hidden">
+        <div class="card">
+          <div class="card-title">Copiar &amp; Colar de Outro Grupo</div>
+          <div class="empty-desc" style="margin-top: 4px; margin-bottom: 8px;">
+            Cole o texto de promoções recebido no WhatsApp ou Telegram. O Afilados identificará preço, cupom e trocará os links pelos seus de afiliado.
+          </div>
+
+          <label class="label" for="group-text-input">Mensagem Original</label>
+          <textarea
+            id="group-text-input"
+            class="input textarea-input"
+            rows="5"
+            placeholder="Cole aqui o texto da promoção..."
+          ></textarea>
+
+          <button id="btn-process-text" class="btn btn-action">⚡ Processar &amp; Trocar Links</button>
+          <div id="group-process-msg" class="msg"></div>
+        </div>
+
+        <!-- Card de Prévia Inteligente (exibido após processamento) -->
+        <div id="group-parsed-card" class="card hidden">
+          <div class="card-header-flex">
+            <div class="card-title">Dados Identificados</div>
+            <span id="group-status-badge" class="badge">PROCESSADO</span>
+          </div>
+
+          <!-- Pílulas de Detecção -->
+          <div class="preview-tags">
+            <div id="tag-price" class="preview-tag preview-tag-price hidden">
+              💰 <strong id="val-price">R$ 0,00</strong>
+              <span id="val-orig" class="val-orig"></span>
+              <span id="val-disc" class="val-disc"></span>
+            </div>
+            <div id="tag-coupon" class="preview-tag preview-tag-coupon hidden">
+              🎟️ Cupom: <strong id="val-coupon">---</strong>
+            </div>
+          </div>
+
+          <!-- Relatório de Links -->
+          <div id="group-links-report" class="group-links-container"></div>
+
+          <!-- Prévia da Mensagem Final & Edição Rápida -->
+          <div class="card-header-flex" style="margin-top: 12px; margin-bottom: 4px;">
+            <label class="label" style="margin: 0;">Prévia da Mensagem Final</label>
+            <button id="btn-toggle-edit" class="btn-secondary-sm" type="button">✏️ Editar rápido</button>
+          </div>
+
+          <!-- Modo Visualização da Prévia -->
+          <div id="group-preview-bubble" class="message-preview-bubble"></div>
+
+          <!-- Modo Edição da Mensagem (alternável) -->
+          <textarea
+            id="group-edit-textarea"
+            class="input textarea-edit hidden"
+            rows="6"
+            placeholder="Edite o texto final que será enviado..."
+          ></textarea>
+
+          <!-- Seletor de Fila/Lote de Destino -->
+          <label class="label" for="group-capture-target" style="margin-top: 10px;">
+            Para qual fila (lote) quer enviar?
+          </label>
+          <select id="group-capture-target" class="input"></select>
+
+          <button id="btn-send-group" class="btn btn-action" style="margin-top: 10px;">
+            🚀 Enviar para o Lote
+          </button>
+          <div id="group-send-status" class="msg"></div>
         </div>
       </div>
     </main>

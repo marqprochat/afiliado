@@ -237,12 +237,20 @@ export const extensionCaptureSchema = z
     // Só vale com `batchId`: 'next' (padrão) fura a fila; 'random' sorteia a posição entre os
     // pendentes (usado pelo envio em massa da extensão).
     batchPosition: z.enum(['next', 'random']).nullish(),
+    // Texto customizado para envio direto (ex: texto de outro grupo processado e editado)
+    customText: z.string().max(10000).nullish(),
   })
   .refine((b) => !(b.batchId && b.automationRuleId), {
     message: 'Informe apenas um destino: lote ou automação',
     path: ['batchId'],
   });
 export type ExtensionCaptureBody = z.infer<typeof extensionCaptureSchema>;
+
+export const extensionConvertTextSchema = z.object({
+  text: z.string().min(1).max(10000),
+});
+export type ExtensionConvertTextBody = z.infer<typeof extensionConvertTextSchema>;
+
 
 // Descoberta feita pela extensão: ela abre a busca do marketplace no Chrome do usuário (sem
 // bloqueio anti-bot) e envia os cards lidos. O servidor aplica os filtros da automação.

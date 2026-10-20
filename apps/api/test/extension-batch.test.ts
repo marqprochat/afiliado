@@ -140,10 +140,10 @@ describe('extensão: enviar produto direto para um lote', () => {
     });
 
   describe('GET /extension/batches', () => {
-    it('lista só lotes ativos, com a contagem de pendentes', async () => {
+    it('lista lotes ativos e concluídos, com a contagem de pendentes', async () => {
       const sched = await makeBatch('SCHEDULED', 2);
       const paused = await makeBatch('PAUSED', 1);
-      await makeBatch('DONE', 0, { sent: 1 });
+      const done = await makeBatch('DONE', 0, { sent: 1 });
       await makeBatch('CANCELLED', 1);
 
       const res = await app.inject({
@@ -153,7 +153,7 @@ describe('extensão: enviar produto direto para um lote', () => {
       });
       expect(res.statusCode).toBe(200);
       const list = res.json() as { id: string; name: string; status: string; pending: number }[];
-      expect(list.map((b) => b.id).sort()).toEqual([sched.batch.id, paused.batch.id].sort());
+      expect(list.map((b) => b.id).sort()).toEqual([sched.batch.id, paused.batch.id, done.batch.id].sort());
       expect(list.find((b) => b.id === sched.batch.id)).toMatchObject({
         status: 'SCHEDULED',
         pending: 2,
@@ -161,6 +161,10 @@ describe('extensão: enviar produto direto para um lote', () => {
       expect(list.find((b) => b.id === paused.batch.id)).toMatchObject({
         status: 'PAUSED',
         pending: 1,
+      });
+      expect(list.find((b) => b.id === done.batch.id)).toMatchObject({
+        status: 'DONE',
+        pending: 0,
       });
     });
 
@@ -297,14 +301,24 @@ describe('extensão: enviar produto direto para um lote', () => {
       expect(await pendingItems(batch.id)).toHaveLength(2);
     });
 
-    it('lote concluído/cancelado → 409 BATCH_INACTIVE', async () => {
-      const done = await makeBatch('DONE', 0, { sent: 1 });
+    it('lote cancelado → 409 BATCH_INACTIVE', async () => {
       const cancelled = await makeBatch('CANCELLED', 1);
-      for (const b of [done.batch, cancelled.batch]) {
-        const res = await capture(b.id);
-        expect(res.statusCode).toBe(409);
-        expect(res.json()).toMatchObject({ error: { code: 'BATCH_INACTIVE' } });
-      }
+      const res = await capture(cancelled.batch.id);
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toMatchObject({ error: { code: 'BATCH_INACTIVE' } });
+    });
+
+    it('lote concluído pode receber novo item e é reativado para SCHEDULED', async () => {
+      const done = await makeBatch('DONE', 0, { sent: 1 });
+      const res = await capture(done.batch.id, { customText: 'Texto customizado final' });
+      expect(res.statusCode).toBe(200);
+
+      const updatedBatch = await prisma.batch.findUniqueOrThrow({ where: { id: done.batch.id } });
+      expect(updatedBatch.status).toBe('SCHEDULED');
+
+      const items = await pendingItems(done.batch.id);
+      expect(items).toHaveLength(1);
+      expect(items[0]!.customText).toBe('Texto customizado final');
     });
 
     it('lote de outro tenant ou inexistente → 404', async () => {

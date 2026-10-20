@@ -4,6 +4,7 @@ import { prisma, forTenant, getParentTenantId } from '@afilados/db';
 import {
   couponVerifySchema,
   extensionCaptureSchema,
+  extensionConvertTextSchema,
   extensionDiscoverSchema,
   extensionSessionSchema,
   ApiError,
@@ -16,6 +17,8 @@ import { matchesDiscoveryFilters } from '../lib/discovery-filters';
 import { toApiProduct, upsertProducts } from '../lib/products';
 import { toApiCoupon } from '../lib/coupons';
 import { fetchAwinCatalogByUrls } from '../lib/awin-catalog';
+import { convertOfferText } from '../lib/affiliate-converter';
+
 import {
   getAliexpressAdapter,
   getShopeeAdapter,
@@ -102,12 +105,12 @@ export async function extensionRoutes(app: FastifyInstance) {
     return rules;
   });
 
-  // 1.6 Lista os lotes ativos do tenant, para a extensão escolher o lote de destino
+  // 1.6 Lista os lotes ativos do tenant, para a extensão escolher o lote de destino (incluindo concluídos)
   app.get('/extension/batches', async (req) => {
     const { tenantId } = await authenticateExtension(req);
     const db = forTenant(tenantId);
     const batches = await db.batch.findMany({
-      where: { status: { in: ['SCHEDULED', 'RUNNING', 'PAUSED'] } },
+      where: { status: { in: ['SCHEDULED', 'RUNNING', 'PAUSED', 'DONE'] } },
       orderBy: { createdAt: 'desc' },
       select: { id: true, name: true, status: true, items: { select: { status: true } } },
     });
@@ -117,6 +120,14 @@ export async function extensionRoutes(app: FastifyInstance) {
       status: b.status,
       pending: b.items.filter((i) => i.status === 'PENDING').length,
     }));
+  });
+
+  // 1.8 Processa texto colado de outro grupo, detecta cupom/preço/links e converte links para os do afiliado
+  app.post('/extension/convert-text', async (req) => {
+    const { tenantId } = await authenticateExtension(req);
+    const body = extensionConvertTextSchema.parse(req.body);
+    const result = await convertOfferText(tenantId, body.text);
+    return { ok: true, ...result };
   });
 
   // 2. Captura de produto da aba ativa diretamente pela extensão
@@ -141,8 +152,8 @@ export async function extensionRoutes(app: FastifyInstance) {
       : null;
     if (body.batchId) {
       if (!targetBatch) throw ApiError.notFound('Lote não encontrado');
-      if (targetBatch.status === 'DONE' || targetBatch.status === 'CANCELLED') {
-        throw new ApiError('BATCH_INACTIVE', 'Lote não está ativo', 409);
+      if (targetBatch.status === 'CANCELLED') {
+        throw new ApiError('BATCH_INACTIVE', 'Lote cancelado não pode receber ofertas', 409);
       }
     }
 
@@ -251,6 +262,7 @@ export async function extensionRoutes(app: FastifyInstance) {
         tenantId,
         batch: targetBatch,
         productId: savedProduct.id,
+        customText: body.customText,
         window: toCoreWindow(await getOperatingWindow(tenantDb, tenantId)),
         ...(body.batchPosition === 'random'
           ? { index: Math.floor(Math.random() * (pendingCount + 1)) }

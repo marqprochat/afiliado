@@ -319,15 +319,16 @@ export async function insertBatchItemNext(args: {
     items: Array<Pick<BatchItem, 'id' | 'productId' | 'status' | 'order' | 'runAt'>>;
   };
   productId: string;
+  customText?: string | null | undefined;
   window: OperatingWindow;
   now?: Date | undefined;
   /** Posição entre os pendentes (0 = próximo envio, padrão). Valores fora da faixa são ajustados. */
   index?: number | undefined;
 }): Promise<InsertBatchItemResult> {
-  const { db, tenantId, batch, productId, window, now = new Date() } = args;
+  const { db, tenantId, batch, productId, customText, window, now = new Date() } = args;
 
-  if (batch.status === 'DONE' || batch.status === 'CANCELLED') {
-    throw new ApiError('BATCH_INACTIVE', 'Lote não está ativo', 409);
+  if (batch.status === 'CANCELLED') {
+    throw new ApiError('BATCH_INACTIVE', 'Lote cancelado não pode receber produtos', 409);
   }
   if (
     batch.items.some(
@@ -348,8 +349,17 @@ export async function insertBatchItemNext(args: {
     now,
   });
 
+  const createdId = res.createdIds[0]!;
+
+  if (customText) {
+    await db.batchItem.updateMany({
+      where: { id: createdId },
+      data: { customText },
+    });
+  }
+
   return {
-    id: res.createdIds[0]!,
+    id: createdId,
     runAt: res.runAt,
     total: batch.items.length + res.added,
     estimatedEndAt: res.estimatedEndAt,
