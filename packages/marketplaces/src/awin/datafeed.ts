@@ -33,6 +33,7 @@ export interface AwinFeedRow {
 
 export interface AwinDatafeedOptions {
   fetchImpl?: typeof fetch;
+  signal?: AbortSignal;
 }
 
 function parseProductCount(v?: string): number | null {
@@ -90,7 +91,7 @@ export async function downloadFeed(
   opts: AwinDatafeedOptions = {},
 ): Promise<AsyncIterable<AwinFeedRow>> {
   const doFetch = opts.fetchImpl ?? fetch;
-  const res = await doFetch(feedUrl);
+  const res = await doFetch(feedUrl, opts.signal ? { signal: opts.signal } : undefined);
   if (!res.ok) {
     throw new AwinApiError(`Download do feed da Awin respondeu HTTP ${res.status}`, 'AWIN_ERROR');
   }

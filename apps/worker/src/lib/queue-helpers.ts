@@ -39,13 +39,19 @@ export async function enqueueSendTelegram(job: SendTelegramJob & { jobId: string
 
 export async function enqueueAwinImport(tenantId: string) {
   const q = getQueue<AwinImportJob>(QUEUE_AWIN_IMPORT);
+  const intervalHoursRaw = Number(process.env.AWIN_IMPORT_INTERVAL_HOURS ?? 12);
+  const intervalHours =
+    Number.isFinite(intervalHoursRaw) && intervalHoursRaw > 0 ? intervalHoursRaw : 12;
+  const intervalMs = intervalHours * 60 * 60 * 1000;
+  const scheduleSlot = Math.floor(Date.now() / intervalMs);
   await q.add(
     'awin-import',
     { tenantId },
     {
-      jobId: `awin-import-${tenantId}-${Date.now()}`,
+      // Evita que reinícios do worker repitam a importação automática no mesmo intervalo.
+      jobId: `awin-import-${tenantId}-schedule-${scheduleSlot}`,
       attempts: 2,
-      removeOnComplete: true,
+      removeOnComplete: { age: intervalHours * 60 * 60 + 3600, count: 100 },
       removeOnFail: 50,
     },
   );

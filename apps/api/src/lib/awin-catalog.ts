@@ -1,4 +1,4 @@
-import type { TenantClient } from '@afilados/db';
+import { forTenant, getParentTenantId, type TenantClient } from '@afilados/db';
 import { mapAwinCatalogRowToProductData, type ProductData } from '@afilados/shared';
 
 function toRow(r: {
@@ -28,7 +28,8 @@ export async function searchAwinCatalog(
   keyword: string,
   limit: number,
 ): Promise<ProductData[]> {
-  const rows = await db.awinCatalogProduct.findMany({
+  const ownerTenantId = (await getParentTenantId(db.$tenantId)) ?? db.$tenantId;
+  const rows = await forTenant(ownerTenantId).awinCatalogProduct.findMany({
     where: { title: { contains: keyword, mode: 'insensitive' } },
     take: limit,
   });
@@ -40,6 +41,9 @@ export async function fetchAwinCatalogByUrls(
   urls: string[],
 ): Promise<ProductData[]> {
   if (urls.length === 0) return [];
-  const rows = await db.awinCatalogProduct.findMany({ where: { deepLink: { in: urls } } });
+  const ownerTenantId = (await getParentTenantId(db.$tenantId)) ?? db.$tenantId;
+  const rows = await forTenant(ownerTenantId).awinCatalogProduct.findMany({
+    where: { deepLink: { in: urls } },
+  });
   return rows.map((r) => mapAwinCatalogRowToProductData(toRow(r)));
 }

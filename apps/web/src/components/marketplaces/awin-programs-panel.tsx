@@ -14,7 +14,7 @@ type AwinImportResult = {
   error?: string;
 }[];
 type AwinImportProgress = {
-  phase: 'listing' | 'downloading' | 'importing' | 'completed';
+  phase: 'listing' | 'downloading' | 'importing' | 'completed' | 'cancelling' | 'cancelled';
   feedId?: string;
   feedName?: string;
   feedIndex?: number;
@@ -31,6 +31,7 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
   const [selected, setSelected] = useState<Set<string> | null>(null);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [canceling, setCanceling] = useState(false);
   const [feedback, setFeedback] = useState<{ message: string; ok: boolean } | null>(null);
   const [activeImport, setActiveImport] = useState<{
     jobId: string;
@@ -75,6 +76,14 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
           error?: string;
         }>('/marketplaces/awin/import/' + encodeURIComponent(activeImport.jobId));
         if (cancelled) return;
+        const progress = typeof status.progress === 'object' ? status.progress : undefined;
+        if (progress?.phase === 'cancelled') {
+          setFeedback({ message: 'Importação cancelada.', ok: true });
+          window.sessionStorage.removeItem('awin-import-job');
+          setActiveImport(null);
+          setCanceling(false);
+          return;
+        }
         if (status.state === 'completed') {
           showImportResult(status.result ?? []);
           window.sessionStorage.removeItem('awin-import-job');
@@ -91,7 +100,6 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
           setActiveImport(null);
           return;
         }
-        const progress = typeof status.progress === 'object' ? status.progress : undefined;
         setActiveImport((current) =>
           current?.jobId === activeImport.jobId
             ? { ...current, state: status.state, progress }
@@ -207,6 +215,36 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
     }
   }
 
+  async function handleCancelImport() {
+    if (!activeImport?.jobId) return;
+    setCanceling(true);
+    try {
+      const result = await apiFetch<{ state: string }>(
+        '/marketplaces/awin/import/' + encodeURIComponent(activeImport.jobId) + '/cancel',
+        { method: 'POST' },
+      );
+      if (result.state === 'cancelling') {
+        setFeedback({ message: 'Cancelamento solicitado. Parando o processamento...', ok: true });
+        setActiveImport((current) =>
+          current?.jobId === activeImport.jobId
+            ? { ...current, progress: { ...current.progress, phase: 'cancelling' } }
+            : current,
+        );
+      } else {
+        window.sessionStorage.removeItem('awin-import-job');
+        setActiveImport(null);
+        setFeedback({ message: 'Importação cancelada.', ok: true });
+        setCanceling(false);
+      }
+    } catch (err) {
+      setCanceling(false);
+      setFeedback({
+        message: err instanceof Error ? err.message : 'Não foi possível cancelar a importação.',
+        ok: false,
+      });
+    }
+  }
+
   return (
     <div className="rounded-lg border border-border bg-surface-2 p-3.5">
       <p className="mb-2 text-sm font-medium">Programas da Awin</p>
@@ -291,6 +329,18 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
             >
               {importing || activeImport ? 'Importando feeds selecionados...' : 'Importar agora'}
             </Button>
+            {activeImport && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={canceling || activeImport.progress?.phase === 'cancelling'}
+                onClick={handleCancelImport}
+              >
+                {canceling || activeImport.progress?.phase === 'cancelling'
+                  ? 'Cancelando...'
+                  : 'Cancelar importação'}
+              </Button>
+            )}
           </div>
 
           {(importing || activeImport) && (
@@ -327,32 +377,34 @@ export function AwinProgramsPanel({ onImported }: { onImported?: () => void }) {
                     : null}
                   {activeImport.progress && (
                     <>
-                      {activeImport.progress.phase === 'listing'
-                        ? 'Buscando os feeds selecionados na Awin...'
-                        : activeImport.progress.phase === 'downloading'
-                          ? 'Baixando ' +
-                            (activeImport.progress.feedName ?? 'feed') +
-                            ' (' +
-                            activeImport.progress.feedIndex +
-                            '/' +
-                            activeImport.progress.totalFeeds +
-                            ')...'
-                          : 'Importando ' +
-                            (activeImport.progress.feedName ?? 'feed') +
-                            ' (' +
-                            activeImport.progress.feedIndex +
-                            '/' +
-                            activeImport.progress.totalFeeds +
-                            ')' +
-                            (activeImport.progress.processedRows != null
-                              ? ': ' +
-                                activeImport.progress.processedRows.toLocaleString('pt-BR') +
-                                (activeImport.progress.estimatedRows
-                                  ? ' de ~' +
-                                    activeImport.progress.estimatedRows.toLocaleString('pt-BR') +
-                                    ' linhas'
-                                  : ' linhas processadas')
-                              : '')}
+                      {activeImport.progress.phase === 'cancelling'
+                        ? 'Cancelando importação...'
+                        : activeImport.progress.phase === 'listing'
+                          ? 'Buscando os feeds selecionados na Awin...'
+                          : activeImport.progress.phase === 'downloading'
+                            ? 'Baixando ' +
+                              (activeImport.progress.feedName ?? 'feed') +
+                              ' (' +
+                              activeImport.progress.feedIndex +
+                              '/' +
+                              activeImport.progress.totalFeeds +
+                              ')...'
+                            : 'Importando ' +
+                              (activeImport.progress.feedName ?? 'feed') +
+                              ' (' +
+                              activeImport.progress.feedIndex +
+                              '/' +
+                              activeImport.progress.totalFeeds +
+                              ')' +
+                              (activeImport.progress.processedRows != null
+                                ? ': ' +
+                                  activeImport.progress.processedRows.toLocaleString('pt-BR') +
+                                  (activeImport.progress.estimatedRows
+                                    ? ' de ~' +
+                                      activeImport.progress.estimatedRows.toLocaleString('pt-BR') +
+                                      ' linhas'
+                                    : ' linhas processadas')
+                                : '')}
                       {typeof activeImport.progress.percent === 'number'
                         ? ' · ' + activeImport.progress.percent + '%'
                         : ''}

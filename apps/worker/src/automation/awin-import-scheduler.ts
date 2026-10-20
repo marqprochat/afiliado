@@ -1,5 +1,5 @@
 import pino from 'pino';
-import { listTenantsWithCredentials } from '@afilados/db';
+import { prisma } from '@afilados/db';
 import { enqueueAwinImport } from '../lib/queue-helpers';
 
 const log = pino({ name: 'awin-import-scheduler' });
@@ -44,7 +44,18 @@ export class AwinImportScheduler {
   }
 
   async tick() {
-    for (const tenantId of await listTenantsWithCredentials(['AWIN'])) {
+    // O catálogo pertence à conta principal; afiliados compartilham os mesmos feeds e só
+    // diferenciam o Sub ID na geração do link. Importar por afiliado duplicava o trabalho.
+    const owners = await prisma.$queryRaw<{ tenantId: string }[]>`
+      SELECT DISTINCT connection."tenantId"
+      FROM "MarketplaceConnection" AS connection
+      INNER JOIN "Tenant" AS tenant ON tenant.id = connection."tenantId"
+      WHERE connection.kind = 'AWIN'
+        AND connection."encryptedCredentials" IS NOT NULL
+        AND tenant."parentTenantId" IS NULL
+        AND tenant.active = TRUE
+    `;
+    for (const { tenantId } of owners) {
       await this.enqueue(tenantId);
     }
   }

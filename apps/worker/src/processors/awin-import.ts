@@ -1,6 +1,13 @@
 import type { Job } from 'bullmq';
 import pino from 'pino';
-import { prisma, decryptJson, resolveConnection, isTenantActive } from '@afilados/db';
+import { getRedis } from '../lib/redis';
+import {
+  prisma,
+  decryptJson,
+  resolveConnection,
+  isTenantActive,
+  getParentTenantId,
+} from '@afilados/db';
 import {
   downloadFeed as downloadFeedReal,
   listDatafeeds as listDatafeedsReal,
@@ -29,7 +36,7 @@ export interface AwinImportFeedResult {
 }
 
 export interface AwinImportProgress {
-  phase: 'listing' | 'downloading' | 'importing' | 'completed';
+  phase: 'listing' | 'downloading' | 'importing' | 'completed' | 'cancelling' | 'cancelled';
   feedId?: string;
   feedName?: string;
   feedIndex?: number;
@@ -78,6 +85,7 @@ async function importFeed(
   progress?: (value: AwinImportProgress) => Promise<void>,
   feedIndex = 1,
   totalFeeds = 1,
+  signal?: AbortSignal,
 ): Promise<AwinImportFeedResult> {
   const runStartedAt = new Date();
   try {
@@ -90,7 +98,7 @@ async function importFeed(
       processedRows: 0,
       estimatedRows: entry.productCount,
     });
-    const rows = await downloadFeed(entry.url);
+    const rows = await downloadFeed(entry.url, signal ? { signal } : {});
     let imported = 0;
     let batch = new Map<string, AwinCatalogUpsertInput>();
     let processedRows = 0;
@@ -105,6 +113,7 @@ async function importFeed(
     });
 
     for await (const row of rows) {
+      if (signal?.aborted) throw new Error('AWIN_IMPORT_CANCELLED');
       processedRows += 1;
       const input = mapAwinRow(row, entry);
       if (!input) continue;
@@ -134,6 +143,7 @@ async function importFeed(
       await flushBatch(tenantId, feedId, values, runStartedAt);
       imported += values.length;
     }
+    if (signal?.aborted) throw new Error('AWIN_IMPORT_CANCELLED');
     const ratio = entry.productCount ? Math.min(processedRows / entry.productCount, 1) : 1;
     await progress?.({
       phase: 'importing',
@@ -160,6 +170,7 @@ async function importFeed(
     });
     return { feedId, ok: true, imported, removed: pruned.count };
   } catch (e) {
+    if (signal?.aborted) throw new Error('AWIN_IMPORT_CANCELLED');
     const error = e instanceof Error ? e.message : String(e);
     log.warn({ tenantId, feedId, error }, 'falha ao importar feed da Awin');
     return { feedId, ok: false, imported: 0, removed: 0, error };
@@ -170,6 +181,7 @@ export async function importAwinCatalog(
   deps: AwinImportDeps,
   tenantId: string,
   progress?: (value: AwinImportProgress) => Promise<void>,
+  signal?: AbortSignal,
 ): Promise<AwinImportFeedResult[]> {
   const listDatafeeds = deps.listDatafeeds ?? listDatafeedsReal;
   const downloadFeed = deps.downloadFeed ?? downloadFeedReal;
@@ -203,6 +215,7 @@ export async function importAwinCatalog(
   const results: AwinImportFeedResult[] = [];
 
   for (const [index, feedId] of creds.feedIds.entries()) {
+    if (signal?.aborted) throw new Error('AWIN_IMPORT_CANCELLED');
     const entry = activeById.get(feedId);
     if (!entry) {
       results.push({
@@ -223,6 +236,7 @@ export async function importAwinCatalog(
         progress,
         index + 1,
         creds.feedIds.length,
+        signal,
       ),
     );
   }
@@ -231,13 +245,48 @@ export async function importAwinCatalog(
 
 export function createAwinImportProcessor(deps: AwinImportDeps = {}) {
   return async (job: Job<AwinImportJob>) => {
+    if (await getParentTenantId(job.data.tenantId)) {
+      await job.updateProgress({ phase: 'cancelled' });
+      log.info({ tenantId: job.data.tenantId, jobId: job.id }, 'ignored obsolete affiliate import');
+      return [];
+    }
+    const cancelKey = `awin-import:cancel:${job.id}`;
+    const controller = new AbortController();
+    const cancelCheck = setInterval(() => {
+      void getRedis()
+        .get(cancelKey)
+        .then((requested) => {
+          if (requested) controller.abort();
+        })
+        .catch((err) => log.warn({ err, jobId: job.id }, 'Awin cancellation check failed'));
+    }, 500);
+    cancelCheck.unref();
     log.info(
       { tenantId: job.data.tenantId, jobId: job.id },
       'iniciando importação do catálogo Awin',
     );
-    const results = await importAwinCatalog(deps, job.data.tenantId, (progress) =>
-      job.updateProgress(progress),
-    );
+    const results = await importAwinCatalog(
+      deps,
+      job.data.tenantId,
+      async (progress) => {
+        if (await getRedis().get(cancelKey)) {
+          controller.abort();
+          throw new Error('AWIN_IMPORT_CANCELLED');
+        }
+        await job.updateProgress(progress);
+      },
+      controller.signal,
+    ).catch(async (err: unknown) => {
+      clearInterval(cancelCheck);
+      if (!controller.signal.aborted) throw err;
+      await job.updateProgress({ phase: 'cancelled' });
+      log.warn({ tenantId: job.data.tenantId, jobId: job.id }, 'Awin import cancelled');
+      await getRedis().del(cancelKey);
+      return [];
+    });
+    clearInterval(cancelCheck);
+    if (controller.signal.aborted) return results;
+    await getRedis().del(cancelKey);
     await job.updateProgress({ phase: 'completed', percent: 100 });
     log.info(
       {

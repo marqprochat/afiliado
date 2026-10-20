@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { decryptJson, resolveConnections } from '@afilados/db';
+import { decryptJson, prisma, resolveConnections } from '@afilados/db';
 import {
   ApiError,
   MARKETPLACE_KINDS,
@@ -26,7 +26,7 @@ import {
   setAffiliateSubId,
   upsertMarketplaceCredentials,
 } from '../lib/marketplaces';
-import { getQueue, getQueueEvents } from '../lib/redis';
+import { getQueue, getQueueEvents, getRedis } from '../lib/redis';
 import { completeMlOAuth, startMlOAuth } from '../lib/ml-api';
 import { readMlLinkBatchError } from '../lib/ml-links';
 import { getAliexpressCategories, listDatafeeds } from '@afilados/marketplaces';
@@ -273,7 +273,10 @@ export async function marketplacesRoutes(app: FastifyInstance) {
 
   app.get('/marketplaces/awin/import/:jobId', async (req) => {
     const { jobId } = z.object({ jobId: z.string().min(1).max(200) }).parse(req.params);
-    if (!jobId.startsWith(`awin-import-${req.tenantId}-`)) {
+    if (
+      req.isAffiliate ||
+      !(jobId === `awin-import-${req.tenantId}` || jobId.startsWith(`awin-import-${req.tenantId}-`))
+    ) {
       throw new ApiError('NOT_FOUND', 'Importação não encontrada', 404);
     }
     const job = await getQueue<AwinImportJob>(QUEUE_AWIN_IMPORT).getJob(jobId);
@@ -309,7 +312,35 @@ export async function marketplacesRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post('/marketplaces/awin/import', async (req) => {
+  app.post(
+    '/marketplaces/awin/import/:jobId/cancel',
+    { preHandler: forbidAffiliate },
+    async (req) => {
+      const { jobId } = z.object({ jobId: z.string().min(1).max(200) }).parse(req.params);
+      if (
+        jobId !== `awin-import-${req.tenantId}` &&
+        !jobId.startsWith(`awin-import-${req.tenantId}-`)
+      ) {
+        throw new ApiError('NOT_FOUND', 'Awin import not found', 404);
+      }
+      const q = getQueue<AwinImportJob>(QUEUE_AWIN_IMPORT);
+      const job = await q.getJob(jobId);
+      if (!job) return { cancelled: false, state: 'not-found' };
+      const state = await job.getState();
+      if (state === 'waiting' || state === 'delayed' || state === 'prioritized') {
+        await job.remove();
+        return { cancelled: true, state: 'cancelled' };
+      }
+      if (state === 'active') {
+        await getRedis().set(`awin-import:cancel:${jobId}`, '1', 'EX', 3600);
+        await job.updateProgress({ phase: 'cancelling' });
+        return { cancelled: true, state: 'cancelling' };
+      }
+      return { cancelled: false, state };
+    },
+  );
+
+  app.post('/marketplaces/awin/import', { preHandler: forbidAffiliate }, async (req) => {
     // Valida as credenciais antes de enfileirar — sem isso, um tenant sem AWIN configurada
     // recebe { queued: true } mas o job roda e não faz nada (importAwinCatalog retorna []).
     const creds = await loadAwinCredentials(req.db);
@@ -317,6 +348,25 @@ export async function marketplacesRoutes(app: FastifyInstance) {
       throw new ApiError('MARKETPLACE_ERROR', 'Selecione ao menos um programa para importar', 400);
     }
     const q = getQueue<AwinImportJob>(QUEUE_AWIN_IMPORT);
+    const affiliates = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM "Tenant" WHERE "parentTenantId" = ${req.tenantId}
+    `;
+    const familyIds = new Set([req.tenantId, ...affiliates.map((tenant) => tenant.id)]);
+    const [activeJobs, waitingJobs, delayedJobs] = await Promise.all([
+      q.getActive(),
+      q.getWaiting(),
+      q.getDelayed(),
+    ]);
+    for (const oldJob of [...activeJobs, ...waitingJobs, ...delayedJobs]) {
+      if (!familyIds.has(oldJob.data.tenantId)) continue;
+      const oldState = await oldJob.getState();
+      if (oldState === 'active') {
+        await getRedis().set(`awin-import:cancel:${oldJob.id}`, '1', 'EX', 3600);
+        await oldJob.updateProgress({ phase: 'cancelling' });
+      } else if (oldState === 'waiting' || oldState === 'delayed') {
+        await oldJob.remove();
+      }
+    }
     const job = await q.add(
       'awin-import',
       { tenantId: req.tenantId },
