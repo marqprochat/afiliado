@@ -45,7 +45,7 @@ function redisCache(): NonNullable<ProductEnrichDeps['cache']> {
   };
 }
 
-async function fetchViaAdapter(
+export async function fetchViaAdapter(
   tenantId: string,
   kind: ProductEnrichJob['marketplaceKind'],
   url: string,
@@ -76,6 +76,28 @@ async function fetchViaAdapter(
   const creds = await loadFetchCredentials(tenantId, kind);
   const list = await getTagAdapter(kind).fetchByUrls(creds, [url]);
   return list[0] ?? null;
+}
+
+export async function fetchProductWithCache(
+  tenantId: string,
+  kind: ProductEnrichJob['marketplaceKind'],
+  url: string,
+): Promise<ProductData | null> {
+  try {
+    const cache = redisCache();
+    const key = cacheKey(kind, url);
+    const cached = await cache.get(key).catch(() => null);
+    if (cached) return JSON.parse(cached) as ProductData;
+
+    const scraped = await fetchViaAdapter(tenantId, kind, url);
+    if (scraped) {
+      await cache.set(key, JSON.stringify(scraped), ENRICH_CACHE_TTL_SEC).catch(() => {});
+    }
+    return scraped;
+  } catch (err) {
+    log.warn({ err, kind, url }, 'falha ao buscar produto via adapter com cache; tentando direto');
+    return await fetchViaAdapter(tenantId, kind, url).catch(() => null);
+  }
 }
 
 export async function enrichProduct(

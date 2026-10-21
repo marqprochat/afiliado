@@ -148,7 +148,19 @@ export async function sendOffer(
       } else if (item.customImageUrl) {
         message = { kind: 'image', imageUrl: item.customImageUrl, caption: item.customText };
       } else {
-        message = { kind: 'text', text: item.customText };
+        const urlMatch = item.customText.match(/https?:\/\/[^\s<>"')]+/);
+        if (urlMatch) {
+          message = {
+            kind: 'preview',
+            text: item.customText,
+            url: urlMatch[0],
+            title: 'Oferta',
+            description: '',
+            thumbnailUrl: '',
+          };
+        } else {
+          message = { kind: 'text', text: item.customText };
+        }
       }
       return sendPlainMessages(
         deps,
@@ -318,9 +330,15 @@ export async function sendOffer(
       cta,
     });
     const image = product.images[0];
+    const imageBuffer = item.customImageData ? Buffer.from(item.customImageData) : undefined;
     const message: OutgoingMessage =
-      batch.mediaMode === 'IMAGE' && image
-        ? { kind: 'image', imageUrl: image, caption: text }
+      batch.mediaMode === 'IMAGE' && (imageBuffer || image)
+        ? {
+            kind: 'image',
+            ...(imageBuffer ? { imageBuffer } : {}),
+            ...(image ? { imageUrl: image } : {}),
+            caption: text,
+          }
         : {
             kind: 'preview',
             text,

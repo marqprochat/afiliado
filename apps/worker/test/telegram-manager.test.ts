@@ -16,6 +16,9 @@ vi.mock('@afilados/db', () => ({
     batch: {
       findMany: vi.fn(),
     },
+    product: {
+      create: vi.fn(),
+    },
     $transaction: vi.fn((items) => Promise.resolve(items)),
   },
   decryptJson: vi.fn(() => ({ token: 'mock-bot-token' })),
@@ -36,6 +39,8 @@ describe('TelegramManager', () => {
   };
   let mockConvertOffer: ReturnType<typeof vi.fn>;
   let mockAddBatchItem: ReturnType<typeof vi.fn>;
+  let mockFetchProduct: ReturnType<typeof vi.fn>;
+  let mockDownloadImage: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -51,6 +56,8 @@ describe('TelegramManager', () => {
 
     mockConvertOffer = vi.fn();
     mockAddBatchItem = vi.fn();
+    mockFetchProduct = vi.fn();
+    mockDownloadImage = vi.fn();
   });
 
   it('bloqueia usuário cujo ID não está na lista allowedUserIds', async () => {
@@ -77,7 +84,6 @@ describe('TelegramManager', () => {
       text: 'Olha essa promo https://shopee.com.br/item',
     };
 
-    // Primeira iteração retorna a mensagem; na segunda o bot é finalizado
     fakeClient.getUpdates.mockResolvedValueOnce({
       nextOffset: 2,
       chatUpdates: [],
@@ -91,7 +97,6 @@ describe('TelegramManager', () => {
 
     await (manager as any).pollLoop('bot-1', 'tenant-1', { stopped: false });
 
-    // Verifica que enviou mensagem de não autorizado com o ID do usuário
     expect(fakeClient.sendMessage).toHaveBeenCalledWith(
       '999999',
       expect.stringContaining('Acesso não autorizado'),
@@ -100,7 +105,6 @@ describe('TelegramManager', () => {
       '999999',
       expect.stringContaining('999999'),
     );
-    // Não tenta converter
     expect(mockConvertOffer).not.toHaveBeenCalled();
   });
 
@@ -135,7 +139,6 @@ describe('TelegramManager', () => {
       callbackQueries: [],
     });
 
-    // Simula falha na conversão
     mockConvertOffer.mockResolvedValueOnce({
       originalText: message.text,
       convertedText: message.text,
@@ -151,7 +154,6 @@ describe('TelegramManager', () => {
     await (manager as any).pollLoop('bot-1', 'tenant-1', { stopped: false });
 
     expect(mockConvertOffer).toHaveBeenCalledWith('tenant-1', message.text);
-    // Verifica aviso de falha e encerramento da interação
     expect(fakeClient.sendMessage).toHaveBeenCalledWith(
       '123456',
       expect.stringContaining('Não foi possível converter o link da promoção'),
@@ -164,15 +166,15 @@ describe('TelegramManager', () => {
       '123456',
       expect.stringContaining('A interação foi finalizada'),
     );
-    // Não buscou lotes
     expect(prisma.batch.findMany).not.toHaveBeenCalled();
   });
 
-  it('pergunta em qual lote quer enviar quando o link é convertido com sucesso', async () => {
+  it('se enviar colagem com texto longo, pergunta em qual lote quer enviar', async () => {
     const manager = new TelegramManager({
       makeClient: () => fakeClient as unknown as TelegramClient,
       convertOffer: mockConvertOffer,
       addBatchItem: mockAddBatchItem,
+      fetchProduct: mockFetchProduct.mockResolvedValue(null),
     });
 
     const botMock = {
@@ -184,12 +186,20 @@ describe('TelegramManager', () => {
       allowedUserIds: ['123456'],
     };
 
+    // Colagem com texto longo (> 60 caracteres além do link)
+    const longText =
+      '🔥 OFERTA IMPERDÍVEL DO DIA!\n' +
+      'Smartphone Top de Linha com câmera excelente\n' +
+      'De R$ 1.999 por R$ 1.299 em até 10x sem juros\n' +
+      'Compre agora pelo link: https://shopee.com.br/item-top\n' +
+      'Aproveite antes que acabe o estoque!';
+
     const message: TelegramMessage = {
       messageId: 3,
       from: { id: 123456, firstName: 'João' },
       chat: { id: 123456, type: 'private' },
       date: 1700000000,
-      text: 'Oferta boa: https://shopee.com.br/item-top',
+      text: longText,
     };
 
     fakeClient.getUpdates.mockResolvedValueOnce({
@@ -199,17 +209,23 @@ describe('TelegramManager', () => {
       callbackQueries: [],
     });
 
-    // Simula sucesso na conversão
     mockConvertOffer.mockResolvedValueOnce({
       originalText: message.text,
-      convertedText: 'Oferta boa: https://s.shopee.com.br/afiliado-xyz',
+      convertedText: longText.replace('https://shopee.com.br/item-top', 'https://s.shopee.com.br/afiliado-xyz'),
       hasConvertedLink: true,
       detected: {
-        links: [{ originalUrl: 'https://shopee.com.br/item-top', affiliateUrl: 'https://s.shopee.com.br/afiliado-xyz', converted: true }],
+        links: [
+          {
+            originalUrl: 'https://shopee.com.br/item-top',
+            resolvedUrl: 'https://shopee.com.br/item-top',
+            affiliateUrl: 'https://s.shopee.com.br/afiliado-xyz',
+            marketplace: 'SHOPEE',
+            converted: true,
+          },
+        ],
       },
     });
 
-    // Lotes disponíveis
     vi.mocked(prisma.batch.findMany).mockResolvedValueOnce([
       { id: 'batch-tech', name: 'Lote Tecnologia', status: 'SCHEDULED', items: [{ status: 'PENDING' }] },
       { id: 'batch-geral', name: 'Lote Geral', status: 'RUNNING', items: [] },
@@ -221,7 +237,6 @@ describe('TelegramManager', () => {
 
     await (manager as any).pollLoop('bot-1', 'tenant-1', { stopped: false });
 
-    // Verifica que perguntou o lote e mandou teclado com as opções
     expect(fakeClient.sendMessage).toHaveBeenCalledWith(
       '123456',
       expect.stringContaining('Em qual lote deseja enviar?'),
@@ -231,8 +246,96 @@ describe('TelegramManager', () => {
             expect.arrayContaining([
               expect.objectContaining({ text: expect.stringContaining('Lote Tecnologia') }),
             ]),
+          ]),
+        }),
+      }),
+    );
+  });
+
+  it('se enviar APENAS UM LINK, busca tudo do produto e pergunta se tem cupom', async () => {
+    const manager = new TelegramManager({
+      makeClient: () => fakeClient as unknown as TelegramClient,
+      convertOffer: mockConvertOffer,
+      addBatchItem: mockAddBatchItem,
+      fetchProduct: mockFetchProduct,
+      downloadImage: mockDownloadImage,
+    });
+
+    const botMock = {
+      id: 'bot-1',
+      tenantId: 'tenant-1',
+      encryptedToken: Buffer.from('token'),
+      updatesOffset: 0,
+      status: 'OK',
+      allowedUserIds: ['123456'],
+    };
+
+    const link = 'https://shopee.com.br/product/123/456';
+    const message: TelegramMessage = {
+      messageId: 10,
+      from: { id: 123456, firstName: 'João' },
+      chat: { id: 123456, type: 'private' },
+      date: 1700000000,
+      text: link,
+    };
+
+    fakeClient.getUpdates.mockResolvedValueOnce({
+      nextOffset: 11,
+      chatUpdates: [],
+      messages: [message],
+      callbackQueries: [],
+    });
+
+    mockConvertOffer.mockResolvedValueOnce({
+      originalText: link,
+      convertedText: 'https://s.shopee.com.br/xyz',
+      hasConvertedLink: true,
+      detected: {
+        links: [
+          {
+            originalUrl: link,
+            resolvedUrl: link,
+            affiliateUrl: 'https://s.shopee.com.br/xyz',
+            marketplace: 'SHOPEE',
+            converted: true,
+          },
+        ],
+      },
+    });
+
+    mockFetchProduct.mockResolvedValueOnce({
+      source: 'SHOPEE',
+      title: 'Mouse Gamer RGB 16000 DPI',
+      price: 159.9,
+      originalPrice: 220.0,
+      discountPct: 27,
+      images: ['https://cf.shopee.com.br/file/img1.jpg'],
+      shipping: 'FREE',
+      originalUrl: link,
+      raw: {},
+    });
+
+    mockDownloadImage.mockResolvedValueOnce(Buffer.from([0xff, 0xd8, 0xff]));
+
+    vi.mocked(prisma.telegramBot.findUnique)
+      .mockResolvedValueOnce(botMock as any)
+      .mockResolvedValueOnce(null);
+
+    await (manager as any).pollLoop('bot-1', 'tenant-1', { stopped: false });
+
+    // 1. Buscou os dados do produto via adapter
+    expect(mockFetchProduct).toHaveBeenCalledWith('tenant-1', 'SHOPEE', link);
+    // 2. Baixou a imagem do produto para garantir envio com foto
+    expect(mockDownloadImage).toHaveBeenCalledWith('https://cf.shopee.com.br/file/img1.jpg');
+    // 3. Perguntou se tem cupom com o botão 'Sem cupom'
+    expect(fakeClient.sendMessage).toHaveBeenCalledWith(
+      '123456',
+      expect.stringContaining('Deseja adicionar algum cupom para esta oferta?'),
+      expect.objectContaining({
+        replyMarkup: expect.objectContaining({
+          inline_keyboard: expect.arrayContaining([
             expect.arrayContaining([
-              expect.objectContaining({ text: expect.stringContaining('Lote Geral') }),
+              expect.objectContaining({ text: '⏭️ Sem cupom' }),
             ]),
             expect.arrayContaining([
               expect.objectContaining({ text: '❌ Cancelar' }),
@@ -243,50 +346,59 @@ describe('TelegramManager', () => {
     );
   });
 
-  it('processa o callback_query do usuário escolhendo o lote e adiciona a oferta', async () => {
+  it('quando o usuário responde com código de cupom em texto, anota o cupom e mostra lotes', async () => {
     const manager = new TelegramManager({
       makeClient: () => fakeClient as unknown as TelegramClient,
       convertOffer: mockConvertOffer,
       addBatchItem: mockAddBatchItem,
     });
 
-    // Pré-armazena uma sessão pendente
     const sessionKey = '123456:1700000000';
     (manager as any).pendingSessions.set(sessionKey, {
       sessionKey,
       userId: 123456,
       tenantId: 'tenant-1',
       botId: 'bot-1',
-      convertedText: 'Oferta convertida final',
+      step: 'waiting_coupon',
+      isLinkOnly: true,
+      convertedText: 'https://s.shopee.com.br/xyz',
+      originalUrl: 'https://shopee.com.br/product/123/456',
+      source: 'SHOPEE',
+      productData: {
+        source: 'SHOPEE',
+        title: 'Mouse Gamer RGB',
+        price: 159.9,
+        images: [],
+        shipping: 'FREE',
+        originalUrl: 'https://shopee.com.br/product/123/456',
+      },
       createdAt: Date.now(),
     });
 
-    mockAddBatchItem.mockResolvedValueOnce({
-      success: true,
-      batchName: 'Lote Tecnologia',
-      runAt: new Date('2026-10-20T22:00:00Z'),
-      batchStatus: 'SCHEDULED',
-    });
-
-    const callbackQuery: TelegramCallbackQuery = {
-      id: 'cq_101',
+    const message: TelegramMessage = {
+      messageId: 12,
       from: { id: 123456, firstName: 'João' },
-      message: { messageId: 88, chat: { id: 123456, type: 'private' } },
-      data: `tg_batch:batch-tech:${sessionKey}`,
+      chat: { id: 123456, type: 'private' },
+      date: 1700000005,
+      text: 'GAMER20OFF',
     };
 
     fakeClient.getUpdates.mockResolvedValueOnce({
-      nextOffset: 5,
+      nextOffset: 13,
       chatUpdates: [],
-      messages: [],
-      callbackQueries: [callbackQuery],
+      messages: [message],
+      callbackQueries: [],
     });
+
+    vi.mocked(prisma.batch.findMany).mockResolvedValueOnce([
+      { id: 'batch-gamer', name: 'Lote Games', status: 'RUNNING', items: [] },
+    ] as any);
 
     const botMock = {
       id: 'bot-1',
       tenantId: 'tenant-1',
       encryptedToken: Buffer.from('token'),
-      updatesOffset: 4,
+      updatesOffset: 12,
       status: 'OK',
       allowedUserIds: ['123456'],
     };
@@ -297,23 +409,124 @@ describe('TelegramManager', () => {
 
     await (manager as any).pollLoop('bot-1', 'tenant-1', { stopped: false });
 
-    // Verifica que respondeu a callback query
-    expect(fakeClient.answerCallbackQuery).toHaveBeenCalledWith('cq_101');
+    // Anotou o cupom na sessão
+    const session = (manager as any).pendingSessions.get(sessionKey);
+    expect(session.couponCode).toBe('GAMER20OFF');
+    expect(session.step).toBe('choosing_batch');
 
-    // Verifica que chamou addBatchItem com o texto convertido
-    expect(mockAddBatchItem).toHaveBeenCalledWith(
+    // Confirmou o cupom por mensagem e exibiu os lotes
+    expect(fakeClient.sendMessage).toHaveBeenCalledWith(
+      '123456',
+      expect.stringContaining('GAMER20OFF'),
+    );
+    expect(fakeClient.sendMessage).toHaveBeenCalledWith(
+      '123456',
+      expect.stringContaining('Em qual lote deseja enviar?'),
+      expect.anything(),
+    );
+  });
+
+  it('ao selecionar o lote com produto link-only, cria o Produto com cupom e adiciona por productId para respeitar o template', async () => {
+    const manager = new TelegramManager({
+      makeClient: () => fakeClient as unknown as TelegramClient,
+      convertOffer: mockConvertOffer,
+      addBatchItem: mockAddBatchItem,
+    });
+
+    const sessionKey = '123456:1700000000';
+    (manager as any).pendingSessions.set(sessionKey, {
+      sessionKey,
+      userId: 123456,
+      tenantId: 'tenant-1',
+      botId: 'bot-1',
+      step: 'choosing_batch',
+      isLinkOnly: true,
+      convertedText: 'https://s.shopee.com.br/xyz',
+      originalUrl: 'https://shopee.com.br/product/123/456',
+      source: 'SHOPEE',
+      couponCode: 'CUPOM15',
+      imageBuffer: Buffer.from([1, 2, 3]),
+      productData: {
+        source: 'SHOPEE',
+        title: 'Mouse Gamer RGB',
+        price: 159.9,
+        images: ['https://img.com/mouse.jpg'],
+        shipping: 'FREE',
+        originalUrl: 'https://shopee.com.br/product/123/456',
+      },
+      createdAt: Date.now(),
+    });
+
+    vi.mocked(prisma.product.create).mockResolvedValueOnce({
+      id: 'prod-mouse-999',
+      title: 'Mouse Gamer RGB',
+    } as any);
+
+    mockAddBatchItem.mockResolvedValueOnce({
+      success: true,
+      batchName: 'Lote Games',
+      runAt: new Date('2026-10-21T18:00:00Z'),
+      batchStatus: 'SCHEDULED',
+    });
+
+    const callbackQuery: TelegramCallbackQuery = {
+      id: 'cq_batch_choice',
+      from: { id: 123456, firstName: 'João' },
+      message: { messageId: 95, chat: { id: 123456, type: 'private' } },
+      data: `tg_batch:batch-gamer:${sessionKey}`,
+    };
+
+    fakeClient.getUpdates.mockResolvedValueOnce({
+      nextOffset: 14,
+      chatUpdates: [],
+      messages: [],
+      callbackQueries: [callbackQuery],
+    });
+
+    const botMock = {
+      id: 'bot-1',
+      tenantId: 'tenant-1',
+      encryptedToken: Buffer.from('token'),
+      updatesOffset: 13,
+      status: 'OK',
+      allowedUserIds: ['123456'],
+    };
+
+    vi.mocked(prisma.telegramBot.findUnique)
+      .mockResolvedValueOnce(botMock as any)
+      .mockResolvedValueOnce(null);
+
+    await (manager as any).pollLoop('bot-1', 'tenant-1', { stopped: false });
+
+    // Cria o produto no banco com o cupom informado
+    expect(prisma.product.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        tenantId: 'tenant-1',
-        batchId: 'batch-tech',
-        customText: 'Oferta convertida final',
+        data: expect.objectContaining({
+          tenantId: 'tenant-1',
+          source: 'SHOPEE',
+          title: 'Mouse Gamer RGB',
+          price: 159.9,
+          couponCode: 'CUPOM15',
+        }),
       }),
     );
 
-    // Confirmação exibida editando a mensagem
+    // Adiciona ao lote com productId (para renderizar o template do lote!)
+    expect(mockAddBatchItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: 'tenant-1',
+        batchId: 'batch-gamer',
+        productId: 'prod-mouse-999',
+        couponCode: 'CUPOM15',
+        imageBuffer: expect.any(Buffer),
+      }),
+    );
+
+    // Mensagem de confirmação informa que seguirá o template do lote
     expect(fakeClient.editMessageText).toHaveBeenCalledWith(
       '123456',
-      88,
-      expect.stringContaining('Promoção adicionada ao lote com sucesso!'),
+      95,
+      expect.stringContaining('O disparo seguirá rigorosamente o modelo/template do lote'),
     );
   });
 

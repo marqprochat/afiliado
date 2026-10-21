@@ -5,7 +5,9 @@ import { enqueueSendOffer } from '../lib/queue-helpers';
 export interface AddItemToBatchArgs {
   tenantId: string;
   batchId: string;
-  customText: string;
+  customText?: string | undefined;
+  productId?: string | undefined;
+  couponCode?: string | undefined;
   imageBuffer?: Buffer | undefined;
   imageMime?: string | undefined;
   now?: Date | undefined;
@@ -20,7 +22,17 @@ export interface AddItemToBatchResult {
 }
 
 export async function addItemToBatch(args: AddItemToBatchArgs): Promise<AddItemToBatchResult> {
-  const { tenantId, batchId, customText, imageBuffer, imageMime, now = new Date() } = args;
+  const { tenantId, batchId, customText, productId, imageBuffer, imageMime, now = new Date() } = args;
+
+  if (!customText && !productId) {
+    return {
+      success: false,
+      batchName: '',
+      runAt: null,
+      batchStatus: 'UNKNOWN',
+      error: 'Nenhum texto ou produto informado para adicionar ao lote',
+    };
+  }
 
   const batch = await prisma.batch.findUnique({
     where: { id: batchId },
@@ -58,7 +70,8 @@ export async function addItemToBatch(args: AddItemToBatchArgs): Promise<AddItemT
     await prisma.batchItem.create({
       data: {
         batchId: batch.id,
-        customText,
+        ...(productId ? { productId } : {}),
+        ...(customText ? { customText } : {}),
         ...(imageBuffer ? { customImageData: imageBuffer, customImageType: imageMime ?? 'image/jpeg' } : {}),
         order: baseOrder,
         runAt: now,
@@ -110,7 +123,8 @@ export async function addItemToBatch(args: AddItemToBatchArgs): Promise<AddItemT
   const newItem = await prisma.batchItem.create({
     data: {
       batchId: batch.id,
-      customText,
+      ...(productId ? { productId } : {}),
+      ...(customText ? { customText } : {}),
       ...(imageBuffer ? { customImageData: imageBuffer, customImageType: imageMime ?? 'image/jpeg' } : {}),
       order: baseOrder,
       runAt: itemRunAt,

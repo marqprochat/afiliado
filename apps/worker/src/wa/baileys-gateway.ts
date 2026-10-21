@@ -478,18 +478,27 @@ export class BaileysGateway implements WhatsAppGateway {
             image: imageBuf,
             caption: msg.caption,
           });
-        } else if (!imageBuf && !asPreviewFallback && msg.imageUrl) {
-          // Nunca entregar a URL ao Baileys (axios sem checagem de IP e com redirects): SSRF.
-          log.warn(
-            { sessionId, jid, imageUrl: msg.imageUrl },
-            'imagem indisponível ou URL bloqueada; enviando em modo texto',
-          );
-          return l.sock.sendMessage(jid, { text: msg.caption });
-        } else {
-          return l.sock.sendMessage(jid, { text: msg.caption });
         }
+        // Fallback: tenta enviar com preview de link com thumbnail se houver URL no texto ou na imagem
+        const urlMatch = msg.caption.match(/https?:\/\/[^\s<>"')]+/);
+        const targetUrl = urlMatch ? urlMatch[0] : (msg.imageUrl ?? undefined);
+        if (targetUrl) {
+          log.warn(
+            { sessionId, jid, imageUrl: msg.imageUrl, targetUrl },
+            'imagem indisponível; enviando em modo preview de link (nunca sem nada)',
+          );
+          const jpegThumbnail = msg.imageUrl ? await fetchThumbnail(msg.imageUrl) : await fetchThumbnail(targetUrl);
+          const linkPreview: WAUrlInfo = {
+            'canonical-url': targetUrl,
+            'matched-text': targetUrl,
+            title: '',
+          };
+          if (jpegThumbnail) linkPreview.jpegThumbnail = jpegThumbnail;
+          return l.sock.sendMessage(jid, { text: msg.caption, linkPreview });
+        }
+        return l.sock.sendMessage(jid, { text: msg.caption });
       } else if (msg.kind === 'preview') {
-        const jpegThumbnail = await fetchThumbnail(msg.thumbnailUrl);
+        const jpegThumbnail = msg.thumbnailUrl ? await fetchThumbnail(msg.thumbnailUrl) : undefined;
         const linkPreview: WAUrlInfo = {
           'canonical-url': msg.url,
           'matched-text': msg.url,
@@ -499,6 +508,18 @@ export class BaileysGateway implements WhatsAppGateway {
         if (jpegThumbnail) linkPreview.jpegThumbnail = jpegThumbnail;
         return l.sock.sendMessage(jid, { text: msg.text, linkPreview });
       } else {
+        const urlMatch = msg.text.match(/https?:\/\/[^\s<>"')]+/);
+        if (urlMatch) {
+          const targetUrl = urlMatch[0];
+          const jpegThumbnail = await fetchThumbnail(targetUrl);
+          const linkPreview: WAUrlInfo = {
+            'canonical-url': targetUrl,
+            'matched-text': targetUrl,
+            title: '',
+          };
+          if (jpegThumbnail) linkPreview.jpegThumbnail = jpegThumbnail;
+          return l.sock.sendMessage(jid, { text: msg.text, linkPreview });
+        }
         return l.sock.sendMessage(jid, { text: msg.text });
       }
     };
