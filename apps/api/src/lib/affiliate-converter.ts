@@ -37,11 +37,11 @@ export interface ConvertTextResult {
   originalText: string;
   convertedText: string;
   detected: {
-    title?: string;
-    price?: number;
-    originalPrice?: number;
-    discountPct?: number;
-    coupon?: string;
+    title?: string | undefined;
+    price?: number | undefined;
+    originalPrice?: number | undefined;
+    discountPct?: number | undefined;
+    coupon?: string | undefined;
     links: ConvertedLinkItem[];
   };
 }
@@ -94,7 +94,7 @@ export async function convertOfferText(
 
       if (kind === 'SHOPEE') {
         const creds = decryptJson<ShopeeCredentials>(Buffer.from(conn.encryptedCredentials));
-        const { subId, extraSubIds } = composeLinkSubIds('SHOPEE', affiliateSubId);
+        const { subId, extraSubIds } = composeLinkSubIds('SHOPEE', affiliateSubId, '');
         affiliateUrl = await getShopeeAdapter().toAffiliateLink(
           creds,
           expandedUrl,
@@ -103,11 +103,11 @@ export async function convertOfferText(
         );
       } else if (kind === 'ALIEXPRESS') {
         const creds = decryptJson<AliexpressCredentials>(Buffer.from(conn.encryptedCredentials));
-        const subId = composeLinkSubIds('ALIEXPRESS', affiliateSubId).subId;
+        const subId = composeLinkSubIds('ALIEXPRESS', affiliateSubId, '').subId;
         affiliateUrl = await getAliexpressAdapter().toAffiliateLink(creds, expandedUrl, subId);
       } else if (kind === 'AWIN') {
         const creds = decryptJson<AwinCredentials>(Buffer.from(conn.encryptedCredentials));
-        const subId = composeLinkSubIds('AWIN', affiliateSubId).subId;
+        const subId = composeLinkSubIds('AWIN', affiliateSubId, '').subId;
         affiliateUrl = await getAwinAdapter().toAffiliateLink(creds, expandedUrl, subId);
       } else {
         // AMAZON, MERCADOLIVRE, MAGALU

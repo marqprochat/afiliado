@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { decryptJson, encryptJson } from '@afilados/db';
-import { ApiError, telegramBotCreateSchema } from '@afilados/shared';
+import { ApiError, telegramBotCreateSchema, telegramBotUpdateSchema } from '@afilados/shared';
 import { TelegramClient } from '@afilados/telegram';
 import { requireAuth } from '../plugins/auth';
 
@@ -15,6 +15,7 @@ function publicBot(row: {
   id: string;
   label: string;
   username: string | null;
+  allowedUserIds: string[];
   status: string;
   lastError: string | null;
   lastCheckedAt: Date | null;
@@ -23,6 +24,7 @@ function publicBot(row: {
     id: row.id,
     label: row.label,
     username: row.username,
+    allowedUserIds: row.allowedUserIds ?? [],
     status: row.status,
     lastError: row.lastError,
     lastCheckedAt: row.lastCheckedAt,
@@ -51,12 +53,35 @@ export async function telegramRoutes(app: FastifyInstance) {
         label: body.label,
         encryptedToken: encryptJson({ token: body.token } satisfies TokenPayload),
         username: me.username ?? null,
+        allowedUserIds: body.allowedUserIds ?? [],
         status: 'OK',
         lastCheckedAt: new Date(),
       },
     });
     await app.events.publish(req.tenantId, { type: 'telegram.bots.changed' });
     return reply.status(201).send(publicBot(row));
+  });
+
+  app.patch('/telegram/bots/:id', async (req) => {
+    const { id } = idParam.parse(req.params);
+    const body = telegramBotUpdateSchema.parse(req.body);
+    const bot = await req.db.telegramBot.findFirst({ where: { id } });
+    if (!bot) throw ApiError.notFound('Bot não encontrado');
+
+    const data: { label?: string; allowedUserIds?: string[] } = {};
+    if (body.label !== undefined) data.label = body.label;
+    if (body.allowedUserIds !== undefined) {
+      data.allowedUserIds = Array.from(new Set(body.allowedUserIds.map((u) => u.trim()).filter(Boolean)));
+    }
+
+    await req.db.telegramBot.updateMany({
+      where: { id },
+      data,
+    });
+    const updated = await req.db.telegramBot.findFirst({ where: { id } });
+    if (!updated) throw ApiError.notFound('Bot não encontrado');
+    await app.events.publish(req.tenantId, { type: 'telegram.bots.changed' });
+    return publicBot(updated);
   });
 
   app.post('/telegram/bots/:id/check', async (req) => {

@@ -206,6 +206,7 @@ model TelegramBot {
   label          String
   encryptedToken Bytes
   username       String?
+  allowedUserIds String[]         @default([])
   status         ConnectionStatus @default(UNCONFIGURED)
   lastError      String?
   lastCheckedAt  DateTime?

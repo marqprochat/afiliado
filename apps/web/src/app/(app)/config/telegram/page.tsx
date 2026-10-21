@@ -10,6 +10,95 @@ import { useApiMutation } from '@/lib/mutations';
 import { useTelegramBots, useTelegramChats } from '@/lib/queries';
 import type { TelegramBot } from '@/lib/types';
 
+function AllowedUsersSection({ bot }: { bot: TelegramBot }) {
+  const [newId, setNewId] = useState('');
+  const updateUsers = useApiMutation(
+    (allowedUserIds: string[]) =>
+      apiFetch(`/telegram/bots/${bot.id}`, {
+        method: 'PATCH',
+        json: { allowedUserIds },
+      }),
+    { invalidate: [['telegram']], success: 'Lista de usuários atualizada' },
+  );
+
+  const handleAdd = () => {
+    const trimmed = newId.trim();
+    if (!trimmed) return;
+    if ((bot.allowedUserIds ?? []).includes(trimmed)) {
+      setNewId('');
+      return;
+    }
+    updateUsers.mutate([...(bot.allowedUserIds ?? []), trimmed]);
+    setNewId('');
+  };
+
+  const handleRemove = (idToRemove: string) => {
+    updateUsers.mutate((bot.allowedUserIds ?? []).filter((id) => id !== idToRemove));
+  };
+
+  const list = bot.allowedUserIds ?? [];
+
+  return (
+    <div className="mt-4 space-y-2 border-t border-border pt-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Usuários Autorizados (Interação & Envio)
+        </h4>
+        <span className="text-xs text-muted-foreground">{list.length} cadastrado(s)</span>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Usuários com esses IDs do Telegram podem enviar ou colar promoções no privado do bot. O bot converte o link e pergunta em qual lote agendar o envio. Se não conseguir converter, ele avisa e encerra.
+      </p>
+
+      <div className="flex gap-2">
+        <Input
+          placeholder="Ex: 123456789"
+          value={newId}
+          onChange={(e) => setNewId(e.target.value)}
+          className="h-8 text-xs font-mono"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleAdd();
+            }
+          }}
+        />
+        <Button
+          size="sm"
+          type="button"
+          onClick={handleAdd}
+          disabled={!newId.trim() || updateUsers.isPending}
+          className="h-8"
+        >
+          Adicionar ID
+        </Button>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5 pt-1">
+        {list.map((userId) => (
+          <Badge key={userId} variant="secondary" className="gap-1 font-mono text-xs py-1">
+            <span>{userId}</span>
+            <button
+              type="button"
+              onClick={() => handleRemove(userId)}
+              disabled={updateUsers.isPending}
+              className="text-muted-foreground hover:text-foreground ml-1 font-bold"
+              aria-label={`Remover ${userId}`}
+            >
+              ×
+            </button>
+          </Badge>
+        ))}
+        {list.length === 0 && (
+          <p className="text-xs text-muted-foreground italic">
+            Nenhum ID cadastrado. O bot informará o ID ao usuário e recusará interações até que seja autorizado.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function BotCard({ bot }: { bot: TelegramBot }) {
   const [open, setOpen] = useState(false);
   const { data: chats } = useTelegramChats(open ? bot.id : null);
@@ -75,33 +164,41 @@ function BotCard({ bot }: { bot: TelegramBot }) {
         </Button>
       </div>
       {open && (
-        <div className="space-y-2 border-t border-border p-3 pt-3">
+        <div className="space-y-3 border-t border-border p-3 pt-3">
           {bot.lastError && <p className="text-xs text-red-400">Último erro: {bot.lastError}</p>}
-          <p className="text-xs text-muted-foreground">
-            Grupos e canais aparecem aqui automaticamente assim que você adicionar este bot neles
-            como administrador — não existe um botão de "sincronizar", o Telegram não tem como
-            listar isso sob demanda.
-          </p>
-          <ul className="space-y-1">
-            {chats?.map((c) => (
-              <li
-                key={c.id}
-                className="flex items-center justify-between rounded-md border border-border bg-surface-2 px-2 py-1 text-sm"
-              >
-                <span>{c.title}</span>
-                {c.botIsAdmin ? (
-                  <Badge className="bg-brand/20 text-brand">Admin</Badge>
-                ) : (
-                  <span className="text-xs text-muted-foreground">membro</span>
-                )}
-              </li>
-            ))}
-            {chats?.length === 0 && (
-              <li className="text-sm text-muted-foreground">
-                Nenhum grupo/canal encontrado ainda.
-              </li>
-            )}
-          </ul>
+          
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+              Grupos e Canais Sincronizados
+            </h4>
+            <p className="text-xs text-muted-foreground mb-2">
+              Grupos e canais aparecem aqui automaticamente assim que você adicionar este bot neles
+              como administrador — não existe um botão de "sincronizar", o Telegram não tem como
+              listar isso sob demanda.
+            </p>
+            <ul className="space-y-1">
+              {chats?.map((c) => (
+                <li
+                  key={c.id}
+                  className="flex items-center justify-between rounded-md border border-border bg-surface-2 px-2 py-1 text-sm"
+                >
+                  <span>{c.title}</span>
+                  {c.botIsAdmin ? (
+                    <Badge className="bg-brand/20 text-brand">Admin</Badge>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">membro</span>
+                  )}
+                </li>
+              ))}
+              {chats?.length === 0 && (
+                <li className="text-sm text-muted-foreground">
+                  Nenhum grupo/canal encontrado ainda.
+                </li>
+              )}
+            </ul>
+          </div>
+
+          <AllowedUsersSection bot={bot} />
         </div>
       )}
     </div>
@@ -131,7 +228,7 @@ export default function TelegramPage() {
         <h1 className="text-xl font-semibold">Telegram</h1>
         <p className="text-sm text-muted-foreground">
           Conecte um bot (crie um em <span className="font-mono">@BotFather</span>) para enviar
-          ofertas também em grupos e canais do Telegram.
+          ofertas em grupos e canais do Telegram e receber promoções enviadas por usuários cadastrados.
         </p>
       </div>
 

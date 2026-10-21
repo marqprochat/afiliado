@@ -2,11 +2,11 @@ import { extractUrls } from './links';
 import { parseCouponsFromText, extractCodesFromBlock } from './coupon-parse';
 
 export interface ParsedOffer {
-  title?: string;
-  price?: number;
-  originalPrice?: number;
-  discountPct?: number;
-  coupon?: string;
+  title?: string | undefined;
+  price?: number | undefined;
+  originalPrice?: number | undefined;
+  discountPct?: number | undefined;
+  coupon?: string | undefined;
   urls: string[];
 }
 

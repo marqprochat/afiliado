@@ -19,7 +19,7 @@ describe('convertOfferText', () => {
             id: 'c1',
             tenantId: 't1',
             kind: 'AMAZON',
-            encryptedCredentials: Buffer.from(creds) as unknown as string,
+            encryptedCredentials: Buffer.from(creds) as unknown as Buffer,
             status: 'OK',
             affiliateTag: null,
             subId: null,
@@ -28,9 +28,9 @@ describe('convertOfferText', () => {
           },
           subId: null,
           isAffiliate: false,
-        };
+        } as unknown as dbModule.ResolvedConnection;
       }
-      return null;
+      return null as unknown as dbModule.ResolvedConnection;
     });
 
     // Mock decryptJson
@@ -45,7 +45,7 @@ Acesse: https://amzn.to/3xyz`;
 
     const res = await convertOfferText('tenant-1', text);
 
-    expect(res.ok).toBeUndefined(); // a rota envelopa com ok: true
+    expect('ok' in res).toBe(false); // a rota envelopa com ok: true
     expect(res.detected.title).toBe('Fone Top Bluetooth');
     expect(res.detected.price).toBe(189.9);
     expect(res.detected.originalPrice).toBe(299.0);
@@ -59,7 +59,7 @@ Acesse: https://amzn.to/3xyz`;
 
   it('informa erro amigável se marketplace não estiver configurado', async () => {
     vi.spyOn(coreModule, 'resolveShortLinks').mockResolvedValue(new Map());
-    vi.spyOn(dbModule, 'resolveConnection').mockResolvedValue(null);
+    vi.spyOn(dbModule, 'resolveConnection').mockResolvedValue(null as unknown as dbModule.ResolvedConnection);
 
     const text = `Produto Shopee
 R$ 50,00

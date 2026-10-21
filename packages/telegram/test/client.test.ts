@@ -26,12 +26,21 @@ describe('TelegramClient', () => {
     await expect(client.getMe()).rejects.toThrow(new TelegramApiError('Unauthorized'));
   });
 
-  it('getUpdates extrai só eventos de my_chat_member e avança o offset', async () => {
+  it('getUpdates extrai my_chat_member, messages e callbackQueries e avança o offset', async () => {
     const f = fakeFetch([
       {
         ok: true,
         result: [
-          { update_id: 10, message: { text: 'oi' } },
+          {
+            update_id: 10,
+            message: {
+              message_id: 101,
+              from: { id: 987, first_name: 'Maria', username: 'maria_tg' },
+              chat: { id: 987, type: 'private' },
+              date: 1700000000,
+              text: 'Confira https://shopee.com.br/item-1',
+            },
+          },
           {
             update_id: 11,
             my_chat_member: {
@@ -39,15 +48,36 @@ describe('TelegramClient', () => {
               new_chat_member: { status: 'administrator' },
             },
           },
+          {
+            update_id: 12,
+            callback_query: {
+              id: 'cq_1',
+              from: { id: 987, first_name: 'Maria' },
+              message: { message_id: 102, chat: { id: 987, type: 'private' }, text: 'Escolha o lote:' },
+              data: 'pick_batch:batch_123:session_456',
+            },
+          },
         ],
       },
     ]);
     const client = new TelegramClient('TOKEN', f as unknown as typeof fetch);
     const r = await client.getUpdates(5);
-    expect(r.nextOffset).toBe(12);
+    expect(r.nextOffset).toBe(13);
     expect(r.chatUpdates).toEqual([
       { chatId: '-100123', title: 'Ofertas VIP', kind: 'supergroup', botIsAdmin: true },
     ]);
+    expect(r.messages).toHaveLength(1);
+    expect(r.messages[0]).toMatchObject({
+      messageId: 101,
+      from: { id: 987, firstName: 'Maria', username: 'maria_tg' },
+      text: 'Confira https://shopee.com.br/item-1',
+    });
+    expect(r.callbackQueries).toHaveLength(1);
+    expect(r.callbackQueries[0]).toMatchObject({
+      id: 'cq_1',
+      from: { id: 987, firstName: 'Maria' },
+      data: 'pick_batch:batch_123:session_456',
+    });
   });
 
   it('getUpdates marca botIsAdmin=false quando o bot foi removido', async () => {
@@ -68,6 +98,48 @@ describe('TelegramClient', () => {
     const client = new TelegramClient('TOKEN', f as unknown as typeof fetch);
     const r = await client.getUpdates(0);
     expect(r.chatUpdates[0]!.botIsAdmin).toBe(false);
+  });
+
+  it('sendMessage com replyMarkup envia inline_keyboard', async () => {
+    const f = fakeFetch([{ ok: true, result: { message_id: 77 } }]);
+    const client = new TelegramClient('TOKEN', f as unknown as typeof fetch);
+    const res = await client.sendMessage('987', 'Escolha o lote:', {
+      replyMarkup: {
+        inline_keyboard: [[{ text: 'Lote Tech', callback_data: 'pick:lote_1' }]],
+      },
+    });
+    expect(res).toEqual({ messageId: 77 });
+    const calls = f.mock.calls as unknown as [string, RequestInit][];
+    const body = JSON.parse(calls[0]![1].body as string);
+    expect(body.chat_id).toBe('987');
+    expect(body.reply_markup.inline_keyboard[0][0].text).toBe('Lote Tech');
+  });
+
+  it('editMessageText e answerCallbackQuery funcionam corretamente', async () => {
+    const f = fakeFetch([
+      { ok: true, result: { message_id: 88 } },
+      { ok: true, result: true },
+    ]);
+    const client = new TelegramClient('TOKEN', f as unknown as typeof fetch);
+
+    const editRes = await client.editMessageText('987', 88, 'Texto atualizado');
+    expect(editRes).toEqual({ messageId: 88 });
+
+    const ansRes = await client.answerCallbackQuery('cq_1', 'Processando...', false);
+    expect(ansRes).toBe(true);
+  });
+
+  it('getFile retorna detalhes do arquivo', async () => {
+    const f = fakeFetch([
+      { ok: true, result: { file_id: 'fid_123', file_path: 'photos/file_1.jpg', file_size: 4096 } },
+    ]);
+    const client = new TelegramClient('TOKEN', f as unknown as typeof fetch);
+    const info = await client.getFile('fid_123');
+    expect(info).toEqual({
+      fileId: 'fid_123',
+      filePath: 'photos/file_1.jpg',
+      fileSize: 4096,
+    });
   });
 
   it('sendMessage e sendPhoto retornam o messageId', async () => {

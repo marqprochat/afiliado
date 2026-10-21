@@ -89,6 +89,7 @@ export interface TelegramBot {
   id: string;
   label: string;
   username: string | null;
+  allowedUserIds: string[];
   status: 'UNCONFIGURED' | 'OK' | 'ERROR';
   lastError: string | null;
   lastCheckedAt: string | null;
