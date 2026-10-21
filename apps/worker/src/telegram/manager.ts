@@ -49,6 +49,25 @@ function isLinkOnlyOffer(text: string, urls: string[]): boolean {
   return remaining.length <= 60 && lines.length <= 2;
 }
 
+function extractTitleFromUrl(urlStr: string): string {
+  try {
+    const u = new URL(urlStr);
+    const pathname = decodeURIComponent(u.pathname);
+    // Shopee: /Nome-do-Produto-i.123.456
+    const shopeeMatch = pathname.match(/^\/([^/]+)-i\.\d+\.\d+/);
+    if (shopeeMatch) {
+      return shopeeMatch[1]!.replace(/[-_]+/g, ' ').trim();
+    }
+    // ML: /MLB-12345-nome-do-produto or /p/MLB123
+    const parts = pathname.split('/').filter(Boolean);
+    const lastPart = parts[parts.length - 1] ?? '';
+    const clean = lastPart.replace(/^MLB-?\d*-?/i, '').replace(/[-_]+/g, ' ').trim();
+    if (clean.length > 5) return clean;
+    if (parts[0] && parts[0].length > 5) return parts[0].replace(/[-_]+/g, ' ').trim();
+  } catch {}
+  return 'Oferta Especial';
+}
+
 function makeBatchKeyboard(
   batches: Array<{ id: string; name: string; status: string; items: Array<{ status: string }> }>,
   sessionKey: string,
@@ -245,13 +264,16 @@ export class TelegramManager {
 
     let previewText = '';
     if (session.isLinkOnly && session.productData) {
-      const priceStr = Number(session.productData.price).toLocaleString('pt-BR', {
-        style: 'currency',
-        currency: 'BRL',
-      });
+      const priceStr =
+        session.productData.price > 0
+          ? Number(session.productData.price).toLocaleString('pt-BR', {
+              style: 'currency',
+              currency: 'BRL',
+            })
+          : '';
       previewText =
         `📦 <b>Produto:</b> ${escapeHtml(session.productData.title)}\n` +
-        `💰 <b>Preço:</b> ${priceStr}\n` +
+        (priceStr ? `💰 <b>Preço:</b> ${priceStr}\n` : '') +
         (session.couponCode ? `🏷️ <b>Cupom:</b> <code>${escapeHtml(session.couponCode)}</code>\n` : '') +
         `<i>✨ A mensagem será gerada respeitando o template do lote escolhido.</i>`;
     } else {
@@ -406,57 +428,72 @@ export class TelegramManager {
         }
       }
 
-      if (productData) {
-        // Baixa a foto do produto se não veio imagem no Telegram
-        if (!imageBuffer && productData.images && productData.images.length > 0) {
-          imageBuffer = await this.downloadImage(productData.images[0]!);
-        }
-
-        const sessionKey = `${message.from.id}:${Date.now()}`;
-        const session: PendingOfferSession = {
-          sessionKey,
-          userId: message.from.id,
-          tenantId: bot.tenantId,
-          botId: bot.id,
-          step: 'waiting_coupon',
-          isLinkOnly: true,
-          convertedText: conv.convertedText,
+      // Se a busca falhou ou retornou vazio, usa metadados extraídos da URL para SEMPRE respeitar o template do lote
+      if (!productData) {
+        const fallbackTitle = extractTitleFromUrl(targetUrl);
+        productData = {
+          source: kind as any,
+          title: fallbackTitle,
+          price: 0,
+          images: [],
+          shipping: 'UNKNOWN',
           originalUrl: targetUrl,
-          source: kind,
-          productData,
-          imageBuffer,
-          imageMime,
-          createdAt: Date.now(),
+          raw: {},
         };
-        this.pendingSessions.set(sessionKey, session);
-
-        const priceStr = Number(productData.price).toLocaleString('pt-BR', {
-          style: 'currency',
-          currency: 'BRL',
-        });
-        const origStr = productData.originalPrice
-          ? ` <s>${Number(productData.originalPrice).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</s>`
-          : '';
-        const discStr = productData.discountPct ? ` (-${productData.discountPct}%)` : '';
-
-        await client.sendMessage(
-          String(message.chat.id),
-          `✅ <b>Link convertido com sucesso!</b>\n\n` +
-            `📦 <b>Produto:</b> ${escapeHtml(productData.title)}\n` +
-            `💰 <b>Preço:</b> ${priceStr}${origStr}${discStr}\n\n` +
-            `🏷️ <b>Deseja adicionar algum cupom para esta oferta?</b>\n\n` +
-            `👉 Envie o código do cupom como resposta (ex: <code>PROMO10</code>) ou clique no botão abaixo para continuar sem cupom:`,
-          {
-            replyMarkup: {
-              inline_keyboard: [
-                [{ text: '⏭️ Sem cupom', callback_data: `tg_skip_coupon:${sessionKey}` }],
-                [{ text: '❌ Cancelar', callback_data: `tg_cancel:${sessionKey}` }],
-              ],
-            },
-          },
-        );
-        return;
       }
+
+      // Baixa a foto do produto se não veio imagem no Telegram
+      if (!imageBuffer && productData.images && productData.images.length > 0) {
+        imageBuffer = await this.downloadImage(productData.images[0]!);
+      }
+
+      const sessionKey = `${message.from.id}:${Date.now()}`;
+      const session: PendingOfferSession = {
+        sessionKey,
+        userId: message.from.id,
+        tenantId: bot.tenantId,
+        botId: bot.id,
+        step: 'waiting_coupon',
+        isLinkOnly: true,
+        convertedText: conv.convertedText,
+        originalUrl: targetUrl,
+        source: kind,
+        productData,
+        imageBuffer,
+        imageMime,
+        createdAt: Date.now(),
+      };
+      this.pendingSessions.set(sessionKey, session);
+
+      const priceStr =
+        productData.price > 0
+          ? Number(productData.price).toLocaleString('pt-BR', {
+              style: 'currency',
+              currency: 'BRL',
+            })
+          : '';
+      const origStr = productData.originalPrice
+        ? ` <s>${Number(productData.originalPrice).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</s>`
+        : '';
+      const discStr = productData.discountPct ? ` (-${productData.discountPct}%)` : '';
+
+      await client.sendMessage(
+        String(message.chat.id),
+        `✅ <b>Link convertido com sucesso!</b>\n\n` +
+          `📦 <b>Produto:</b> ${escapeHtml(productData.title)}\n` +
+          (priceStr ? `💰 <b>Preço:</b> ${priceStr}${origStr}${discStr}\n\n` : '\n') +
+          `🏷️ <b>Deseja adicionar algum cupom para esta oferta?</b>\n\n` +
+          `👉 Envie o código do cupom como resposta (ex: <code>PROMO10</code>) ou clique no botão abaixo para continuar sem cupom:`,
+        {
+          replyMarkup: {
+            inline_keyboard: [
+              [{ text: '⏭️ Sem cupom', callback_data: `tg_skip_coupon:${sessionKey}` }],
+              [{ text: '❌ Cancelar', callback_data: `tg_cancel:${sessionKey}` }],
+            ],
+          },
+        },
+      );
+      return;
     }
 
     // Se NÃO é link único ou a busca do produto falhou, tenta baixar foto da URL para nunca ir sem foto
@@ -553,13 +590,16 @@ export class TelegramManager {
       if (cq.message) {
         let preview = '';
         if (session.productData) {
-          const priceStr = Number(session.productData.price).toLocaleString('pt-BR', {
-            style: 'currency',
-            currency: 'BRL',
-          });
+          const priceStr =
+            session.productData.price > 0
+              ? Number(session.productData.price).toLocaleString('pt-BR', {
+                  style: 'currency',
+                  currency: 'BRL',
+                })
+              : '';
           preview =
             `📦 <b>Produto:</b> ${escapeHtml(session.productData.title)}\n` +
-            `💰 <b>Preço:</b> ${priceStr}\n` +
+            (priceStr ? `💰 <b>Preço:</b> ${priceStr}\n` : '') +
             `<i>✨ A mensagem será gerada respeitando o template do lote escolhido.</i>\n\n`;
         }
         await client.editMessageText(

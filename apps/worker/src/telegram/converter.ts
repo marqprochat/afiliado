@@ -25,7 +25,7 @@ import {
 
 let shopeeAdapter: MarketplaceAdapter<ShopeeCredentials> | null = null;
 function getShopee() {
-  if (!shopeeAdapter) shopeeAdapter = createShopeeAdapter();
+  if (!shopeeAdapter) shopeeAdapter = createShopeeAdapter({ mock: false });
   return shopeeAdapter;
 }
 

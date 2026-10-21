@@ -96,7 +96,7 @@ export interface ShopeeAdapterOptions {
 export function createShopeeAdapter(
   opts: ShopeeAdapterOptions = {},
 ): MarketplaceAdapter<ShopeeCredentials> {
-  const mock = opts.mock ?? process.env.SHOPEE_MOCK === '1';
+  const mock = opts.mock ?? (process.env.NODE_ENV === 'test' && process.env.SHOPEE_MOCK === '1');
   const client = (creds: ShopeeCredentials) => new ShopeeGraphQLClient(creds, opts.fetchImpl);
 
   // Item extra só visível via busca dirigida por itemId (fetchByUrls) em modo mock, para

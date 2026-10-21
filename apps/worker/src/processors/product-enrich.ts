@@ -54,7 +54,7 @@ export async function fetchViaAdapter(
     const { row: conn } = await resolveConnection(tenantId, 'SHOPEE');
     if (!conn?.encryptedCredentials) throw new Error('Shopee não configurada para este tenant');
     const creds = decryptJson<ShopeeCredentials>(Buffer.from(conn.encryptedCredentials));
-    const list = await createShopeeAdapter().fetchByUrls(creds, [url]);
+    const list = await createShopeeAdapter({ mock: false }).fetchByUrls(creds, [url]);
     return list[0] ?? null;
   }
   if (kind === 'ALIEXPRESS') {
