@@ -257,6 +257,13 @@ export const extensionConvertTextSchema = z.object({
 });
 export type ExtensionConvertTextBody = z.infer<typeof extensionConvertTextSchema>;
 
+export const extensionAwinGenerateLinkSchema = z.object({
+  destinationUrl: z.string().url(),
+  advertiserId: z.union([z.string(), z.number()]).optional(),
+  shorten: z.boolean().optional(),
+});
+export type ExtensionAwinGenerateLinkBody = z.infer<typeof extensionAwinGenerateLinkSchema>;
+
 
 // Descoberta feita pela extensão: ela abre a busca do marketplace no Chrome do usuário (sem
 // bloqueio anti-bot) e envia os cards lidos. O servidor aplica os filtros da automação.

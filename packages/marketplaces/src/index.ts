@@ -15,6 +15,7 @@ export * from './awin/datafeed';
 export * from './awin/mapper';
 export * from './awin/adapter';
 export * from './awin/offers';
+export * from './awin/programmes';
 export * from './aliexpress';
 export * from './aliexpress/coupons';
 export * from './coupons';

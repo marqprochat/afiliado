@@ -42,6 +42,30 @@
 
       <!-- VISÃO 1: Captura da Página Atual -->
       <div id="tab-page-view">
+        <!-- Card do Link Builder / Tracking Link (Estilo AWIN) -->
+        <div id="link-builder-section" class="card hidden">
+          <div class="card-header-flex">
+            <div class="card-title">🔗 Link Builder</div>
+            <span id="link-builder-badge" class="badge badge-awin">AWIN</span>
+          </div>
+
+          <div id="link-builder-store" class="partner-store-title">Parceiro AWIN</div>
+
+          <label class="label" for="link-builder-orig">Link Original</label>
+          <input type="text" id="link-builder-orig" class="input input-readonly" readonly />
+
+          <label class="label" for="link-builder-tracking">Tracking Link (Seu Link de Afiliado)</label>
+          <div class="tracking-input-container">
+            <input type="text" id="link-builder-tracking" class="input input-readonly input-tracking" readonly />
+          </div>
+
+          <div class="link-builder-buttons">
+            <button id="btn-shorten-tracking" class="btn btn-secondary-outline">✂️ Encurtar Link</button>
+            <button id="btn-copy-tracking" class="btn btn-action-copy">📋 Copiar Link</button>
+          </div>
+          <div id="link-builder-status" class="msg"></div>
+        </div>
+
         <!-- Seção de Produto Detectado -->
         <div id="product-section" class="card hidden">
           <div class="card-header-flex">
@@ -60,6 +84,18 @@
               </div>
               <div id="p-extra" class="p-extra"></div>
             </div>
+          </div>
+
+          <!-- Cupom Detectado / Disponível -->
+          <div id="p-coupon-section" class="p-coupon-box hidden">
+            <div class="p-coupon-header">
+              <span class="p-coupon-icon">🎟️</span>
+              <span class="p-coupon-title">Cupom disponível</span>
+              <span id="p-coupon-badge" class="p-coupon-badge"></span>
+              <button id="btn-remove-coupon" class="btn-coupon-toggle" title="Remover cupom">✕</button>
+            </div>
+            <div id="p-coupon-desc" class="p-coupon-desc"></div>
+            <select id="p-coupon-select" class="input p-coupon-select hidden"></select>
           </div>
 
           <label id="capture-target-label" class="label" for="capture-target">Enviar para qual fila (lote)?</label>
@@ -103,7 +139,7 @@
             <span class="empty-icon">🔍</span>
             <div class="empty-title">Nenhum produto detectado nesta aba</div>
             <div class="empty-desc">
-              Abra uma página de produto no Mercado Livre, Amazon, Magalu ou Shopee para capturar a
+              Abra uma página de produto no Mercado Livre, Amazon, Magalu, Shopee, AliExpress ou parceiros da AWIN (ex: Drogal) para capturar a
               oferta. Ou use a aba <strong>Colar de Grupo</strong> acima para processar textos copiados.
             </div>
           </div>

@@ -172,6 +172,27 @@
       error: ['[class*="promo-code-error"]', '[class*="comet-v2-alert-error"]'],
       autoApply: false,
     },
+
+    AWIN: {
+      key: 'AWIN',
+      name: 'Parceiro Awin',
+      cartMatch: /\/(cart|carrinho|checkout|order|pedido|basket|bag|sacola)/i,
+      productCouponSelectors: [
+        '[class*="coupon"]',
+        '[class*="cupom"]',
+        '[class*="voucher"]',
+        '[class*="promo"]',
+        '[data-testid*="coupon"]',
+        '[data-testid*="cupom"]',
+      ],
+      input:
+        'input[placeholder*="cupom" i], input[placeholder*="voucher" i], input[placeholder*="código" i], input[name*="coupon" i], input[name*="cupom" i], input[id*="coupon" i], input[id*="cupom" i]',
+      apply:
+        'button[class*="coupon" i], button[class*="cupom" i], button:has(span:contains("Aplicar")), button:has(span:contains("OK"))',
+      success: ['[class*="coupon-success"]', '[class*="cupom-sucesso"]'],
+      error: ['[class*="coupon-error"]', '[class*="cupom-erro"]'],
+      autoApply: false,
+    },
   };
 
   if (typeof window !== 'undefined') {

@@ -70,6 +70,293 @@
     return null;
   }
 
+  // Extrai metadados de produto para parceiros AWIN e lojas de e-commerce universais
+  function extractProductFromAwinPartner() {
+    let title = '';
+    let price = null;
+    let originalPrice = null;
+    let images = [];
+    let couponCode = null;
+
+    function toAbsUrl(src) {
+      if (!src || typeof src !== 'string') return null;
+      src = src.trim();
+      if (!src || src.startsWith('data:image/svg') || src.startsWith('data:image/gif')) return null;
+      if (src.startsWith('//')) return `https:${src}`;
+      if (src.startsWith('http://') || src.startsWith('https://')) return src;
+      try {
+        return new URL(src, window.location.href).href;
+      } catch {
+        return null;
+      }
+    }
+
+    function addImage(url) {
+      const abs = toAbsUrl(url);
+      if (abs && abs.startsWith('http') && !images.includes(abs)) {
+        images.push(abs);
+      }
+    }
+
+    // 1. Extração via Schema.org JSON-LD (universal para e-commerces: Drogal, VTEX, Shopify, Nuvemshop, etc.)
+    const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
+    const ldCandidates = [];
+    for (const script of jsonLdScripts) {
+      try {
+        const text = script.textContent;
+        if (!text || !text.includes('Product')) continue;
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+          ldCandidates.push(...parsed);
+        } else if (parsed && typeof parsed === 'object') {
+          if (Array.isArray(parsed['@graph'])) {
+            ldCandidates.push(...parsed['@graph']);
+          } else {
+            ldCandidates.push(parsed);
+          }
+        }
+      } catch {}
+    }
+
+    for (const item of ldCandidates) {
+      if (!item || typeof item !== 'object') continue;
+      const type = item['@type'];
+      const isProduct =
+        type === 'Product' ||
+        type === 'IndividualProduct' ||
+        type === 'ProductGroup' ||
+        (Array.isArray(type) && type.includes('Product'));
+
+      if (isProduct) {
+        if (!title && item.name) title = String(item.name).trim();
+        if (!title && item.headline) title = String(item.headline).trim();
+
+        // Extrai imagens do produto
+        const imgField = item.image;
+        if (imgField) {
+          if (Array.isArray(imgField)) {
+            for (const img of imgField) {
+              if (typeof img === 'string') addImage(img);
+              else if (img && typeof img === 'object') addImage(img.url || img.contentUrl);
+            }
+          } else if (typeof imgField === 'object') {
+            addImage(imgField.url || imgField.contentUrl);
+          } else if (typeof imgField === 'string') {
+            addImage(imgField);
+          }
+        }
+
+        // Extrai ofertas/preço
+        const offers = Array.isArray(item.offers) ? item.offers : item.offers ? [item.offers] : [];
+        for (const offer of offers) {
+          if (!offer) continue;
+          if (offer.image) {
+            if (typeof offer.image === 'string') addImage(offer.image);
+            else if (offer.image.url) addImage(offer.image.url);
+          }
+          const rawP = offer.price ?? offer.lowPrice ?? offer.priceSpecification?.price;
+          if (rawP !== undefined && rawP !== null && price === null) {
+            const p = parseFloat(String(rawP).replace(',', '.'));
+            if (!isNaN(p) && p > 0) price = p;
+          }
+          const rawHigh = offer.highPrice ?? offer.priceSpecification?.maxPrice;
+          if (rawHigh !== undefined && rawHigh !== null && originalPrice === null) {
+            const hp = parseFloat(String(rawHigh).replace(',', '.'));
+            if (!isNaN(hp) && hp > 0) originalPrice = hp;
+          }
+        }
+      }
+    }
+
+    // 2. Título via DOM / Meta tags se ainda não encontrado
+    if (!title) {
+      const h1 = document.querySelector(
+        'h1.vtex-store-components-3-x-productNameContainer, h1[class*="product-name"], h1[class*="productName"], h1[class*="title"], h1[data-testid*="title"], h1',
+      );
+      if (h1 && h1.textContent.trim()) {
+        title = h1.textContent.trim();
+      }
+    }
+    if (!title) {
+      const ogTitle =
+        document.querySelector('meta[property="og:title"]')?.getAttribute('content') ||
+        document.querySelector('meta[name="twitter:title"]')?.getAttribute('content');
+      if (ogTitle) title = ogTitle.trim();
+    }
+    if (!title) {
+      title = document.title;
+    }
+
+    // 3. Imagens via Meta tags (OpenGraph, Twitter, itemprop, link)
+    if (images.length === 0) {
+      const metaImages = [
+        document.querySelector('meta[property="og:image:secure_url"]')?.getAttribute('content'),
+        document.querySelector('meta[property="og:image"]')?.getAttribute('content'),
+        document.querySelector('meta[name="twitter:image"]')?.getAttribute('content'),
+        document.querySelector('meta[name="twitter:image:src"]')?.getAttribute('content'),
+        document.querySelector('meta[itemprop="image"]')?.getAttribute('content'),
+        document.querySelector('link[rel="image_src"]')?.getAttribute('href'),
+        document.querySelector('link[rel="preload"][as="image"]')?.getAttribute('href'),
+      ];
+      for (const mImg of metaImages) {
+        if (mImg) addImage(mImg);
+      }
+    }
+
+    // 4. Imagens via seletores comuns de galeria / PDP de e-commerces parceiros
+    if (images.length === 0) {
+      const gallerySelectors = [
+        '.vtex-store-components-3-x-productImageTag',
+        '[data-testid*="product-image"] img',
+        '[data-testid*="main-image"] img',
+        '[class*="productImage"] img',
+        '[class*="product-image"] img',
+        '[class*="product__image"] img',
+        '[class*="product-photo"] img',
+        '[class*="gallery"] img',
+        '[class*="carousel"] img',
+        '[class*="slider"] img',
+        '[class*="zoom"] img',
+        '[class*="main-image"] img',
+      ];
+      for (const sel of gallerySelectors) {
+        const els = document.querySelectorAll(sel);
+        for (const el of els) {
+          const src =
+            el.getAttribute('data-zoom-image') ||
+            el.getAttribute('data-large') ||
+            el.getAttribute('data-src') ||
+            el.getAttribute('data-original') ||
+            el.currentSrc ||
+            el.getAttribute('src');
+          if (src) addImage(src);
+        }
+        if (images.length > 0) break;
+      }
+    }
+
+    // 5. Heurística DOM universal para imagens: encontra a maior imagem visível de produto
+    if (images.length === 0) {
+      const allImgs = Array.from(document.querySelectorAll('img'));
+      const ranked = [];
+      for (const el of allImgs) {
+        const src =
+          el.getAttribute('data-zoom-image') ||
+          el.getAttribute('data-large') ||
+          el.getAttribute('data-src') ||
+          el.currentSrc ||
+          el.src;
+        const abs = toAbsUrl(src);
+        if (!abs || !abs.startsWith('http')) continue;
+        if (/logo|icon|badge|avatar|flag|payment|bandeira|selo|sprite|footer|header|pixel|transp/i.test(abs)) continue;
+        if (/logo|icon|badge|avatar/i.test(el.className || '')) continue;
+        const w = el.naturalWidth || el.clientWidth || el.width || 0;
+        const h = el.naturalHeight || el.clientHeight || el.height || 0;
+        if (w >= 100 && h >= 100) {
+          ranked.push({ src: abs, area: w * h });
+        }
+      }
+      ranked.sort((a, b) => b.area - a.area);
+      for (const item of ranked) {
+        addImage(item.src);
+      }
+    }
+
+    // 6. Preço via Meta tags se não veio do Schema.org
+    if (!price) {
+      const metaP =
+        document.querySelector('meta[property="product:price:amount"]')?.getAttribute('content') ||
+        document.querySelector('meta[property="og:price:amount"]')?.getAttribute('content') ||
+        document.querySelector('meta[itemprop="price"]')?.getAttribute('content') ||
+        document.querySelector('meta[name="twitter:data1"]')?.getAttribute('content');
+      if (metaP) {
+        const cleaned = metaP.replace(/[^\d.,]/g, '').replace(',', '.');
+        const p = parseFloat(cleaned);
+        if (!isNaN(p) && p > 0) price = p;
+      }
+    }
+
+    // 7. Preço via Seletores DOM da Drogal / VTEX e similares
+    if (!price) {
+      const priceSelectors = [
+        '.vtex-product-price-1-x-sellingPriceValue',
+        '.vtex-product-price-1-x-spotPriceValue',
+        '.skuBestPrice',
+        '[class*="selling-price"]',
+        '[class*="sellingPrice"]',
+        '[class*="best-price"]',
+        '[class*="bestPrice"]',
+        '[class*="product-price"]',
+        '[class*="productPrice"]',
+        '[data-testid*="price"]',
+        '[class*="price-sales"]',
+        '[class*="price-box"]',
+      ];
+      for (const sel of priceSelectors) {
+        const priceEl = document.querySelector(sel);
+        if (priceEl && priceEl.textContent) {
+          const match =
+            priceEl.textContent.match(/R\$\s*([\d.]+,\d{2})/i) ||
+            priceEl.textContent.match(/([\d.]+,\d{2})/);
+          if (match) {
+            const p = parseFloat(match[1].replace(/\./g, '').replace(',', '.'));
+            if (!isNaN(p) && p > 0) {
+              price = p;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // 8. Preço Original (riscado)
+    if (!originalPrice) {
+      const listPriceSelectors = [
+        '.vtex-product-price-1-x-listPriceValue',
+        '.skuListPrice',
+        's',
+        'del',
+        '[class*="list-price"]',
+        '[class*="listPrice"]',
+        '[class*="original-price"]',
+        '[class*="was-price"]',
+        '[class*="price-from"]',
+      ];
+      for (const sel of listPriceSelectors) {
+        const listPriceEl = document.querySelector(sel);
+        if (listPriceEl && listPriceEl.textContent) {
+          const match =
+            listPriceEl.textContent.match(/R\$\s*([\d.]+,\d{2})/i) ||
+            listPriceEl.textContent.match(/([\d.]+,\d{2})/);
+          if (match) {
+            const p = parseFloat(match[1].replace(/\./g, '').replace(',', '.'));
+            if (!isNaN(p) && p > 0 && (!price || p > price)) {
+              originalPrice = p;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    let discountPct = null;
+    if (originalPrice && price && originalPrice > price) {
+      discountPct = Math.round(((originalPrice - price) / originalPrice) * 100);
+    }
+
+    couponCode = extractCouponFromScope(document.body, 'AWIN');
+
+    return {
+      title,
+      price,
+      originalPrice,
+      discountPct,
+      images,
+      shipping: /frete gr[aá]tis/i.test(document.body.innerText) ? 'FREE' : 'UNKNOWN',
+      couponCode,
+    };
+  }
+
   // Extrai metadados do DOM da página atual
   function extractProductFromPage() {
     const url = window.location.href;
@@ -470,6 +757,25 @@
       couponCode = extractCouponFromScope(scope, 'ALIEXPRESS');
     }
 
+    // 7. Parceiros AWIN (ex: Drogal BR e outras lojas parceiras)
+    if (
+      !url.includes('mercadolivre.com.br') &&
+      !url.includes('amazon.com.br') &&
+      !url.includes('magazineluiza.com.br') &&
+      !url.includes('magazinevoce.com.br') &&
+      !url.includes('shopee.com.br') &&
+      !url.includes('aliexpress.com')
+    ) {
+      const awinData = extractProductFromAwinPartner();
+      if (awinData.title) title = awinData.title;
+      if (awinData.price) price = awinData.price;
+      if (awinData.originalPrice) originalPrice = awinData.originalPrice;
+      if (awinData.discountPct) discountPct = awinData.discountPct;
+      if (awinData.images && awinData.images.length > 0) images = awinData.images;
+      if (awinData.shipping) shipping = awinData.shipping;
+      if (awinData.couponCode) couponCode = awinData.couponCode;
+    }
+
     return {
       title,
       price,
@@ -514,6 +820,17 @@
     }
     if (host === 'aliexpress.com' || host.endsWith('.aliexpress.com')) {
       return /\/item\/(\d+)/i.test(path) || /_p(\d+)/i.test(path);
+    }
+    // Parceiros AWIN ou e-commerces universais (Drogal, VTEX, Dafiti, Centauro, etc.)
+    if (
+      /\/p(\?|$|\/)/i.test(path) ||
+      /\/produto[\/-]/i.test(path) ||
+      /\/pdp[\/-]/i.test(path) ||
+      /\/item[\/-]/i.test(path) ||
+      /\/(?:dp|d)\/[A-Z0-9]+/i.test(path) ||
+      /\.html?$/i.test(path)
+    ) {
+      return true;
     }
     return false;
   }
@@ -997,10 +1314,33 @@
       else if (url.includes('magazineluiza.com.br') || url.includes('magazinevoce.com.br'))
         marketplaceKind = 'MAGALU';
       else if (url.includes('aliexpress.com')) marketplaceKind = 'ALIEXPRESS';
+      else marketplaceKind = 'AWIN';
+
+      let affiliateUrl = undefined;
+      if (marketplaceKind === 'AWIN') {
+        const { awinPartners, awinPublisherId } = await chrome.storage.local.get([
+          'awinPartners',
+          'awinPublisherId',
+        ]);
+        const host = window.location.hostname.replace(/^www\./, '').toLowerCase();
+        let partner = awinPartners && awinPartners[host];
+        if (!partner && awinPartners) {
+          partner = Object.values(awinPartners).find(
+            (p) => host === p.domain || host.endsWith(`.${p.domain}`),
+          );
+        }
+        if (!partner && host.includes('drogal')) {
+          partner = { advertiserId: '68224' };
+        }
+        const mid = partner?.advertiserId || '68224';
+        const pub = awinPublisherId || '691887';
+        affiliateUrl = `https://www.awin1.com/cread.php?awinmid=${mid}&awinaffid=${pub}&platform=dl&ued=${encodeURIComponent(url)}`;
+      }
 
       const payload = {
         url,
         marketplaceKind,
+        ...(affiliateUrl ? { affiliateUrl } : {}),
         ...(product.title ? { title: product.title } : {}),
         ...(product.price !== null && product.price !== undefined ? { price: product.price } : {}),
         ...(product.originalPrice ? { originalPrice: product.originalPrice } : {}),
@@ -1271,13 +1611,19 @@
       const apiToken = saved.apiToken;
       if (!apiToken) return;
 
-      const res = await fetch(`${apiUrl}/api/v1/extension/coupons?store=${store.key}`, {
+      const host = window.location.hostname.replace(/^www\./, '').toLowerCase();
+      let queryUrl = `${apiUrl}/api/v1/extension/coupons?store=${store.key}`;
+      if (store.key === 'AWIN') {
+        queryUrl += `&domain=${encodeURIComponent(host)}`;
+      }
+      const res = await fetch(queryUrl, {
         headers: { Authorization: `Bearer ${apiToken}` },
       });
       if (!res.ok) return;
-      const coupons = await res.json();
-      if (Array.isArray(coupons) && coupons.length > 0) {
-        renderCartCouponPanel(coupons, store, apiUrl, apiToken);
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : data?.coupons || [];
+      if (list.length > 0) {
+        renderCartCouponPanel(list, store, apiUrl, apiToken);
       }
     } catch {}
   }
@@ -1327,8 +1673,54 @@
     return buttons;
   }
 
+  async function shouldInjectButtons() {
+    const url = window.location.href;
+    if (
+      url.includes('mercadolivre.com.br') ||
+      url.includes('amazon.com.br') ||
+      url.includes('magazineluiza.com.br') ||
+      url.includes('magazinevoce.com.br') ||
+      url.includes('shopee.com.br') ||
+      url.includes('aliexpress.com')
+    ) {
+      return true;
+    }
+    const host = window.location.hostname.replace(/^www\./, '').toLowerCase();
+    if (host === 'drogal.com.br' || host.endsWith('.drogal.com.br')) return true;
+    const DEFAULT_PARTNERS = [
+      'centauro.com.br',
+      'dafiti.com.br',
+      'nike.com.br',
+      'boticario.com.br',
+      'sephora.com.br',
+      'fastshop.com.br',
+      'netshoes.com.br',
+      'zattini.com.br',
+    ];
+    if (DEFAULT_PARTNERS.some((p) => host === p || host.endsWith(`.${p}`))) return true;
+    if (typeof chrome !== 'undefined' && chrome.storage) {
+      try {
+        const { awinPartners } = await chrome.storage.local.get(['awinPartners']);
+        if (awinPartners) {
+          if (awinPartners[host]) return true;
+          if (
+            Object.values(awinPartners).some(
+              (p) => host === p.domain || host.endsWith(`.${p.domain}`),
+            )
+          ) {
+            return true;
+          }
+        }
+      } catch {}
+    }
+    return false;
+  }
+
   // Injeta após carregar a página
-  function injectButtons() {
+  async function injectButtons() {
+    const supported = await shouldInjectButtons();
+    if (!supported) return;
+
     injectFloatingButton();
     injectCopyLinksButton();
     void initCartCouponPanel();

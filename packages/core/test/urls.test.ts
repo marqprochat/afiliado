@@ -69,6 +69,28 @@ describe('parseProductUrl — Awin', () => {
     expect(result).toEqual({ source: 'AWIN' });
     expect('externalId' in result).toBe(false);
   });
+
+  it('reconhece parceiro parceiro Drogal BR e retorna source AWIN com advertiserId 68224', () => {
+    const result = parseProductUrl(
+      'https://www.drogal.com.br/suplemento-alimentar-digeliv-sabor-laranja-15-comprimidos-mastigaveis/p',
+    );
+    expect(result).toEqual({
+      source: 'AWIN',
+      advertiserId: '68224',
+    });
+  });
+
+  it('reconhece parceiro dinâmico informado em awinPartners', () => {
+    const result = parseProductUrl('https://www.loja-parceira.com.br/produto/123', {
+      awinPartners: {
+        'loja-parceira.com.br': { advertiserId: '998877' },
+      },
+    });
+    expect(result).toEqual({
+      source: 'AWIN',
+      advertiserId: '998877',
+    });
+  });
 });
 
 describe('parseProductUrl — AliExpress', () => {

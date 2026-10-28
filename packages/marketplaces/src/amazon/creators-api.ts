@@ -201,6 +201,7 @@ export interface AmazonApiItem {
 }
 
 interface AmazonGetItemsResponse {
+  itemsResult?: { items?: AmazonApiItem[] };
   itemResults?: { items?: AmazonApiItem[] };
   errors?: Array<{ code?: string; message?: string }>;
 }
@@ -251,7 +252,7 @@ async function getItemsBatch(
     throw new AmazonApiError(`GetItems respondeu HTTP ${res.status}`, 'AMAZON_API_ERROR');
   }
   const data = (await res.json()) as AmazonGetItemsResponse;
-  return data.itemResults?.items ?? [];
+  return data.itemsResult?.items ?? data.itemResults?.items ?? [];
 }
 
 /** ASINs em lotes de até 10 (limite do GetItems), respeitando o rate limit entre lotes. */

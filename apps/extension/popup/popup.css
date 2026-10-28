@@ -205,9 +205,10 @@ body {
 .p-img {
   width: 68px;
   height: 68px;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 6px;
-  background: #1e293b;
+  background: #ffffff;
+  padding: 2px;
   border: 1px solid #334155;
 }
 
@@ -257,6 +258,73 @@ body {
   font-size: 11px;
   color: #38bdf8;
   margin-top: 2px;
+}
+
+.p-coupon-box {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px dashed rgba(16, 185, 129, 0.4);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-top: 8px;
+  margin-bottom: 10px;
+}
+
+.p-coupon-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.p-coupon-icon {
+  font-size: 14px;
+}
+
+.p-coupon-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #10b981;
+}
+
+.p-coupon-badge {
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: 700;
+  background: #10b981;
+  color: #022c22;
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+
+.btn-coupon-toggle {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0 4px;
+  margin-left: auto;
+}
+.btn-coupon-toggle:hover {
+  color: #ef4444;
+}
+
+.p-coupon-desc {
+  font-size: 11px;
+  color: #cbd5e1;
+  margin-top: 4px;
+  line-height: 1.3;
+}
+
+.p-coupon-select {
+  margin-top: 6px;
+  padding: 4px 6px;
+  font-size: 11px;
+  height: 28px;
+  background: #0f172a;
+  color: #f8fafc;
+  border: 1px solid #334155;
+  border-radius: 4px;
 }
 
 /* Pílulas de identificação inteligente */
@@ -418,6 +486,72 @@ body {
 
 .msg-error {
   color: #f87171;
+}
+
+.badge-awin {
+  background: #ea580c;
+  color: #fff;
+}
+
+.partner-store-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f8fafc;
+  margin-bottom: 8px;
+}
+
+.input-readonly {
+  background: #060911;
+  color: #cbd5e1;
+  cursor: text;
+  font-size: 11px;
+}
+
+.input-tracking {
+  color: #34d399;
+  border-color: #065f46;
+  font-weight: 500;
+}
+
+.link-builder-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.btn-secondary-outline {
+  flex: 1;
+  padding: 8px 10px;
+  font-size: 12px;
+  background: #1e293b;
+  border: 1px solid #475569;
+  color: #f1f5f9;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-top: 0;
+}
+
+.btn-secondary-outline:hover {
+  background: #334155;
+  border-color: #64748b;
+}
+
+.btn-action-copy {
+  flex: 1.2;
+  padding: 8px 10px;
+  font-size: 12px;
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 0;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.2);
+}
+
+.btn-action-copy:hover {
+  opacity: 0.92;
 }
 
 .hidden {

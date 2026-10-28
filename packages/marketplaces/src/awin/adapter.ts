@@ -1,6 +1,7 @@
 import type { AwinCredentials, ConnectionStatus, MarketplaceAdapter } from '../adapter';
 import { UnsupportedError } from '../tag-adapter';
 import { listDatafeeds, type AwinDatafeedOptions } from './datafeed';
+import { buildAwinTrackingLink, DEFAULT_AWIN_PARTNERS } from './programmes';
 
 export function createAwinAdapter(
   opts: AwinDatafeedOptions = {},
@@ -40,22 +41,38 @@ export function createAwinAdapter(
       return [];
     },
 
-    async toAffiliateLink(_creds, url, subId) {
+    async toAffiliateLink(creds, url, subId) {
       let hostname: string;
       try {
-        hostname = new URL(url).hostname.replace(/^www\./, '');
+        hostname = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
       } catch {
         hostname = '';
       }
-      if (hostname !== 'awin1.com') {
-        throw new UnsupportedError(
-          'Awin: só é possível gerar link de afiliado para produtos vindos do catálogo importado',
-        );
+
+      // 1. Se já for um deep link do awin1.com
+      if (hostname === 'awin1.com') {
+        if (!subId) return url;
+        const u = new URL(url);
+        u.searchParams.set('clickref', subId);
+        return u.toString();
       }
-      if (!subId) return url;
-      const u = new URL(url);
-      u.searchParams.set('clickref', subId);
-      return u.toString();
+
+      // 2. Se for um site parceiro (ex: drogal.com.br)
+      const partners = { ...DEFAULT_AWIN_PARTNERS, ...(creds?.partners || {}) };
+      const partner = partners[hostname];
+
+      if (partner && creds?.publisherId) {
+        return buildAwinTrackingLink({
+          publisherId: creds.publisherId,
+          advertiserId: partner.advertiserId,
+          destinationUrl: url,
+          ...(subId ? { subId } : {}),
+        });
+      }
+
+      throw new UnsupportedError(
+        'Awin: só é possível gerar link de afiliado para produtos de parceiros Awin aprovados ou do catálogo importado',
+      );
     },
   };
 }

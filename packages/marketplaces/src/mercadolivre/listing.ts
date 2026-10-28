@@ -80,9 +80,13 @@ export function cleanMlProductUrl(href: string): string | undefined {
 
 /** A página de "verificação de conta" do anti-bot (HTTP 200, sem produtos). */
 export function isMlVerificationPage(finalUrl: string, html: string): boolean {
-  if (/\/gz\/account-verification/.test(finalUrl)) return true;
+  if (/\/gz\/account-verification|\/captcha\//i.test(finalUrl)) return true;
   const hasCards = /poly-card|dynamic-carousel__item-container/.test(html);
-  return !hasCards && /suspicious-traffic|account-verification/.test(html);
+  return (
+    !hasCards &&
+    (/suspicious-traffic|account-verification|captcha-wall|abuse-captcha/i.test(html) ||
+      /\/captcha\//i.test(finalUrl))
+  );
 }
 
 const clean = (s: string) => s.replace(/\s+/g, ' ').trim();

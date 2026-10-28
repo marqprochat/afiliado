@@ -24,6 +24,35 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnDiscover = document.getElementById('btn-discover');
   const discoverMsg = document.getElementById('discover-msg');
 
+  // Elementos do Link Builder (AWIN)
+  const linkBuilderSection = document.getElementById('link-builder-section');
+  const linkBuilderBadge = document.getElementById('link-builder-badge');
+  const linkBuilderStore = document.getElementById('link-builder-store');
+  const linkBuilderOrig = document.getElementById('link-builder-orig');
+  const linkBuilderTracking = document.getElementById('link-builder-tracking');
+  const btnShortenTracking = document.getElementById('btn-shorten-tracking');
+  const btnCopyTracking = document.getElementById('btn-copy-tracking');
+  const linkBuilderStatus = document.getElementById('link-builder-status');
+
+  // Elementos de Cupom
+  const pCouponSection = document.getElementById('p-coupon-section');
+  const pCouponBadge = document.getElementById('p-coupon-badge');
+  const pCouponDesc = document.getElementById('p-coupon-desc');
+  const pCouponSelect = document.getElementById('p-coupon-select');
+  const btnRemoveCoupon = document.getElementById('btn-remove-coupon');
+  let activeStoreCoupons = [];
+
+  let currentAwinTrackingLink = '';
+  let awinPartners = {
+    'drogal.com.br': {
+      advertiserId: '68224',
+      name: 'Drogal BR',
+      domain: 'drogal.com.br',
+      displayUrl: 'https://www.drogal.com.br',
+    },
+  };
+  let awinPublisherId = null;
+
   // Elementos das Abas
   const tabBtnPage = document.getElementById('tab-btn-page');
   const tabBtnGroup = document.getElementById('tab-btn-group');
@@ -66,6 +95,100 @@ document.addEventListener('DOMContentLoaded', async () => {
     tabGroupView.classList.remove('hidden');
     tabPageView.classList.add('hidden');
   });
+
+  // Copiar link de afiliado gerado (Link Builder)
+  btnCopyTracking.addEventListener('click', async () => {
+    const textToCopy = linkBuilderTracking.value || currentAwinTrackingLink;
+    if (!textToCopy) return;
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      btnCopyTracking.textContent = '✓ Copiado!';
+      linkBuilderStatus.textContent = '✅ Link copiado para a área de transferência!';
+      linkBuilderStatus.className = 'msg msg-success';
+      setTimeout(() => {
+        btnCopyTracking.textContent = '📋 Copiar Link';
+      }, 2500);
+    } catch {
+      linkBuilderStatus.textContent = '❌ Falha ao copiar link.';
+      linkBuilderStatus.className = 'msg msg-error';
+    }
+  });
+
+  // Encurtar link via API da AWIN
+  btnShortenTracking.addEventListener('click', async () => {
+    if (!isAuthed) {
+      linkBuilderStatus.textContent = '❌ Conecte à sua conta para encurtar com a API da AWIN.';
+      linkBuilderStatus.className = 'msg msg-error';
+      return;
+    }
+    const origUrl = linkBuilderOrig.value;
+    if (!origUrl) return;
+
+    btnShortenTracking.disabled = true;
+    linkBuilderStatus.textContent = 'Encurtando link via API da AWIN...';
+    linkBuilderStatus.className = 'msg';
+
+    try {
+      const res = await fetch(`${normalizeApiUrl(config.apiUrl)}/api/v1/extension/awin/generate-link`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${config.apiToken}`,
+        },
+        body: JSON.stringify({
+          destinationUrl: origUrl,
+          shorten: true,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.url) {
+          linkBuilderTracking.value = data.url;
+          currentAwinTrackingLink = data.url;
+          linkBuilderStatus.textContent = '✅ Link encurtado via API AWIN!';
+          linkBuilderStatus.className = 'msg msg-success';
+        }
+      } else {
+        const err = await res.json().catch(() => null);
+        linkBuilderStatus.textContent = `❌ ${err?.error?.message || 'Falha ao encurtar link'}`;
+        linkBuilderStatus.className = 'msg msg-error';
+      }
+    } catch {
+      linkBuilderStatus.textContent = '❌ Erro de conexão com a API';
+      linkBuilderStatus.className = 'msg msg-error';
+    } finally {
+      btnShortenTracking.disabled = false;
+    }
+  });
+
+  async function syncAwinPartners() {
+    if (typeof chrome !== 'undefined' && chrome.storage) {
+      const saved = await chrome.storage.local.get(['awinPartners', 'awinPublisherId']);
+      if (saved.awinPartners) awinPartners = { ...awinPartners, ...saved.awinPartners };
+      if (saved.awinPublisherId) awinPublisherId = saved.awinPublisherId;
+    }
+
+    if (!isAuthed) return;
+
+    try {
+      const res = await fetch(`${normalizeApiUrl(config.apiUrl)}/api/v1/extension/awin/partners`, {
+        headers: { Authorization: `Bearer ${config.apiToken}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.partners) {
+          awinPartners = { ...awinPartners, ...data.partners };
+        }
+        if (data.publisherId) {
+          awinPublisherId = data.publisherId;
+        }
+        if (typeof chrome !== 'undefined' && chrome.storage) {
+          await chrome.storage.local.set({ awinPartners, awinPublisherId });
+        }
+      }
+    } catch {}
+  }
 
   function renderDiscovery(results) {
     if (!results || results.length === 0) {
@@ -636,6 +759,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         .sendMessage({ action: 'SYNC_ML_SESSION' })
         .then(renderMlSession)
         .catch(() => {});
+      void syncAwinPartners();
       setTimeout(() => inspectCurrentTab(), 500);
       void loadCaptureTargets();
     }
@@ -652,38 +776,248 @@ document.addEventListener('DOMContentLoaded', async () => {
     currentTabId = tab.id;
     let marketplaceKind = null;
 
+    let hostname = '';
+    try {
+      hostname = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+    } catch {}
+
+    let currentAwinPartner = null;
+
     if (url.includes('mercadolivre.com.br')) marketplaceKind = 'MERCADOLIVRE';
     else if (url.includes('amazon.com.br')) marketplaceKind = 'AMAZON';
     else if (url.includes('magazineluiza.com.br') || url.includes('magazinevoce.com.br'))
       marketplaceKind = 'MAGALU';
     else if (url.includes('shopee.com.br')) marketplaceKind = 'SHOPEE';
     else if (url.includes('aliexpress.com')) marketplaceKind = 'ALIEXPRESS';
+    else if (hostname) {
+      if (awinPartners[hostname]) {
+        currentAwinPartner = awinPartners[hostname];
+        marketplaceKind = 'AWIN';
+      } else {
+        const found = Object.values(awinPartners).find(
+          (p) => hostname === p.domain || hostname.endsWith(`.${p.domain}`),
+        );
+        if (found) {
+          currentAwinPartner = found;
+          marketplaceKind = 'AWIN';
+        }
+      }
+    }
 
     if (!marketplaceKind) {
+      if (linkBuilderSection) linkBuilderSection.classList.add('hidden');
       productSection.classList.add('hidden');
       unsupportedSection.classList.remove('hidden');
       return;
     }
 
+    // Configura o Link Builder para parceiros AWIN
+    if (marketplaceKind === 'AWIN') {
+      const advertiserId = currentAwinPartner?.advertiserId || '68224';
+      const partnerName = currentAwinPartner?.name || 'Drogal BR';
+      const pubId = awinPublisherId || '691887';
+
+      currentAwinTrackingLink = `https://www.awin1.com/cread.php?awinmid=${advertiserId}&awinaffid=${pubId}&platform=dl&ued=${encodeURIComponent(url)}`;
+
+      if (linkBuilderSection) {
+        linkBuilderStore.textContent = partnerName;
+        linkBuilderOrig.value = url;
+        linkBuilderTracking.value = currentAwinTrackingLink;
+        linkBuilderStatus.textContent = '';
+        linkBuilderSection.classList.remove('hidden');
+      }
+    } else if (linkBuilderSection) {
+      linkBuilderSection.classList.add('hidden');
+    }
+
+    let pageProduct = null;
     try {
       const response = await chrome.tabs.sendMessage(tab.id, { action: 'GET_PRODUCT_DATA' });
       if (response && response.product) {
-        currentProduct = {
-          ...response.product,
-          url,
-          marketplaceKind,
-        };
+        pageProduct = response.product;
       }
     } catch {
-      currentProduct = {
-        url,
-        marketplaceKind,
-        title: tab.title || 'Produto detectado na página',
-      };
+      // Content script pode não ter sido injetado ainda na aba (ex: aberta antes da extensão)
+      if (chrome.scripting && chrome.scripting.executeScript && tab.id) {
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['content/coupon-stores.js', 'content/content.js'],
+          });
+          const retryRes = await chrome.tabs.sendMessage(tab.id, { action: 'GET_PRODUCT_DATA' });
+          if (retryRes && retryRes.product) {
+            pageProduct = retryRes.product;
+          }
+        } catch {
+          // Extração direta inline no contexto da página como fallback
+          try {
+            const [evalRes] = await chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              func: () => {
+                const title =
+                  document.querySelector('h1')?.textContent?.trim() ||
+                  document.querySelector('meta[property="og:title"]')?.getAttribute('content') ||
+                  document.title;
+                const images = [];
+                const og =
+                  document.querySelector('meta[property="og:image:secure_url"]')?.getAttribute('content') ||
+                  document.querySelector('meta[property="og:image"]')?.getAttribute('content') ||
+                  document.querySelector('meta[name="twitter:image"]')?.getAttribute('content');
+                if (og && og.startsWith('http')) images.push(og);
+                if (images.length === 0) {
+                  for (const img of Array.from(document.querySelectorAll('img'))) {
+                    if (img.src && img.src.startsWith('http') && !/logo|icon|badge|avatar|flag/i.test(img.src)) {
+                      const w = img.naturalWidth || img.clientWidth || 0;
+                      if (w >= 100) {
+                        images.push(img.src);
+                        break;
+                      }
+                    }
+                  }
+                }
+                let price = null;
+                const metaP =
+                  document.querySelector('meta[property="product:price:amount"]')?.getAttribute('content') ||
+                  document.querySelector('meta[property="og:price:amount"]')?.getAttribute('content');
+                if (metaP) {
+                  const p = parseFloat(metaP.replace(',', '.'));
+                  if (!isNaN(p) && p > 0) price = p;
+                }
+                return { title, images, price };
+              },
+            });
+            if (evalRes && evalRes.result) {
+              pageProduct = evalRes.result;
+            }
+          } catch {}
+        }
+      }
     }
 
+    currentProduct = {
+      ...(pageProduct || {}),
+      url,
+      marketplaceKind,
+      title: pageProduct?.title || tab.title || 'Produto detectado na página',
+      ...(currentAwinTrackingLink ? { affiliateUrl: currentAwinTrackingLink } : {}),
+    };
+
+    await loadCouponsForCurrentProduct(marketplaceKind, currentAwinPartner, hostname);
     renderProductPreview(currentProduct);
   }
+
+  async function loadCouponsForCurrentProduct(marketplaceKind, awinPartner, hostname) {
+    if (!config.apiToken) return;
+    activeStoreCoupons = [];
+
+    let queryParams = `store=${encodeURIComponent(marketplaceKind)}`;
+    if (marketplaceKind === 'AWIN') {
+      const advId = awinPartner?.advertiserId;
+      if (advId) queryParams += `&advertiserId=${encodeURIComponent(advId)}`;
+      if (hostname) queryParams += `&domain=${encodeURIComponent(hostname)}`;
+    }
+
+    try {
+      const res = await fetch(
+        `${normalizeApiUrl(config.apiUrl)}/api/v1/extension/coupons?${queryParams}`,
+        {
+          headers: { Authorization: `Bearer ${config.apiToken}` },
+        },
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : data?.coupons || [];
+        if (list.length > 0) {
+          activeStoreCoupons = list;
+
+          // Se o produto não tinha cupom ainda, aplica o primeiro automaticamente
+          if (!currentProduct.couponCode) {
+            currentProduct.couponCode = activeStoreCoupons[0].code;
+            if (activeStoreCoupons[0].discountValue) {
+              currentProduct.couponValue = activeStoreCoupons[0].discountValue;
+            }
+          }
+        }
+      }
+    } catch {}
+
+    renderCouponSection();
+  }
+
+  function renderCouponSection() {
+    if (!pCouponSection) return;
+
+    if (!currentProduct || (!currentProduct.couponCode && activeStoreCoupons.length === 0)) {
+      pCouponSection.classList.add('hidden');
+      return;
+    }
+
+    const currentCode = currentProduct.couponCode;
+    const matched = activeStoreCoupons.find(
+      (c) => c.code.toUpperCase() === (currentCode || '').toUpperCase(),
+    );
+
+    if (currentCode) {
+      pCouponSection.classList.remove('hidden');
+      pCouponBadge.textContent = currentCode;
+      pCouponDesc.textContent =
+        matched?.description ||
+        matched?.terms ||
+        (currentProduct.couponValue
+          ? `Desconto de R$ ${currentProduct.couponValue.toFixed(2)}`
+          : 'Cupom aplicado à mensagem');
+    } else {
+      pCouponBadge.textContent = 'Nenhum';
+      pCouponDesc.textContent = 'Nenhum cupom selecionado';
+    }
+
+    if (activeStoreCoupons.length > 0) {
+      pCouponSelect.innerHTML = '';
+      const optNone = document.createElement('option');
+      optNone.value = '';
+      optNone.textContent = '— Sem cupom —';
+      pCouponSelect.appendChild(optNone);
+
+      for (const c of activeStoreCoupons) {
+        const opt = document.createElement('option');
+        opt.value = c.code;
+        const discountLabel = c.discountValue ? ` (-R$ ${c.discountValue.toFixed(2)})` : '';
+        const titleText = c.description || c.advertiserName || '';
+        opt.textContent = `🎟️ ${c.code}${discountLabel}${titleText ? ` — ${titleText}` : ''}`.slice(
+          0,
+          48,
+        );
+        if (currentCode && c.code.toUpperCase() === currentCode.toUpperCase()) {
+          opt.selected = true;
+        }
+        pCouponSelect.appendChild(opt);
+      }
+      pCouponSelect.classList.remove('hidden');
+    } else {
+      pCouponSelect.classList.add('hidden');
+    }
+  }
+
+  pCouponSelect?.addEventListener('change', () => {
+    const val = pCouponSelect.value;
+    if (val) {
+      const found = activeStoreCoupons.find((c) => c.code === val);
+      currentProduct.couponCode = val;
+      currentProduct.couponValue = found?.discountValue ?? null;
+    } else {
+      currentProduct.couponCode = null;
+      currentProduct.couponValue = null;
+    }
+    renderCouponSection();
+    renderProductPreview(currentProduct);
+  });
+
+  btnRemoveCoupon?.addEventListener('click', () => {
+    currentProduct.couponCode = null;
+    currentProduct.couponValue = null;
+    pCouponSection.classList.add('hidden');
+    renderProductPreview(currentProduct);
+  });
 
   function renderProductPreview(p) {
     if (!p) return;
@@ -716,6 +1050,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (p.images && p.images.length > 0) {
       imgEl.src = p.images[0];
       imgEl.classList.remove('hidden');
+      imgEl.onerror = () => {
+        imgEl.classList.add('hidden');
+      };
     } else {
       imgEl.classList.add('hidden');
     }
@@ -732,6 +1069,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     return {
       url: product.url,
       marketplaceKind: product.marketplaceKind,
+      ...(product.affiliateUrl || currentAwinTrackingLink
+        ? { affiliateUrl: product.affiliateUrl || currentAwinTrackingLink }
+        : {}),
       ...(product.title ? { title: product.title } : {}),
       ...(product.price !== null && product.price !== undefined ? { price: product.price } : {}),
       ...(product.originalPrice ? { originalPrice: product.originalPrice } : {}),
@@ -739,6 +1079,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       ...(product.images && product.images.length > 0 ? { images: product.images } : {}),
       ...(product.shipping && product.shipping !== 'UNKNOWN' ? { shipping: product.shipping } : {}),
       ...(product.couponCode ? { couponCode: product.couponCode } : {}),
+      ...(product.couponValue ? { couponValue: product.couponValue } : {}),
       ...(target.kind === 'rule' ? { automationRuleId: target.id } : {}),
       ...(target.kind === 'batch'
         ? { batchId: target.id, ...(batchPosition ? { batchPosition } : {}) }
@@ -893,8 +1234,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  await syncAwinPartners();
+  inspectCurrentTab();
   if (isAuthed) {
-    inspectCurrentTab();
     renderMlSession();
   }
 });

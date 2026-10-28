@@ -15,6 +15,7 @@ export interface AwinCredentials {
   feedIds: string[];
   publisherId?: string | undefined;
   offersApiToken?: string | undefined;
+  partners?: Record<string, { advertiserId: string; name: string }> | undefined;
 }
 
 export interface AliexpressCredentials {

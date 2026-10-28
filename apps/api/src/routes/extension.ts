@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma, forTenant, getParentTenantId } from '@afilados/db';
 import {
   couponVerifySchema,
+  extensionAwinGenerateLinkSchema,
   extensionCaptureSchema,
   extensionConvertTextSchema,
   extensionDiscoverSchema,
@@ -17,7 +18,13 @@ import { matchesDiscoveryFilters } from '../lib/discovery-filters';
 import { toApiProduct, upsertProducts } from '../lib/products';
 import { toApiCoupon } from '../lib/coupons';
 import { fetchAwinCatalogByUrls } from '../lib/awin-catalog';
+import { scrapeProductMeta } from '../lib/product-scraper';
 import { convertOfferText } from '../lib/affiliate-converter';
+import {
+  generateAwinLinkForTenant,
+  getAwinPartnersForTenant,
+  getAwinCouponsForTenant,
+} from '../lib/awin-partners';
 
 import {
   getAliexpressAdapter,
@@ -130,6 +137,36 @@ export async function extensionRoutes(app: FastifyInstance) {
     return { ok: true, ...result };
   });
 
+  // 1.9 Lista anunciantes parceiros da Awin aprovados para o usuário
+  app.get('/extension/awin/partners', async (req) => {
+    const { tenantId } = await authenticateExtension(req);
+    const { publisherId, partners } = await getAwinPartnersForTenant(tenantId);
+    return {
+      ok: true,
+      publisherId,
+      partners,
+    };
+  });
+
+  // 1.10 Gera tracking link da Awin para uma URL de produto parceiro (opcionalmente encurtado)
+  app.post('/extension/awin/generate-link', async (req) => {
+    const { tenantId } = await authenticateExtension(req);
+    const body = extensionAwinGenerateLinkSchema.parse(req.body);
+    try {
+      const result = await generateAwinLinkForTenant(tenantId, {
+        destinationUrl: body.destinationUrl,
+        ...(body.advertiserId !== undefined ? { advertiserId: body.advertiserId } : {}),
+        ...(body.shorten !== undefined ? { shorten: body.shorten } : {}),
+      });
+      return {
+        ok: true,
+        ...result,
+      };
+    } catch (e: any) {
+      throw new ApiError('MARKETPLACE_ERROR', e?.message || 'Falha ao gerar link da Awin', 400);
+    }
+  });
+
   // 2. Captura de produto da aba ativa diretamente pela extensão
   app.post('/extension/capture', async (req) => {
     const { tenantId } = await authenticateExtension(req);
@@ -174,14 +211,38 @@ export async function extensionRoutes(app: FastifyInstance) {
         originalUrl: body.url,
         raw: { source: 'extension-capture', ...body },
       };
+      if (productData.images.length === 0) {
+        const scraped = await scrapeProductMeta(body.url);
+        if (scraped.images.length > 0) {
+          productData.images = scraped.images;
+        }
+      }
     } else {
       // Faz scraping via adapter (Shopee usa a API oficial com as credenciais do tenant)
-      let list: ProductData[];
+      let list: ProductData[] = [];
       if (body.marketplaceKind === 'SHOPEE') {
         const { creds } = await loadShopeeCredentials(tenantDb);
         list = await getShopeeAdapter().fetchByUrls(creds, [body.url]);
       } else if (body.marketplaceKind === 'AWIN') {
         list = await fetchAwinCatalogByUrls(tenantDb, [body.url]);
+        if (list.length === 0) {
+          const scraped = await scrapeProductMeta(body.url);
+          if (scraped.title && scraped.price !== undefined) {
+            list = [
+              {
+                source: 'AWIN',
+                title: scraped.title,
+                price: scraped.price,
+                ...(scraped.originalPrice !== undefined ? { originalPrice: scraped.originalPrice } : {}),
+                ...(scraped.discountPct !== undefined ? { discountPct: scraped.discountPct } : {}),
+                images: scraped.images,
+                shipping: 'UNKNOWN',
+                originalUrl: body.url,
+                raw: { source: 'extension-capture-scraped', ...body },
+              },
+            ];
+          }
+        }
       } else if (body.marketplaceKind === 'ALIEXPRESS') {
         const creds = await loadAliexpressCredentials(tenantDb);
         list = await getAliexpressAdapter().fetchByUrls(creds, [body.url]);
@@ -194,6 +255,18 @@ export async function extensionRoutes(app: FastifyInstance) {
         throw ApiError.validation('Não foi possível extrair os dados da página');
       }
       productData = first;
+    }
+
+    if (body.marketplaceKind === 'AWIN' && !productData.couponCode) {
+      try {
+        const awinCoupons = await getAwinCouponsForTenant(tenantId, { domain: body.url });
+        if (awinCoupons.length > 0 && awinCoupons[0]?.code) {
+          productData.couponCode = awinCoupons[0].code;
+          if (awinCoupons[0].discountValue) {
+            productData.couponValue = Number(awinCoupons[0].discountValue);
+          }
+        }
+      } catch {}
     }
 
     const [savedProduct] = await upsertProducts(tenantDb, tenantId, [productData]);
@@ -414,6 +487,9 @@ export async function extensionRoutes(app: FastifyInstance) {
   // 4. Cupons para a extensão (carrinho e captura)
   const extensionCouponQuerySchema = z.object({
     store: z.enum(MARKETPLACE_KINDS).optional(),
+    advertiserId: z.string().optional(),
+    scope: z.string().optional(),
+    domain: z.string().optional(),
   });
 
   const extensionCouponCreateSchema = z.object({
@@ -442,13 +518,21 @@ export async function extensionRoutes(app: FastifyInstance) {
     const q = extensionCouponQuerySchema.parse(req.query);
     const db = forTenant(tenantId);
 
-    const rows = await db.coupon.findMany({
-      where: {
-        status: { in: ['VALID', 'UNVERIFIED'] },
-        ...(q.store ? { store: q.store } : {}),
-      },
-      orderBy: { fetchedAt: 'desc' },
-    });
+    let rows: any[];
+    if (q.store === 'AWIN') {
+      rows = await getAwinCouponsForTenant(tenantId, {
+        advertiserId: q.advertiserId || q.scope,
+        domain: q.domain,
+      });
+    } else {
+      rows = await db.coupon.findMany({
+        where: {
+          status: { in: ['VALID', 'UNVERIFIED'] },
+          ...(q.store ? { store: q.store } : {}),
+        },
+        orderBy: { fetchedAt: 'desc' },
+      });
+    }
 
     const sorted = [...rows].sort((a, b) => {
       const statusDiff = (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99);
@@ -465,8 +549,11 @@ export async function extensionRoutes(app: FastifyInstance) {
       coupons: sorted.map((c) => ({
         id: c.id,
         store: c.store,
+        scope: c.scope,
+        advertiserName: c.advertiserName,
         code: c.code,
         description: c.description,
+        terms: c.terms,
         minSpend: c.minSpend ? Number(c.minSpend) : null,
         discountType: c.discountType,
         discountValue: c.discountValue ? Number(c.discountValue) : null,

@@ -75,9 +75,18 @@ describe('isMlVerificationPage', () => {
       isMlVerificationPage('https://www.mercadolivre.com.br/gz/account-verification?go=x', ''),
     ).toBe(true);
     expect(
+      isMlVerificationPage('https://www.mercadolivre.com.br/captcha/wall/logged?go_url=x', ''),
+    ).toBe(true);
+    expect(
       isMlVerificationPage(
         'https://www.mercadolivre.com.br/ofertas',
         '<link href=".../suspicious-traffic-frontend/gz-account-verification-index.css">',
+      ),
+    ).toBe(true);
+    expect(
+      isMlVerificationPage(
+        'https://www.mercadolivre.com.br/ofertas',
+        '<link href=".../abuse-captcha-mobile-frontend/captcha-wall-logged-index.css">',
       ),
     ).toBe(true);
     expect(isMlVerificationPage('https://www.mercadolivre.com.br/ofertas', polyCard())).toBe(false);

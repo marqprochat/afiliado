@@ -1,17 +1,24 @@
 import type { MarketplaceKind } from '@afilados/shared';
 
 export type ParsedProductUrl =
-  | { source: MarketplaceKind; externalId?: string; shopId?: string }
+  | { source: MarketplaceKind; externalId?: string; shopId?: string; advertiserId?: string }
   | { source: 'UNSUPPORTED'; reason: string };
 
-export function parseProductUrl(raw: string): ParsedProductUrl {
+export interface ParseProductUrlOptions {
+  awinPartners?: Record<string, { advertiserId?: string }> | Set<string> | string[];
+}
+
+export function parseProductUrl(
+  raw: string,
+  options?: ParseProductUrlOptions,
+): ParsedProductUrl {
   let u: URL;
   try {
     u = new URL(raw);
   } catch {
     return { source: 'UNSUPPORTED', reason: 'URL inválida' };
   }
-  const host = u.hostname.replace(/^www\./, '');
+  const host = u.hostname.replace(/^www\./, '').toLowerCase();
   const path = u.pathname;
 
   if (host === 'shopee.com.br') {
@@ -51,5 +58,29 @@ export function parseProductUrl(raw: string): ParsedProductUrl {
     if (m) return { source: 'ALIEXPRESS', externalId: m[1]! };
     return { source: 'ALIEXPRESS' };
   }
+
+  // Verifica se é um domínio de parceiro da Awin
+  if (options?.awinPartners) {
+    if (Array.isArray(options.awinPartners) && options.awinPartners.includes(host)) {
+      return { source: 'AWIN' };
+    }
+    if (options.awinPartners instanceof Set && options.awinPartners.has(host)) {
+      return { source: 'AWIN' };
+    }
+    if (typeof options.awinPartners === 'object' && !(options.awinPartners instanceof Set)) {
+      const partner = (options.awinPartners as Record<string, { advertiserId?: string }>)[host];
+      if (partner) {
+        return partner.advertiserId
+          ? { source: 'AWIN', advertiserId: partner.advertiserId }
+          : { source: 'AWIN' };
+      }
+    }
+  }
+
+  // Fallback para parceiros Awin populares (ex: drogal.com.br)
+  if (host === 'drogal.com.br' || host.endsWith('.drogal.com.br')) {
+    return { source: 'AWIN', advertiserId: '68224' };
+  }
+
   return { source: 'UNSUPPORTED', reason: `Domínio ou formato não reconhecido: ${host}${path}` };
 }
