@@ -37,6 +37,9 @@ const TENANT_MODELS = new Set([
   'GroupMemberEvent',
   'GroupSnapshot',
   'LinkClickEvent',
+  'MasterProduct',
+  'ProductListing',
+  'PriceAlert',
 ]);
 
 const FILTERED_OPS = new Set([

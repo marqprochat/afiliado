@@ -2,6 +2,7 @@ export function formatBRL(n: number | null | undefined): string {
   if (n === null || n === undefined) return '—';
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }).replace(/ /g, ' ');
 }
+export const formatCurrency = formatBRL;
 
 export function formatDateTime(iso: string | Date | null | undefined): string {
   if (!iso) return '—';

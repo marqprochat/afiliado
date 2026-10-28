@@ -29,6 +29,7 @@ import { manualSendRoutes } from './routes/manual-send';
 import { groupLinksRoutes } from './routes/group-links';
 import { publicGroupLinksRoutes } from './routes/public-group-links';
 import { adminAffiliatesRoutes } from './routes/admin-affiliates';
+import { dealsRoutes } from './routes/deals';
 
 import { EventHub } from './lib/events';
 import { closeRedis } from './lib/redis';
@@ -88,6 +89,7 @@ export async function buildApp(opts: BuildAppOptions = {}) {
       await api.register(groupLinksRoutes);
       await api.register(publicGroupLinksRoutes);
       await api.register(adminAffiliatesRoutes);
+      await api.register(dealsRoutes);
     },
     { prefix: '/api/v1' },
   );

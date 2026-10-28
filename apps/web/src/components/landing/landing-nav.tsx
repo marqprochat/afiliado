@@ -2,12 +2,12 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, Flame, Users } from 'lucide-react';
 
 export function LandingNav() {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-[#0a0c10]/90 backdrop-blur-xl border-b border-emerald-500/20 py-3 shadow-2xl">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between">
         {/* Dudu Rocha Brand Logo */}
         <Link href="/landpage" className="flex items-center gap-3 group">
           <div className="relative h-10 w-auto px-3 py-1 bg-black/90 rounded-xl flex items-center gap-2.5 border border-emerald-500/40 shadow-inner">
@@ -27,10 +27,23 @@ export function LandingNav() {
           </div>
         </Link>
 
-        {/* Selo Simples e Direto */}
-        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[#25D366] text-xs font-bold">
-          <ShieldCheck className="w-3.5 h-3.5" />
-          <span>Grupos Oficiais</span>
+        {/* Links de Acesso */}
+        <div className="flex items-center gap-3">
+          <Link
+            href="/ofertas"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-[#25D366] text-xs font-extrabold transition cursor-pointer"
+          >
+            <Flame className="w-3.5 h-3.5" />
+            <span>Melhores Preços</span>
+          </Link>
+
+          <Link
+            href="/landpage"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/60 hover:bg-slate-850 border border-slate-800 text-slate-300 text-xs font-bold transition cursor-pointer"
+          >
+            <Users className="w-3.5 h-3.5 text-slate-400" />
+            <span>Grupos VIP</span>
+          </Link>
         </div>
       </div>
     </header>

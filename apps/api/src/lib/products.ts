@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Product, TenantClient } from '@afilados/db';
 import type { ProductData } from '@afilados/shared';
+import { indexProductInPriceEngine } from './price-engine';
 
 export function toApiProduct(p: Product) {
   return {
@@ -45,6 +46,12 @@ export async function upsertProducts(
       create: { source: it.source, externalId, ...data },
     });
     out.push(row);
+
+    // Indexação no PriceEngine para deduplicação, histórico de preço e alertas
+    indexProductInPriceEngine(db, tenantId, it).catch((err) => {
+      // Log sem travar o pipeline principal
+      console.error('[PriceEngine] Erro ao indexar produto:', err);
+    });
   }
   return out;
 }

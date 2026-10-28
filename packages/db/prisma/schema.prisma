@@ -46,6 +46,9 @@ model Tenant {
   groupMemberEvents    GroupMemberEvent[]
   groupSnapshots       GroupSnapshot[]
   linkClickEvents      LinkClickEvent[]
+  masterProducts       MasterProduct[]
+  productListings      ProductListing[]
+  priceAlerts          PriceAlert[]
 
   @@index([parentTenantId])
 }
@@ -838,4 +841,101 @@ model LinkClickEvent {
 
   @@index([tenantId, clickedAt])
   @@index([groupLinkId, clickedAt])
+}
+
+// ---------- PriceEngine & Deals Hub (Deduplicação, Histórico e Alertas) ----------
+
+model MasterProduct {
+  id                String           @id @default(cuid())
+  tenantId          String
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title             String
+  cleanTitle        String
+  slug              String
+  brand             String?
+  ean               String?
+  category          String?
+  imageUrl          String?
+  images            String[]         @default([])
+  lowestPriceEver   Decimal          @db.Decimal(12, 2)
+  averagePrice30d   Decimal?         @db.Decimal(12, 2)
+  currentBestPrice  Decimal          @db.Decimal(12, 2)
+  bestListingId     String?
+  listingsCount     Int              @default(1)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  listings          ProductListing[]
+  alerts            PriceAlert[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, ean])
+  @@index([tenantId, cleanTitle])
+  @@index([tenantId, currentBestPrice])
+  @@index([tenantId, lowestPriceEver])
+  @@index([tenantId, category])
+}
+
+model ProductListing {
+  id              String         @id @default(cuid())
+  tenantId        String
+  tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  masterProductId String
+  masterProduct   MasterProduct  @relation(fields: [masterProductId], references: [id], onDelete: Cascade)
+  source          ProductSource
+  storeName       String
+  externalId      String
+  title           String
+  originalUrl     String
+  affiliateUrl    String?
+  currentPrice    Decimal        @db.Decimal(12, 2)
+  originalPrice   Decimal?       @db.Decimal(12, 2)
+  discountPct     Int?
+  imageUrl        String?
+  inStock         Boolean        @default(true)
+  lastCheckedAt   DateTime       @default(now())
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  history         PriceHistory[]
+
+  @@unique([tenantId, source, externalId])
+  @@index([tenantId, masterProductId])
+  @@index([tenantId, currentPrice])
+  @@index([tenantId, source])
+}
+
+model PriceHistory {
+  id            String         @id @default(cuid())
+  listingId     String
+  listing       ProductListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  price         Decimal        @db.Decimal(12, 2)
+  originalPrice Decimal?       @db.Decimal(12, 2)
+  recordedAt    DateTime       @default(now())
+
+  @@index([listingId, recordedAt])
+}
+
+enum AlertChannel {
+  WHATSAPP
+  EMAIL
+}
+
+model PriceAlert {
+  id                String        @id @default(cuid())
+  tenantId          String
+  tenant            Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  masterProductId   String
+  masterProduct     MasterProduct @relation(fields: [masterProductId], references: [id], onDelete: Cascade)
+  targetPrice       Decimal?      @db.Decimal(12, 2)
+  notifyOnAnyDrop   Boolean       @default(false)
+  channel           AlertChannel  @default(WHATSAPP)
+  recipient         String
+  triggered         Boolean       @default(false)
+  triggeredAt       DateTime?
+  lastNotifiedPrice Decimal?      @db.Decimal(12, 2)
+  createdAt         DateTime      @default(now())
+
+  @@index([tenantId, masterProductId, triggered])
+  @@index([tenantId, recipient])
 }
