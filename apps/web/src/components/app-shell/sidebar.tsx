@@ -32,6 +32,7 @@ const PRINCIPAL = [
   { href: '/', label: 'Visão Geral', icon: Home },
   { href: '/dashboard', label: 'Dashboard & Métricas', icon: BarChart3 },
   { href: '/produtos', label: 'Buscar Produtos', icon: Search },
+  { href: '/catalogo-ofertas', label: 'Catálogo da Vitrine', icon: Store },
   { href: '/automacoes', label: 'Automações', icon: Zap },
   { href: '/enviar', label: 'Enviar Ofertas', icon: Send },
   { href: '/envio-manual', label: 'Envio manual', icon: PenLine },

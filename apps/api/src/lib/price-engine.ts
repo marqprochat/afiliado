@@ -31,13 +31,22 @@ function formatStoreName(source: string, customName?: string | null): string {
 
 function inferCategory(title: string): string {
   const lower = title.toLowerCase();
-  if (/\b(smartphone|iphone|galaxy|celular|motorola|xiaomi)\b/i.test(lower)) return 'Celulares & Smartphones';
+  if (/\b(smartphone|iphone|galaxy|celular|motorola|xiaomi)\b/i.test(lower))
+    return 'Celulares & Smartphones';
   if (/\b(tv|smart tv|televis[aã]o|monitor|oled|qled)\b/i.test(lower)) return 'TV & Vídeo';
-  if (/\b(notebook|laptop|computador|pc|gamer|macbook|teclado|mouse)\b/i.test(lower)) return 'Informática';
-  if (/\b(air fryer|fritadeira|geladeira|fog[aã]o|micro-ondas|cafeteira|liquidificador|aspirador)\b/i.test(lower)) return 'Eletrodomésticos';
-  if (/\b(fone|headphone|headset|jbl|caixa de som|bluetooth|earbuds|airpods)\b/i.test(lower)) return 'Áudio & Som';
+  if (/\b(notebook|laptop|computador|pc|gamer|macbook|teclado|mouse)\b/i.test(lower))
+    return 'Informática';
+  if (
+    /\b(air fryer|fritadeira|geladeira|fog[aã]o|micro-ondas|cafeteira|liquidificador|aspirador)\b/i.test(
+      lower,
+    )
+  )
+    return 'Eletrodomésticos';
+  if (/\b(fone|headphone|headset|jbl|caixa de som|bluetooth|earbuds|airpods)\b/i.test(lower))
+    return 'Áudio & Som';
   if (/\b(playstation|ps5|ps4|xbox|nintendo|switch|game)\b/i.test(lower)) return 'Games & Consoles';
-  if (/\b(relogio|smartwatch|relogio inteligente|apple watch)\b/i.test(lower)) return 'Smartwatches';
+  if (/\b(relogio|smartwatch|relogio inteligente|apple watch)\b/i.test(lower))
+    return 'Smartwatches';
   return 'Geral & Ofertas';
 }
 
@@ -56,12 +65,19 @@ export async function indexProductInPriceEngine(
   const storeName = formatStoreName(item.source, item.shopName);
 
   // Extrai possível EAN de item.raw se disponível
-  const rawObj = (item.raw && typeof item.raw === 'object' ? item.raw : {}) as Record<string, unknown>;
+  const rawObj = (item.raw && typeof item.raw === 'object' ? item.raw : {}) as Record<
+    string,
+    unknown
+  >;
   const eanCandidate = (rawObj.ean ?? rawObj.gtin ?? rawObj.barcode ?? null) as string | null;
-  const cleanEan = eanCandidate && String(eanCandidate).trim().length >= 8 ? String(eanCandidate).trim() : null;
+  const cleanEan =
+    eanCandidate && String(eanCandidate).trim().length >= 8 ? String(eanCandidate).trim() : null;
+  const existingListing = await db.productListing.findFirst({
+    where: { source: item.source, externalId },
+  });
 
   // 1. Busca por EAN exato se disponível
-  let matchedMasterId: string | null = null;
+  let matchedMasterId: string | null = existingListing?.masterProductId ?? null;
   if (cleanEan) {
     const byEan = await db.masterProduct.findFirst({
       where: { ean: cleanEan },
@@ -142,13 +158,6 @@ export async function indexProductInPriceEngine(
   }
 
   // 3. Atualiza ou cria a oferta da loja (ProductListing)
-  const existingListing = await db.productListing.findFirst({
-    where: {
-      source: item.source,
-      externalId,
-    },
-  });
-
   let listingId: string;
   const currentPriceNum = Number(item.price);
   const originalPriceNum = item.originalPrice ? Number(item.originalPrice) : null;
@@ -236,9 +245,10 @@ export async function indexProductInPriceEngine(
   });
 
   const allRecordedPrices = historyEntries.map((h) => Number(h.price));
-  const avg30d = allRecordedPrices.length > 0
-    ? Number((allRecordedPrices.reduce((a, b) => a + b, 0) / allRecordedPrices.length).toFixed(2))
-    : bestPrice;
+  const avg30d =
+    allRecordedPrices.length > 0
+      ? Number((allRecordedPrices.reduce((a, b) => a + b, 0) / allRecordedPrices.length).toFixed(2))
+      : bestPrice;
 
   const currentMaster = await db.masterProduct.findFirst({
     where: { id: masterId },
@@ -267,69 +277,84 @@ export async function indexProductInPriceEngine(
 }
 
 /**
- * Garante que a vitrine de ofertas esteja populada com produtos caso
- * MasterProduct ainda esteja vazio, importando automaticamente os itens
- * existentes de Product e AwinCatalogProduct.
+ * Sincroniza os produtos já salvos e o catálogo Awin para a vitrine.
  */
-export async function ensureDealsPopulated(db: TenantClient, tenantId: string): Promise<void> {
-  const currentCount = await db.masterProduct.count();
-  if (currentCount > 0) return;
-
-  // 1. Pega produtos existentes na tabela Product
-  const existingProducts = await db.product.findMany({
-    take: 150,
-    orderBy: { createdAt: 'desc' },
-  });
-
-  for (const p of existingProducts) {
-    const priceNum = Number(p.price);
-    if (!priceNum || priceNum <= 0) continue;
-
-    const data: ProductData = {
-      source: p.source,
-      externalId: p.externalId ?? p.id,
-      title: p.title,
-      price: priceNum,
-      images: p.images,
-      shipping: p.shipping,
-      originalUrl: p.originalUrl,
-      raw: (p.raw && typeof p.raw === 'object' ? p.raw : {}) as Record<string, unknown>,
-      ...(p.originalPrice ? { originalPrice: Number(p.originalPrice) } : {}),
-      ...(p.discountPct !== null && p.discountPct !== undefined ? { discountPct: p.discountPct } : {}),
-      ...(p.salesCount !== null && p.salesCount !== undefined ? { salesCount: p.salesCount } : {}),
-      ...(p.commissionPct ? { commissionPct: Number(p.commissionPct) } : {}),
-      ...(p.shopId ? { shopId: p.shopId } : {}),
-      ...(p.shopName ? { shopName: p.shopName } : {}),
-    };
-
-    await indexProductInPriceEngine(db, tenantId, data).catch(() => {});
+export async function syncDealsCatalog(db: TenantClient, tenantId: string) {
+  const pageSize = 100;
+  const result = { productsProcessed: 0, awinProcessed: 0, indexed: 0, failed: 0 };
+  async function index(data: ProductData) {
+    try {
+      await indexProductInPriceEngine(db, tenantId, data);
+      result.indexed += 1;
+    } catch {
+      result.failed += 1;
+    }
   }
 
-  // 2. Pega produtos do catálogo Awin (AwinCatalogProduct)
-  const awinItems = await db.awinCatalogProduct.findMany({
-    take: 150,
-    orderBy: { lastImportedAt: 'desc' },
-  });
-
-  for (const aw of awinItems) {
-    const priceNum = Number(aw.price);
-    if (!priceNum || priceNum <= 0) continue;
-
-    const data: ProductData = {
-      source: 'AWIN',
-      externalId: aw.externalId,
-      title: aw.title,
-      price: priceNum,
-      images: aw.imageUrl ? [aw.imageUrl] : [],
-      shipping: 'UNKNOWN',
-      originalUrl: aw.deepLink,
-      raw: (aw.raw && typeof aw.raw === 'object' ? aw.raw : {}) as Record<string, unknown>,
-      ...(aw.originalPrice ? { originalPrice: Number(aw.originalPrice) } : {}),
-      ...(aw.advertiserName ? { shopName: aw.advertiserName } : {}),
-    };
-
-    await indexProductInPriceEngine(db, tenantId, data).catch(() => {});
+  let productOffset = 0;
+  while (true) {
+    const rows = await db.product.findMany({
+      take: pageSize,
+      skip: productOffset,
+      orderBy: { createdAt: 'desc' },
+    });
+    for (const p of rows) {
+      result.productsProcessed += 1;
+      const price = Number(p.price);
+      if (!price || price <= 0) continue;
+      await index({
+        source: p.source,
+        externalId: p.externalId ?? p.id,
+        title: p.title,
+        price,
+        images: p.images,
+        shipping: p.shipping,
+        originalUrl: p.originalUrl,
+        raw: (p.raw && typeof p.raw === 'object' ? p.raw : {}) as Record<string, unknown>,
+        ...(p.originalPrice ? { originalPrice: Number(p.originalPrice) } : {}),
+        ...(p.discountPct !== null && p.discountPct !== undefined
+          ? { discountPct: p.discountPct }
+          : {}),
+        ...(p.salesCount !== null && p.salesCount !== undefined
+          ? { salesCount: p.salesCount }
+          : {}),
+        ...(p.commissionPct ? { commissionPct: Number(p.commissionPct) } : {}),
+        ...(p.shopId ? { shopId: p.shopId } : {}),
+        ...(p.shopName ? { shopName: p.shopName } : {}),
+      });
+    }
+    productOffset += rows.length;
+    if (rows.length < pageSize) break;
   }
+
+  let awinOffset = 0;
+  while (true) {
+    const rows = await db.awinCatalogProduct.findMany({
+      take: pageSize,
+      skip: awinOffset,
+      orderBy: { lastImportedAt: 'desc' },
+    });
+    for (const aw of rows) {
+      result.awinProcessed += 1;
+      const price = Number(aw.price);
+      if (!price || price <= 0) continue;
+      await index({
+        source: 'AWIN',
+        externalId: aw.externalId,
+        title: aw.title,
+        price,
+        images: aw.imageUrl ? [aw.imageUrl] : [],
+        shipping: 'UNKNOWN',
+        originalUrl: aw.deepLink,
+        raw: (aw.raw && typeof aw.raw === 'object' ? aw.raw : {}) as Record<string, unknown>,
+        ...(aw.originalPrice ? { originalPrice: Number(aw.originalPrice) } : {}),
+        ...(aw.advertiserName ? { shopName: aw.advertiserName } : {}),
+      });
+    }
+    awinOffset += rows.length;
+    if (rows.length < pageSize) break;
+  }
+  return result;
 }
 
 /**
@@ -356,9 +381,7 @@ export async function checkAndNotifyPriceAlerts(
 
   for (const alert of pendingAlerts) {
     const target = alert.targetPrice ? Number(alert.targetPrice) : null;
-    const shouldTrigger =
-      alert.notifyOnAnyDrop ||
-      (target !== null && currentPrice <= target);
+    const shouldTrigger = alert.notifyOnAnyDrop || (target !== null && currentPrice <= target);
 
     if (shouldTrigger) {
       await db.priceAlert.updateMany({
@@ -510,14 +533,16 @@ export async function getDealDetailBySlug(db: TenantClient, slug: string) {
   const lowestEver = Number(master.lowestPriceEver);
   const avgPrice = master.averagePrice30d ? Number(master.averagePrice30d) : currentPrice;
 
-  const consolidatedHistory = master.listings.flatMap((l) =>
-    l.history.map((h) => ({
-      storeName: l.storeName,
-      source: l.source,
-      price: Number(h.price),
-      recordedAt: h.recordedAt,
-    })),
-  ).sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
+  const consolidatedHistory = master.listings
+    .flatMap((l) =>
+      l.history.map((h) => ({
+        storeName: l.storeName,
+        source: l.source,
+        price: Number(h.price),
+        recordedAt: h.recordedAt,
+      })),
+    )
+    .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
 
   const bestListing = master.listings[0] ?? null;
   const analysis = analyzeDealPromotion(

@@ -2,11 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma, forTenant } from '@afilados/db';
 import { ApiError } from '@afilados/shared';
-import {
-  getDealsShowcase,
-  getDealDetailBySlug,
-  ensureDealsPopulated,
-} from '../lib/price-engine';
+import { getDealsShowcase, getDealDetailBySlug, syncDealsCatalog } from '../lib/price-engine';
+import { forbidAffiliate, requireAuth } from '../plugins/auth';
 
 const dealsQuerySchema = z.object({
   q: z.string().optional(),
@@ -73,11 +70,6 @@ export async function dealsRoutes(app: FastifyInstance) {
 
     const db = forTenant(tenantId);
 
-    // Auto-popula a vitrine se MasterProduct ainda não tiver itens
-    await ensureDealsPopulated(db, tenantId).catch((err) => {
-      req.log.warn({ err }, 'Falha silenciosa ao auto-popular deals');
-    });
-
     const result = await getDealsShowcase(db, {
       ...(q.q ? { query: q.q } : {}),
       ...(q.category ? { category: q.category } : {}),
@@ -92,17 +84,46 @@ export async function dealsRoutes(app: FastifyInstance) {
   /**
    * Força sincronização de produtos existentes de Product e AwinCatalogProduct para a vitrine.
    */
-  app.post('/deals/sync', async (req, reply) => {
+  app.get(
+    '/deals/sync/status',
+    { preHandler: [requireAuth, forbidAffiliate] },
+    async (req, reply) => {
+      const tenantId = req.tenantId;
+      const db = forTenant(tenantId);
+      const [products, awinProducts, masterProducts, listings, latestAwinImport] =
+        await Promise.all([
+          db.product.count(),
+          db.awinCatalogProduct.count(),
+          db.masterProduct.count(),
+          db.productListing.count(),
+          db.awinCatalogProduct.findFirst({
+            orderBy: { lastImportedAt: 'desc' },
+            select: { lastImportedAt: true },
+          }),
+        ]);
+      return reply.send({
+        products,
+        awinProducts,
+        masterProducts,
+        listings,
+        latestAwinImport: latestAwinImport?.lastImportedAt ?? null,
+      });
+    },
+  );
+
+  app.post('/deals/sync', { preHandler: [requireAuth, forbidAffiliate] }, async (req, reply) => {
     const tenantId = await resolveTenantId(req.tenantId);
     if (!tenantId) {
       throw ApiError.validation('Nenhum tenant encontrado para sincronizar');
     }
 
     const db = forTenant(tenantId);
-    await ensureDealsPopulated(db, tenantId);
-
-    const count = await db.masterProduct.count();
-    return reply.send({ ok: true, masterProductsCount: count });
+    const result = await syncDealsCatalog(db, tenantId);
+    const [masterProductsCount, listingsCount] = await Promise.all([
+      db.masterProduct.count(),
+      db.productListing.count(),
+    ]);
+    return reply.send({ ok: true, ...result, masterProductsCount, listingsCount });
   });
 
   /**
