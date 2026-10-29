@@ -23,6 +23,12 @@ const alertBodySchema = z.object({
 const slugParamSchema = z.object({
   slug: z.string().min(1),
 });
+const alertsQuerySchema = z.object({
+  q: z.string().trim().max(100).optional(),
+  productId: z.string().min(1).optional(),
+  offset: z.coerce.number().int().min(0).max(100_000).default(0),
+});
+const ALERT_PAGE_SIZE = 8;
 
 async function resolveTenantId(requestTenantId?: string): Promise<string | null> {
   if (requestTenantId) return requestTenantId;
@@ -124,6 +130,87 @@ export async function dealsRoutes(app: FastifyInstance) {
       db.productListing.count(),
     ]);
     return reply.send({ ok: true, ...result, masterProductsCount, listingsCount });
+  });
+
+  app.get('/deals/alerts', { preHandler: [requireAuth, forbidAffiliate] }, async (req, reply) => {
+    const { q, productId, offset } = alertsQuerySchema.parse(req.query);
+    const productFilter = productId ? { masterProductId: productId } : {};
+    const alertWhere = { tenantId: req.tenantId, ...productFilter };
+
+    const popularGroups = await req.db.priceAlert.groupBy({
+      by: ['masterProductId'],
+      where: { tenantId: req.tenantId },
+      _count: { _all: true },
+      orderBy: { _count: { masterProductId: 'desc' } },
+      take: 8,
+    });
+    const popularIds = popularGroups.map((group) => group.masterProductId);
+    const popularProducts = await req.db.masterProduct.findMany({
+      where: { id: { in: popularIds } },
+      select: { id: true, title: true, slug: true },
+    });
+    const popularById = new Map(
+      popularGroups.map((group) => [group.masterProductId, group._count._all]),
+    );
+    const popular = popularIds.flatMap((id) => {
+      const product = popularProducts.find((item) => item.id === id);
+      return product ? [{ ...product, alertCount: popularById.get(id) ?? 0 }] : [];
+    });
+
+    const matchingProducts =
+      q && q.length >= 2
+        ? await req.db.masterProduct.findMany({
+            where: {
+              title: { contains: q, mode: 'insensitive' },
+              alerts: { some: { tenantId: req.tenantId } },
+            },
+            select: { id: true, title: true, slug: true },
+            take: 8,
+            orderBy: { title: 'asc' },
+          })
+        : [];
+    const matchingGroups = matchingProducts.length
+      ? await req.db.priceAlert.groupBy({
+          by: ['masterProductId'],
+          where: {
+            tenantId: req.tenantId,
+            masterProductId: { in: matchingProducts.map((product) => product.id) },
+          },
+          _count: { _all: true },
+        })
+      : [];
+    const matchingCounts = new Map(
+      matchingGroups.map((group) => [group.masterProductId, group._count._all]),
+    );
+    const matches = matchingProducts.map((product) => ({
+      ...product,
+      alertCount: matchingCounts.get(product.id) ?? 0,
+    }));
+
+    const [total, alerts] = await Promise.all([
+      req.db.priceAlert.count({ where: alertWhere }),
+      req.db.priceAlert.findMany({
+        where: alertWhere,
+        include: { masterProduct: { select: { id: true, title: true, slug: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: ALERT_PAGE_SIZE,
+      }),
+    ]);
+
+    return reply.send({
+      popular,
+      matches,
+      alerts: alerts.map((alert) => ({
+        ...alert,
+        targetPrice: alert.targetPrice === null ? null : Number(alert.targetPrice),
+        lastNotifiedPrice:
+          alert.lastNotifiedPrice === null ? null : Number(alert.lastNotifiedPrice),
+      })),
+      total,
+      offset,
+      pageSize: ALERT_PAGE_SIZE,
+    });
   });
 
   /**
