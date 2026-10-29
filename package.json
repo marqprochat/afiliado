@@ -17,6 +17,7 @@
     "db:migrate": "pnpm --filter @afilados/db migrate:dev",
     "db:deploy": "pnpm --filter @afilados/db migrate:deploy",
     "db:seed": "pnpm --filter @afilados/db seed",
+    "db:sync:deals": "pnpm --filter @afilados/db sync:deals",
     "db:generate": "pnpm --filter @afilados/db generate"
   },
   "devDependencies": {

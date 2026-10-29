@@ -267,6 +267,72 @@ export async function indexProductInPriceEngine(
 }
 
 /**
+ * Garante que a vitrine de ofertas esteja populada com produtos caso
+ * MasterProduct ainda esteja vazio, importando automaticamente os itens
+ * existentes de Product e AwinCatalogProduct.
+ */
+export async function ensureDealsPopulated(db: TenantClient, tenantId: string): Promise<void> {
+  const currentCount = await db.masterProduct.count();
+  if (currentCount > 0) return;
+
+  // 1. Pega produtos existentes na tabela Product
+  const existingProducts = await db.product.findMany({
+    take: 150,
+    orderBy: { createdAt: 'desc' },
+  });
+
+  for (const p of existingProducts) {
+    const priceNum = Number(p.price);
+    if (!priceNum || priceNum <= 0) continue;
+
+    const data: ProductData = {
+      source: p.source,
+      externalId: p.externalId ?? p.id,
+      title: p.title,
+      price: priceNum,
+      images: p.images,
+      shipping: p.shipping,
+      originalUrl: p.originalUrl,
+      raw: (p.raw && typeof p.raw === 'object' ? p.raw : {}) as Record<string, unknown>,
+      ...(p.originalPrice ? { originalPrice: Number(p.originalPrice) } : {}),
+      ...(p.discountPct !== null && p.discountPct !== undefined ? { discountPct: p.discountPct } : {}),
+      ...(p.salesCount !== null && p.salesCount !== undefined ? { salesCount: p.salesCount } : {}),
+      ...(p.commissionPct ? { commissionPct: Number(p.commissionPct) } : {}),
+      ...(p.shopId ? { shopId: p.shopId } : {}),
+      ...(p.shopName ? { shopName: p.shopName } : {}),
+    };
+
+    await indexProductInPriceEngine(db, tenantId, data).catch(() => {});
+  }
+
+  // 2. Pega produtos do catálogo Awin (AwinCatalogProduct)
+  const awinItems = await db.awinCatalogProduct.findMany({
+    take: 150,
+    orderBy: { lastImportedAt: 'desc' },
+  });
+
+  for (const aw of awinItems) {
+    const priceNum = Number(aw.price);
+    if (!priceNum || priceNum <= 0) continue;
+
+    const data: ProductData = {
+      source: 'AWIN',
+      externalId: aw.externalId,
+      title: aw.title,
+      price: priceNum,
+      images: aw.imageUrl ? [aw.imageUrl] : [],
+      shipping: 'UNKNOWN',
+      originalUrl: aw.deepLink,
+      raw: (aw.raw && typeof aw.raw === 'object' ? aw.raw : {}) as Record<string, unknown>,
+      ...(aw.originalPrice ? { originalPrice: Number(aw.originalPrice) } : {}),
+      ...(aw.advertiserName ? { shopName: aw.advertiserName } : {}),
+    };
+
+    await indexProductInPriceEngine(db, tenantId, data).catch(() => {});
+  }
+}
+
+/**
  * Dispara alertas para usuários quando o preço atingir o alvo desejado ou sofrer queda.
  */
 export async function checkAndNotifyPriceAlerts(
@@ -444,7 +510,6 @@ export async function getDealDetailBySlug(db: TenantClient, slug: string) {
   const lowestEver = Number(master.lowestPriceEver);
   const avgPrice = master.averagePrice30d ? Number(master.averagePrice30d) : currentPrice;
 
-  // Flatten histórico com identificação da loja para o gráfico
   const consolidatedHistory = master.listings.flatMap((l) =>
     l.history.map((h) => ({
       storeName: l.storeName,

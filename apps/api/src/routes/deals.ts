@@ -5,6 +5,7 @@ import { ApiError } from '@afilados/shared';
 import {
   getDealsShowcase,
   getDealDetailBySlug,
+  ensureDealsPopulated,
 } from '../lib/price-engine';
 
 const dealsQuerySchema = z.object({
@@ -29,12 +30,31 @@ const slugParamSchema = z.object({
 async function resolveTenantId(requestTenantId?: string): Promise<string | null> {
   if (requestTenantId) return requestTenantId;
 
+  // 1. Tenta achar tenant que já possui MasterProduct
+  const withMaster = await prisma.masterProduct.findFirst({ select: { tenantId: true } });
+  if (withMaster?.tenantId) return withMaster.tenantId;
+
+  // 2. Tenta achar o tenant que possui produtos cadastrados na tabela Product
+  const withProduct = await prisma.product.findFirst({
+    select: { tenantId: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (withProduct?.tenantId) return withProduct.tenantId;
+
+  // 3. Tenta achar o tenant que possui produtos da Awin
+  const withAwin = await prisma.awinCatalogProduct.findFirst({
+    select: { tenantId: true },
+  });
+  if (withAwin?.tenantId) return withAwin.tenantId;
+
+  // 4. Superadmin fallback
   const ownerUser = await prisma.user.findFirst({
     where: { isSuperAdmin: true },
     select: { tenantId: true },
   });
   if (ownerUser?.tenantId) return ownerUser.tenantId;
 
+  // 5. Primeiro tenant
   const firstTenant = await prisma.tenant.findFirst({ select: { id: true } });
   return firstTenant?.id ?? null;
 }
@@ -52,6 +72,12 @@ export async function dealsRoutes(app: FastifyInstance) {
     }
 
     const db = forTenant(tenantId);
+
+    // Auto-popula a vitrine se MasterProduct ainda não tiver itens
+    await ensureDealsPopulated(db, tenantId).catch((err) => {
+      req.log.warn({ err }, 'Falha silenciosa ao auto-popular deals');
+    });
+
     const result = await getDealsShowcase(db, {
       ...(q.q ? { query: q.q } : {}),
       ...(q.category ? { category: q.category } : {}),
@@ -61,6 +87,22 @@ export async function dealsRoutes(app: FastifyInstance) {
     });
 
     return reply.send(result);
+  });
+
+  /**
+   * Força sincronização de produtos existentes de Product e AwinCatalogProduct para a vitrine.
+   */
+  app.post('/deals/sync', async (req, reply) => {
+    const tenantId = await resolveTenantId(req.tenantId);
+    if (!tenantId) {
+      throw ApiError.validation('Nenhum tenant encontrado para sincronizar');
+    }
+
+    const db = forTenant(tenantId);
+    await ensureDealsPopulated(db, tenantId);
+
+    const count = await db.masterProduct.count();
+    return reply.send({ ok: true, masterProductsCount: count });
   });
 
   /**
@@ -137,8 +179,6 @@ export async function dealsRoutes(app: FastifyInstance) {
     }
 
     const currentPrice = Number(master.currentBestPrice);
-
-    // Se o usuário já pediu um preço igual ou maior que o atual, podemos avisar imediatamente
     const alreadyMet = body.targetPrice ? currentPrice <= body.targetPrice : false;
 
     const alert = await prisma.priceAlert.create({
