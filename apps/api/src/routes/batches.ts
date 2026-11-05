@@ -511,15 +511,12 @@ export async function batchesRoutes(app: FastifyInstance) {
     const r = await req.db.batchItem.deleteMany({
       where: { batchId: b.id, id: { in: sent.map((i) => i.id) }, status: 'SENT' },
     });
-    // Sem o item no lote o produto voltaria para a triagem como "Enviado"; sai junto,
-    // a menos que ainda esteja em outro lote ativo.
+    // Sem o item no lote o produto não deve voltar para a triagem: remove da triagem qualquer registro desses produtos.
     const productIds = sent.map((i) => i.productId).filter((p): p is string => !!p);
     if (productIds.length) {
       await req.db.queueItem.deleteMany({
         where: {
           productId: { in: productIds },
-          status: 'SENT',
-          product: { batchItems: { none: { batch: { status: { not: 'CANCELLED' } } } } },
         },
       });
     }

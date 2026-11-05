@@ -219,7 +219,7 @@ describe('batches', () => {
       where: { tenantId: t.tenantId },
       orderBy: { addedAt: 'asc' },
     });
-    await prisma.queueItem.updateMany({ where: { id: sentP!.id }, data: { status: 'SENT' } });
+    // queueItem permanece com status padrão (ex: PENDING) — limpar enviados do lote deve tirá-lo da triagem de qualquer forma
     const b = await prisma.batch.create({
       data: {
         tenantId: t.tenantId,
