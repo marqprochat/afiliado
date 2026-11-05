@@ -4,6 +4,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   ExternalLink,
   Copy,
+  Users,
+  Sparkles,
+  ShieldCheck,
+  Zap,
+  Flame,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -11,7 +16,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 export interface PublicGroupLink {
   id: string;
   slug: string;
-  label: string; // Rótulo / Identidade
+  label: string;
   baseName: string;
   customText: string;
   groupDescription: string | null;
@@ -26,7 +31,6 @@ export interface PublicGroupLink {
   redirectUrl: string;
 }
 
-// Fallback demo links abrangendo várias categorias
 const DUDU_ROCHA_DEMO_LINKS: PublicGroupLink[] = [
   {
     id: 'dudu-1',
@@ -100,7 +104,6 @@ const DUDU_ROCHA_DEMO_LINKS: PublicGroupLink[] = [
   },
 ];
 
-// Componente para Foto Grande do Grupo
 function GroupAvatar({
   src,
   label,
@@ -112,7 +115,6 @@ function GroupAvatar({
 }) {
   const [hasError, setHasError] = useState(false);
 
-  // Formatar src para garantir data uri se for base64 puro
   const imageSrc = useMemo(() => {
     if (!src) return null;
     if (src.startsWith('data:') || src.startsWith('http://') || src.startsWith('https://')) {
@@ -121,7 +123,7 @@ function GroupAvatar({
     return `data:image/jpeg;base64,${src}`;
   }, [src]);
 
-  const initials = (label || 'G')
+  const initials = (label || 'VIP')
     .replace(/[^a-zA-ZÀ-ÿ0-9 ]/g, '')
     .split(' ')
     .filter(Boolean)
@@ -136,14 +138,14 @@ function GroupAvatar({
         src={imageSrc}
         alt={label}
         onError={() => setHasError(true)}
-        className={`${className} shrink-0 rounded-2xl object-cover border-2 border-slate-700/80 shadow-md group-hover:border-[#25D366] transition-all duration-200`}
+        className={`${className} shrink-0 rounded-2xl object-cover border-2 border-white/10 shadow-lg group-hover:border-red-500/60 transition-all duration-300`}
       />
     );
   }
 
   return (
     <div
-      className={`${className} shrink-0 rounded-2xl bg-gradient-to-br from-emerald-600/30 to-slate-800 border-2 border-emerald-500/40 flex items-center justify-center text-emerald-400 font-black text-lg sm:text-2xl shadow-md group-hover:scale-105 group-hover:border-[#25D366] transition-all duration-200`}
+      className={`${className} shrink-0 rounded-2xl bg-gradient-to-br from-red-950/40 via-[#131722] to-slate-900 border-2 border-white/10 flex items-center justify-center text-red-400 font-black text-lg sm:text-2xl shadow-lg group-hover:border-red-500/60 transition-all duration-300`}
     >
       {initials || 'VIP'}
     </div>
@@ -179,7 +181,6 @@ export function GroupListSection() {
     fetchPublicGroups();
   }, []);
 
-  // Extrai rótulos únicos
   const uniqueLabels = useMemo(() => {
     const labels = new Set<string>();
     links.forEach((link) => {
@@ -188,7 +189,6 @@ export function GroupListSection() {
     return Array.from(labels);
   }, [links]);
 
-  // Filtra por categoria/rótulo selecionado
   const filteredLinks = useMemo(() => {
     if (selectedLabel === 'ALL') return links;
     return links.filter(
@@ -202,33 +202,39 @@ export function GroupListSection() {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const fullUrl = `${origin}/g/${slug}`;
     await copyToClipboard(fullUrl);
-    toast.success('Link de convite copiado!');
+    toast.success('Link de convite copiado com sucesso!');
   };
 
   return (
-    <section id="grupos" className="py-8 px-4 sm:px-6 max-w-4xl mx-auto scroll-mt-20">
-      {/* Box Principal Estilo Canaltech Ofertas */}
-      <div className="bg-[#12151c] border border-slate-800 rounded-2xl p-5 sm:p-8 shadow-2xl">
-        
-        {/* Título de chamada */}
-        <div className="text-center mb-6 sm:mb-8">
-          <h2 className="text-xl sm:text-3xl font-extrabold text-white mb-2">
-            🤑 Escolha os grupos que deseja entrar:
+    <section id="grupos" className="py-20 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto scroll-mt-20">
+      {/* Container Principal Estilo Blueprint / Launch Page */}
+      <div className="relative bg-[#090c12] border border-white/10 rounded-3xl p-6 sm:p-10 shadow-2xl overflow-hidden">
+        {/* Glow corner */}
+        <div className="absolute -top-32 -right-32 w-80 h-80 bg-red-600/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-32 -left-32 w-80 h-80 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none" />
+
+        {/* Section Header */}
+        <div className="text-center max-w-2xl mx-auto mb-8 sm:mb-12 relative z-10">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-md bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-mono font-bold uppercase tracking-wider mb-3">
+            <span>[ DIRETÓRIO DE LINKS ATIVOS ]</span>
+          </div>
+          <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight uppercase mb-3">
+            ESCOLHA SEU GRUPO VIP
           </h2>
           <p className="text-slate-400 text-sm sm:text-base">
-            Clique no botão do grupo para receber as ofertas e cupons diretamente no seu WhatsApp:
+            Selecione a categoria desejada e receba cupons secretos e promoções em tempo real no seu WhatsApp:
           </p>
         </div>
 
-        {/* Filtro Rápido de Categorias / Rótulos */}
+        {/* Filter Tabs */}
         {uniqueLabels.length > 1 && (
-          <div className="flex flex-wrap items-center justify-center gap-2 mb-6 sm:mb-8">
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-8 relative z-10">
             <button
               onClick={() => setSelectedLabel('ALL')}
-              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition border ${
+              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wide transition border ${
                 selectedLabel === 'ALL'
-                  ? 'bg-[#25D366] text-black border-[#25D366] font-bold shadow-md'
-                  : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800 hover:text-white'
+                  ? 'bg-red-600 text-white border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]'
+                  : 'bg-[#111622] text-slate-300 border-white/10 hover:bg-[#182030] hover:text-white'
               }`}
             >
               Todos ({links.length})
@@ -241,10 +247,10 @@ export function GroupListSection() {
                 <button
                   key={lbl}
                   onClick={() => setSelectedLabel(lbl)}
-                  className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition border ${
+                  className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wide transition border ${
                     isSelected
-                      ? 'bg-[#25D366] text-black border-[#25D366] font-bold shadow-md'
-                      : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800 hover:text-white'
+                      ? 'bg-red-600 text-white border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]'
+                      : 'bg-[#111622] text-slate-300 border-white/10 hover:bg-[#182030] hover:text-white'
                   }`}
                 >
                   {lbl} ({count})
@@ -254,74 +260,88 @@ export function GroupListSection() {
           </div>
         )}
 
-        {/* Lista de Botões Diretos de Grupos com Imagem Grande e Descrição */}
+        {/* Link Cards List */}
         {loading ? (
-          <div className="space-y-4">
+          <div className="space-y-4 relative z-10">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-24 bg-slate-900/60 rounded-2xl animate-pulse" />
+              <div key={i} className="h-28 bg-[#131824] rounded-2xl animate-pulse border border-white/5" />
             ))}
           </div>
         ) : filteredLinks.length === 0 ? (
-          <div className="text-center py-10 text-slate-400 text-sm">
-            Nenhum grupo encontrado nesta categoria.
+          <div className="text-center py-12 text-slate-400 text-sm relative z-10">
+            Nenhum grupo encontrado nesta categoria no momento.
           </div>
         ) : (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 relative z-10">
             {filteredLinks.map((link) => {
               const description = link.groupDescription || link.customText;
               return (
-                <a
+                <div
                   key={link.id}
-                  href={link.redirectUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group relative flex items-center justify-between p-4 sm:p-5 rounded-2xl bg-[#181d28] hover:bg-[#202738] border border-slate-700/70 hover:border-[#25D366] transition-all duration-150 shadow-md hover:shadow-xl hover:shadow-[#25D366]/10"
+                  className="group relative flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 sm:p-5 rounded-2xl bg-[#0e121a] hover:bg-[#131926] border border-white/10 hover:border-red-500/50 transition-all duration-200 shadow-xl"
                 >
-                  {/* Lado Esquerdo: Foto Grande + Identidade/Rótulo + Descrição */}
-                  <div className="flex-1 min-w-0 flex items-center gap-4 sm:gap-5 pr-3 sm:pr-6">
+                  {/* Left: Avatar + Details */}
+                  <div className="flex items-center gap-4 sm:gap-5 min-w-0 flex-1 mb-4 sm:mb-0 pr-0 sm:pr-4">
                     <GroupAvatar
                       src={link.groupImageBase64}
                       label={link.label}
-                      className="w-14 h-14 sm:w-20 sm:h-20 shrink-0"
+                      className="w-14 h-14 sm:w-16 sm:h-16 shrink-0"
                     />
 
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-base sm:text-xl font-bold text-white group-hover:text-[#25D366] transition-colors leading-snug break-words">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-mono font-bold uppercase tracking-wider border border-emerald-500/30">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          Vagas Abertas
+                        </span>
+                      </div>
+                      <h3 className="text-base sm:text-lg font-black text-white group-hover:text-red-400 transition-colors leading-snug">
                         {link.label}
                       </h3>
                       {description && (
-                        <p className="text-xs sm:text-sm text-slate-300 leading-relaxed mt-1 line-clamp-2">
+                        <p className="text-xs sm:text-sm text-slate-400 leading-relaxed mt-1 line-clamp-2">
                           {description}
                         </p>
                       )}
                     </div>
                   </div>
 
-                  {/* Lado Direito: Botão "Entrar" e Copiar */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  {/* Right: Actions */}
+                  <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end shrink-0">
                     <button
                       onClick={(e) => handleCopyLink(e, link.slug)}
                       title="Copiar link de convite"
-                      className="hidden sm:flex p-3 rounded-xl bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition"
+                      className="p-3 rounded-xl bg-[#161c27] text-slate-400 hover:text-white hover:bg-[#20293a] border border-white/5 transition"
                     >
                       <Copy className="w-4 h-4" />
                     </button>
 
-                    <div className="px-4 py-3 sm:px-6 sm:py-3.5 rounded-xl bg-[#25D366] text-black font-extrabold text-xs sm:text-base group-hover:bg-[#22c35e] group-hover:scale-105 transition-all flex items-center gap-2 shadow-lg shadow-[#25D366]/20 shrink-0 uppercase tracking-wide">
-                      <span>Entrar</span>
+                    <a
+                      href={link.redirectUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs sm:text-sm uppercase tracking-wider shadow-[0_0_20px_rgba(239,68,68,0.35)] group-hover:scale-105 transition-all duration-150"
+                    >
+                      <span>Entrar no Grupo</span>
                       <ExternalLink className="w-4 h-4" />
-                    </div>
+                    </a>
                   </div>
-                </a>
+                </div>
               );
             })}
           </div>
         )}
 
-        {/* Rodapé simples do box */}
-        <div className="mt-8 pt-5 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-2">
-          <span>🔒 Todos os grupos são 100% gratuitos e livres de spam</span>
-          <span>⚡ Links com vagas verificadas e redirecionamento automático</span>
+        {/* Technical Footer of Box */}
+        <div className="mt-8 pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-3 relative z-10">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>Todos os grupos são 100% gratuitos e livres de spam</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-amber-400" />
+            <span>Links com rotação inteligente de vagas ativas</span>
+          </div>
         </div>
       </div>
     </section>
