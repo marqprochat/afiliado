@@ -188,6 +188,7 @@ export {
 export interface AmazonApiItem {
   asin: string;
   parentASIN?: string;
+  detailPageURL?: string;
   images?: { primary?: { large?: { url?: string } } };
   itemInfo?: { title?: { displayValue?: string } };
   offersV2?: {
@@ -203,6 +204,12 @@ export interface AmazonApiItem {
 interface AmazonGetItemsResponse {
   itemsResult?: { items?: AmazonApiItem[] };
   itemResults?: { items?: AmazonApiItem[] };
+  errors?: Array<{ code?: string; message?: string }>;
+}
+
+interface AmazonSearchItemsResponse {
+  searchResult?: { items?: AmazonApiItem[] };
+  searchResults?: { items?: AmazonApiItem[] };
   errors?: Array<{ code?: string; message?: string }>;
 }
 
@@ -253,6 +260,53 @@ async function getItemsBatch(
   }
   const data = (await res.json()) as AmazonGetItemsResponse;
   return data.itemsResult?.items ?? data.itemResults?.items ?? [];
+}
+
+/**
+ * Busca produtos pelo catálogo oficial da Amazon. A Creators API devolve no máximo dez itens por
+ * consulta, portanto `limit` é deliberadamente limitado aqui, mesmo que a tela peça mais.
+ */
+export async function searchItems(
+  keywords: string,
+  creds: AmazonApiCredentials,
+  limit = 10,
+  opts: AmazonApiOptions = {},
+): Promise<AmazonApiItem[]> {
+  const doFetch = opts.fetchImpl ?? fetch;
+  const baseUrl = opts.baseUrl ?? AMAZON_CREATORS_API_BASE_URL_DEFAULT;
+  const marketplace = opts.marketplace ?? AMAZON_CREATORS_API_MARKETPLACE_BR;
+  await waitForRateLimitSlot(creds.clientId);
+  const token = await getAccessToken(creds, opts);
+  const res = await fetchWithTimeout(doFetch, `${baseUrl}/catalog/v1/searchItems`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'x-marketplace': marketplace,
+    },
+    body: JSON.stringify({
+      keywords,
+      marketplace,
+      partnerTag: creds.partnerTag,
+      itemCount: Math.min(Math.max(limit, 1), 10),
+      resources: GET_ITEMS_RESOURCES,
+    }),
+  });
+  if (res.status === 401 || res.status === 403) {
+    const bodyText = await res.text().catch(() => '');
+    throw new AmazonApiError(
+      `Credenciais da Creators API inválidas (${describeAmazonErrorBody(bodyText)})`,
+      'AMAZON_API_UNAUTHORIZED',
+    );
+  }
+  if (res.status === 429) {
+    throw new AmazonApiError('Cota da Creators API excedida (429)', 'AMAZON_API_RATE_LIMITED');
+  }
+  if (!res.ok) {
+    throw new AmazonApiError(`SearchItems respondeu HTTP ${res.status}`, 'AMAZON_API_ERROR');
+  }
+  const data = (await res.json()) as AmazonSearchItemsResponse;
+  return data.searchResult?.items ?? data.searchResults?.items ?? [];
 }
 
 /** ASINs em lotes de até 10 (limite do GetItems), respeitando o rate limit entre lotes. */

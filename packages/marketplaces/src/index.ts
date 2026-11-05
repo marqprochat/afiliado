@@ -29,6 +29,7 @@ export {
   AmazonApiError,
   getAccessToken,
   getItems,
+  searchItems,
   extractAsin,
   mapCreatorsApiItem,
   resetAmazonApiState,

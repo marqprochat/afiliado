@@ -43,11 +43,11 @@ describe('Buscar Produtos: Ofertas da Amazon', () => {
     expect(screen.queryByText('Ofertas da Amazon')).toBeNull();
   });
 
-  it('ao escolher a Amazon abre direto em Ofertas da Amazon', () => {
+  it('ao escolher a Amazon abre a Captura de Produtos pela Creators API', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: 'Amazon' }));
-    expect(screen.getByLabelText('Fonte das ofertas da Amazon')).toBeTruthy();
-    expect(screen.queryByLabelText('Fonte da listagem')).toBeNull();
+    expect(screen.getByPlaceholderText('Buscar por palavra-chave…')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Captura de Produtos' })).toBeTruthy();
   });
 
   it('ML → Amazon → ML troca de formulário sem ficar preso em outra subaba', () => {
@@ -55,14 +55,31 @@ describe('Buscar Produtos: Ofertas da Amazon', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Mercado Livre' }));
     expect(screen.getByLabelText('Fonte da listagem')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Amazon' }));
-    expect(screen.getByLabelText('Fonte das ofertas da Amazon')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Buscar por palavra-chave…')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Mercado Livre' }));
     expect(screen.getByLabelText('Fonte da listagem')).toBeTruthy();
+  });
+
+  it('Captura de Produtos da Amazon envia uma busca por palavra-chave', async () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Amazon' }));
+    fireEvent.change(screen.getByPlaceholderText('Buscar por palavra-chave…'), {
+      target: { value: 'echo dot' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^buscar$/i }));
+    await vi.waitFor(() => {
+      expect(lastSearchBody()).toMatchObject({
+        source: 'AMAZON',
+        mode: 'keyword',
+        query: 'echo dot',
+      });
+    });
   });
 
   it('ofertas por palavra-chave: Buscar fica desabilitado sem termo e envia amazonListing + query', async () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: 'Amazon' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ofertas da Amazon' }));
     const buscar = screen.getByRole('button', { name: /^buscar$/i }) as HTMLButtonElement;
     expect(buscar.disabled).toBe(true);
     fireEvent.change(screen.getByLabelText('Palavra-chave das ofertas'), {
@@ -83,6 +100,7 @@ describe('Buscar Produtos: Ofertas da Amazon', () => {
   it('Mega Oferta Prime: busca sem termo e não manda query', async () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: 'Amazon' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ofertas da Amazon' }));
     fireEvent.change(screen.getByLabelText('Fonte das ofertas da Amazon'), {
       target: { value: 'mega' },
     });

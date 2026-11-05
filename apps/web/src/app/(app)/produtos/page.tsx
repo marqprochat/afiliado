@@ -27,7 +27,8 @@ const MARKETS: { key: MarketplaceKind; label: string }[] = [
 
 // Busca por palavra-chave por raspagem é bloqueada pelo anti-bot. O Mercado Livre é liberado
 // quando a API oficial está conectada (Marketplaces → Mercado Livre → "Conectar API oficial").
-const SCRAPED_KEYWORD_SOURCES: MarketplaceKind[] = ['MERCADOLIVRE', 'AMAZON', 'MAGALU'];
+// A Amazon usa a Creators API, portanto sua aba de captura permanece disponível.
+const SCRAPED_KEYWORD_SOURCES: MarketplaceKind[] = ['MERCADOLIVRE', 'MAGALU'];
 // Categoria/mais buscados existem na API oficial da Shopee e na do AliExpress. Loja
 // favorita é só Shopee (shopId na productOfferV2). Os demais marketplaces só têm busca
 // por palavra-chave (scraping) e importação por link.
@@ -65,12 +66,18 @@ export default function ProdutosPage() {
     : baseSubtabs;
   // Sem busca por palavra-chave (anti-bot), o ML abre nas Ofertas do ML; os demais, em Por Links / CSV.
   const fallbackSub = (kind: MarketplaceKind): SearchMode | 'import' =>
-    kind === 'MERCADOLIVRE' || kind === 'AMAZON' ? 'listing' : 'import';
+    kind === 'MERCADOLIVRE' ? 'listing' : 'import';
   const effectiveSub: SearchMode | 'import' =
     isKeywordDisabled && sub === 'keyword' ? fallbackSub(source) : sub;
 
   function selectSource(kind: MarketplaceKind) {
     setSource(kind);
+    // A captura da Amazon usa a Creators API. Ao trocar para ela, abre essa aba em vez de
+    // herdar a listagem do Mercado Livre (as duas usam o mesmo modo interno `listing`).
+    if (kind === 'AMAZON' && source !== kind) {
+      setSub('keyword');
+      return;
+    }
     const willDisableKeyword = DISABLED_KEYWORD_SOURCES.includes(kind);
     // Vindo de outro marketplace (ex.: ML → Amazon → ML), o ML sem API oficial abre em Ofertas do ML
     // em vez de herdar "Por Links / CSV" que a Amazon deixou.

@@ -81,6 +81,7 @@ import {
   extractAsin,
   getItems,
   mapCreatorsApiItem,
+  searchItems,
   type AmazonApiItem,
 } from '../src/amazon/creators-api';
 
@@ -206,6 +207,42 @@ describe('getItems', () => {
     const gap = getItemsCallTimes[1]! - getItemsCallTimes[0]!;
     expect(gap).toBeGreaterThanOrEqual(900);
   }, 10_000);
+});
+
+describe('searchItems', () => {
+  beforeEach(() => {
+    resetAmazonApiState();
+  });
+
+  it('consulta SearchItems com a palavra-chave, tag e no máximo 10 itens', async () => {
+    const calls: { url: string; init: RequestInit }[] = [];
+    const fetchImpl = vi.fn(async (url: string, init: RequestInit) => {
+      calls.push({ url: String(url), init });
+      if (String(url).includes('/auth/o2/token')) {
+        return { ok: true, status: 200, json: async () => ({ access_token: 'tok', expires_in: 3600 }) };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ searchResult: { items: [{ asin: 'B09B8V1LZ3' }] } }),
+      };
+    }) as unknown as typeof fetch;
+
+    const items = await searchItems('echo dot', { clientId: 'cid', clientSecret: 'secret', partnerTag: 'tag-20' }, 100, {
+      fetchImpl,
+      baseUrl: 'https://creatorsapi.amazon',
+    });
+
+    expect(items).toEqual([{ asin: 'B09B8V1LZ3' }]);
+    const searchCall = calls.find((c) => c.url.includes('/catalog/v1/searchItems'))!;
+    expect(searchCall.url).toBe('https://creatorsapi.amazon/catalog/v1/searchItems');
+    expect(JSON.parse(searchCall.init.body as string)).toMatchObject({
+      keywords: 'echo dot',
+      partnerTag: 'tag-20',
+      itemCount: 10,
+      marketplace: 'www.amazon.com.br',
+    });
+  });
 });
 
 describe('mapCreatorsApiItem', () => {

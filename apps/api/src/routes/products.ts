@@ -22,6 +22,8 @@ import {
   discoverMagaluByKeyword,
   AmazonListingError,
   MlListingError,
+  mapCreatorsApiItem,
+  searchItems,
 } from '@afilados/marketplaces';
 import { requireAuth } from '../plugins/auth';
 import {
@@ -121,6 +123,38 @@ export async function productsRoutes(app: FastifyInstance) {
       return { products: rows.map(toApiProduct) };
     }
 
+    // A aba "Captura de Produtos" da Amazon consulta o catálogo pela Creators API. Ao contrário
+    // da aba de ofertas, não lê HTML nem depende de cookies; a API limita cada busca a 10 itens.
+    if (q.source === 'AMAZON' && q.mode === 'keyword') {
+      const creds = await loadFetchCredentials(req.db, 'AMAZON');
+      const amazonApi = creds.amazonApi;
+      if (!amazonApi || !creds.tag) {
+        throw new ApiError(
+          'MARKETPLACE_ERROR',
+          'AMAZON: configure tag, Client ID e Client Secret da Creators API em Configurações',
+          400,
+        );
+      }
+      let found: ProductData[];
+      try {
+        const items = await searchItems(
+          q.query!,
+          { ...amazonApi, partnerTag: creds.tag },
+          q.limit,
+        );
+        found = items.map((item) =>
+          mapCreatorsApiItem(
+            item,
+            item.detailPageURL ?? `https://www.amazon.com.br/dp/${item.asin}`,
+          ),
+        );
+      } catch (e) {
+        throw new ApiError('MARKETPLACE_ERROR', e instanceof Error ? e.message : String(e), 502);
+      }
+      const rows = await upsertProducts(req.db, req.tenantId, applySearchFilters(found, q));
+      return { products: rows.map(toApiProduct) };
+    }
+
     // Amazon por listagem de ofertas: busca por palavra-chave no departamento Ofertas ou a página
     // Mega Oferta Prime. Os filtros rodam durante a paginação, como no Mercado Livre.
     if (q.mode === 'listing' && q.source === 'AMAZON') {
@@ -194,14 +228,14 @@ export async function productsRoutes(app: FastifyInstance) {
       return { products: rows.map(toApiProduct) };
     }
 
-    // Mercado Livre, Amazon e Magalu não têm API de catálogo/categoria — só busca por
-    // palavra-chave, reaproveitando os mesmos scrapers/sessão usados pela automação (Plano 2).
+    // Mercado Livre e Magalu não têm API de catálogo/categoria — só busca por palavra-chave,
+    // reaproveitando os mesmos scrapers/sessão usados pela automação (Plano 2).
     if (q.mode !== 'keyword') {
       throw ApiError.validation(
         `${q.source}: só a busca por palavra-chave está disponível fora da Shopee`,
       );
     }
-    const kind = q.source as 'MERCADOLIVRE' | 'AMAZON' | 'MAGALU';
+    const kind = q.source as 'MERCADOLIVRE' | 'MAGALU';
     // Mercado Livre com a API oficial conectada: busca no catálogo (a raspagem é bloqueada pelo
     // anti-bot). Só ML carrega as credenciais antes; Amazon e Magalu mantêm a ordem de sempre.
     const mlCreds = kind === 'MERCADOLIVRE' ? await loadFetchCredentials(req.db, kind) : undefined;
