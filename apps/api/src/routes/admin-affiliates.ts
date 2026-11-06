@@ -43,7 +43,7 @@ async function loadAffiliate(adminTenantId: string, id: string) {
 }
 
 async function toRow(tenantId: string) {
-  const [tenant, user, conns, wa, groups, sends] = await Promise.all([
+  const [tenant, user, conns, wa, groups, sends, lp] = await Promise.all([
     prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } }),
     prisma.user.findFirstOrThrow({
       where: { tenantId, role: 'OWNER' },
@@ -58,6 +58,7 @@ async function toRow(tenantId: string) {
     prisma.sendLog.count({
       where: { tenantId, status: 'SENT', sentAt: { gte: new Date(Date.now() - 7 * 86_400_000) } },
     }),
+    prisma.affiliateLandingPage.findUnique({ where: { tenantId }, select: { slug: true } }),
   ]);
   return {
     id: tenant.id,
@@ -70,6 +71,7 @@ async function toRow(tenantId: string) {
     groups,
     sends7d: sends,
     subIds: Object.fromEntries(conns.filter((c) => c.subId).map((c) => [c.kind, c.subId])),
+    landingSlug: lp?.slug ?? null,
   };
 }
 

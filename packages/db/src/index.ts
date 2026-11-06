@@ -40,6 +40,7 @@ const TENANT_MODELS = new Set([
   'MasterProduct',
   'ProductListing',
   'PriceAlert',
+  'AffiliateLandingPage',
 ]);
 
 const FILTERED_OPS = new Set([

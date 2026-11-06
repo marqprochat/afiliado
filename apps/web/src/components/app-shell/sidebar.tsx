@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import {
   BarChart3,
   Bot,
+  Globe,
   Home,
   Link2,
   LogOut,
@@ -39,6 +40,7 @@ const PRINCIPAL = [
   { href: '/espelhamento', label: 'Espelhamento', icon: Radio },
   { href: '/grupos', label: 'Grupos', icon: UsersRound },
   { href: '/links-grupos', label: 'Links de Grupos', icon: Link2 },
+  { href: '/minha-landpage', label: 'Minha Landing Page', icon: Globe },
   { href: '/trafego', label: 'Gestor de Tráfego IA', icon: Megaphone },
   { href: '/afiliados', label: 'Afiliados', icon: Users },
 ];

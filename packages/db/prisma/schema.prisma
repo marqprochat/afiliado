@@ -49,6 +49,7 @@ model Tenant {
   masterProducts       MasterProduct[]
   productListings      ProductListing[]
   priceAlerts          PriceAlert[]
+  affiliateLandingPage AffiliateLandingPage?
 
   @@index([parentTenantId])
 }
@@ -938,4 +939,54 @@ model PriceAlert {
 
   @@index([tenantId, masterProductId, triggered])
   @@index([tenantId, recipient])
+}
+
+// ---------- Landing Pages Dinâmicas de Afiliados ----------
+
+model AffiliateLandingPage {
+  id             String   @id @default(cuid())
+  tenantId       String   @unique
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  slug           String   @unique
+  enabled        Boolean  @default(true)
+
+  // Identidade / Marca
+  title          String?
+  authorName     String
+  authorBadge    String?  @default("RADAR VIP · 24H")
+  authorBio      String?
+  authorImage    String?
+  logoText       String?
+  themeColor     String   @default("red") // red, emerald, blue, violet, amber, rose, cyan
+
+  // Dobra 1: Hero
+  headline       String?
+  subheadline    String?
+  ctaButtonText  String?  @default("QUERO ENTRAR NOS GRUPOS VIP")
+
+  // Estatísticas
+  stat1Value     String?  @default("+10K")
+  stat1Label     String?  @default("Membros VIP")
+  stat2Value     String?  @default("R$ 500K+")
+  stat2Label     String?  @default("Economia Gerada")
+  stat3Value     String?  @default("100%")
+  stat3Label     String?  @default("Links Verificados")
+  stat4Value     String?  @default("24/7")
+  stat4Label     String?  @default("Radar Ativo")
+
+  // Redes Sociais
+  instagramUrl   String?
+  youtubeUrl     String?
+  telegramUrl    String?
+
+  // Seções visíveis
+  showBenefits   Boolean  @default(true)
+  showAuthority  Boolean  @default(true)
+  showCategories Boolean  @default(true)
+  showFaq        Boolean  @default(true)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([slug])
 }

@@ -512,4 +512,5 @@ export interface AffiliateRow {
   groups: number;
   sends7d: number;
   subIds: Partial<Record<MarketplaceKind, string>>;
+  landingSlug?: string | null;
 }
