@@ -186,7 +186,7 @@ export async function affiliateLandingRoutes(app: FastifyInstance) {
   });
 
   // PUT /affiliate-landing - Salva configurações da LP do tenant
-  app.put('/affiliate-landing', { preHandler: [requireAuth] }, async (req, reply) => {
+  app.put('/affiliate-landing', { preHandler: [requireAuth], bodyLimit: 10 * 1024 * 1024 }, async (req, reply) => {
     const tenantId = req.tenantId;
     const body = affiliateLandingUpdateSchema.parse(req.body);
 

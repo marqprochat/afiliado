@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Sparkles,
   ExternalLink,
@@ -15,6 +15,12 @@ import {
   Sliders,
   CheckCircle2,
   AlertCircle,
+  Upload,
+  Link as LinkIcon,
+  Trash2,
+  Image as ImageIcon,
+  FileImage,
+  RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -35,11 +41,75 @@ const THEME_OPTIONS = [
   { id: 'rose', name: 'Rosa Neon', border: 'border-rose-500', bg: 'bg-rose-500', glow: 'shadow-rose-500/30' },
 ] as const;
 
+/** Otimiza fotos grandes redimensionando proporcionalmente para no máximo 900x900px */
+function processImageFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) {
+      reject(new Error('O arquivo selecionado não é uma imagem válida.'));
+      return;
+    }
+
+    if (file.type === 'image/svg+xml') {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('Falha ao ler o arquivo SVG.'));
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX_DIM = 900;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_DIM) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          }
+        } else {
+          if (height > MAX_DIM) {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(e.target?.result as string);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        // Gera JPEG otimizado de alta qualidade
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+        resolve(dataUrl);
+      };
+      img.onerror = () => resolve(e.target?.result as string);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error('Erro ao processar imagem.'));
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function MinhaLandpagePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'geral' | 'hero' | 'stats' | 'redes' | 'secoes'>('geral');
+
+  // Controle de upload vs URL
+  const [imageMode, setImageMode] = useState<'upload' | 'url'>('upload');
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     slug: '',
@@ -77,6 +147,7 @@ export default function MinhaLandpagePage() {
         const res = await apiFetch<{ ok: boolean; data: any }>('/affiliate-landing');
         if (res.ok && res.data) {
           const d = res.data;
+          const currentImg = d.authorImage || '';
           setFormData({
             slug: d.slug || '',
             enabled: d.enabled ?? true,
@@ -84,7 +155,7 @@ export default function MinhaLandpagePage() {
             authorName: d.authorName || '',
             authorBadge: d.authorBadge || 'RADAR VIP · 24H',
             authorBio: d.authorBio || '',
-            authorImage: d.authorImage || '',
+            authorImage: currentImg,
             logoText: d.logoText || '',
             themeColor: d.themeColor || 'red',
             headline: d.headline || '',
@@ -106,6 +177,13 @@ export default function MinhaLandpagePage() {
             showCategories: d.showCategories ?? true,
             showFaq: d.showFaq ?? true,
           });
+
+          // Se a imagem cadastrada for URL externa (http), inicia no modo URL; senão, modo upload
+          if (currentImg.startsWith('http://') || currentImg.startsWith('https://')) {
+            setImageMode('url');
+          } else {
+            setImageMode('upload');
+          }
         }
       } catch (err) {
         toast.error('Erro ao carregar dados da sua landing page');
@@ -127,6 +205,34 @@ export default function MinhaLandpagePage() {
       toast.success('Link copiado para a área de transferência!');
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const handleFileSelect = async (file?: File) => {
+    if (!file) return;
+    setIsProcessingImage(true);
+    try {
+      const dataUrl = await processImageFile(file);
+      setFormData((prev) => ({ ...prev, authorImage: dataUrl }));
+      toast.success('Foto carregada e otimizada com sucesso!');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao processar imagem');
+    } finally {
+      setIsProcessingImage(false);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileSelect(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setFormData((prev) => ({ ...prev, authorImage: '' }));
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    toast.info('Imagem removida. A página usará o emblema padrão com suas iniciais.');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -155,6 +261,18 @@ export default function MinhaLandpagePage() {
       setSaving(false);
     }
   };
+
+  const initials = (formData.authorName || 'VIP')
+    .replace(/[^a-zA-ZÀ-ÿ0-9 ]/g, '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase() || 'VIP';
+
+  const isImageBase64 = formData.authorImage?.startsWith('data:');
+  const isImageHttp = formData.authorImage?.startsWith('http://') || formData.authorImage?.startsWith('https://');
 
   if (loading) {
     return (
@@ -291,7 +409,7 @@ export default function MinhaLandpagePage() {
           <div className="space-y-6 p-6 rounded-2xl bg-surface border border-border">
             <h2 className="text-lg font-bold flex items-center gap-2">
               <Palette className="w-5 h-5 text-brand" />
-              <span>Identidade Visual & URL</span>
+              <span>Identidade Visual & Imagem</span>
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -357,19 +475,183 @@ export default function MinhaLandpagePage() {
                 />
               </div>
 
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="authorImage" className="font-semibold">
-                  URL da Foto do Criador / Logo da Comunidade
-                </Label>
-                <Input
-                  id="authorImage"
-                  value={formData.authorImage}
-                  onChange={(e) => setFormData({ ...formData, authorImage: e.target.value })}
-                  placeholder="https://exemplo.com/sua-foto.jpg ou deixe em branco para avatar gerado"
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Recomendado: foto quadrada (ex: 600x600px). Se deixar vazio, usaremos um emblema profissional com suas iniciais.
-                </p>
+              {/* SEÇÃO DE IMAGEM: UPLOAD OU URL */}
+              <div className="space-y-3 md:col-span-2 pt-2 border-t border-border">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <Label className="font-semibold text-base flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4 text-brand" />
+                      <span>Foto do Criador / Logo da Comunidade</span>
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Você pode enviar um arquivo do seu computador/celular ou colar um link direto de imagem.
+                    </p>
+                  </div>
+
+                  {/* Seletor de Modo: Upload vs URL */}
+                  <div className="inline-flex rounded-lg bg-surface-2 p-1 border border-border text-xs font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => setImageMode('upload')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition ${
+                        imageMode === 'upload'
+                          ? 'bg-background text-foreground shadow-sm font-bold'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Upload de Arquivo</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImageMode('url')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition ${
+                        imageMode === 'url'
+                          ? 'bg-background text-foreground shadow-sm font-bold'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <LinkIcon className="w-3.5 h-3.5" />
+                      <span>Inserir Link (URL)</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start mt-2">
+                  {/* Coluna de Input (Upload ou URL) */}
+                  <div className="lg:col-span-8 space-y-3">
+                    {imageMode === 'upload' ? (
+                      <div>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              handleFileSelect(e.target.files[0]);
+                            }
+                          }}
+                        />
+
+                        <div
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            setIsDragging(true);
+                          }}
+                          onDragLeave={() => setIsDragging(false)}
+                          onDrop={handleDrop}
+                          onClick={() => fileInputRef.current?.click()}
+                          className={`relative border-2 border-dashed rounded-2xl p-6 sm:p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
+                            isDragging
+                              ? 'border-brand bg-brand/10 scale-[1.01]'
+                              : 'border-border/80 hover:border-brand/60 bg-surface-2/40 hover:bg-surface-2/70'
+                          }`}
+                        >
+                          <div className="w-12 h-12 rounded-2xl bg-brand/15 text-brand flex items-center justify-center mb-3 shadow-inner">
+                            {isProcessingImage ? (
+                              <RefreshCw className="w-6 h-6 animate-spin" />
+                            ) : (
+                              <Upload className="w-6 h-6" />
+                            )}
+                          </div>
+
+                          <span className="text-sm font-bold text-foreground mb-1">
+                            {isProcessingImage
+                              ? 'Processando e otimizando imagem...'
+                              : 'Clique para escolher ou arraste uma foto aqui'}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            Formatos aceitos: JPG, PNG, WebP, SVG (Otimização automática de resolução)
+                          </span>
+
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="mt-4 pointer-events-none text-xs"
+                          >
+                            Selecionar do Computador / Celular
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 p-4 rounded-xl border border-border bg-surface-2/30">
+                        <Label htmlFor="authorImageInput" className="text-xs font-semibold">
+                          Cole a URL da Imagem (HTTPS)
+                        </Label>
+                        <Input
+                          id="authorImageInput"
+                          value={formData.authorImage}
+                          onChange={(e) => setFormData({ ...formData, authorImage: e.target.value })}
+                          placeholder="https://exemplo.com/minha-foto.jpg"
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          Certifique-se de que o link termine em formato de imagem válido ou seja acessível publicamente.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Coluna de Preview Visual em Tempo Real */}
+                  <div className="lg:col-span-4 p-4 rounded-2xl border border-border bg-surface-2/60 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono font-bold uppercase text-muted-foreground">
+                        Pré-visualização
+                      </span>
+                      {formData.authorImage && (
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20">
+                          {isImageBase64 ? 'ARQUIVO UPLOAD' : isImageHttp ? 'URL EXTERNA' : 'IMAGEM ATIVA'}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="relative rounded-xl overflow-hidden border-2 border-white/10 bg-[#0e121a] aspect-[4/5] flex items-center justify-center shadow-lg group">
+                      {formData.authorImage ? (
+                        <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={formData.authorImage}
+                            alt="Preview da foto do autor"
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              toast.error('Erro ao carregar a imagem do preview. Verifique o link ou envie outro arquivo.');
+                            }}
+                          />
+                          <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black via-black/60 to-transparent" />
+                          <div className="absolute bottom-2 left-2 right-2 text-[11px] font-mono font-bold text-white truncate">
+                            {formData.authorName || 'Afiliado VIP'}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center p-4 text-center">
+                          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-red-600 to-rose-600 flex items-center justify-center text-white text-xl font-black shadow-lg mb-2">
+                            {initials}
+                          </div>
+                          <span className="text-xs font-bold text-slate-300">
+                            {formData.authorName || 'Sem foto cadastrada'}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground mt-0.5">
+                            Emblema padrão com iniciais
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {formData.authorImage && (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleRemoveImage}
+                        className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Remover Foto</span>
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
