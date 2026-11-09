@@ -98,7 +98,7 @@ export async function groupLinksRoutes(app: FastifyInstance) {
   });
 
   // Cria um novo link fixo
-  app.post('/group-links', async (req, reply) => {
+  app.post('/group-links', { bodyLimit: 5 * 1024 * 1024 }, async (req, reply) => {
     const body = groupLinkCreateSchema.parse(req.body);
 
     const existing = await prisma.groupLink.findUnique({
@@ -252,7 +252,7 @@ export async function groupLinksRoutes(app: FastifyInstance) {
   });
 
   // Atualiza configurações de um link fixo
-  app.patch('/group-links/:id', async (req) => {
+  app.patch('/group-links/:id', { bodyLimit: 5 * 1024 * 1024 }, async (req) => {
     const { id } = idParam.parse(req.params);
     const link = await req.db.groupLink.findFirst({ where: { id } });
     if (!link) throw ApiError.notFound('Link não encontrado');

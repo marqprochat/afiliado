@@ -123,8 +123,8 @@ export function GroupLinkFormDialog({
       return;
     }
 
-    if (file.size > 350 * 1024) {
-      alert('A imagem é muito grande. Escolha uma foto de até 300KB.');
+    if (file.size > 1024 * 1024) {
+      alert('A imagem é muito grande. Escolha uma foto de até 1MB.');
       return;
     }
 
@@ -372,7 +372,7 @@ export function GroupLinkFormDialog({
                   )}
                 </div>
                 <span className="text-[10px] text-muted-foreground mt-1.5">
-                  JPEG, PNG ou WebP (máx. 300KB)
+                  JPEG, PNG ou WebP (máx. 1MB)
                 </span>
               </div>
 

@@ -181,7 +181,7 @@ describe('group-links shared helpers', () => {
     });
 
     it('rejeita groupImageBase64 excedendo limite de tamanho', () => {
-      const oversized = 'data:image/png;base64,' + 'A'.repeat(700 * 1024);
+      const oversized = 'data:image/png;base64,' + 'A'.repeat(2.5 * 1024 * 1024);
       expect(() =>
         groupLinkCreateSchema.parse({
           sessionId: 'sess-123',
