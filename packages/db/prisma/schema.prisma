@@ -951,39 +951,67 @@ model AffiliateLandingPage {
   enabled        Boolean  @default(true)
 
   // Identidade / Marca
-  title          String?
-  authorName     String
-  authorBadge    String?  @default("RADAR VIP · 24H")
-  authorBio      String?
-  authorImage    String?
-  logoText       String?
-  themeColor     String   @default("red") // red, emerald, blue, violet, amber, rose, cyan
+  title               String?
+  authorName          String
+  authorBadge         String?  @default("RADAR VIP · 24H")
+  authorBio           String?
+  authorImage         String?
+  logoText            String?
+  themeColor          String   @default("rose") // rose, red, emerald, blue, violet, amber, cyan
+  themeMode           String   @default("light") // light, dark
+  buttonColor         String   @default("emerald") // emerald, theme, rose, red, blue, violet, amber, cyan, dark
 
   // Dobra 1: Hero
-  headline       String?
-  subheadline    String?
-  ctaButtonText  String?  @default("QUERO ENTRAR NOS GRUPOS VIP")
+  heroImage           String?
+  badgeText           String?  @default("Grupos de Preços & Ofertas VIP · 100% Gratuito")
+  headline            String?
+  subheadline         String?
+  floatingBadgeText   String?  @default("Garimpo Ao Vivo no WhatsApp · 4 Nichos Exclusivos")
+  ctaButtonText       String?  @default("Entrar no Grupo do WhatsApp")
+  reassuranceText     String?  @default("100% Silencioso (sem conversas paralelas) · Apenas administradores postam · Gratuito para sempre")
+  whatsappGeneralUrl  String?
 
-  // Estatísticas
-  stat1Value     String?  @default("+10K")
-  stat1Label     String?  @default("Membros VIP")
-  stat2Value     String?  @default("R$ 500K+")
-  stat2Label     String?  @default("Economia Gerada")
-  stat3Value     String?  @default("100%")
-  stat3Label     String?  @default("Links Verificados")
-  stat4Value     String?  @default("24/7")
-  stat4Label     String?  @default("Radar Ativo")
+  // Estatísticas (legado / opcional)
+  stat1Value          String?  @default("+10K")
+  stat1Label          String?  @default("Membros VIP")
+  stat2Value          String?  @default("R$ 500K+")
+  stat2Label          String?  @default("Economia Gerada")
+  stat3Value          String?  @default("100%")
+  stat3Label          String?  @default("Links Verificados")
+  stat4Value          String?  @default("24/7")
+  stat4Label          String?  @default("Radar Ativo")
+
+  // Dobra Como Funciona
+  howItWorksTitle     String?  @default("Como funcionam os nossos grupos de preço")
+  howItWorksSubtitle  String?  @default("Economizar não precisa dar trabalho. Nós fazemos a busca exaustiva para você apenas aproveitar.")
+  howItWorksSteps     Json?
+
+  // Dobra FAQ
+  faqTitle            String?  @default("Tudo o que você precisa saber sobre os grupos")
+  faqSubtitle         String?  @default("Respostas diretas e transparentes para você entrar com total tranquilidade.")
+  faqItems            Json?
+  faqBannerTitle      String?  @default("Quer entrar no Grupo Geral com todos os nichos juntos?")
+  faqBannerText       String?  @default("Se você prefere receber todos os achadinhos em um único grupo, temos o Grupo Geral VIP no WhatsApp ativo.")
+  faqBannerButtonText String?  @default("Entrar no WhatsApp Geral")
+
+  // Nichos customizados (opcional)
+  customNiches        Json?
+
+  // Rodapé
+  footerText          String?  @default("A curadoria independente de promoções, cupons e achadinhos nos melhores e-commerces do Brasil.")
 
   // Redes Sociais
-  instagramUrl   String?
-  youtubeUrl     String?
-  telegramUrl    String?
+  instagramUrl        String?
+  youtubeUrl          String?
+  telegramUrl         String?
 
   // Seções visíveis
-  showBenefits   Boolean  @default(true)
-  showAuthority  Boolean  @default(true)
-  showCategories Boolean  @default(true)
-  showFaq        Boolean  @default(true)
+  showBenefits        Boolean  @default(true)
+  showAuthority       Boolean  @default(true)
+  showCategories      Boolean  @default(true)
+  showFaq             Boolean  @default(true)
+  showHowItWorks      Boolean  @default(true)
+  showNiches          Boolean  @default(true)
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

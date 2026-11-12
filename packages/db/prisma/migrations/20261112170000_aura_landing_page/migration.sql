@@ -1,0 +1,22 @@
+-- AlterTable
+ALTER TABLE "AffiliateLandingPage" 
+  ADD COLUMN "themeMode" TEXT NOT NULL DEFAULT 'light',
+  ADD COLUMN "buttonColor" TEXT NOT NULL DEFAULT 'emerald',
+  ADD COLUMN "heroImage" TEXT,
+  ADD COLUMN "badgeText" TEXT DEFAULT 'Grupos de Preços & Ofertas VIP · 100% Gratuito',
+  ADD COLUMN "floatingBadgeText" TEXT DEFAULT 'Garimpo Ao Vivo no WhatsApp · 4 Nichos Exclusivos',
+  ADD COLUMN "reassuranceText" TEXT DEFAULT '100% Silencioso (sem conversas paralelas) · Apenas administradores postam · Gratuito para sempre',
+  ADD COLUMN "whatsappGeneralUrl" TEXT,
+  ADD COLUMN "howItWorksTitle" TEXT DEFAULT 'Como funcionam os nossos grupos de preço',
+  ADD COLUMN "howItWorksSubtitle" TEXT DEFAULT 'Economizar não precisa dar trabalho. Nós fazemos a busca exaustiva para você apenas aproveitar.',
+  ADD COLUMN "howItWorksSteps" JSONB,
+  ADD COLUMN "faqTitle" TEXT DEFAULT 'Tudo o que você precisa saber sobre os grupos',
+  ADD COLUMN "faqSubtitle" TEXT DEFAULT 'Respostas diretas e transparentes para você entrar com total tranquilidade.',
+  ADD COLUMN "faqItems" JSONB,
+  ADD COLUMN "faqBannerTitle" TEXT DEFAULT 'Quer entrar no Grupo Geral com todos os nichos juntos?',
+  ADD COLUMN "faqBannerText" TEXT DEFAULT 'Se você prefere receber todos os achadinhos em um único grupo, temos o Grupo Geral VIP no WhatsApp ativo.',
+  ADD COLUMN "faqBannerButtonText" TEXT DEFAULT 'Entrar no WhatsApp Geral',
+  ADD COLUMN "customNiches" JSONB,
+  ADD COLUMN "footerText" TEXT DEFAULT 'A curadoria independente de promoções, cupons e achadinhos nos melhores e-commerces do Brasil.',
+  ADD COLUMN "showHowItWorks" BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN "showNiches" BOOLEAN NOT NULL DEFAULT true;
