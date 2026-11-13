@@ -1,6 +1,5 @@
 import React from 'react';
 import type { Metadata } from 'next';
-import { prisma } from '@afilados/db';
 import { AuraLandingView } from '@/components/aura-landing/AuraLandingView';
 import {
   AURA_DEFAULT_HERO_IMAGE,
@@ -8,10 +7,13 @@ import {
   AURA_DEFAULT_STEPS,
   AURA_DEFAULT_FAQS,
   mapGroupLinkToAuraNiche,
+  type GroupLinkLike,
 } from '@afilados/shared';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+const API_URL = process.env.API_INTERNAL_URL ?? 'http://localhost:3001';
 
 export const metadata: Metadata = {
   title: 'Clube de Preços VIP · Grupos de Ofertas e Cupons no WhatsApp',
@@ -24,17 +26,20 @@ export default async function LandpagePage() {
   let generalUrl = 'https://chat.whatsapp.com/invite/exemplo-grupo-vip-geral';
 
   try {
-    const groupLinks = await prisma.groupLink.findMany({
-      where: {
-        enabled: true,
-        status: 'ACTIVE',
-      },
-      orderBy: [{ displayOrder: 'asc' }, { createdAt: 'desc' }],
+    const res = await fetch(`${API_URL}/api/v1/public/affiliate-landing/exemplo`, {
+      cache: 'no-store',
     });
 
-    if (groupLinks.length > 0) {
-      niches = groupLinks.map((link, idx) => mapGroupLinkToAuraNiche(link, idx));
-      generalUrl = `/g/${groupLinks[0].slug}`;
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.ok && Array.isArray(data?.data?.niches) && data.data.niches.length > 0) {
+        niches = data.data.niches;
+        if (data.data.profile?.whatsappGeneralUrl) {
+          generalUrl = data.data.profile.whatsappGeneralUrl;
+        } else if (niches[0]?.whatsappLink) {
+          generalUrl = niches[0].whatsappLink;
+        }
+      }
     }
   } catch {
     niches = AURA_DEFAULT_NICHES;
