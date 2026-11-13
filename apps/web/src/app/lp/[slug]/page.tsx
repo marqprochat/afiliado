@@ -1,67 +1,108 @@
-'use client';
-
-import React, { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
-import { Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
+import React from 'react';
+import type { Metadata } from 'next';
+import { AlertCircle, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { AuraLandingView, type AuraLandingProfileData } from '@/components/aura-landing/AuraLandingView';
+import { getServerBaseUrl } from '@/lib/server-url';
 import type { AuraNicheItem } from '@afilados/shared';
 
-export default function AffiliateLandingPage() {
-  const params = useParams();
-  const slug = (params?.slug as string) || '';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-  const [profile, setProfile] = useState<AuraLandingProfileData | null>(null);
-  const [niches, setNiches] = useState<AuraNicheItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+const API_URL = process.env.API_INTERNAL_URL ?? 'http://localhost:3001';
 
-  useEffect(() => {
-    if (!slug) return;
+interface PageProps {
+  params: Promise<{ slug: string }> | { slug: string };
+}
 
-    async function fetchLanding() {
-      try {
-        setLoading(true);
-        setError(null);
-        const res = await fetch(`/api/v1/public/affiliate-landing/${slug}`);
-        if (!res.ok) {
-          if (res.status === 404) {
-            setError('Esta página de ofertas não existe ou foi temporariamente pausada.');
-          } else {
-            setError('Não foi possível carregar as informações desta página.');
-          }
-          return;
-        }
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const resolvedParams = await params;
+  const slug = (resolvedParams?.slug || '').toLowerCase().trim();
 
-        const json = await res.json();
-        if (json.ok && json.data) {
-          setProfile(json.data.profile);
-          setNiches(json.data.niches || []);
-          if (json.data.profile?.title) {
-            document.title = json.data.profile.title;
-          }
-        } else {
-          setError('Página não encontrada.');
-        }
-      } catch (err) {
-        setError('Ocorreu uma falha de conexão ao carregar a página.');
-      } finally {
-        setLoading(false);
+  let title = 'Clube de Preços VIP · Ofertas e Cupons no WhatsApp';
+  let description =
+    'Rastreamos bugs de preço, descontos relâmpago e promoções exclusivas em grandes lojas. Escolha seu nicho abaixo e entre no grupo do WhatsApp!';
+  let authorName = 'Clube VIP';
+
+  try {
+    const res = await fetch(`${API_URL}/api/v1/public/affiliate-landing/${slug}`, {
+      cache: 'no-store',
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const p = json?.data?.profile;
+      if (p) {
+        title = p.title || p.headline || title;
+        description = p.subheadline || p.badgeText || description;
+        authorName = p.authorName || authorName;
       }
     }
+  } catch (err) {
+    console.error('[generateMetadata lp/[slug]] erro ao buscar dados:', err);
+  }
 
-    fetchLanding();
-  }, [slug]);
+  const baseUrl = await getServerBaseUrl();
+  const pageUrl = `${baseUrl}/lp/${slug}`;
+  const ogImageUrl = `${baseUrl}/lp/${slug}/hero-image`;
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#FFFBFD] dark:bg-[#090b10] text-neutral-900 dark:text-slate-100 flex flex-col items-center justify-center gap-4">
-        <Loader2 className="w-10 h-10 text-rose-500 animate-spin" />
-        <span className="font-mono text-xs text-neutral-500 uppercase tracking-widest">
-          Carregando Clube VIP...
-        </span>
-      </div>
-    );
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: 'website',
+      url: pageUrl,
+      siteName: authorName,
+      locale: 'pt_BR',
+      images: [
+        {
+          url: ogImageUrl,
+          width: 1200,
+          height: 630,
+          alt: title,
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [ogImageUrl],
+    },
+  };
+}
+
+export default async function AffiliateLandingPage({ params }: PageProps) {
+  const resolvedParams = await params;
+  const slug = (resolvedParams?.slug || '').toLowerCase().trim();
+
+  let profile: AuraLandingProfileData | null = null;
+  let niches: AuraNicheItem[] = [];
+  let error: string | null = null;
+
+  try {
+    const res = await fetch(`${API_URL}/api/v1/public/affiliate-landing/${slug}`, {
+      cache: 'no-store',
+    });
+
+    if (!res.ok) {
+      if (res.status === 404) {
+        error = 'Esta página de ofertas não existe ou foi temporariamente pausada.';
+      } else {
+        error = 'Não foi possível carregar as informações desta página.';
+      }
+    } else {
+      const json = await res.json();
+      if (json.ok && json.data) {
+        profile = json.data.profile;
+        niches = json.data.niches || [];
+      } else {
+        error = 'Página não encontrada.';
+      }
+    }
+  } catch (err) {
+    error = 'Ocorreu uma falha de conexão ao carregar a página.';
   }
 
   if (error || !profile) {

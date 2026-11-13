@@ -169,6 +169,52 @@ export async function affiliateLandingRoutes(app: FastifyInstance) {
     });
   });
 
+  // GET /public/affiliate-landing/:slug/hero-image - Serve a imagem principal em binário para OG / WhatsApp
+  app.get('/public/affiliate-landing/:slug/hero-image', async (req, reply) => {
+    const { slug } = req.params as { slug: string };
+    const cleanSlug = slug.toLowerCase().trim();
+
+    let heroImage: string | null = null;
+
+    if (cleanSlug === 'exemplo') {
+      heroImage = AURA_DEFAULT_HERO_IMAGE;
+    } else {
+      const lp = await prisma.affiliateLandingPage.findUnique({
+        where: { slug: cleanSlug },
+        select: { heroImage: true, enabled: true },
+      });
+      heroImage = lp?.heroImage ?? null;
+    }
+
+    if (!heroImage) {
+      heroImage = AURA_DEFAULT_HERO_IMAGE;
+    }
+
+    // 1. Base64 data URL
+    if (heroImage.startsWith('data:image/')) {
+      const match = heroImage.match(/^data:(image\/[a-zA-Z0-9\+\-\.]+);base64,(.+)$/);
+      if (match && match[1] && match[2]) {
+        const mimeType = match[1];
+        const buffer = Buffer.from(match[2], 'base64');
+        return reply
+          .header('Content-Type', mimeType)
+          .header('Content-Length', buffer.length.toString())
+          .header('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800')
+          .send(buffer);
+      }
+    }
+
+    // 2. URL externa http/https
+    if (heroImage.startsWith('http://') || heroImage.startsWith('https://')) {
+      return reply.redirect(heroImage, 302);
+    }
+
+    // 3. Relativo /assets/...
+    const webOrigin = process.env.WEB_ORIGIN || 'http://localhost:3000';
+    const finalUrl = heroImage.startsWith('/') ? `${webOrigin}${heroImage}` : `${webOrigin}/${heroImage}`;
+    return reply.redirect(finalUrl, 302);
+  });
+
   // GET /affiliate-landing - Dados de configuração da LP para o tenant autenticado
   app.get('/affiliate-landing', { preHandler: [requireAuth] }, async (req, reply) => {
     const tenantId = req.tenantId;

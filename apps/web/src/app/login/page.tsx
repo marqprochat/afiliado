@@ -31,6 +31,10 @@ export default function LoginPage() {
         onSubmit={submit}
         className="w-full max-w-sm rounded-2xl border border-border bg-surface p-8 shadow-xl"
       >
+        <div className="mb-6 flex items-center justify-center gap-3">
+          <img src="/icon.png" alt="Logo" className="h-9 w-9 object-contain" />
+          <span className="text-lg font-bold tracking-tight">Super Ofertas e Descontos</span>
+        </div>
         <h1 className="mb-1 text-2xl font-bold">Acessar Painel</h1>
         <p className="mb-6 text-sm text-muted-foreground">Entre com suas credenciais</p>
         <Label htmlFor="email">E-mail</Label>

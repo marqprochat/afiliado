@@ -83,7 +83,7 @@ export default function ExtensaoConfigPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
           <Sparkles className="w-7 h-7 text-emerald-500" />
-          Extensão Chrome — Afilados Connect
+          Extensão Chrome — Super Ofertas e Descontos Connect
         </h1>
         <p className="text-sm text-slate-400 mt-1">
           Capture ofertas em 1 clique diretamente nas páginas de produto do Mercado Livre, Amazon,
@@ -134,7 +134,7 @@ export default function ExtensaoConfigPage() {
               Gerar Chave de Acesso
             </CardTitle>
             <CardDescription>
-              Crie uma chave para vincular a extensão à sua conta Afilados.
+              Crie uma chave para vincular a extensão à sua conta Super Ofertas e Descontos.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -233,7 +233,7 @@ export default function ExtensaoConfigPage() {
                 4
               </span>
               <div>
-                Abra o popup do <strong>Afilados Connect</strong>, confira a URL da API e cole a
+                Abra o popup do <strong>Super Ofertas e Descontos Connect</strong>, confira a URL da API e cole a
                 Chave de Acesso gerada ao lado.
               </div>
             </div>

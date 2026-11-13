@@ -280,7 +280,7 @@ export function MarketplaceDrawer({
                 <p className="mt-2 text-xs">
                   Ou instale a{' '}
                   <a href={config.extensionUrl} className="text-brand underline">
-                    extensão Afilados Connect
+                    extensão Super Ofertas e Descontos Connect
                   </a>{' '}
                   para sincronizar automaticamente.
                 </p>

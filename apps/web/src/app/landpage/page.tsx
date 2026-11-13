@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Metadata } from 'next';
 import { AuraLandingView } from '@/components/aura-landing/AuraLandingView';
+import { getServerBaseUrl } from '@/lib/server-url';
 import {
   AURA_DEFAULT_HERO_IMAGE,
   AURA_DEFAULT_NICHES,
@@ -15,11 +16,40 @@ export const revalidate = 0;
 
 const API_URL = process.env.API_INTERNAL_URL ?? 'http://localhost:3001';
 
-export const metadata: Metadata = {
-  title: 'Clube de Preços VIP · Grupos de Ofertas e Cupons no WhatsApp',
-  description:
-    'Rastreamos bugs de preço, descontos relâmpago e promoções exclusiva em grandes lojas. Escolha seu nicho e entre no grupo do WhatsApp!',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const baseUrl = await getServerBaseUrl();
+  const title = 'Clube de Preços VIP · Grupos de Ofertas e Cupons no WhatsApp';
+  const description =
+    'Rastreamos bugs de preço, descontos relâmpago e promoções exclusivas em grandes lojas. Escolha seu nicho e entre no grupo do WhatsApp!';
+  const ogImageUrl = `${baseUrl}/landpage/hero-image`;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: 'website',
+      url: `${baseUrl}/landpage`,
+      siteName: 'Clube de Preços VIP',
+      locale: 'pt_BR',
+      images: [
+        {
+          url: ogImageUrl,
+          width: 1200,
+          height: 630,
+          alt: title,
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [ogImageUrl],
+    },
+  };
+}
 
 export default async function LandpagePage() {
   let niches = AURA_DEFAULT_NICHES;
