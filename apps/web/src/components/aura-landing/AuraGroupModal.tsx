@@ -1,9 +1,42 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { AuraNicheItem, ThemeColor, ButtonColor, ThemeMode } from '@afilados/shared';
+import { formatGroupImage } from '@afilados/shared';
 import { X, MessageCircle, Copy, CheckCheck, Flame, ArrowRight } from 'lucide-react';
 import { getAuraThemeStyles } from './theme';
+
+function NicheAvatarImage({ src, alt, className }: { src?: string | null; alt: string; className?: string }) {
+  const [hasError, setHasError] = useState(false);
+  const imageSrc = useMemo(() => formatGroupImage(src), [src]);
+
+  const initials = (alt || 'VIP')
+    .replace(/[^a-zA-ZÀ-ÿ0-9 ]/g, '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase() || 'VIP';
+
+  if (!hasError && imageSrc) {
+    return (
+      <img
+        src={imageSrc}
+        alt={alt}
+        onError={() => setHasError(true)}
+        referrerPolicy="no-referrer"
+        className={className || 'w-full h-full object-cover object-top'}
+      />
+    );
+  }
+
+  return (
+    <div className={`w-full h-full bg-gradient-to-br from-rose-500/20 via-pink-500/20 to-purple-500/20 flex items-center justify-center font-bold text-sm text-rose-500 ${className || ''}`}>
+      {initials}
+    </div>
+  );
+}
 
 interface AuraGroupModalProps {
   isOpen: boolean;
@@ -45,11 +78,9 @@ export const AuraGroupModal: React.FC<AuraGroupModalProps> = ({
         <div className={`p-6 border-b flex items-center justify-between ${t.cardSoftBg} ${t.isDark ? 'border-slate-800' : 'border-rose-100'}`}>
           <div className="flex items-center gap-3.5">
             <div className={`w-14 h-14 rounded-full overflow-hidden ring-3 shadow-md shrink-0 ${t.accentRing}`}>
-              <img
+              <NicheAvatarImage
                 src={niche.image}
                 alt={niche.name}
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover object-top"
               />
             </div>
             <div>

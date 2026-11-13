@@ -3,6 +3,7 @@ import { prisma } from '@afilados/db';
 import {
   ApiError,
   affiliateLandingUpdateSchema,
+  mapGroupLinkToAuraNiche,
   AURA_DEFAULT_NICHES,
   AURA_DEFAULT_STEPS,
   AURA_DEFAULT_FAQS,
@@ -83,17 +84,13 @@ export async function affiliateLandingRoutes(app: FastifyInstance) {
       };
     });
 
-    // Determina os nichos que serão exibidos
-    let niches = Array.isArray(lp.customNiches) && (lp.customNiches as any[]).length > 0
-      ? (lp.customNiches as any[])
-      : AURA_DEFAULT_NICHES.map((dn, idx) => {
-          // Se o tenant tem links cadastrados, vincula a url de redirecionamento correspondente
-          const matchingGroup = formattedGroups[idx] || formattedGroups[0];
-          return {
-            ...dn,
-            whatsappLink: matchingGroup ? matchingGroup.redirectUrl : lp.whatsappGeneralUrl || '#',
-          };
-        });
+    // Determina os nichos que serão exibidos:
+    // Puxa automaticamente dos links de grupos reais criados no admin do afiliado!
+    const niches = formattedGroups.length > 0
+      ? formattedGroups.map((link, idx) => mapGroupLinkToAuraNiche(link, idx))
+      : (Array.isArray(lp.customNiches) && (lp.customNiches as any[]).length > 0
+          ? (lp.customNiches as any[])
+          : AURA_DEFAULT_NICHES);
 
     return reply.send({
       ok: true,
@@ -176,7 +173,7 @@ export async function affiliateLandingRoutes(app: FastifyInstance) {
   app.get('/affiliate-landing', { preHandler: [requireAuth] }, async (req, reply) => {
     const tenantId = req.tenantId;
 
-    const [existing, tenant, user] = await Promise.all([
+    const [existing, tenant, user, groupLinks] = await Promise.all([
       prisma.affiliateLandingPage.findUnique({
         where: { tenantId },
       }),
@@ -186,17 +183,64 @@ export async function affiliateLandingRoutes(app: FastifyInstance) {
       prisma.user.findFirst({
         where: { tenantId, role: 'OWNER' },
       }),
+      prisma.groupLink.findMany({
+        where: {
+          tenantId,
+          enabled: true,
+          status: 'ACTIVE',
+        },
+        orderBy: [{ displayOrder: 'asc' }, { createdAt: 'desc' }],
+        include: {
+          groups: {
+            where: { status: 'ACTIVE' },
+            take: 1,
+          },
+        },
+      }),
     ]);
+
+    const formattedRealGroups = groupLinks.map((link) => {
+      const activeGroup = link.groups[0] ?? null;
+      return {
+        id: link.id,
+        slug: link.slug,
+        label: link.label,
+        baseName: link.baseName,
+        customText: link.customText,
+        groupDescription: link.groupDescription,
+        groupImageBase64: link.groupImageBase64,
+        displayOrder: link.displayOrder,
+        clickCount: link.clickCount,
+        status: link.status,
+        memberLimit: link.memberLimit,
+        activeGroup: activeGroup
+          ? {
+              name: activeGroup.name,
+              memberCount: activeGroup.memberCount,
+            }
+          : null,
+        redirectUrl: `/g/${link.slug}`,
+      };
+    });
+
+    const realNiches = formattedRealGroups.map((link, idx) => mapGroupLinkToAuraNiche(link, idx));
+    const effectiveNiches = realNiches.length > 0
+      ? realNiches
+      : (Array.isArray(existing?.customNiches) && (existing?.customNiches as any[]).length > 0
+          ? (existing?.customNiches as any[])
+          : AURA_DEFAULT_NICHES);
 
     if (existing) {
       return reply.send({
         ok: true,
         data: {
           ...existing,
+          whatsappGeneralUrl: existing.whatsappGeneralUrl || (formattedRealGroups[0]?.redirectUrl ?? null),
           howItWorksSteps: existing.howItWorksSteps || AURA_DEFAULT_STEPS,
           faqItems: existing.faqItems || AURA_DEFAULT_FAQS,
-          customNiches: existing.customNiches || AURA_DEFAULT_NICHES,
+          customNiches: effectiveNiches,
           heroImage: existing.heroImage || AURA_DEFAULT_HERO_IMAGE,
+          realGroups: formattedRealGroups,
         },
       });
     }
@@ -230,7 +274,7 @@ export async function affiliateLandingRoutes(app: FastifyInstance) {
       ctaButtonText: 'Entrar no Grupo do WhatsApp',
       reassuranceText:
         '100% Silencioso (sem conversas paralelas) · Apenas administradores postam · Gratuito para sempre',
-      whatsappGeneralUrl: null,
+      whatsappGeneralUrl: formattedRealGroups[0]?.redirectUrl ?? null,
 
       // Dobra Como Funciona
       howItWorksTitle: 'Como funcionam os nossos grupos de preço',
@@ -248,7 +292,8 @@ export async function affiliateLandingRoutes(app: FastifyInstance) {
       faqBannerButtonText: 'Entrar no WhatsApp Geral',
 
       // Nichos
-      customNiches: AURA_DEFAULT_NICHES,
+      customNiches: effectiveNiches,
+      realGroups: formattedRealGroups,
 
       // Rodapé
       footerText:

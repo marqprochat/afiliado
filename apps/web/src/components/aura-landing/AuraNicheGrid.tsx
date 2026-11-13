@@ -1,9 +1,42 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import type { AuraNicheItem, ThemeColor, ButtonColor, ThemeMode } from '@afilados/shared';
+import { formatGroupImage } from '@afilados/shared';
 import { MessageCircle, ArrowRight, Flame } from 'lucide-react';
 import { getAuraThemeStyles } from './theme';
+
+function NicheAvatarImage({ src, alt, className }: { src?: string | null; alt: string; className?: string }) {
+  const [hasError, setHasError] = useState(false);
+  const imageSrc = useMemo(() => formatGroupImage(src), [src]);
+
+  const initials = (alt || 'VIP')
+    .replace(/[^a-zA-ZÀ-ÿ0-9 ]/g, '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase() || 'VIP';
+
+  if (!hasError && imageSrc) {
+    return (
+      <img
+        src={imageSrc}
+        alt={alt}
+        onError={() => setHasError(true)}
+        referrerPolicy="no-referrer"
+        className={className || 'w-full h-full object-cover object-top group-hover/photo:scale-110 transition-transform duration-500'}
+      />
+    );
+  }
+
+  return (
+    <div className={`w-full h-full bg-gradient-to-br from-rose-500/20 via-pink-500/20 to-purple-500/20 flex items-center justify-center font-bold text-sm text-rose-500 ${className || ''}`}>
+      {initials}
+    </div>
+  );
+}
 
 interface AuraNicheGridProps {
   niches: AuraNicheItem[];
@@ -67,11 +100,9 @@ export const AuraNicheGrid: React.FC<AuraNicheGridProps> = ({
                       }`}
                       title={`Destacar ${niche.name}`}
                     >
-                      <img
+                      <NicheAvatarImage
                         src={niche.image}
-                        alt={niche.name}
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover object-top group-hover/photo:scale-110 transition-transform duration-500"
+                        alt={`Foto do nicho ${niche.name}`}
                       />
                       <div className="absolute inset-0 bg-neutral-950/10 group-hover/photo:bg-transparent transition-colors" />
                     </button>

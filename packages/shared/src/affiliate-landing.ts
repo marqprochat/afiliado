@@ -62,6 +62,71 @@ export interface AuraFaqItem {
 
 export const AURA_DEFAULT_HERO_IMAGE = '/assets/landing/hero-model.jpg';
 
+export function formatGroupImage(src?: string | null, fallbackIndex: number = 0): string {
+  if (!src || src.trim() === '') {
+    const fallbackImages: readonly string[] = [
+      '/assets/landing/niche-beleza.jpg',
+      '/assets/landing/niche-bebe.png',
+      '/assets/landing/niche-mercado.jpg',
+      '/assets/landing/niche-casa.jpg',
+    ];
+    return fallbackImages[fallbackIndex % fallbackImages.length] ?? '/assets/landing/niche-beleza.jpg';
+  }
+  const clean = src.trim();
+  if (
+    clean.startsWith('data:') ||
+    clean.startsWith('http://') ||
+    clean.startsWith('https://') ||
+    clean.startsWith('/')
+  ) {
+    return clean;
+  }
+  return `data:image/jpeg;base64,${clean}`;
+}
+
+export interface GroupLinkLike {
+  id: string;
+  slug: string;
+  label: string;
+  baseName?: string | null;
+  customText?: string | null;
+  groupDescription?: string | null;
+  groupImageBase64?: string | null;
+  displayOrder?: number | null;
+  clickCount?: number | null;
+}
+
+export function mapGroupLinkToAuraNiche(link: GroupLinkLike, index: number): AuraNicheItem {
+  const orderNumber = String(index + 1).padStart(2, '0');
+  const name = (link.label || link.baseName || `Grupo ${orderNumber}`).trim();
+  const description = (
+    link.groupDescription ||
+    link.customText ||
+    'Entre no grupo oficial no WhatsApp para receber as melhores ofertas, cupons e bugs de preço selecionados diariamente.'
+  ).trim();
+  const image = formatGroupImage(link.groupImageBase64, index);
+  const whatsappLink = `/g/${link.slug}`;
+  const dealsTodayCount = Math.max(15, Math.min(99, Math.floor((link.clickCount || 0) / 8) + 20));
+
+  return {
+    id: link.slug || link.id,
+    orderNumber,
+    name,
+    tagline: link.customText || link.groupDescription || '',
+    description,
+    image,
+    categoryBadge: 'WhatsApp Oficial',
+    dealsTodayCount,
+    whatsappLink,
+    popularItems: [
+      'Ofertas com Menor Preço Histórico',
+      'Cupons Exclusivos Testados',
+      'Bugs e Erros de Preço',
+      'Descontos Acima de 50% OFF',
+    ],
+  };
+}
+
 export const AURA_DEFAULT_NICHES: AuraNicheItem[] = [
   {
     id: 'beleza-cosmeticos',

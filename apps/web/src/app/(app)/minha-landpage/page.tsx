@@ -48,6 +48,7 @@ import {
   AURA_DEFAULT_FAQS,
   THEME_COLORS,
   BUTTON_COLORS,
+  formatGroupImage,
 } from '@afilados/shared';
 
 const THEME_PRESETS: { id: ThemeColor; name: string; colorHex: string }[] = [
@@ -138,6 +139,7 @@ export default function MinhaLandpagePage() {
   // Imagem Hero
   const [heroImageMode, setHeroImageMode] = useState<'upload' | 'url'>('upload');
   const [isProcessingHero, setIsProcessingHero] = useState(false);
+  const [realGroups, setRealGroups] = useState<any[]>([]);
   const heroFileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
@@ -259,6 +261,10 @@ export default function MinhaLandpagePage() {
             youtubeUrl: d.youtubeUrl || '',
             telegramUrl: d.telegramUrl || '',
           });
+
+          if (Array.isArray(d.realGroups)) {
+            setRealGroups(d.realGroups);
+          }
 
           if (d.heroImage?.startsWith('http://') || d.heroImage?.startsWith('https://')) {
             setHeroImageMode('url');
@@ -1016,10 +1022,10 @@ export default function MinhaLandpagePage() {
             <div>
               <h2 className="text-xl font-bold flex items-center gap-2">
                 <Layers className="w-5 h-5 text-rose-500" />
-                <span>Grupos de Nicho (Círculos & Cards)</span>
+                <span>Grupos & Nichos Sincronizados</span>
               </h2>
               <p className="text-xs text-muted-foreground mt-1">
-                Configure os nichos que aparecem tanto nos círculos clicáveis ao lado da foto quanto na grade completa.
+                Os grupos, imagens e links de redirecionamento são puxados automaticamente dos seus Links Fixos de Grupos.
               </p>
             </div>
 
@@ -1035,6 +1041,155 @@ export default function MinhaLandpagePage() {
                 />
               </div>
 
+              <a
+                href="/links-grupos"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand/10 text-brand hover:bg-brand/20 text-xs font-semibold border border-brand/20 transition"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Gerenciar Links de Grupos</span>
+              </a>
+            </div>
+          </div>
+
+          {/* BANNER DE SINCRONIZAÇÃO AUTOMÁTICA */}
+          <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0 mt-0.5">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-emerald-500 flex items-center gap-2">
+                  <span>Sincronização Automática com Grupos Reais Ativa</span>
+                </h4>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  Os nomes, fotos de perfil do WhatsApp, descrições e links dinâmicos <code>/g/[slug]</code> são puxados diretamente do seu cadastro em <strong>Links Fixos de Grupos</strong>.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+              <a
+                href="/links-grupos"
+                className="w-full sm:w-auto text-center px-3.5 py-2 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 text-xs font-bold transition shadow-xs"
+              >
+                + Criar / Editar Grupos
+              </a>
+            </div>
+          </div>
+
+          {/* LISTA DOS GRUPOS REAIS CADASTRADOS */}
+          {realGroups.length > 0 ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Grupos Reais Detectados ({realGroups.length})
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Ordenados pela ordem de exibição da landpage
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {realGroups.map((rg, idx) => {
+                  const img = formatGroupImage(rg.groupImageBase64, idx);
+                  return (
+                    <div
+                      key={rg.id || idx}
+                      className="p-4 sm:p-5 rounded-2xl bg-surface-2 border border-border flex items-start gap-4 hover:border-border/80 transition"
+                    >
+                      <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-emerald-500/40 shrink-0 shadow-sm bg-surface">
+                        <img
+                          src={img}
+                          alt={rg.label}
+                          className="w-full h-full object-cover object-top"
+                        />
+                      </div>
+
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-rose-500 uppercase font-mono">
+                            #{String(idx + 1).padStart(2, '0')}
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 font-bold border border-emerald-500/20">
+                            Ativo no WhatsApp
+                          </span>
+                        </div>
+
+                        <div className="font-bold text-sm truncate">{rg.label}</div>
+
+                        <div className="text-xs text-muted-foreground line-clamp-2">
+                          {rg.groupDescription || rg.customText || 'Sem descrição cadastrada'}
+                        </div>
+
+                        <div className="pt-2 flex items-center justify-between gap-2">
+                          <span className="text-xs font-mono text-brand font-semibold truncate">
+                            {rg.redirectUrl}
+                          </span>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const fullUrl = `${window.location.origin}${rg.redirectUrl}`;
+                                await copyToClipboard(fullUrl);
+                                toast.success('Link do grupo copiado!');
+                              }}
+                              className="p-1.5 rounded-lg bg-surface hover:bg-surface-2 text-muted-foreground hover:text-foreground text-xs"
+                              title="Copiar link"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+
+                            <a
+                              href={rg.redirectUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 rounded-lg bg-surface hover:bg-surface-2 text-muted-foreground hover:text-foreground text-xs"
+                              title="Abrir link"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="p-8 rounded-2xl border border-dashed border-border bg-surface-2 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto">
+                <Layers className="w-6 h-6" />
+              </div>
+              <h3 className="font-bold text-sm">Nenhum Link Fixo de Grupo Criado Ainda</h3>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                Crie seus links em <strong>Links Fixos de Grupos</strong> para que suas fotos de grupo, descrições e links de convite sejam puxados automaticamente para a sua landing page.
+              </p>
+              <div className="pt-2">
+                <a
+                  href="/links-grupos"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-500 text-white font-bold text-xs shadow-md hover:bg-rose-600 transition"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Criar Meu Primeiro Link de Grupo</span>
+                </a>
+              </div>
+            </div>
+          )}
+
+          {/* PERSONALIZAÇÃO DE TAGS DOS NICHOS */}
+          <div className="space-y-4 pt-6 border-t border-border">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold">Tags dos Nichos na Landing Page</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Personalize os itens populares destacados em tags para cada nicho (&quot;O que mais postamos com super desconto&quot;).
+                </p>
+              </div>
+
               <Button
                 type="button"
                 variant="outline"
@@ -1043,81 +1198,35 @@ export default function MinhaLandpagePage() {
                 className="text-xs flex items-center gap-1.5"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>Restaurar 4 Nichos Aura</span>
+                <span>Restaurar Padrões Aura</span>
               </Button>
             </div>
-          </div>
 
-          {/* LISTA DOS NICHOS */}
-          <div className="space-y-6">
-            {formData.customNiches.map((niche, idx) => (
-              <div
-                key={niche.id || idx}
-                className="p-5 sm:p-6 rounded-2xl bg-surface-2 border border-border space-y-4"
-              >
-                <div className="flex items-center justify-between border-b border-border pb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-rose-400 shrink-0 shadow-xs">
+            <div className="space-y-4">
+              {formData.customNiches.map((niche, idx) => (
+                <div
+                  key={niche.id || idx}
+                  className="p-4 rounded-2xl bg-surface-2 border border-border flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+                >
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="w-10 h-10 rounded-full overflow-hidden border border-rose-300 shrink-0">
                       <img
-                        src={niche.image}
+                        src={formatGroupImage(niche.image, idx)}
                         alt={niche.name}
                         className="w-full h-full object-cover object-top"
                       />
                     </div>
                     <div>
-                      <span className="text-[10px] font-bold text-rose-500 uppercase tracking-wider">
+                      <span className="text-[10px] font-bold text-rose-500 uppercase">
                         Nicho #{niche.orderNumber || `0${idx + 1}`}
                       </span>
-                      <div className="font-bold text-sm">{niche.name}</div>
+                      <div className="font-bold text-xs truncate max-w-[200px]">{niche.name}</div>
                     </div>
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Nome do Nicho</Label>
-                    <Input
-                      value={niche.name}
-                      onChange={(e) => handleNicheChange(idx, 'name', e.target.value)}
-                      placeholder="Ex: BELEZA, COSMÉTICOS E CUIDADO"
-                      className="text-xs"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Categoria / Badge</Label>
-                    <Input
-                      value={niche.categoryBadge}
-                      onChange={(e) => handleNicheChange(idx, 'categoryBadge', e.target.value)}
-                      placeholder="Ex: Beleza & Cuidados"
-                      className="text-xs"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">URL da Imagem Redonda</Label>
-                    <Input
-                      value={niche.image}
-                      onChange={(e) => handleNicheChange(idx, 'image', e.target.value)}
-                      placeholder="/assets/landing/niche-beleza.jpg"
-                      className="text-xs font-mono"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5 sm:col-span-2 md:col-span-3">
-                    <Label className="text-xs font-semibold">Descrição Destacada do Grupo</Label>
-                    <Textarea
-                      rows={2}
-                      value={niche.description}
-                      onChange={(e) => handleNicheChange(idx, 'description', e.target.value)}
-                      placeholder="Ex: Grupo para produtos indispensáveis para mulheres, de cosméticos até cuidados íntimos!"
-                      className="text-xs"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <Label className="text-xs font-semibold">
-                      Itens Mais Postados com Desconto (Tags separadas por vírgula)
+                  <div className="flex-1 w-full space-y-1">
+                    <Label className="text-[11px] font-semibold text-muted-foreground">
+                      Tags separadas por vírgula (&quot;O que mais postamos com super desconto&quot;):
                     </Label>
                     <Input
                       value={niche.popularItems?.join(', ') || ''}
@@ -1126,19 +1235,9 @@ export default function MinhaLandpagePage() {
                       className="text-xs"
                     />
                   </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Link Direto do WhatsApp (Opcional)</Label>
-                    <Input
-                      value={niche.whatsappLink || ''}
-                      onChange={(e) => handleNicheChange(idx, 'whatsappLink', e.target.value)}
-                      placeholder="https://chat.whatsapp.com/..."
-                      className="text-xs font-mono"
-                    />
-                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       )}
