@@ -22,10 +22,10 @@ function getDefaultHeroBuffer(): { buffer: Buffer; contentType: string } | null 
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: Promise<{ slug: string }> | { slug: string } }
+  { params }: { params: Promise<{ slug: string }> }
 ) {
-  const resolvedParams = await params;
-  const slug = (resolvedParams?.slug || '').toLowerCase().trim();
+  const { slug: rawSlug } = await params;
+  const slug = (rawSlug || '').toLowerCase().trim();
 
   try {
     let heroImage: string | null = null;

@@ -12,12 +12,12 @@ export const revalidate = 0;
 const API_URL = process.env.API_INTERNAL_URL ?? 'http://localhost:3001';
 
 interface PageProps {
-  params: Promise<{ slug: string }> | { slug: string };
+  params: Promise<{ slug: string }>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const resolvedParams = await params;
-  const slug = (resolvedParams?.slug || '').toLowerCase().trim();
+  const { slug: rawSlug } = await params;
+  const slug = (rawSlug || '').toLowerCase().trim();
 
   let title = 'Clube de Preços VIP · Ofertas e Cupons no WhatsApp';
   let description =
@@ -74,8 +74,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function AffiliateLandingPage({ params }: PageProps) {
-  const resolvedParams = await params;
-  const slug = (resolvedParams?.slug || '').toLowerCase().trim();
+  const { slug: rawSlug } = await params;
+  const slug = (rawSlug || '').toLowerCase().trim();
 
   let profile: AuraLandingProfileData | null = null;
   let niches: AuraNicheItem[] = [];
