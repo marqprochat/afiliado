@@ -266,15 +266,36 @@ export class BaileysGateway implements WhatsAppGateway {
     let entry: Live;
     try {
       ({ state, saveCreds, clear } = await usePostgresAuthState(sessionId));
+      // Limpa registros de sender-key-memory para garantir que a chave do grupo seja distribuída
+      await prisma.waAuthKey.deleteMany({
+        where: { sessionId, type: 'sender-key-memory' },
+      }).catch(() => undefined);
+
       const version = await getWaVersion();
       const logger = log.child({ sessionId }) as never;
       const msgRetryCounterCache = new MemoryCacheStore(5000, 3600_000);
       const userDevicesCache = new MemoryCacheStore(5000, 24 * 3600_000);
+      const baseKeyStore = makeCacheableSignalKeyStore(state.keys, logger);
+      const signalKeyStore: typeof baseKeyStore = {
+        ...baseKeyStore,
+        get: async (type, ids) => {
+          if (type === 'sender-key-memory') {
+            return {};
+          }
+          return baseKeyStore.get(type, ids);
+        },
+        set: async (data) => {
+          if (data['sender-key-memory']) {
+            delete data['sender-key-memory'];
+          }
+          return baseKeyStore.set(data);
+        },
+      };
       sock = makeWASocket({
         version,
         auth: {
           creds: state.creds,
-          keys: makeCacheableSignalKeyStore(state.keys, logger),
+          keys: signalKeyStore,
         },
         msgRetryCounterCache,
         userDevicesCache,
@@ -572,7 +593,8 @@ export class BaileysGateway implements WhatsAppGateway {
     // Se for grupo, pré-carrega ou garante metadados para estabelecer sessões dos participantes
     if (jid.endsWith('@g.us')) {
       try {
-        if (!this.groupCache.has(jid)) {
+        const cached = this.groupCache.get(jid);
+        if (!cached || Date.now() - cached.timestamp >= 5 * 60 * 1000) {
           const meta = await l.sock.groupMetadata(jid);
           this.groupCache.set(jid, { data: meta, timestamp: Date.now() });
         }

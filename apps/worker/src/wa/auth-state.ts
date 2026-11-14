@@ -26,6 +26,14 @@ export async function usePostgresAuthState(sessionId: string) {
     creds,
     keys: {
       get: async <T extends keyof SignalDataTypeMap>(type: T, ids: string[]) => {
+        // NÃO armazena nem retorna sender-key-memory persistido.
+        // Isso força o Baileys a SEMPRE incluir a mensagem de distribuição
+        // de chave (senderKeyDistributionMessage) ao enviar ofertas no grupo.
+        // Evita definitivamente que membros do grupo fiquem travados em
+        // "Aguardando mensagem. Essa ação pode levar alguns instantes".
+        if (type === 'sender-key-memory') {
+          return {} as { [id: string]: SignalDataTypeMap[T] };
+        }
         const rows = await prisma.waAuthKey.findMany({
           where: { sessionId, type, keyId: { in: ids } },
         });
@@ -44,6 +52,7 @@ export async function usePostgresAuthState(sessionId: string) {
       set: async (data) => {
         const ops = [];
         for (const [type, entries] of Object.entries(data)) {
+          if (type === 'sender-key-memory') continue;
           for (const [keyId, value] of Object.entries(entries ?? {})) {
             if (value === null || value === undefined) {
               ops.push(prisma.waAuthKey.deleteMany({ where: { sessionId, type, keyId } }));
