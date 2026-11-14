@@ -23,6 +23,7 @@ class FakeSocket {
   async logout() {}
   requestPairingCode = vi.fn(async () => 'ABCD-EFGH');
   sendPresenceUpdate = vi.fn(async () => {});
+  uploadPreKeysToServerIfRequired = vi.fn(async () => {});
   sendMessage = vi.fn();
   groupFetchAllParticipating = vi.fn();
 

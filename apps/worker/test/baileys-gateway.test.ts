@@ -24,6 +24,7 @@ class FakeSocket {
   async logout() {}
   requestPairingCode = vi.fn(async () => 'ABCD-EFGH');
   sendPresenceUpdate = vi.fn(async () => {});
+  uploadPreKeysToServerIfRequired = vi.fn(async () => {});
   sendMessage = vi.fn(async () => ({ key: { id: 'WAMSG-1' } }));
   groupFetchAllParticipating = vi.fn();
   groupMetadata = vi.fn();

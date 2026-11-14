@@ -272,9 +272,10 @@ export class BaileysGateway implements WhatsAppGateway {
       if (!state.creds.registered) {
         await prisma.waAuthKey.deleteMany({ where: { sessionId } }).catch(() => undefined);
       } else {
-        // Limpa registros de sender-key-memory para garantir que a chave do grupo seja distribuída
+        // Limpa registros de sender-key e sender-key-memory para garantir que
+        // a chave do grupo seja redistribuída totalmente na próxima mensagem
         await prisma.waAuthKey.deleteMany({
-          where: { sessionId, type: 'sender-key-memory' },
+          where: { sessionId, type: { in: ['sender-key', 'sender-key-memory'] } },
         }).catch(() => undefined);
       }
 
@@ -328,6 +329,15 @@ export class BaileysGateway implements WhatsAppGateway {
           }
           return msg;
         },
+        // Garante que as pre-keys estejam sincronizadas no servidor antes de cada envio.
+        // Isso evita que membros do grupo fiquem com "Aguardando mensagem" por falta de
+        // chaves de criptografia válidas no servidor do WhatsApp.
+        patchMessageBeforeSending: async (msg) => {
+          await sock.uploadPreKeysToServerIfRequired?.().catch((e: unknown) =>
+            log.debug({ err: e, sessionId }, 'aviso ao fazer upload de pre-keys'),
+          );
+          return msg;
+        },
       });
       let resolveClosed!: () => void;
       const closed = new Promise<void>((resolve) => {
@@ -360,12 +370,26 @@ export class BaileysGateway implements WhatsAppGateway {
 
     sock.ev.on('groups.update', (updates) => {
       for (const u of updates) {
-        if (u.id) this.groupCache.delete(u.id);
+        if (u.id) {
+          const gid = u.id;
+          this.groupCache.delete(gid);
+          // Atualiza o cache proativamente para que o próximo envio já tenha
+          // os metadados frescos (participantes, permissões etc.)
+          sock.groupMetadata(gid).then((meta) => {
+            this.groupCache.set(gid, { data: meta, timestamp: Date.now() });
+          }).catch(() => {/* ignora se o grupo não existir mais */});
+        }
       }
     });
 
     sock.ev.on('group-participants.update', (event) => {
-      if (event.id) this.groupCache.delete(event.id);
+      if (event.id) {
+        this.groupCache.delete(event.id);
+        // Refaz o cache proativamente para refletir a mudança de participantes
+        sock.groupMetadata(event.id).then((meta) => {
+          this.groupCache.set(event.id, { data: meta, timestamp: Date.now() });
+        }).catch(() => {});
+      }
       if (event.id && event.participants && event.action) {
         const payload: GroupParticipantsUpdateEvent = {
           sessionId,
@@ -451,6 +475,10 @@ export class BaileysGateway implements WhatsAppGateway {
             entry.attempt = 0;
             entry.connected = true;
             void sock.sendPresenceUpdate('available').catch(() => undefined);
+            // Garante que pre-keys estejam no servidor logo após conectar
+            void sock.uploadPreKeysToServerIfRequired?.().catch((e: unknown) =>
+              log.debug({ err: e, sessionId }, 'aviso ao fazer upload de pre-keys na conexão'),
+            );
             const phone = sock.user?.id.split(':')[0]?.split('@')[0];
             const extra: { phone?: string; lastQr: null; pairCode: null } = {
               lastQr: null,
