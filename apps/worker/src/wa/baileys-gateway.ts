@@ -370,6 +370,10 @@ export class BaileysGateway implements WhatsAppGateway {
         if (msg.key?.id && msg.message) {
           void this.storeMessage(sessionId, msg.key.id, msg.message);
         }
+        if (msg.key?.fromMe && msg.key?.remoteJid?.endsWith('@lid') && sock.user && !sock.user.lid) {
+          sock.user.lid = msg.key.remoteJid;
+          log.info({ sessionId, lid: msg.key.remoteJid }, 'LID da conta identificado via mensagem de sincronização');
+        }
       }
       if (type !== 'notify') return;
       for (const msg of messages) {
@@ -686,26 +690,40 @@ export class BaileysGateway implements WhatsAppGateway {
     const l = this.live.get(sessionId);
     if (!l || !this.isConnected(sessionId)) throw new Error('WA_NOT_CONNECTED');
     if (!l.sock.user) throw new Error('WA_NOT_CONNECTED');
-    // O WhatsApp entrega o LID da própria conta só algum tempo depois da conexão abrir (numa
-    // sessão recém-pareada pode demorar bastante). Como os grupos hoje identificam admins
-    // exclusivamente por LID, sincronizar sem ele marcaria TODOS os grupos como não-admin —
-    // dado errado gravado silenciosamente. Espera, e se não vier, falha em vez de gravar.
-    for (let i = 0; i < 30 && !l.sock.user?.lid; i++) {
+
+    // Espera brevemente caso o LID chegue logo no handshake inicial
+    for (let i = 0; i < 10 && !l.sock.user?.lid; i++) {
       await new Promise((r) => setTimeout(r, 500));
     }
     const user = l.sock.user;
     if (!user) throw new Error('WA_NOT_CONNECTED');
-    if (!user.lid) throw new Error('WA_LID_PENDING');
-    // a conta aparece nos participantes ora com o JID de telefone, ora com o LID
+
+    // A conta aparece nos participantes ora com o JID de telefone, ora com o LID
     const meJid = jidNormalizedUser(user.id);
-    const meLid = user.lid ? jidNormalizedUser(user.lid) : undefined;
+    let meLid = user.lid ? jidNormalizedUser(user.lid) : undefined;
+
+    const groups = await l.sock.groupFetchAllParticipating();
+
+    // Se o LID não veio nas credenciais iniciais, deduz a partir da lista de participantes dos próprios grupos
+    if (!meLid) {
+      for (const g of Object.values(groups)) {
+        const found = g.participants?.find((p) => jidNormalizedUser(p.id) === meJid);
+        if (found?.lid) {
+          meLid = jidNormalizedUser(found.lid);
+          if (l.sock.user) l.sock.user.lid = meLid;
+          log.info({ sessionId, meLid }, 'LID da conta identificado a partir dos participantes dos grupos');
+          break;
+        }
+      }
+    }
+
     const isMe = (...ids: (string | undefined)[]) =>
       ids.some((id) => {
         if (!id) return false;
         const n = jidNormalizedUser(id);
         return n === meJid || (meLid !== undefined && n === meLid);
       });
-    const groups = await l.sock.groupFetchAllParticipating();
+
     const out: GroupInfo[] = Object.values(groups).map((g) => ({
       jid: g.id,
       name: g.subject,
