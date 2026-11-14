@@ -22,6 +22,7 @@ class FakeSocket {
   end() {}
   async logout() {}
   requestPairingCode = vi.fn(async () => 'ABCD-EFGH');
+  sendPresenceUpdate = vi.fn(async () => {});
   sendMessage = vi.fn();
   groupFetchAllParticipating = vi.fn();
 

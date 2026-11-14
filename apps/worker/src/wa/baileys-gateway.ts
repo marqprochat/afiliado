@@ -7,6 +7,7 @@ import {
   makeCacheableSignalKeyStore,
   BufferJSON,
   proto,
+  Browsers,
   type WASocket,
   type WAUrlInfo,
   type WAMessage,
@@ -266,10 +267,16 @@ export class BaileysGateway implements WhatsAppGateway {
     let entry: Live;
     try {
       ({ state, saveCreds, clear } = await usePostgresAuthState(sessionId));
-      // Limpa registros de sender-key-memory para garantir que a chave do grupo seja distribuída
-      await prisma.waAuthKey.deleteMany({
-        where: { sessionId, type: 'sender-key-memory' },
-      }).catch(() => undefined);
+      // Se a sessão ainda não está registrada (gerando novo QR / pareando), purga todas as chaves
+      // antigas do banco para garantir uma sessão 100% limpa (como no WhatsApp Web oficial)
+      if (!state.creds.registered) {
+        await prisma.waAuthKey.deleteMany({ where: { sessionId } }).catch(() => undefined);
+      } else {
+        // Limpa registros de sender-key-memory para garantir que a chave do grupo seja distribuída
+        await prisma.waAuthKey.deleteMany({
+          where: { sessionId, type: 'sender-key-memory' },
+        }).catch(() => undefined);
+      }
 
       const version = await getWaVersion();
       const logger = log.child({ sessionId }) as never;
@@ -300,9 +307,10 @@ export class BaileysGateway implements WhatsAppGateway {
         msgRetryCounterCache,
         userDevicesCache,
         printQRInTerminal: false,
-        browser: [config.WA_BROWSER_NAME, 'Chrome', '120.0'],
+        browser: Browsers.ubuntu('Chrome'),
         logger,
-        markOnlineOnConnect: false,
+        markOnlineOnConnect: true,
+        syncFullHistory: false,
         cachedGroupMetadata: async (jid) => {
           const cached = this.groupCache.get(jid);
           if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
@@ -442,6 +450,7 @@ export class BaileysGateway implements WhatsAppGateway {
           if (u.connection === 'open') {
             entry.attempt = 0;
             entry.connected = true;
+            void sock.sendPresenceUpdate('available').catch(() => undefined);
             const phone = sock.user?.id.split(':')[0]?.split('@')[0];
             const extra: { phone?: string; lastQr: null; pairCode: null } = {
               lastQr: null,
