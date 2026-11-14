@@ -5,14 +5,18 @@ import {
   jidNormalizedUser,
   downloadMediaMessage,
   makeCacheableSignalKeyStore,
+  BufferJSON,
+  proto,
   type WASocket,
   type WAUrlInfo,
   type WAMessage,
+  type CacheStore,
 } from '@whiskeysockets/baileys';
 import type { Boom } from '@hapi/boom';
 import pino from 'pino';
 import { prisma, type WaSessionStatus } from '@afilados/db';
 import { config } from '../config';
+import { getRedis } from '../lib/redis';
 import { publishEvent } from '../lib/events';
 import { assertPublicHttpUrl } from '../lib/safe-url';
 import { usePostgresAuthState } from './auth-state';
@@ -27,6 +31,42 @@ import type {
   GroupParticipantAction,
   GroupSettingsUpdate,
 } from './gateway';
+
+/**
+ * Cache síncrono em memória compatível com CacheStore do Baileys
+ * (usado para msgRetryCounterCache e userDevicesCache).
+ */
+export class MemoryCacheStore implements CacheStore {
+  private map = new Map<string, { val: unknown; expiresAt?: number | undefined }>();
+  constructor(private maxEntries = 5000, private defaultTtlMs = 24 * 3600_000) {}
+
+  get<T>(key: string): T | undefined {
+    const item = this.map.get(key);
+    if (!item) return undefined;
+    if (item.expiresAt && Date.now() > item.expiresAt) {
+      this.map.delete(key);
+      return undefined;
+    }
+    return item.val as T;
+  }
+
+  set<T>(key: string, value: T, ttlMs?: number): void {
+    if (this.map.size >= this.maxEntries) {
+      const firstKey = this.map.keys().next().value;
+      if (firstKey) this.map.delete(firstKey);
+    }
+    const expiresAt = (ttlMs ?? this.defaultTtlMs) > 0 ? Date.now() + (ttlMs ?? this.defaultTtlMs) : undefined;
+    this.map.set(key, { val: value, expiresAt });
+  }
+
+  del(key: string): void {
+    this.map.delete(key);
+  }
+
+  flushAll(): void {
+    this.map.clear();
+  }
+}
 
 interface Live {
   sock: WASocket;
@@ -46,6 +86,10 @@ interface Live {
   pairRequested: boolean;
   /** reconexão agendada por este socket (também em `pendingReconnects`) */
   reconnectTimer?: NodeJS.Timeout;
+  /** cache de retries para evitar loops de decriptografia */
+  msgRetryCounterCache: MemoryCacheStore;
+  /** cache de lista de dispositivos de participantes */
+  userDevicesCache: MemoryCacheStore;
   /** listeners/timers a remover quando o socket morre */
   cleanup: (() => void)[];
   /** resolve quando o `connection.update` de close chega */
@@ -96,6 +140,51 @@ export class BaileysGateway implements WhatsAppGateway {
   /** ids das mensagens enviadas pelo processor de espelhamento, para não reespelhar o próprio eco */
   private dedupedEchoIds = new Set<string>();
   private groupCache = new Map<string, { data: unknown; timestamp: number }>();
+  private messageCache = new Map<string, proto.IMessage>();
+
+  /**
+   * Armazena mensagens enviadas e recebidas no cache em memória e no Redis (24h),
+   * permitindo que o Baileys responda a pedidos de retransmissão / retry do WhatsApp
+   * quando outro usuário relata "Aguardando mensagem. Essa ação pode levar alguns instantes".
+   */
+  private async storeMessage(sessionId: string, msgId: string, message: proto.IMessage) {
+    if (!msgId || !message) return;
+    const cacheKey = `${sessionId}:${msgId}`;
+    if (this.messageCache.size >= 5000) {
+      const firstKey = this.messageCache.keys().next().value;
+      if (firstKey) this.messageCache.delete(firstKey);
+    }
+    this.messageCache.set(cacheKey, message);
+
+    try {
+      const redis = getRedis();
+      const raw = JSON.stringify(message, BufferJSON.replacer);
+      await redis.setex(`wa:msg:${cacheKey}`, 86400, raw);
+    } catch (err) {
+      log.debug({ err, sessionId, msgId }, 'aviso ao gravar mensagem de retry no redis');
+    }
+  }
+
+  private async loadMessage(sessionId: string, msgId: string): Promise<proto.IMessage | undefined> {
+    if (!msgId) return undefined;
+    const cacheKey = `${sessionId}:${msgId}`;
+    const mem = this.messageCache.get(cacheKey);
+    if (mem) return mem;
+
+    try {
+      const redis = getRedis();
+      const raw = await redis.get(`wa:msg:${cacheKey}`);
+      if (raw) {
+        const parsed = JSON.parse(raw, BufferJSON.reviver);
+        const msg = proto.Message.fromObject(parsed as proto.IMessage);
+        this.messageCache.set(cacheKey, msg);
+        return msg;
+      }
+    } catch (err) {
+      log.warn({ err, sessionId, msgId }, 'aviso ao recuperar mensagem para retry do redis');
+    }
+    return undefined;
+  }
 
   onMessage(handler: (m: IncomingGroupMessage) => void) {
     this.messageHandlers.push(handler);
@@ -179,12 +268,16 @@ export class BaileysGateway implements WhatsAppGateway {
       ({ state, saveCreds, clear } = await usePostgresAuthState(sessionId));
       const version = await getWaVersion();
       const logger = log.child({ sessionId }) as never;
+      const msgRetryCounterCache = new MemoryCacheStore(5000, 3600_000);
+      const userDevicesCache = new MemoryCacheStore(5000, 24 * 3600_000);
       sock = makeWASocket({
         version,
         auth: {
           creds: state.creds,
           keys: makeCacheableSignalKeyStore(state.keys, logger),
         },
+        msgRetryCounterCache,
+        userDevicesCache,
         printQRInTerminal: false,
         browser: [config.WA_BROWSER_NAME, 'Chrome', '120.0'],
         logger,
@@ -196,7 +289,16 @@ export class BaileysGateway implements WhatsAppGateway {
           }
           return undefined;
         },
-        getMessage: async () => undefined,
+        getMessage: async (key: proto.IMessageKey) => {
+          if (!key.id) return undefined;
+          const msg = await this.loadMessage(sessionId, key.id);
+          if (msg) {
+            log.info({ sessionId, msgId: key.id, remoteJid: key.remoteJid }, 'respondendo retry de mensagem');
+          } else {
+            log.warn({ sessionId, msgId: key.id, remoteJid: key.remoteJid }, 'mensagem de retry não encontrada no cache');
+          }
+          return msg;
+        },
       });
       let resolveClosed!: () => void;
       const closed = new Promise<void>((resolve) => {
@@ -211,7 +313,12 @@ export class BaileysGateway implements WhatsAppGateway {
         connected: false,
         mode: opts.mode,
         pairRequested: false,
-        cleanup: [],
+        msgRetryCounterCache,
+        userDevicesCache,
+        cleanup: [
+          () => msgRetryCounterCache.flushAll(),
+          () => userDevicesCache.flushAll(),
+        ],
         closed,
         resolveClosed,
       };
@@ -259,6 +366,11 @@ export class BaileysGateway implements WhatsAppGateway {
     });
 
     sock.ev.on('messages.upsert', ({ type, messages }) => {
+      for (const msg of messages) {
+        if (msg.key?.id && msg.message) {
+          void this.storeMessage(sessionId, msg.key.id, msg.message);
+        }
+      }
       if (type !== 'notify') return;
       for (const msg of messages) {
         const remoteJid = msg.key.remoteJid;
@@ -557,6 +669,10 @@ export class BaileysGateway implements WhatsAppGateway {
 
     const messageId = sent?.key?.id;
     if (!messageId) throw new Error('Envio sem messageId');
+    const outMessage = sent?.message ?? (msg.kind === 'text' ? { conversation: msg.text } : undefined);
+    if (outMessage) {
+      void this.storeMessage(sessionId, messageId, outMessage as proto.IMessage);
+    }
     if (opts?.dedupeEcho) {
       if (this.dedupedEchoIds.size >= 5000) {
         this.dedupedEchoIds.delete(this.dedupedEchoIds.values().next().value!);
