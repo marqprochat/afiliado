@@ -783,11 +783,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     let currentAwinPartner = null;
 
-    if (url.includes('mercadolivre.com.br')) marketplaceKind = 'MERCADOLIVRE';
-    else if (url.includes('amazon.com.br')) marketplaceKind = 'AMAZON';
+    if (url.includes('mercadolivre.com.br') || url.includes('meli.la')) marketplaceKind = 'MERCADOLIVRE';
+    else if (url.includes('amazon.com.br') || url.includes('amzn.to') || url.includes('a.co')) marketplaceKind = 'AMAZON';
     else if (url.includes('magazineluiza.com.br') || url.includes('magazinevoce.com.br'))
       marketplaceKind = 'MAGALU';
-    else if (url.includes('shopee.com.br')) marketplaceKind = 'SHOPEE';
+    else if (url.includes('shopee.com.br') || url.includes('shp.ee') || url.includes('shope.ee')) marketplaceKind = 'SHOPEE';
     else if (url.includes('aliexpress.com')) marketplaceKind = 'ALIEXPRESS';
     else if (hostname) {
       if (awinPartners[hostname]) {

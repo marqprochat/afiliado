@@ -802,8 +802,24 @@
     if (host === 'shopee.com.br') {
       return /-i\.(\d+)\.(\d+)/.test(path) || /^\/product\/(\d+)\/(\d+)/.test(path);
     }
+    if (
+      host === 'shp.ee' ||
+      host.endsWith('.shp.ee') ||
+      host === 'shope.ee' ||
+      host.endsWith('.shope.ee')
+    ) {
+      return true;
+    }
     if (host === 'mercadolivre.com.br' || host.endsWith('.mercadolivre.com.br')) {
-      return /MLB-?(\d+)/i.test(path) || /\/p\/(MLB\d+|[A-Z0-9]+)/i.test(path);
+      return (
+        /MLB[U]?-?(\d+)/i.test(path) ||
+        /\/p\/(MLB\d+|[A-Z0-9]+)/i.test(path) ||
+        /\/up\/(MLBU?\d+|[A-Z0-9]+)/i.test(path) ||
+        /[?&]pdp_filters=.*item_id(?:%3A|:)MLB/i.test(u.search)
+      );
+    }
+    if (host === 'meli.la') {
+      return true;
     }
     if (host === 'amazon.com.br') {
       return /\/(?:dp|gp\/product|product)\/([A-Z0-9]{10})/.test(path);

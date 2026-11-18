@@ -39,6 +39,47 @@ describe('resolveShortLinks', () => {
     expect((init.headers as Record<string, string>)['user-agent']).toMatch(/Mozilla\/5\.0/);
   });
 
+  it('expande br.shp.ee e shp.ee (encurtador da Shopee)', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === 'https://br.shp.ee/jn9N8Wkp') {
+        return fakeResponse(301, {
+          location: 'https://shopee.com.br/product/683952730/54252536066?d_id=5d050',
+        });
+      }
+      if (url === 'https://shp.ee/xyz123') {
+        return fakeResponse(301, {
+          location: 'https://shopee.com.br/product/111/222',
+        });
+      }
+      throw new Error('url inesperada: ' + url);
+    });
+    const out = await resolveShortLinks(
+      'Shopee: https://br.shp.ee/jn9N8Wkp e https://shp.ee/xyz123',
+      {
+        fetch: fetchMock as unknown as typeof fetch,
+      },
+    );
+    expect(out.get('https://br.shp.ee/jn9N8Wkp')).toBe(
+      'https://shopee.com.br/product/683952730/54252536066?d_id=5d050',
+    );
+    expect(out.get('https://shp.ee/xyz123')).toBe('https://shopee.com.br/product/111/222');
+  });
+
+  it('expande meli.la para página UP do Mercado Livre (/up/MLBU...)', async () => {
+    const fetchMock = vi.fn(async () =>
+      fakeResponse(301, {
+        location:
+          'https://www.mercadolivre.com.br/up/MLBU5730789416?matt_tool=38524122&pdp_filters=item_id%3AMLB7901946500#origin=share&sid=share&wid=MLB7901946500',
+      }),
+    );
+    const out = await resolveShortLinks('Oferta: https://meli.la/2ZyJEM4', {
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+    expect(out.get('https://meli.la/2ZyJEM4')).toBe(
+      'https://www.mercadolivre.com.br/up/MLBU5730789416?matt_tool=38524122&pdp_filters=item_id%3AMLB7901946500#origin=share&sid=share&wid=MLB7901946500',
+    );
+  });
+
   it('expande tidd.ly (encurtador da Awin)', async () => {
     const fetchMock = vi.fn(async () =>
       fakeResponse(301, { location: 'https://www.awin1.com/cread.php?awinmid=1&awinaffid=2' }),

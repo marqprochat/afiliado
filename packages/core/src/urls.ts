@@ -29,10 +29,24 @@ export function parseProductUrl(
     if (m2) return { source: 'SHOPEE', shopId: m2[1]!, externalId: m2[2]! };
   }
   if (host === 'mercadolivre.com.br' || host.endsWith('.mercadolivre.com.br')) {
-    const m = path.match(/MLB-?(\d+)/i) || path.match(/\/p\/(MLB\d+|[A-Z0-9]+)/i);
+    const m =
+      path.match(/\/p\/(MLB\d+|[A-Z0-9]+)/i) ||
+      path.match(/\/up\/(MLBU?\d+|[A-Z0-9]+)/i) ||
+      path.match(/MLB[U]?-?(\d+)/i);
     if (m) {
-      const digits = m[1]!.replace(/^MLB-?/i, '');
-      return { source: 'MERCADOLIVRE', externalId: `MLB${digits}` };
+      const raw = m[1]!;
+      const clean = raw.replace(/^MLB-?/i, '');
+      const externalId =
+        clean.toUpperCase().startsWith('MLBU') || clean.toUpperCase().startsWith('U')
+          ? `MLBU${clean.replace(/^U/i, '')}`
+          : `MLB${clean}`;
+      return { source: 'MERCADOLIVRE', externalId };
+    }
+    const pdpMatch =
+      u.searchParams.get('pdp_filters')?.match(/item_id:(MLB\d+)/i)?.[1] ||
+      u.search.match(/item_id(?:%3A|:)(MLB\d+)/i)?.[1];
+    if (pdpMatch) {
+      return { source: 'MERCADOLIVRE', externalId: pdpMatch.toUpperCase() };
     }
   }
   if (host === 'amazon.com.br') {

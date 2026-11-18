@@ -6,6 +6,7 @@ import {
   extractStoreLinks,
   extractUrls,
   hasImage,
+  isShortenerHost,
   isWithinOperatingWindow,
   nextWindowOpen,
   parseProductUrl,
@@ -102,7 +103,7 @@ export async function mirrorMessage(
   const text = pickText(jobData.message);
   const isShortenerUrl = (url: string): boolean => {
     try {
-      return SHORTENER_HOSTS.has(new URL(url).hostname.replace(/^www\./, ''));
+      return isShortenerHost(new URL(url).hostname);
     } catch {
       return false;
     }
@@ -241,7 +242,9 @@ export async function mirrorMessage(
             decryptJson<TagCredentials>(Buffer.from(conn.encryptedCredentials)),
             affiliateSubId,
           );
-          if (hasTagCredentials(kind, creds)) {
+          const hasMlSession = kind === 'MERCADOLIVRE' && Boolean(creds.mlSession?.cookies);
+          const hasAmazonSession = kind === 'AMAZON' && Boolean(creds.amazonSession?.cookies);
+          if (hasTagCredentials(kind, creds) || hasMlSession || hasAmazonSession) {
             const adapter = adapterGetter(kind) as MarketplaceAdapter<TagCredentials>;
             const affLink = await adapter.toAffiliateLink(creds, storeLink.targetUrl);
             replacements.set(storeLink.textUrl, affLink);

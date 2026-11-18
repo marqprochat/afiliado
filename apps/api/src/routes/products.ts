@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import multipart from '@fastify/multipart';
 import { parse } from 'csv-parse/sync';
 import { z } from 'zod';
-import { parseProductUrl } from '@afilados/core';
+import { parseProductUrl, resolveShortLinks } from '@afilados/core';
 import {
   productsImportSchema,
   searchQuerySchema,
@@ -287,6 +287,15 @@ export async function productsRoutes(app: FastifyInstance) {
           ...(body.urls ?? []),
           ...metaItems.filter((i) => i.title === undefined).map((i) => i.url),
         ];
+      }
+    }
+
+    if (urls.length > 0) {
+      try {
+        const expansions = await resolveShortLinks(urls.join(' '));
+        urls = urls.map((u) => expansions.get(u) ?? u);
+      } catch {
+        // Se a expansão de links falhar, mantém as URLs originais
       }
     }
 

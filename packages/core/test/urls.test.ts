@@ -34,6 +34,18 @@ describe('parseProductUrl', () => {
       source: 'MERCADOLIVRE',
       externalId: 'MLB1234567890',
     });
+    expect(parseProductUrl('https://www.mercadolivre.com.br/up/MLBU5730789416')).toEqual({
+      source: 'MERCADOLIVRE',
+      externalId: 'MLBU5730789416',
+    });
+    expect(
+      parseProductUrl(
+        'https://www.mercadolivre.com.br/up/MLBU5730789416?matt_tool=38524122&pdp_filters=item_id%3AMLB7901946500&ua=xyz#origin=share&sid=share&wid=MLB7901946500',
+      ),
+    ).toEqual({
+      source: 'MERCADOLIVRE',
+      externalId: 'MLBU5730789416',
+    });
   });
   it('amazon ASIN', () => {
     expect(parseProductUrl('https://www.amazon.com.br/Nome/dp/B0ABCDEF12/ref=x')).toEqual({
@@ -49,6 +61,8 @@ describe('parseProductUrl', () => {
   });
   it('encurtadores e desconhecidos são UNSUPPORTED', () => {
     expect(parseProductUrl('https://s.shopee.com.br/abc').source).toBe('UNSUPPORTED');
+    expect(parseProductUrl('https://br.shp.ee/abc').source).toBe('UNSUPPORTED');
+    expect(parseProductUrl('https://shp.ee/abc').source).toBe('UNSUPPORTED');
     expect(parseProductUrl('https://meli.la/abc').source).toBe('UNSUPPORTED');
     expect(parseProductUrl('nao-e-url').source).toBe('UNSUPPORTED');
     expect(parseProductUrl('https://evilmercadolivre.com.br/MLB123').source).toBe('UNSUPPORTED');

@@ -138,7 +138,13 @@ function detectStoreFromUrl(urlStr: string): MarketplaceKind | null {
   try {
     const u = new URL(urlStr);
     const host = u.hostname.replace(/^www\./, '').toLowerCase();
-    if (host.includes('shopee') || host === 'shp.ee') return 'SHOPEE';
+    if (
+      host.includes('shopee') ||
+      host === 'shp.ee' ||
+      host.endsWith('.shp.ee') ||
+      host.endsWith('.shope.ee')
+    )
+      return 'SHOPEE';
     if (host.includes('mercadolivre') || host.includes('mercadolibre') || host.includes('meli.la'))
       return 'MERCADOLIVRE';
     if (host.includes('amazon') || host === 'amzn.to') return 'AMAZON';

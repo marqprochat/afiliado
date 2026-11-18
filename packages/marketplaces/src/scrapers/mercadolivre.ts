@@ -146,8 +146,19 @@ export function parseMercadoLivreHtml(html: string, originalUrl: string): Produc
   const flashSaleEndsAt = detectFlashSaleEnd($, pageText, html);
 
   // 8. External ID
-  const mlbMatch = originalUrl.match(/(MLB-?\d+)/i) || originalUrl.match(/\/p\/([A-Z0-9]+)/i);
-  const externalId = mlbMatch ? mlbMatch[1]!.replace('-', '').toUpperCase() : undefined;
+  const mlbMatch =
+    originalUrl.match(/\/p\/(MLB\d+|[A-Z0-9]+)/i) ||
+    originalUrl.match(/\/up\/(MLBU?\d+|[A-Z0-9]+)/i) ||
+    originalUrl.match(/(MLB[U]?-?\d+)/i) ||
+    originalUrl.match(/item_id(?:%3A|:)(MLB\d+)/i);
+  let externalId: string | undefined;
+  if (mlbMatch) {
+    const raw = mlbMatch[1]!.replace(/^MLB-?/i, '');
+    externalId =
+      raw.toUpperCase().startsWith('MLBU') || raw.toUpperCase().startsWith('U')
+        ? `MLBU${raw.replace(/^U/i, '')}`
+        : `MLB${raw}`;
+  }
 
   return {
     source: 'MERCADOLIVRE',

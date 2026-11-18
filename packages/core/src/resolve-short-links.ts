@@ -6,10 +6,20 @@ export const SHORTENER_HOSTS = new Set([
   'a.co',
   's.shopee.com.br',
   'shope.ee',
+  'shp.ee',
+  'br.shp.ee',
   's.click.aliexpress.com',
   'a.aliexpress.com',
   'tidd.ly',
 ]);
+
+export function isShortenerHost(host: string): boolean {
+  const h = host.replace(/^www\./, '').toLowerCase();
+  if (SHORTENER_HOSTS.has(h)) return true;
+  if (h === 'shp.ee' || h.endsWith('.shp.ee')) return true;
+  if (h === 'shope.ee' || h.endsWith('.shope.ee')) return true;
+  return false;
+}
 
 // meli.la (e outros) respondem 403 a requisições sem User-Agent de navegador.
 const BROWSER_HEADERS = {
@@ -49,7 +59,7 @@ export async function resolveShortLinks(
   for (const raw of extractUrls(text)) {
     try {
       const u = new URL(raw);
-      if (SHORTENER_HOSTS.has(u.hostname.replace(/^www\./, ''))) candidates.add(raw);
+      if (isShortenerHost(u.hostname)) candidates.add(raw);
     } catch {
       // URL inválida: ignora
     }
@@ -107,8 +117,7 @@ async function resolveOne(
         return undefined;
       }
       if (!isSafeHop(next)) return undefined;
-      const nextHost = next.hostname.replace(/^www\./, '');
-      if (!SHORTENER_HOSTS.has(nextHost)) {
+      if (!isShortenerHost(next.hostname)) {
         return next.toString();
       }
       current = next;
