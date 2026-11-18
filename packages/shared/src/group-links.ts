@@ -167,10 +167,10 @@ export const groupImageBase64Schema = z
   .refine(
     (val) => {
       if (!val) return true;
-      // Aceita até ~2MB base64 (o que comporta folgadamente 1MB de imagem codificada em base64)
-      return val.length <= 2 * 1024 * 1024;
+      // Aceita até ~8MB base64 (o que comporta folgadamente 5MB de imagem codificada em base64)
+      return val.length <= 8 * 1024 * 1024;
     },
-    { message: 'A imagem deve ter no máximo 1MB' },
+    { message: 'A imagem deve ter no máximo 5MB' },
   )
   .or(z.literal(''))
   .nullable()
