@@ -49,6 +49,7 @@ import {
   THEME_COLORS,
   BUTTON_COLORS,
   formatGroupImage,
+  mapGroupLinkToAuraNiche,
 } from '@afilados/shared';
 
 const THEME_PRESETS: { id: ThemeColor; name: string; colorHex: string }[] = [
@@ -166,7 +167,7 @@ export default function MinhaLandpagePage() {
 
     // Nichos
     showNiches: true,
-    customNiches: AURA_DEFAULT_NICHES as AuraNicheItem[],
+    customNiches: [] as AuraNicheItem[],
 
     // Como Funciona
     showHowItWorks: true,
@@ -225,9 +226,7 @@ export default function MinhaLandpagePage() {
             whatsappGeneralUrl: d.whatsappGeneralUrl || '',
 
             showNiches: d.showNiches ?? true,
-            customNiches: (Array.isArray(d.customNiches) && d.customNiches.length > 0)
-              ? d.customNiches
-              : AURA_DEFAULT_NICHES,
+            customNiches: Array.isArray(d.customNiches) ? d.customNiches : [],
 
             showHowItWorks: d.showHowItWorks ?? true,
             howItWorksTitle: d.howItWorksTitle || 'Como funcionam os nossos grupos de preço',
@@ -315,8 +314,9 @@ export default function MinhaLandpagePage() {
   };
 
   const handleResetNiches = () => {
-    setFormData((prev) => ({ ...prev, customNiches: AURA_DEFAULT_NICHES }));
-    toast.success('Nichos restaurados para os 4 nichos originais do modelo Aura!');
+    const reset = realGroups.map((rg, idx) => mapGroupLinkToAuraNiche(rg, idx));
+    setFormData((prev) => ({ ...prev, customNiches: reset }));
+    toast.success('Nichos sincronizados com os grupos reais!');
   };
 
   const handleResetSteps = () => {
@@ -1099,12 +1099,18 @@ export default function MinhaLandpagePage() {
                       key={rg.id || idx}
                       className="p-4 sm:p-5 rounded-2xl bg-surface-2 border border-border flex items-start gap-4 hover:border-border/80 transition"
                     >
-                      <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-emerald-500/40 shrink-0 shadow-sm bg-surface">
-                        <img
-                          src={img}
-                          alt={rg.label}
-                          className="w-full h-full object-cover object-top"
-                        />
+                      <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-emerald-500/40 shrink-0 shadow-sm bg-surface flex items-center justify-center">
+                        {img ? (
+                          <img
+                            src={img}
+                            alt={rg.label}
+                            className="w-full h-full object-cover object-top"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-emerald-500/15 text-emerald-600 font-black flex items-center justify-center text-sm">
+                            {(rg.label || 'VIP').replace(/[^a-zA-ZÀ-ÿ0-9]/g, '').slice(0, 2).toUpperCase() || 'VIP'}
+                          </div>
+                        )}
                       </div>
 
                       <div className="min-w-0 flex-1 space-y-1">
@@ -1190,54 +1196,82 @@ export default function MinhaLandpagePage() {
                 </p>
               </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleResetNiches}
-                className="text-xs flex items-center gap-1.5"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Restaurar Padrões Aura</span>
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              {formData.customNiches.map((niche, idx) => (
-                <div
-                  key={niche.id || idx}
-                  className="p-4 rounded-2xl bg-surface-2 border border-border flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+              {formData.customNiches.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResetNiches}
+                  className="text-xs flex items-center gap-1.5"
                 >
-                  <div className="flex items-center gap-3 shrink-0">
-                    <div className="w-10 h-10 rounded-full overflow-hidden border border-rose-300 shrink-0">
-                      <img
-                        src={formatGroupImage(niche.image, idx)}
-                        alt={niche.name}
-                        className="w-full h-full object-cover object-top"
-                      />
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-bold text-rose-500 uppercase">
-                        Nicho #{niche.orderNumber || `0${idx + 1}`}
-                      </span>
-                      <div className="font-bold text-xs truncate max-w-[200px]">{niche.name}</div>
-                    </div>
-                  </div>
-
-                  <div className="flex-1 w-full space-y-1">
-                    <Label className="text-[11px] font-semibold text-muted-foreground">
-                      Tags separadas por vírgula (&quot;O que mais postamos com super desconto&quot;):
-                    </Label>
-                    <Input
-                      value={niche.popularItems?.join(', ') || ''}
-                      onChange={(e) => handleNicheTagsChange(idx, e.target.value)}
-                      placeholder="Perfumes Importados, Skincare, Cuidados Íntimos"
-                      className="text-xs"
-                    />
-                  </div>
-                </div>
-              ))}
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Sincronizar com Grupos Reais</span>
+                </Button>
+              )}
             </div>
+
+            {formData.customNiches.length > 0 ? (
+              <div className="space-y-4">
+                {formData.customNiches.map((niche, idx) => {
+                  const nicheImg = formatGroupImage(niche.image, idx);
+                  return (
+                    <div
+                      key={niche.id || idx}
+                      className="p-4 rounded-2xl bg-surface-2 border border-border flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+                    >
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="w-10 h-10 rounded-full overflow-hidden border border-rose-300 shrink-0 bg-surface flex items-center justify-center">
+                          {nicheImg ? (
+                            <img
+                              src={nicheImg}
+                              alt={niche.name}
+                              className="w-full h-full object-cover object-top"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-rose-500/20 text-rose-500 font-bold flex items-center justify-center text-xs">
+                              {(niche.name || 'VIP').replace(/[^a-zA-ZÀ-ÿ0-9]/g, '').slice(0, 2).toUpperCase() || 'VIP'}
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-rose-500 uppercase">
+                            Nicho #{niche.orderNumber || String(idx + 1).padStart(2, '0')}
+                          </span>
+                          <div className="font-bold text-xs truncate max-w-[200px]">{niche.name}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex-1 w-full space-y-1">
+                        <Label className="text-[11px] font-semibold text-muted-foreground">
+                          Tags separadas por vírgula (&quot;O que mais postamos com super desconto&quot;):
+                        </Label>
+                        <Input
+                          value={niche.popularItems?.join(', ') || ''}
+                          onChange={(e) => handleNicheTagsChange(idx, e.target.value)}
+                          placeholder="Perfumes Importados, Skincare, Cuidados Íntimos"
+                          className="text-xs"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-6 rounded-2xl border border-dashed border-border bg-surface text-center space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Nenhum link de grupo cadastrado para configurar tags. Cadastre links de grupos para que eles apareçam aqui automaticamente.
+                </p>
+                <div className="pt-1">
+                  <a
+                    href="/links-grupos"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 text-white font-bold text-xs hover:bg-emerald-600 transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Cadastrar Link de Grupo</span>
+                  </a>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

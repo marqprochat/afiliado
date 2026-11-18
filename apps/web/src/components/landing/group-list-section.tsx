@@ -163,16 +163,16 @@ export function GroupListSection() {
         const res = await fetch('/api/v1/public/group-links');
         if (res.ok) {
           const json = await res.json();
-          if (json.ok && Array.isArray(json.data) && json.data.length > 0) {
+          if (json.ok && Array.isArray(json.data)) {
             setLinks(json.data);
           } else {
-            setLinks(DUDU_ROCHA_DEMO_LINKS);
+            setLinks([]);
           }
         } else {
-          setLinks(DUDU_ROCHA_DEMO_LINKS);
+          setLinks([]);
         }
       } catch {
-        setLinks(DUDU_ROCHA_DEMO_LINKS);
+        setLinks([]);
       } finally {
         setLoading(false);
       }

@@ -45,7 +45,7 @@ export function GroupLinkReorderDialog({
         json: { orderedIds },
       }),
     {
-      invalidate: [['group-links']],
+      invalidate: [['group-links'], ['affiliate-landing']],
       success: 'Ordem da Landing Page atualizada com sucesso!',
       onSuccess: () => {
         onOpenChange(false);

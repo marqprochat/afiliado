@@ -1,15 +1,31 @@
 'use client';
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link2, Plus, Search, Users, Activity, MousePointerClick, RefreshCw, Sparkles, ListOrdered } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { GroupLinkCard } from '@/components/group-links/group-link-card';
 import { GroupLinkFormDialog } from '@/components/group-links/group-link-form-dialog';
 import { GroupLinkReorderDialog } from '@/components/group-links/group-link-reorder-dialog';
-import { useGroupLinks } from '@/lib/queries';
+import { useGroupLinks, useMe } from '@/lib/queries';
+import { apiFetch } from '@/lib/api';
 
 export default function LinksGruposPage() {
   const { data: links = [], isLoading, refetch, isRefetching } = useGroupLinks();
+  const { data: me } = useMe();
+  const isAffiliate = me?.isAffiliate ?? false;
+
+  const { data: lpRes } = useQuery({
+    queryKey: ['affiliate-landing'],
+    queryFn: () => apiFetch<{ ok: boolean; data: any }>('/affiliate-landing'),
+    enabled: isAffiliate,
+  });
+  // Usuário principal (dono da aplicação / superadmin) vai para /landpage
+  // Afiliados seguem para a sua landing page (/lp/${slug} ou /minha-landpage)
+  const landingUrl = isAffiliate
+    ? (lpRes?.data?.slug ? `/lp/${lpRes.data.slug}` : '/minha-landpage')
+    : '/landpage';
+
   const [showCreate, setShowCreate] = useState(false);
   const [showReorder, setShowReorder] = useState(false);
   const [search, setSearch] = useState('');
@@ -55,7 +71,7 @@ export default function LinksGruposPage() {
             Organizar Ordem da Landpage
           </Button>
           <a
-            href="/landpage"
+            href={landingUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/10 border border-indigo-500/30 text-indigo-400 hover:bg-indigo-600/20 hover:text-indigo-300 text-xs font-semibold transition"

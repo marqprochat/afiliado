@@ -59,6 +59,10 @@ export const AuraNicheGrid: React.FC<AuraNicheGridProps> = ({
 }) => {
   const t = getAuraThemeStyles(themeColor, themeMode, buttonColor);
 
+  if (!niches || niches.length === 0) {
+    return null;
+  }
+
   return (
     <section id="grupos" className={`py-16 md:py-24 border-t transition-colors duration-200 ${t.isDark ? 'bg-[#0b0e15] border-slate-800' : 'bg-white border-rose-100'}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

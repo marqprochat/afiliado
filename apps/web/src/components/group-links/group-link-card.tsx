@@ -103,7 +103,7 @@ export function GroupLinkCard({ link }: GroupLinkCardProps) {
         },
       }),
     {
-      invalidate: [['group-links']],
+      invalidate: [['group-links'], ['affiliate-landing']],
       success: `Link ${link.status === 'ACTIVE' ? 'pausado' : 'ativado'} com sucesso!`,
     },
   );
@@ -114,7 +114,7 @@ export function GroupLinkCard({ link }: GroupLinkCardProps) {
         method: 'DELETE',
       }),
     {
-      invalidate: [['group-links']],
+      invalidate: [['group-links'], ['affiliate-landing']],
       success: 'Link fixo excluído com sucesso!',
     },
   );

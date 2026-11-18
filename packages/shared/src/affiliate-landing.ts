@@ -62,15 +62,9 @@ export interface AuraFaqItem {
 
 export const AURA_DEFAULT_HERO_IMAGE = '/assets/landing/hero-model.jpg';
 
-export function formatGroupImage(src?: string | null, fallbackIndex: number = 0): string {
+export function formatGroupImage(src?: string | null, _fallbackIndex: number = 0): string {
   if (!src || src.trim() === '') {
-    const fallbackImages: readonly string[] = [
-      '/assets/landing/niche-beleza.jpg',
-      '/assets/landing/niche-bebe.png',
-      '/assets/landing/niche-mercado.jpg',
-      '/assets/landing/niche-casa.jpg',
-    ];
-    return fallbackImages[fallbackIndex % fallbackImages.length] ?? '/assets/landing/niche-beleza.jpg';
+    return '';
   }
   const clean = src.trim();
   if (
@@ -112,7 +106,7 @@ export function mapGroupLinkToAuraNiche(link: GroupLinkLike, index: number): Aur
     id: link.slug || link.id,
     orderNumber,
     name,
-    tagline: link.customText || link.groupDescription || '',
+    tagline: (link.customText || link.groupDescription || '').trim(),
     description,
     image,
     categoryBadge: 'WhatsApp Oficial',

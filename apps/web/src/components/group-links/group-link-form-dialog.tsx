@@ -149,7 +149,7 @@ export function GroupLinkFormDialog({
         json: payload,
       }),
     {
-      invalidate: [['group-links']],
+      invalidate: [['group-links'], ['affiliate-landing']],
       success: 'Link Fixo criado com sucesso!',
       onSuccess: () => {
         onOpenChange(false);
@@ -165,7 +165,7 @@ export function GroupLinkFormDialog({
         json: payload,
       }),
     {
-      invalidate: [['group-links']],
+      invalidate: [['group-links'], ['affiliate-landing']],
       success: 'Configurações atualizadas com sucesso!',
       onSuccess: () => {
         onOpenChange(false);

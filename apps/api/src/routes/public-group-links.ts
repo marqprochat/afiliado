@@ -94,10 +94,32 @@ export async function publicGroupLinksRoutes(app: FastifyInstance) {
     return respond(resolution);
   });
 
-  // GET /public/group-links - Lista todos os links de grupos ativos para a landpage de divulgação
+  // GET /public/group-links - Lista todos os links de grupos ativos para a landpage do dono da aplicação (/landpage)
   app.get('/public/group-links', async (req, reply) => {
+    const requestedTenantId = (req.query as { tenantId?: string })?.tenantId;
+    let targetTenantId: string | undefined = requestedTenantId;
+
+    if (!targetTenantId) {
+      const ownerUser = await prisma.user.findFirst({
+        where: { isSuperAdmin: true },
+        select: { tenantId: true },
+      });
+      if (ownerUser?.tenantId) {
+        targetTenantId = ownerUser.tenantId;
+      } else {
+        const defaultTenant = await prisma.tenant.findFirst({
+          where: { name: 'default' },
+          select: { id: true },
+        });
+        if (defaultTenant) {
+          targetTenantId = defaultTenant.id;
+        }
+      }
+    }
+
     const links = await prisma.groupLink.findMany({
       where: {
+        ...(targetTenantId ? { tenantId: targetTenantId } : {}),
         enabled: true,
         status: 'ACTIVE',
       },

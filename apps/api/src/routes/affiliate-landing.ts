@@ -4,7 +4,6 @@ import {
   ApiError,
   affiliateLandingUpdateSchema,
   mapGroupLinkToAuraNiche,
-  AURA_DEFAULT_NICHES,
   AURA_DEFAULT_STEPS,
   AURA_DEFAULT_FAQS,
   AURA_DEFAULT_HERO_IMAGE,
@@ -85,12 +84,30 @@ export async function affiliateLandingRoutes(app: FastifyInstance) {
     });
 
     // Determina os nichos que serão exibidos:
-    // Puxa automaticamente dos links de grupos reais criados no admin do afiliado!
-    const niches = formattedGroups.length > 0
-      ? formattedGroups.map((link, idx) => mapGroupLinkToAuraNiche(link, idx))
-      : (Array.isArray(lp.customNiches) && (lp.customNiches as any[]).length > 0
-          ? (lp.customNiches as any[])
-          : AURA_DEFAULT_NICHES);
+    // Puxa SEMPRE e EXCLUSIVAMENTE dos links de grupos reais cadastrados no afiliado!
+    const savedNichesMap = new Map<string, any>();
+    if (Array.isArray(lp.customNiches)) {
+      for (const item of lp.customNiches as any[]) {
+        if (item && item.id) {
+          savedNichesMap.set(item.id, item);
+        }
+      }
+    }
+
+    const niches = formattedGroups.map((link, idx) => {
+      const mapped = mapGroupLinkToAuraNiche(link, idx);
+      const saved = savedNichesMap.get(link.slug) || savedNichesMap.get(link.id);
+      if (saved && Array.isArray(saved.popularItems) && saved.popularItems.length > 0) {
+        mapped.popularItems = saved.popularItems;
+      }
+      return mapped;
+    });
+
+    const defaultFloatingBadge = formattedGroups.length > 0
+      ? `Garimpo Ao Vivo no WhatsApp · ${formattedGroups.length} ${
+          formattedGroups.length === 1 ? 'Grupo Exclusivo' : 'Nichos Exclusivos'
+        }`
+      : 'Garimpo Ao Vivo no WhatsApp · Comunidade VIP';
 
     return reply.send({
       ok: true,
@@ -115,7 +132,7 @@ export async function affiliateLandingRoutes(app: FastifyInstance) {
           subheadline:
             lp.subheadline ||
             'Rastreamos bugs de preço, descontos relâmpago e promoções exclusivas em grandes lojas. Escolha seu nicho abaixo e entre no grupo do WhatsApp!',
-          floatingBadgeText: lp.floatingBadgeText || 'Garimpo Ao Vivo no WhatsApp · 4 Nichos Exclusivos',
+          floatingBadgeText: lp.floatingBadgeText || defaultFloatingBadge,
           ctaButtonText: lp.ctaButtonText || 'Entrar no Grupo do WhatsApp',
           reassuranceText:
             lp.reassuranceText ||
@@ -269,12 +286,24 @@ export async function affiliateLandingRoutes(app: FastifyInstance) {
       };
     });
 
-    const realNiches = formattedRealGroups.map((link, idx) => mapGroupLinkToAuraNiche(link, idx));
-    const effectiveNiches = realNiches.length > 0
-      ? realNiches
-      : (Array.isArray(existing?.customNiches) && (existing?.customNiches as any[]).length > 0
-          ? (existing?.customNiches as any[])
-          : AURA_DEFAULT_NICHES);
+    const savedNichesMap = new Map<string, any>();
+    if (Array.isArray(existing?.customNiches)) {
+      for (const item of existing.customNiches as any[]) {
+        if (item && item.id) {
+          savedNichesMap.set(item.id, item);
+        }
+      }
+    }
+
+    const realNiches = formattedRealGroups.map((link, idx) => {
+      const mapped = mapGroupLinkToAuraNiche(link, idx);
+      const saved = savedNichesMap.get(link.slug) || savedNichesMap.get(link.id);
+      if (saved && Array.isArray(saved.popularItems) && saved.popularItems.length > 0) {
+        mapped.popularItems = saved.popularItems;
+      }
+      return mapped;
+    });
+    const effectiveNiches = realNiches;
 
     if (existing) {
       return reply.send({
@@ -294,6 +323,11 @@ export async function affiliateLandingRoutes(app: FastifyInstance) {
     // Se ainda não existir no banco, gera defaults inteligentes baseados no modelo Aura
     const defaultAuthor = tenant.name || user?.name || 'Clube de Preços VIP';
     const suggestedSlug = generateSlugFromName(defaultAuthor);
+    const defaultFloatingBadge = formattedRealGroups.length > 0
+      ? `Garimpo Ao Vivo no WhatsApp · ${formattedRealGroups.length} ${
+          formattedRealGroups.length === 1 ? 'Grupo Exclusivo' : 'Nichos Exclusivos'
+        }`
+      : 'Garimpo Ao Vivo no WhatsApp · Comunidade VIP';
 
     const defaults = {
       id: null,
@@ -316,7 +350,7 @@ export async function affiliateLandingRoutes(app: FastifyInstance) {
       headline: 'Os melhores achadinhos e cupons secretos no seu WhatsApp',
       subheadline:
         'Rastreamos bugs de preço, descontos relâmpago e promoções exclusivas em grandes lojas. Escolha seu nicho abaixo e entre no grupo do WhatsApp!',
-      floatingBadgeText: 'Garimpo Ao Vivo no WhatsApp · 4 Nichos Exclusivos',
+      floatingBadgeText: defaultFloatingBadge,
       ctaButtonText: 'Entrar no Grupo do WhatsApp',
       reassuranceText:
         '100% Silencioso (sem conversas paralelas) · Apenas administradores postam · Gratuito para sempre',

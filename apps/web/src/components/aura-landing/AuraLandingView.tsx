@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { AuraNicheItem, AuraStepItem, AuraFaqItem, ThemeColor, ButtonColor, ThemeMode } from '@afilados/shared';
 import {
   AURA_DEFAULT_HERO_IMAGE,
-  AURA_DEFAULT_NICHES,
   AURA_DEFAULT_STEPS,
   AURA_DEFAULT_FAQS,
 } from '@afilados/shared';
@@ -60,14 +59,22 @@ interface AuraLandingViewProps {
 
 export const AuraLandingView: React.FC<AuraLandingViewProps> = ({
   profile,
-  niches = AURA_DEFAULT_NICHES,
+  niches = [],
   allowThemeToggle = false,
 }) => {
   const [currentMode, setCurrentMode] = useState<ThemeMode>(profile.themeMode || 'light');
   const [modalNiche, setModalNiche] = useState<AuraNicheItem | null>(null);
 
-  const effectiveNiches = niches && niches.length > 0 ? niches : AURA_DEFAULT_NICHES;
-  const [activeNicheId, setActiveNicheId] = useState<string>(effectiveNiches[0]?.id || 'beleza-cosmeticos');
+  const effectiveNiches = Array.isArray(niches) ? niches : [];
+  const [activeNicheId, setActiveNicheId] = useState<string>(effectiveNiches[0]?.id || '');
+
+  useEffect(() => {
+    if (effectiveNiches.length > 0 && !effectiveNiches.some((n) => n.id === activeNicheId)) {
+      setActiveNicheId(effectiveNiches[0]?.id || '');
+    } else if (effectiveNiches.length === 0 && activeNicheId !== '') {
+      setActiveNicheId('');
+    }
+  }, [effectiveNiches, activeNicheId]);
 
   const themeColor = profile.themeColor || 'rose';
   const buttonColor = profile.buttonColor || 'emerald';
@@ -86,7 +93,7 @@ export const AuraLandingView: React.FC<AuraLandingViewProps> = ({
   const handleOpenGeneral = () => {
     if (profile.whatsappGeneralUrl) {
       window.open(profile.whatsappGeneralUrl, '_blank', 'noopener,noreferrer');
-    } else {
+    } else if (effectiveNiches.length > 0) {
       setModalNiche(effectiveNiches[0] || null);
     }
   };
@@ -102,7 +109,7 @@ export const AuraLandingView: React.FC<AuraLandingViewProps> = ({
         buttonColor={buttonColor}
         showHowItWorks={profile.showHowItWorks !== false}
         showFaq={profile.showFaq !== false}
-        showNiches={profile.showNiches !== false}
+        showNiches={profile.showNiches !== false && effectiveNiches.length > 0}
       />
 
       <main>
@@ -115,6 +122,7 @@ export const AuraLandingView: React.FC<AuraLandingViewProps> = ({
           floatingBadgeText={profile.floatingBadgeText}
           ctaButtonText={profile.ctaButtonText}
           reassuranceText={profile.reassuranceText}
+          whatsappGeneralUrl={profile.whatsappGeneralUrl}
           niches={effectiveNiches}
           activeNicheId={activeNicheId}
           onSelectNiche={setActiveNicheId}
@@ -125,7 +133,7 @@ export const AuraLandingView: React.FC<AuraLandingViewProps> = ({
         />
 
         {/* Niche Groups Cards Grid */}
-        {profile.showNiches !== false && (
+        {profile.showNiches !== false && effectiveNiches.length > 0 && (
           <AuraNicheGrid
             niches={effectiveNiches}
             activeNicheId={activeNicheId}

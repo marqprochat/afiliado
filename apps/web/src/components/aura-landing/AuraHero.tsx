@@ -46,6 +46,7 @@ interface AuraHeroProps {
   floatingBadgeText?: string | null;
   ctaButtonText?: string | null;
   reassuranceText?: string | null;
+  whatsappGeneralUrl?: string | null;
   niches: AuraNicheItem[];
   activeNicheId: string;
   onSelectNiche: (id: string) => void;
@@ -60,9 +61,10 @@ export const AuraHero: React.FC<AuraHeroProps> = ({
   badgeText = 'Grupos de Preços & Ofertas VIP · 100% Gratuito',
   headline = 'Os melhores achadinhos e cupons secretos no seu WhatsApp',
   subheadline = 'Rastreamos bugs de preço, descontos relâmpago e promoções exclusivas em grandes lojas. Escolha seu nicho abaixo e entre no grupo do WhatsApp!',
-  floatingBadgeText = 'Garimpo Ao Vivo no WhatsApp · 4 Nichos Exclusivos',
+  floatingBadgeText,
   ctaButtonText = 'Entrar no Grupo do WhatsApp',
   reassuranceText = '100% Silencioso (sem conversas paralelas) · Apenas administradores postam · Gratuito para sempre',
+  whatsappGeneralUrl,
   niches,
   activeNicheId,
   onSelectNiche,
@@ -217,7 +219,7 @@ export const AuraHero: React.FC<AuraHeroProps> = ({
           </div>
 
           {/* RIGHT: Active Selected Niche Group Card */}
-          {activeNiche && (
+          {activeNiche ? (
             <div className={`lg:col-span-6 flex flex-col justify-between border rounded-3xl p-6 sm:p-8 lg:p-9 shadow-lg backdrop-blur-xs transition-colors duration-200 ${t.cardBg}`}>
               <div>
                 {/* Niche Category Tag */}
@@ -307,6 +309,50 @@ export const AuraHero: React.FC<AuraHeroProps> = ({
                 )}
               </div>
 
+            </div>
+          ) : (
+            <div className={`lg:col-span-6 flex flex-col justify-between border rounded-3xl p-6 sm:p-8 lg:p-9 shadow-lg backdrop-blur-xs transition-colors duration-200 ${t.cardBg}`}>
+              <div>
+                <div className={`flex items-center gap-2 pb-4 border-b ${t.isDark ? 'border-slate-800' : 'border-rose-100'}`}>
+                  <span className={`text-[11px] font-bold uppercase tracking-wider ${t.accentText}`}>
+                    Comunidade VIP Oficial
+                  </span>
+                </div>
+
+                <div className="mt-5">
+                  <h2 className={`text-xl sm:text-2xl font-extrabold tracking-tight leading-tight ${t.textMain}`}>
+                    Grupos de Ofertas Exclusivas
+                  </h2>
+
+                  <p className={`mt-3 text-sm sm:text-base font-semibold leading-relaxed p-4 rounded-2xl border ${t.cardSoftBg} ${t.isDark ? 'text-slate-200' : 'text-neutral-800'}`}>
+                    {subheadline || 'Acompanhe as melhores promoções, achadinhos e cupons de desconto selecionados a dedo no WhatsApp.'}
+                  </p>
+                </div>
+              </div>
+
+              {whatsappGeneralUrl && (
+                <div className={`mt-8 pt-6 border-t ${t.isDark ? 'border-slate-800' : 'border-rose-100'} space-y-3`}>
+                  <a
+                    href={whatsappGeneralUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`w-full flex items-center justify-center gap-2.5 px-6 py-4 text-sm font-bold rounded-2xl shadow-lg transition-all hover:scale-[1.02] active:scale-98 cursor-pointer group ${t.primaryBtnClass}`}
+                  >
+                    <MessageCircle className="w-5 h-5 fill-current" />
+                    <span>{ctaButtonText || 'Entrar no Grupo do WhatsApp'}</span>
+                    <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                  </a>
+
+                  {reassuranceText && (
+                    <div className={`flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] pt-1 ${t.textSubtle}`}>
+                      <span className="flex items-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                        <span>{reassuranceText}</span>
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

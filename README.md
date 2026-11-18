@@ -73,6 +73,12 @@ pnpm --filter @afilados/web e2e
 
 O usuário marcado como SuperAdmin (`admin@dudurochatec.com` na migração; o usuário do seed em instalações novas) cria afiliados em **Afiliados** no painel. Cada afiliado é um tenant filho: tem login próprio e WhatsApp, grupos, fila, lotes e extensão separados, mas usa as credenciais de marketplace e a chave de IA do SuperAdmin. Em **Marketplaces** o afiliado informa só o SubID/tracking ID/etiqueta/loja de cada plataforma. Desativar um afiliado bloqueia login e envios; reativar libera (os lotes que estavam em andamento ficam pausados para o afiliado retomar). "Entrar como" abre a conta do afiliado com uma faixa "Voltar ao admin".
 
+## Landing Pages: Dono da Aplicação (`/landpage`) vs. Afiliados (`/lp/[slug]`)
+
+- **`/landpage` (Dono da aplicação / SuperAdmin):** É a Landing Page principal de todo o sistema. Divulga os grupos fixos pertencentes ao dono da plataforma (tenant principal). Consome `GET /api/v1/public/group-links`. O botão "Ver Landing Page" no painel de links do usuário principal direciona para `/landpage`.
+- **`/lp/[slug]` (Afiliados individuais):** Landing Page personalizada de cada afiliado (estilo Aura). Divulga estritamente os grupos do WhatsApp cadastrados pelo próprio afiliado em seu painel. Consome `GET /api/v1/public/affiliate-landing/:slug`. O botão "Ver Landing Page" no painel de links do afiliado direciona para `/lp/${slug}`.
+- Detalhes adicionais e regras de arquitetura para assistentes em [AGENTS.md](AGENTS.md).
+
 ## Deploy no VPS
 
 1. Instale Docker + Compose plugin; aponte o DNS de `DOMAIN` para o VPS (portas 80/443 abertas).
