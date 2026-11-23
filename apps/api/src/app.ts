@@ -46,7 +46,9 @@ export interface BuildAppOptions {
 }
 
 export async function buildApp(opts: BuildAppOptions = {}) {
-  const app = Fastify({ logger: opts.logger ?? true });
+  // maxParamLength: o padrão do Fastify (100) devolve 414 para slugs de ofertas, que chegam a
+  // 105 caracteres (título de até 100 + sufixo "-xxxx" gerado pelo PriceEngine).
+  const app = Fastify({ logger: opts.logger ?? true, maxParamLength: 500 });
   await app.register(cors, {
     origin: true,
     credentials: true,
