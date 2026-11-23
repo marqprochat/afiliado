@@ -245,6 +245,10 @@ export class TelegramManager {
       where: {
         tenantId: bot.tenantId,
         status: { in: ['SCHEDULED', 'RUNNING', 'PAUSED', 'DONE'] },
+        NOT: [
+          { name: { startsWith: 'Automação:' } },
+          { name: { startsWith: 'Envio manual' } },
+        ],
       },
       orderBy: { createdAt: 'desc' },
       take: 8,
@@ -570,6 +574,10 @@ export class TelegramManager {
         where: {
           tenantId: bot.tenantId,
           status: { in: ['SCHEDULED', 'RUNNING', 'PAUSED', 'DONE'] },
+          NOT: [
+            { name: { startsWith: 'Automação:' } },
+            { name: { startsWith: 'Envio manual' } },
+          ],
         },
         orderBy: { createdAt: 'desc' },
         take: 8,

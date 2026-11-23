@@ -11,7 +11,13 @@ export async function overviewRoutes(app: FastifyInstance) {
       resolveConnection(req.tenantId, 'SHOPEE'),
       req.db.queueItem.count(),
       req.db.batch.findMany({
-        where: { status: { in: ['SCHEDULED', 'RUNNING', 'PAUSED'] } },
+        where: {
+          status: { in: ['SCHEDULED', 'RUNNING', 'PAUSED'] },
+          NOT: [
+            { name: { startsWith: 'Automação:' } },
+            { name: { startsWith: 'Envio manual' } },
+          ],
+        },
         orderBy: { createdAt: 'desc' },
         include: { items: { select: { status: true } } },
       }),

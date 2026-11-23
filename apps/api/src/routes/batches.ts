@@ -201,6 +201,12 @@ export async function batchesRoutes(app: FastifyInstance) {
 
   app.get('/batches', async (req) => {
     const batches = await req.db.batch.findMany({
+      where: {
+        NOT: [
+          { name: { startsWith: 'Automação:' } },
+          { name: { startsWith: 'Envio manual' } },
+        ],
+      },
       orderBy: { createdAt: 'desc' },
       take: 50,
       include: { items: { select: { status: true } } },

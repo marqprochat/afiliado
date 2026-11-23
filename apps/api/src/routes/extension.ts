@@ -117,7 +117,13 @@ export async function extensionRoutes(app: FastifyInstance) {
     const { tenantId } = await authenticateExtension(req);
     const db = forTenant(tenantId);
     const batches = await db.batch.findMany({
-      where: { status: { in: ['SCHEDULED', 'RUNNING', 'PAUSED', 'DONE'] } },
+      where: {
+        status: { in: ['SCHEDULED', 'RUNNING', 'PAUSED', 'DONE'] },
+        NOT: [
+          { name: { startsWith: 'Automação:' } },
+          { name: { startsWith: 'Envio manual' } },
+        ],
+      },
       orderBy: { createdAt: 'desc' },
       select: { id: true, name: true, status: true, items: { select: { status: true } } },
     });
