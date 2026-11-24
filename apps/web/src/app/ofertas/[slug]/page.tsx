@@ -19,6 +19,7 @@ import { LandingNav } from '@/components/landing/landing-nav';
 import { LandingFooter } from '@/components/landing/landing-footer';
 import { PriceHistoryChart } from '@/components/deals/price-history-chart';
 import { PriceAlertModal } from '@/components/deals/price-alert-modal';
+import { DealCouponBlock, type DealCoupon } from '@/components/deals/deal-coupon-block';
 import { formatCurrency } from '@/lib/format';
 
 interface ListingItem {
@@ -61,6 +62,7 @@ interface DealDetail {
     price: number;
     recordedAt: string;
   }[];
+  coupons?: DealCoupon[];
 }
 
 export default function OfertaDetailPage() {
@@ -254,6 +256,8 @@ export default function OfertaDetailPage() {
                   </button>
                 </div>
               </div>
+
+              <DealCouponBlock coupons={deal.coupons ?? []} />
             </div>
           </div>
         </div>
