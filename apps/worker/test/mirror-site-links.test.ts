@@ -126,6 +126,36 @@ describe('espelhamento com link do site', () => {
     );
   });
 
+  it('CLONE: rewriteOfferLinks com erro → envia o texto com os links de afiliado', async () => {
+    const rule = await prisma.mirrorRule.create({
+      data: {
+        tenantId,
+        sessionId,
+        sourceJids: ['s@g.us'],
+        targetJids: ['t7@g.us'],
+        mode: 'CLONE',
+        mediaMode: 'PREVIEW',
+        enabled: true,
+      },
+    });
+    const affiliate = 'https://www.amazon.com.br/dp/B0SITELNK2?tag=minha-20';
+    const rewrite = vi.fn<RewriteOfferLinksFn>(async () => {
+      throw new Error('db fora');
+    });
+    gateway.sendMessage.mockClear();
+    const res = await mirrorMessage(
+      { ...baseDeps(), rewriteOfferLinks: rewrite },
+      job(rule.id, 'M-site-clone-err', 'Olha: https://www.amazon.com.br/dp/B0SITELNK2'),
+    );
+    expect(res).toEqual({ outcome: 'mirrored', count: 1 });
+    expect(gateway.sendMessage).toHaveBeenCalledWith(
+      sessionId,
+      't7@g.us',
+      { kind: 'text', text: `Olha: ${affiliate}` },
+      { dedupeEcho: true },
+    );
+  });
+
   it('TEMPLATE (Shopee): o template e a prévia levam a página do site', async () => {
     const rule = await prisma.mirrorRule.create({
       data: {
