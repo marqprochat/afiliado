@@ -41,3 +41,33 @@ export async function loginCookie(app: FastifyInstance, email: string, password:
   const raw = Array.isArray(setCookie) ? setCookie[0]! : String(setCookie);
   return raw.split(';')[0]!;
 }
+
+/**
+ * Torna o usuário o único superadmin (dono do site público: as rotas públicas de /deals servem o
+ * tenant dele, ignorando a sessão). Devolve a função que restaura os superadmins anteriores; se a
+ * promoção falhar no meio, restaura antes de propagar o erro.
+ */
+export async function makePublicSiteOwner(userId: string): Promise<() => Promise<void>> {
+  const demoted = (
+    await prisma.user.findMany({
+      where: { isSuperAdmin: true, id: { not: userId } },
+      select: { id: true },
+    })
+  ).map((u) => u.id);
+  const restore = async () => {
+    await prisma.user.updateMany({ where: { id: userId }, data: { isSuperAdmin: false } });
+    if (demoted.length > 0) {
+      await prisma.user.updateMany({ where: { id: { in: demoted } }, data: { isSuperAdmin: true } });
+    }
+  };
+  try {
+    if (demoted.length > 0) {
+      await prisma.user.updateMany({ where: { id: { in: demoted } }, data: { isSuperAdmin: false } });
+    }
+    await prisma.user.update({ where: { id: userId }, data: { isSuperAdmin: true } });
+  } catch (err) {
+    await restore();
+    throw err;
+  }
+  return restore;
+}

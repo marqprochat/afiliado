@@ -30,9 +30,12 @@ const alertsQuerySchema = z.object({
 });
 const ALERT_PAGE_SIZE = 8;
 
-async function resolveTenantId(requestTenantId?: string): Promise<string | null> {
-  if (requestTenantId) return requestTenantId;
-
+/**
+ * Tenant do site público (vitrine, página da oferta, alertas). O site é do dono da aplicação: a
+ * sessão de quem está logado (outro tenant, afiliado) é ignorada de propósito, senão o link
+ * postado no grupo daria 404 para quem abre o site logado.
+ */
+async function resolvePublicTenantId(): Promise<string | null> {
   // 1. Tenant do dono da aplicação: as páginas publicadas no envio das ofertas são dele.
   const ownerUser = await prisma.user.findFirst({
     where: { isSuperAdmin: true, tenant: { parentTenantId: null } },
@@ -69,7 +72,7 @@ export async function dealsRoutes(app: FastifyInstance) {
    */
   app.get('/deals', async (req, reply) => {
     const q = dealsQuerySchema.parse(req.query);
-    const tenantId = await resolveTenantId(req.tenantId);
+    const tenantId = await resolvePublicTenantId();
 
     if (!tenantId) {
       return reply.send({ total: 0, page: 1, limit: q.limit, totalPages: 0, deals: [] });
@@ -119,7 +122,7 @@ export async function dealsRoutes(app: FastifyInstance) {
   );
 
   app.post('/deals/sync', { preHandler: [requireAuth, forbidAffiliate] }, async (req, reply) => {
-    const tenantId = await resolveTenantId(req.tenantId);
+    const tenantId = req.tenantId;
     if (!tenantId) {
       throw ApiError.validation('Nenhum tenant encontrado para sincronizar');
     }
@@ -218,7 +221,7 @@ export async function dealsRoutes(app: FastifyInstance) {
    * Categorias distintas com contagem de produtos canônicos.
    */
   app.get('/deals/categories', async (req, reply) => {
-    const tenantId = await resolveTenantId(req.tenantId);
+    const tenantId = await resolvePublicTenantId();
     if (!tenantId) return reply.send([]);
 
     const categories = await prisma.masterProduct.groupBy({
@@ -250,7 +253,7 @@ export async function dealsRoutes(app: FastifyInstance) {
    */
   app.get('/deals/:slug', async (req, reply) => {
     const { slug } = slugParamSchema.parse(req.params);
-    const tenantId = await resolveTenantId(req.tenantId);
+    const tenantId = await resolvePublicTenantId();
 
     if (!tenantId) {
       throw ApiError.notFound('Produto não encontrado');
@@ -272,7 +275,7 @@ export async function dealsRoutes(app: FastifyInstance) {
   app.post('/deals/:slug/alerts', async (req, reply) => {
     const { slug } = slugParamSchema.parse(req.params);
     const body = alertBodySchema.parse(req.body);
-    const tenantId = await resolveTenantId(req.tenantId);
+    const tenantId = await resolvePublicTenantId();
 
     if (!tenantId) {
       throw ApiError.validation('Serviço temporariamente indisponível');

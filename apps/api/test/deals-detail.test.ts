@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll, beforeAll } from 'vitest';
 import { prisma } from '@afilados/db';
 import { buildApp } from '../src/app';
-import { createTenantWithUser, cleanupTenant, loginCookie } from './helpers';
+import { createTenantWithUser, cleanupTenant, loginCookie, makePublicSiteOwner } from './helpers';
 
 const app = await buildApp({ logger: false });
 
@@ -9,10 +9,13 @@ const app = await buildApp({ logger: false });
 const longSlug = `${'a'.repeat(100)}-niiy`;
 let tenantId: string;
 let cookie: string;
+let restoreOwner: (() => Promise<void>) | undefined;
 
 beforeAll(async () => {
   const t = await createTenantWithUser('Deals');
   tenantId = t.tenantId;
+  // As rotas públicas de /deals servem o tenant do dono do site, não o da sessão.
+  restoreOwner = await makePublicSiteOwner(t.userId);
   cookie = await loginCookie(app, t.email, t.password);
   await prisma.masterProduct.create({
     data: {
@@ -28,8 +31,15 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await cleanupTenant(tenantId);
-  await app.close();
+  try {
+    await restoreOwner?.();
+  } finally {
+    try {
+      if (tenantId) await cleanupTenant(tenantId);
+    } finally {
+      await app.close();
+    }
+  }
 });
 
 describe('GET /api/v1/deals/:slug', () => {

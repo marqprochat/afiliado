@@ -1,11 +1,12 @@
 import { describe, it, expect, afterAll, beforeAll } from 'vitest';
 import { prisma } from '@afilados/db';
 import { buildApp } from '../src/app';
-import { createTenantWithUser, cleanupTenant, loginCookie } from './helpers';
+import { createTenantWithUser, cleanupTenant, loginCookie, makePublicSiteOwner } from './helpers';
 
 const app = await buildApp({ logger: false });
 let tenantId: string;
 let cookie: string;
+let restoreOwner: (() => Promise<void>) | undefined;
 const future = new Date(Date.now() + 7 * 86_400_000);
 const past = new Date(Date.now() - 86_400_000);
 
@@ -42,6 +43,8 @@ const getDeal = (slug: string) =>
 beforeAll(async () => {
   const t = await createTenantWithUser('DealsCoupons');
   tenantId = t.tenantId;
+  // As rotas públicas de /deals servem o tenant do dono do site, não o da sessão.
+  restoreOwner = await makePublicSiteOwner(t.userId);
   cookie = await loginCookie(app, t.email, t.password);
   await makeDeal('fone-com-cupom-0001', 'SHOPEE', 'sp-1');
   await makeDeal('fone-sem-cupom-0001', 'SHOPEE', 'sp-2');
@@ -94,8 +97,15 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await cleanupTenant(tenantId);
-  await app.close();
+  try {
+    await restoreOwner?.();
+  } finally {
+    try {
+      if (tenantId) await cleanupTenant(tenantId);
+    } finally {
+      await app.close();
+    }
+  }
 });
 
 describe('GET /api/v1/deals/:slug — cupons', () => {
