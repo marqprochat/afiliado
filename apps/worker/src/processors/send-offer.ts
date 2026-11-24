@@ -145,7 +145,13 @@ export async function sendOffer(
   try {
     if (item.customText) {
       const rewrite = deps.rewriteOfferLinks ?? rewriteOfferLinksForTenant;
-      const customText = await rewrite(tenantId, item.customText);
+      const customText = await rewrite(tenantId, item.customText).catch((err: unknown) => {
+        log.warn(
+          { tenantId, err: err instanceof Error ? err.message : String(err) },
+          'rewrite-offer-links falhou; enviando o texto original',
+        );
+        return item.customText as string;
+      });
       let message: OutgoingMessage;
       if (item.customImageData) {
         message = {

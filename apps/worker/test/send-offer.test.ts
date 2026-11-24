@@ -1072,4 +1072,29 @@ describe('sendOffer com link do site (siteLinks)', () => {
     });
     expect(enqueued[0]!.customText).toBe('Olha https://site.test/ofertas/fone-ab12');
   });
+
+  it('texto livre: se a troca de links rejeitar, envia o texto original', async () => {
+    const batch = await prisma.batch.create({
+      data: {
+        tenantId,
+        sessionId,
+        templateId,
+        name: 'manual-site-erro',
+        groupJids: ['g1@g.us'],
+        intervalMin: 1,
+        items: {
+          create: [{ order: 0, runAt: new Date(), customText: 'Olha https://s.shopee.com.br/AFF1' }],
+        },
+      },
+      include: { items: true },
+    });
+    const rewrite = vi.fn(async () => {
+      throw new Error('boom');
+    });
+    await sendOffer({ ...deps, rewriteOfferLinks: rewrite }, batch.items[0]!.id);
+    expect(gateway.sent).toHaveLength(1);
+    const m = gateway.sent[0]!.msg;
+    if (m.kind === 'preview' || m.kind === 'text') expect(m.text).toBe('Olha https://s.shopee.com.br/AFF1');
+    else throw new Error(`kind inesperado: ${m.kind}`);
+  });
 });

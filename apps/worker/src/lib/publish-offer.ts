@@ -29,7 +29,7 @@ export async function isSiteLinksEnabled(db: TenantClient): Promise<boolean> {
   return siteLinksEnabled(row?.value);
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error(`indexação passou de ${ms} ms`)), ms);

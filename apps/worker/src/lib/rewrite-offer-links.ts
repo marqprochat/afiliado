@@ -8,7 +8,13 @@ import {
 import { forTenant } from '@afilados/db';
 import type { ProductData, ProductEnrichJob } from '@afilados/shared';
 import { fetchProductWithCache } from '../processors/product-enrich';
-import { isSiteLinksEnabled, publishOfferForTenant, type PublishOfferFn } from './publish-offer';
+import {
+  PUBLISH_TIMEOUT_MS,
+  isSiteLinksEnabled,
+  publishOfferForTenant,
+  withTimeout,
+  type PublishOfferFn,
+} from './publish-offer';
 
 const log = pino({ name: 'rewrite-offer-links' });
 
@@ -34,6 +40,8 @@ export interface RewriteOfferLinksCtx {
   resolveShortLinks?: (text: string) => Promise<Map<string, string>>;
   fetchProduct?: (tenantId: string, kind: FetchKind, url: string) => Promise<ProductData | null>;
   publish?: PublishOfferFn;
+  /** Teto de busca + publicação por URL; omitido = `PUBLISH_TIMEOUT_MS`. */
+  timeoutMs?: number;
 }
 
 export type RewriteOfferLinksFn = (
@@ -49,7 +57,14 @@ export type RewriteOfferLinksFn = (
  */
 export async function rewriteOfferLinks(text: string, ctx: RewriteOfferLinksCtx): Promise<string> {
   const isEnabled = ctx.isEnabled ?? ((t: string) => isSiteLinksEnabled(forTenant(t)));
-  if (!(await isEnabled(ctx.tenantId).catch(() => false))) return text;
+  const enabled = await isEnabled(ctx.tenantId).catch((err: unknown) => {
+    log.warn(
+      { tenantId: ctx.tenantId, err: err instanceof Error ? err.message : String(err) },
+      'não foi possível ler a chave siteLinks; mantendo os links de afiliado',
+    );
+    return false;
+  });
+  if (!enabled) return text;
 
   const urls = [...new Set(extractUrls(text))];
   if (urls.length === 0) return text;
@@ -71,14 +86,23 @@ export async function rewriteOfferLinks(text: string, ctx: RewriteOfferLinksCtx)
     if (parsed.source === 'UNSUPPORTED' || !FETCHABLE.has(parsed.source)) continue;
     processed++;
     try {
-      const product = await fetchProduct(ctx.tenantId, parsed.source as FetchKind, original);
-      if (!product) continue;
-      const siteUrl = await publish(ctx.tenantId, product, url);
+      const siteUrl = await withTimeout(
+        (async () => {
+          const product = await fetchProduct(ctx.tenantId, parsed.source as FetchKind, original);
+          return product ? publish(ctx.tenantId, product, url) : null;
+        })(),
+        ctx.timeoutMs ?? PUBLISH_TIMEOUT_MS,
+      );
       if (siteUrl) replacements.set(url, siteUrl);
     } catch (err) {
       log.warn(
-        { tenantId: ctx.tenantId, url, err: err instanceof Error ? err.message : String(err) },
-        'não foi possível montar a página da oferta; mantendo o link de afiliado',
+        {
+          tenantId: ctx.tenantId,
+          source: parsed.source,
+          url,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        'publish-offer fallback',
       );
     }
   }

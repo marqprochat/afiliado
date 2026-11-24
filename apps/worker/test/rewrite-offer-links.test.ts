@@ -56,6 +56,14 @@ describe('rewriteOfferLinks', () => {
     expect(await rewriteOfferLinks(text, ctx({ publish: async () => null }))).toBe(text);
   });
 
+  it('mantém o link e retorna logo quando a busca do produto nunca responde', async () => {
+    const c = ctx({ fetchProduct: vi.fn(() => new Promise<never>(() => undefined)), timeoutMs: 20 });
+    const text = 'Corre! https://s.shopee.com.br/AFF1';
+    const started = Date.now();
+    expect(await rewriteOfferLinks(text, c)).toBe(text);
+    expect(Date.now() - started).toBeLessThan(1_000);
+  });
+
   it('ignora URLs que não são de loja', async () => {
     const c = ctx({ resolveShortLinks: async () => new Map() });
     const text = 'Veja https://google.com/x e https://exemplo.com';
