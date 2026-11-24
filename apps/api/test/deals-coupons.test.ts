@@ -116,7 +116,8 @@ describe('GET /api/v1/deals/:slug — cupons', () => {
       {
         code: 'FONE10',
         description: 'Cupom desta oferta',
-        discountLabel: 'R$ 10,00 OFF',
+        // couponValue não diz se é R$ ou %: sem rótulo, em vez de um possivelmente errado.
+        discountLabel: null,
         expiresAt: null,
       },
     ]);

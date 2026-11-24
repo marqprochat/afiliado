@@ -626,15 +626,17 @@ async function findDealCoupons(
       couponCode: { not: null },
     },
     orderBy: { createdAt: 'desc' },
-    select: { couponCode: true, couponValue: true },
+    select: { couponCode: true },
   });
   if (product?.couponCode) {
     return [
       {
         code: product.couponCode,
         description: 'Cupom desta oferta',
-        discountLabel:
-          product.couponValue !== null ? `${formatBRL(Number(product.couponValue))} OFF` : null,
+        // Product.couponValue não diz o tipo do desconto: a planilha e a extensão gravam reais,
+        // mas o cupom da Awin grava o discountValue, que pode ser percentual. Sem saber o tipo,
+        // é melhor não mostrar rótulo do que mostrar um errado.
+        discountLabel: null,
         expiresAt: null,
       },
     ];
