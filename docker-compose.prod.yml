@@ -48,6 +48,7 @@ services:
       DATABASE_URL: postgresql://afilados:${POSTGRES_PASSWORD}@postgres:5432/afilados
       REDIS_URL: redis://redis:6379
       NODE_ENV: production
+      PUBLIC_SITE_URL: https://${DOMAIN}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_started }

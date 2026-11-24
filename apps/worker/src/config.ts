@@ -16,5 +16,11 @@ const schema = z.object({
   ML_CLIENT_SECRET: z.string().optional(),
   // Retenção de GroupMemberEvent, GroupSnapshot e LinkClickEvent (12 meses por padrão).
   METRICS_RETENTION_DAYS: z.coerce.number().int().min(30).default(365),
+  // Origem pública do site (ex.: https://superofertasedescontos.com.br). Vazio = ofertas seguem
+  // com o link de afiliado direto, mesmo com a chave siteLinks ligada.
+  PUBLIC_SITE_URL: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.string().url().optional(),
+  ),
 });
 export const config = schema.parse(process.env);
