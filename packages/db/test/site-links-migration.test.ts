@@ -14,34 +14,46 @@ let owner: string;
 let child: string;
 let plain: string;
 
-async function tenantWithUser(name: string, isSuperAdmin: boolean, parentTenantId?: string) {
+let newerRoot: string;
+
+async function tenantWithUser(
+  name: string,
+  isSuperAdmin: boolean,
+  parentTenantId?: string,
+  createdAt?: Date,
+) {
   const t = await prisma.tenant.create({
     data: { name, ...(parentTenantId ? { parentTenantId } : {}) },
   });
   await prisma.user.create({
-    data: { tenantId: t.id, email: `${t.id}@mig.test`, name, passwordHash: 'x', isSuperAdmin },
+    data: { tenantId: t.id, email: `${t.id}@mig.test`, name, passwordHash: 'x',
+      isSuperAdmin,
+      ...(createdAt ? { createdAt } : {}),
+    },
   });
   return t.id;
 }
 
 beforeAll(async () => {
-  owner = await tenantWithUser('dono-mig', true);
+  // O dono é o superadmin raiz mais antigo: 1973 vem antes de qualquer usuário do banco.
+  owner = await tenantWithUser('dono-mig', true, undefined, new Date('1973-01-01T00:00:00Z'));
+  newerRoot = await tenantWithUser('raiz-nova-mig', true, undefined, new Date('2003-01-01T00:00:00Z'));
   child = await tenantWithUser('afiliado-mig', false, owner);
   plain = await tenantWithUser('comum-mig', false);
 });
 
 afterAll(async () => {
-  await prisma.tenant.deleteMany({ where: { id: { in: [child, plain] } } });
+  await prisma.tenant.deleteMany({ where: { id: { in: [child, plain, newerRoot] } } });
   await prisma.tenant.deleteMany({ where: { id: owner } });
   await prisma.$disconnect();
 });
 
 describe('migração 20261123120000_site_links_owner', () => {
-  it('liga siteLinks só para o tenant do superadmin e é idempotente', async () => {
+  it('liga siteLinks só para o tenant do dono (superadmin raiz mais antigo) e é idempotente', async () => {
     await prisma.$executeRawUnsafe(sql);
     await prisma.$executeRawUnsafe(sql);
     const rows = await prisma.setting.findMany({
-      where: { key: 'siteLinks', tenantId: { in: [owner, child, plain] } },
+      where: { key: 'siteLinks', tenantId: { in: [owner, child, plain, newerRoot] } },
     });
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ tenantId: owner, value: { enabled: true } });

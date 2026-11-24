@@ -9,6 +9,8 @@ let rootCookie: string;
 let affCookie: string;
 let plain: Awaited<ReturnType<typeof createTenantWithUser>> | undefined;
 let plainCookie: string;
+let newer: Awaited<ReturnType<typeof createTenantWithUser>> | undefined;
+let newerCookie: string;
 
 const call = (method: 'GET' | 'PUT', cookie: string, payload?: object) =>
   app.inject({
@@ -20,8 +22,19 @@ const call = (method: 'GET' | 'PUT', cookie: string, payload?: object) =>
 
 beforeAll(async () => {
   root = await createTenantWithUser('raiz-site-links');
-  // Só o dono (superadmin da conta raiz) liga o link do site.
-  await prisma.user.update({ where: { id: root.userId }, data: { isSuperAdmin: true } });
+  // Só o dono (superadmin raiz mais antigo) liga o link do site: este nasce em 1972, antes de
+  // qualquer usuário do banco compartilhado.
+  await prisma.user.update({
+    where: { id: root.userId },
+    data: { isSuperAdmin: true, createdAt: new Date('1972-01-01T00:00:00Z') },
+  });
+  // Segundo superadmin de conta raiz, mais novo: não é o dono.
+  newer = await createTenantWithUser('raiz-nova-site-links');
+  await prisma.user.update({
+    where: { id: newer.userId },
+    data: { isSuperAdmin: true, createdAt: new Date('2002-01-01T00:00:00Z') },
+  });
+  newerCookie = await loginCookie(app, newer.email, newer.password);
   const aff = await createTenantWithUser('afiliado-site-links', root.tenantId);
   plain = await createTenantWithUser('outra-conta-site-links');
   plainCookie = await loginCookie(app, plain.email, plain.password);
@@ -33,6 +46,7 @@ afterAll(async () => {
   try {
     if (root) await cleanupTenant(root.tenantId);
     if (plain) await cleanupTenant(plain.tenantId);
+    if (newer) await cleanupTenant(newer.tenantId);
   } finally {
     await app.close();
   }
@@ -66,6 +80,15 @@ describe('settings/site-links', () => {
     expect((await call('PUT', plainCookie, { enabled: true })).statusCode).toBe(403);
     const row = await prisma.setting.findFirst({
       where: { tenantId: plain!.tenantId, key: 'siteLinks' },
+    });
+    expect(row).toBeNull();
+  });
+
+  it('segundo superadmin de conta raiz (não é o dono) não lê nem altera → 403', async () => {
+    expect((await call('GET', newerCookie)).statusCode).toBe(403);
+    expect((await call('PUT', newerCookie, { enabled: true })).statusCode).toBe(403);
+    const row = await prisma.setting.findFirst({
+      where: { tenantId: newer!.tenantId, key: 'siteLinks' },
     });
     expect(row).toBeNull();
   });

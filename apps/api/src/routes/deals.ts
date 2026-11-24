@@ -2,7 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma, forTenant } from '@afilados/db';
 import { ApiError } from '@afilados/shared';
-import { getDealsShowcase, getDealDetailBySlug, syncDealsCatalog } from '@afilados/deals';
+import {
+  getDealsShowcase,
+  getDealDetailBySlug,
+  syncDealsCatalog,
+  resolveOwnerTenantId,
+} from '@afilados/deals';
 import { forbidAffiliate, requireAuth } from '../plugins/auth';
 
 const dealsQuerySchema = z.object({
@@ -37,12 +42,8 @@ const ALERT_PAGE_SIZE = 8;
  */
 async function resolvePublicTenantId(): Promise<string | null> {
   // 1. Tenant do dono da aplicação: as páginas publicadas no envio das ofertas são dele.
-  const ownerUser = await prisma.user.findFirst({
-    where: { isSuperAdmin: true, tenant: { parentTenantId: null } },
-    orderBy: { createdAt: 'asc' },
-    select: { tenantId: true },
-  });
-  if (ownerUser?.tenantId) return ownerUser.tenantId;
+  const ownerTenantId = await resolveOwnerTenantId();
+  if (ownerTenantId) return ownerTenantId;
 
   // 2. Tenta achar tenant que já possui MasterProduct
   const withMaster = await prisma.masterProduct.findFirst({ select: { tenantId: true } });

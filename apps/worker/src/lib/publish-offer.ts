@@ -1,6 +1,6 @@
 import pino from 'pino';
 import { prisma, forTenant, type TenantClient } from '@afilados/db';
-import { indexProductInPriceEngine } from '@afilados/deals';
+import { indexProductInPriceEngine, resolveOwnerTenantId } from '@afilados/deals';
 import { SITE_LINKS_KEY, siteLinksEnabled, type ProductData } from '@afilados/shared';
 import { config } from '../config';
 
@@ -27,15 +27,12 @@ export type PublishOfferFn = (
 ) => Promise<string | null>;
 
 /**
- * O site público é do dono da aplicação: conta raiz (sem conta-mãe) com um usuário superadmin.
- * Só ela publica ofertas no site; em qualquer outra conta a página nem abriria (o link daria 404).
+ * O site público é do dono da aplicação: o superadmin mais antigo entre as contas raiz (mesma
+ * regra da API, `resolveOwnerTenantId`). Só ele publica ofertas no site; em qualquer outra conta
+ * a página nem abriria (o link daria 404).
  */
 export async function isOwnerTenant(tenantId: string): Promise<boolean> {
-  const owner = await prisma.user.findFirst({
-    where: { tenantId, isSuperAdmin: true, tenant: { parentTenantId: null } },
-    select: { id: true },
-  });
-  return owner !== null;
+  return tenantId === (await resolveOwnerTenantId());
 }
 
 /** Chave `siteLinks` ligada E a conta é a do dono; uma chave perdida em outra conta é ignorada. */
@@ -64,7 +61,7 @@ function isUniqueConflict(err: unknown): boolean {
 /**
  * Publica a oferta na página /ofertas/<slug> do site e devolve a URL dela. Devolve `null` (e o
  * chamador usa o link de afiliado) quando a chave `siteLinks` do tenant está desligada ou o
- * tenant não é o do dono (conta raiz com superadmin), quando
+ * tenant não é o do dono (superadmin raiz mais antigo), quando
  * falta `PUBLIC_SITE_URL`, em qualquer erro ou quando a indexação passa do teto de tempo.
  */
 export async function publishOffer(
