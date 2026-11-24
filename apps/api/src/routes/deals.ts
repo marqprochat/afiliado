@@ -33,29 +33,30 @@ const ALERT_PAGE_SIZE = 8;
 async function resolveTenantId(requestTenantId?: string): Promise<string | null> {
   if (requestTenantId) return requestTenantId;
 
-  // 1. Tenta achar tenant que já possui MasterProduct
+  // 1. Tenant do dono da aplicação: as páginas publicadas no envio das ofertas são dele.
+  const ownerUser = await prisma.user.findFirst({
+    where: { isSuperAdmin: true, tenant: { parentTenantId: null } },
+    orderBy: { createdAt: 'asc' },
+    select: { tenantId: true },
+  });
+  if (ownerUser?.tenantId) return ownerUser.tenantId;
+
+  // 2. Tenta achar tenant que já possui MasterProduct
   const withMaster = await prisma.masterProduct.findFirst({ select: { tenantId: true } });
   if (withMaster?.tenantId) return withMaster.tenantId;
 
-  // 2. Tenta achar o tenant que possui produtos cadastrados na tabela Product
+  // 3. Tenta achar o tenant que possui produtos cadastrados na tabela Product
   const withProduct = await prisma.product.findFirst({
     select: { tenantId: true },
     orderBy: { createdAt: 'desc' },
   });
   if (withProduct?.tenantId) return withProduct.tenantId;
 
-  // 3. Tenta achar o tenant que possui produtos da Awin
+  // 4. Tenta achar o tenant que possui produtos da Awin
   const withAwin = await prisma.awinCatalogProduct.findFirst({
     select: { tenantId: true },
   });
   if (withAwin?.tenantId) return withAwin.tenantId;
-
-  // 4. Superadmin fallback
-  const ownerUser = await prisma.user.findFirst({
-    where: { isSuperAdmin: true },
-    select: { tenantId: true },
-  });
-  if (ownerUser?.tenantId) return ownerUser.tenantId;
 
   // 5. Primeiro tenant
   const firstTenant = await prisma.tenant.findFirst({ select: { id: true } });

@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
 import type { TenantClient } from '@afilados/db';
-import type { ProductData } from '@afilados/shared';
+import { MARKETPLACE_KINDS, type MarketplaceKind, type ProductData } from '@afilados/shared';
 import {
   normalizeProductTitle,
   findBestProductMatch,
   analyzeDealPromotion,
+  formatBRL,
   type DealAnalysis,
   type MatchingCandidate,
 } from '@afilados/core';
@@ -524,6 +525,81 @@ export async function getDealsShowcase(
 /**
  * Retorna detalhes do produto canônico pelo slug com histórico completo para gráficos.
  */
+export interface DealCoupon {
+  code: string;
+  description: string;
+  discountLabel: string | null;
+  expiresAt: Date | null;
+}
+
+const MAX_STORE_COUPONS = 3;
+
+function couponDiscountLabel(
+  type: 'PERCENT' | 'FIXED' | 'FREE_SHIPPING' | null,
+  value: unknown,
+): string | null {
+  if (type === 'FREE_SHIPPING') return 'Frete grátis';
+  if (value === null || value === undefined) return null;
+  const n = Number(value);
+  if (type === 'PERCENT') return `${n}% OFF`;
+  if (type === 'FIXED') return `${formatBRL(n)} OFF`;
+  return null;
+}
+
+/**
+ * Cupom da página da oferta: o capturado com o produto da melhor listagem; senão, até 3 cupons
+ * válidos e não expirados da mesma loja, do maior desconto para o menor.
+ */
+async function findDealCoupons(
+  db: TenantClient,
+  listing: { source: string; externalId: string } | null,
+): Promise<DealCoupon[]> {
+  if (!listing) return [];
+  const product = await db.product.findFirst({
+    where: {
+      source: listing.source as ProductData['source'],
+      externalId: listing.externalId,
+      couponCode: { not: null },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { couponCode: true, couponValue: true },
+  });
+  if (product?.couponCode) {
+    return [
+      {
+        code: product.couponCode,
+        description: 'Cupom desta oferta',
+        discountLabel:
+          product.couponValue !== null ? `${formatBRL(Number(product.couponValue))} OFF` : null,
+        expiresAt: null,
+      },
+    ];
+  }
+  if (!(MARKETPLACE_KINDS as readonly string[]).includes(listing.source)) return [];
+  const rows = await db.coupon.findMany({
+    where: {
+      store: listing.source as MarketplaceKind,
+      status: 'VALID',
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+    },
+    orderBy: { discountValue: { sort: 'desc', nulls: 'last' } },
+    take: MAX_STORE_COUPONS,
+    select: {
+      code: true,
+      description: true,
+      discountType: true,
+      discountValue: true,
+      expiresAt: true,
+    },
+  });
+  return rows.map((c) => ({
+    code: c.code,
+    description: c.description,
+    discountLabel: couponDiscountLabel(c.discountType, c.discountValue),
+    expiresAt: c.expiresAt,
+  }));
+}
+
 export async function getDealDetailBySlug(db: TenantClient, slug: string) {
   const master = await db.masterProduct.findFirst({
     where: { slug },
@@ -564,6 +640,10 @@ export async function getDealDetailBySlug(db: TenantClient, slug: string) {
     currentPrice,
     bestListing?.originalPrice ? Number(bestListing.originalPrice) : null,
   );
+  const coupons = await findDealCoupons(
+    db,
+    bestListing ? { source: bestListing.source, externalId: bestListing.externalId } : null,
+  );
 
   return {
     id: master.id,
@@ -591,5 +671,6 @@ export async function getDealDetailBySlug(db: TenantClient, slug: string) {
       lastCheckedAt: l.lastCheckedAt,
     })),
     priceHistory: consolidatedHistory,
+    coupons,
   };
 }
