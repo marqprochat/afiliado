@@ -326,3 +326,43 @@ describe('título bruto x o próprio cleanTitle (regressão: página nova a cada
     ).toBe(true);
   });
 });
+
+describe('polegadas decimais separam produtos', () => {
+  it.each([
+    ['Monitor Dell 23.8" Full HD', 'Monitor Dell 24" Full HD'],
+    ['Tablet Samsung 10.1" 64GB', 'Tablet Samsung 11" 64GB'],
+    ['Smartphone Apple 6.1" 128GB', 'Smartphone Apple 6.7" 128GB'],
+    ['Monitor Dell 23,8" Full HD', 'Monitor Dell 24" Full HD'],
+  ])('%s != %s', (a, b) => {
+    expect(productsConflict({ title: a }, { title: b })).toBe(true);
+    expect(findBestProductMatch({ title: a, price: 1000 }, [{ id: 'b', title: b, currentBestPrice: 1000 }])).toBeNull();
+  });
+
+  it('extrai polegadas decimais', () => {
+    expect(extractVariantAttributes('Monitor Dell 23,8" Full HD').inches).toBe('23.8');
+    expect(extractVariantAttributes('Tablet 10.1 polegadas').inches).toBe('10.1');
+    expect(extractVariantAttributes('Celular 6.1" 128GB').inches).toBe('6.1');
+  });
+
+  it('mantém o ponto decimal no cleanTitle e no slug', () => {
+    const n = normalizeProductTitle('Monitor 23,8" Dell');
+    expect(n.cleanTitle).toBe('Monitor 23.8 pol Dell');
+    expect(n.slug).toBe('monitor-23-8-pol-dell');
+  });
+
+  it('mesmo modelo escrito de formas diferentes continua casando', () => {
+    expect(productsConflict({ title: 'Monitor 23,8" Dell' }, { title: 'Monitor Dell 23.8 polegadas' })).toBe(false);
+    const m = findBestProductMatch(
+      { title: 'Monitor 23,8" Dell', price: 900 },
+      [{ id: 'x', title: 'Monitor Dell 23.8 polegadas', currentBestPrice: 900 }],
+    );
+    expect(m?.id).toBe('x');
+  });
+
+  it.each(['Monitor 23,8" Dell', 'Tablet Samsung 10.1" 64GB', 'Smartphone Apple 6.1" 128GB'])(
+    '%s não conflita com o próprio cleanTitle',
+    (raw) => {
+      expect(productsConflict({ title: raw }, { title: normalizeProductTitle(raw).cleanTitle })).toBe(false);
+    },
+  );
+});

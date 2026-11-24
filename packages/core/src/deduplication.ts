@@ -108,7 +108,9 @@ export function normalizeProductTitle(rawTitle: string): {
     .replace(/(\d)\s?(?:''|["″“”])/g, '$1 pol');
 
   text = text
-    .replace(/[^\w\s\d\-áàâãéèêíïóôõöúçñÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ]/gi, ' ')
+    .replace(/[^\w\s\d.\-áàâãéèêíïóôõöúçñÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ]/gi, ' ')
+    // O ponto só fica entre dígitos ("23.8"): é o que separa 23.8" de 24" e 6.1" de 6.7".
+    .replace(/(?<!\d)\.|\.(?!\d)/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -283,9 +285,9 @@ function extractMemory(text: string): { storage?: string; ram?: string } {
 }
 
 function extractInches(text: string): string | undefined {
-  const explicit = text.match(/\b(\d{2,3}(?:\.\d)?)\s?(?:polegadas|pol\b|"|'')/);
+  const explicit = text.match(/\b(\d{2,3}(?:\.\d+)?|\d\.\d+)\s?(?:polegadas|pol\b|"|'')/);
   if (explicit) return String(Number(explicit[1]));
-  const afterTv = text.match(/\b(?:tv|monitor)\s+(\d{2})\b(?!\s?(?:gb|tb|hz|w\b|v\b|cm|mm|%))/);
+  const afterTv = text.match(/\b(?:tv|monitor)\s+(\d{2}(?:\.\d)?)\b(?!\s?(?:gb|tb|hz|w\b|v\b|cm|mm|%))/);
   if (afterTv) return String(Number(afterTv[1]));
   return undefined;
 }
