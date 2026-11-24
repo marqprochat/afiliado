@@ -10,6 +10,7 @@ import { authRoutes } from './routes/auth';
 import { meRoutes } from './routes/me';
 import { settingsRoutes } from './routes/settings';
 import { aiSettingsRoutes } from './routes/ai-settings';
+import { siteLinksRoutes } from './routes/site-links';
 import { marketplacesRoutes } from './routes/marketplaces';
 import { productsRoutes } from './routes/products';
 import { queueRoutes } from './routes/queue';
@@ -73,6 +74,7 @@ export async function buildApp(opts: BuildAppOptions = {}) {
       await api.register(meRoutes);
       await api.register(settingsRoutes);
       await api.register(aiSettingsRoutes);
+      await api.register(siteLinksRoutes);
       await api.register(marketplacesRoutes);
       await api.register(productsRoutes);
       await api.register(queueRoutes);

@@ -17,6 +17,7 @@ import type {
   Overview,
   QueueResponse,
   AiSettings,
+  SiteLinksSettings,
   Settings,
   Template,
   TelegramBot,
@@ -48,6 +49,12 @@ export const useSettings = () =>
   useQuery({ queryKey: ['settings'], queryFn: () => apiFetch<Settings>('/settings') });
 export const useAiSettings = () =>
   useQuery({ queryKey: ['settings', 'ai'], queryFn: () => apiFetch<AiSettings>('/settings/ai') });
+export const useSiteLinks = (enabled: boolean) =>
+  useQuery({
+    queryKey: ['settings', 'site-links'],
+    enabled,
+    queryFn: () => apiFetch<SiteLinksSettings>('/settings/site-links'),
+  });
 export const useSessions = () =>
   useQuery({ queryKey: ['wa', 'sessions'], queryFn: () => apiFetch<WaSession[]>('/wa/sessions') });
 export const useGroups = (sessionId: string | null) =>

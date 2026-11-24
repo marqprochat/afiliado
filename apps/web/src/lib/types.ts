@@ -43,6 +43,10 @@ export interface Settings {
 }
 export type AiTone = 'empolgado' | 'divertido' | 'urgente' | 'sofisticado';
 export type AiEmojiLevel = 'poucos' | 'medio' | 'muitos';
+export interface SiteLinksSettings {
+  enabled: boolean;
+}
+
 export interface AiSettings {
   enabled: boolean;
   baseUrl: string;
