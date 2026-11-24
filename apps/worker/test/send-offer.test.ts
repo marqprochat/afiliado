@@ -1019,4 +1019,57 @@ describe('sendOffer com link do site (siteLinks)', () => {
       expect(m.text).toBe('*Fone* R$ 99,90\nhttps://s.shopee.com.br/MOCK123');
     }
   });
+
+  it('texto livre: troca os links pela página do site, inclusive na prévia e no job do telegram', async () => {
+    const bot = await prisma.telegramBot.create({
+      data: { tenantId, label: 'BotSite', encryptedToken: encryptJson({ token: 'x' }), status: 'OK' },
+    });
+    await prisma.telegramChat.create({
+      data: {
+        tenantId,
+        botId: bot.id,
+        chatId: '-100888',
+        title: 'Canal site',
+        kind: 'channel',
+        botIsAdmin: true,
+      },
+    });
+    const batch = await prisma.batch.create({
+      data: {
+        tenantId,
+        sessionId,
+        templateId,
+        name: 'manual-site',
+        groupJids: ['g1@g.us'],
+        telegramChatIds: ['-100888'],
+        intervalMin: 1,
+        items: {
+          create: [{ order: 0, runAt: new Date(), customText: 'Olha https://s.shopee.com.br/AFF1' }],
+        },
+      },
+      include: { items: true },
+    });
+    const rewrite = vi.fn(async (_t: string, text: string) =>
+      text.replace('https://s.shopee.com.br/AFF1', 'https://site.test/ofertas/fone-ab12'),
+    );
+    const enqueued: { customText?: string }[] = [];
+    await sendOffer(
+      {
+        ...deps,
+        rewriteOfferLinks: rewrite,
+        enqueueTelegram: async (job) => void enqueued.push(job),
+      },
+      batch.items[0]!.id,
+    );
+    expect(rewrite).toHaveBeenCalledWith(tenantId, 'Olha https://s.shopee.com.br/AFF1');
+    expect(gateway.sent[0]!.msg).toEqual({
+      kind: 'preview',
+      text: 'Olha https://site.test/ofertas/fone-ab12',
+      url: 'https://site.test/ofertas/fone-ab12',
+      title: 'Oferta',
+      description: '',
+      thumbnailUrl: '',
+    });
+    expect(enqueued[0]!.customText).toBe('Olha https://site.test/ofertas/fone-ab12');
+  });
 });

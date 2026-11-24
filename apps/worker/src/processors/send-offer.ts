@@ -32,6 +32,7 @@ import { resolveItemCta } from '../lib/ai-cta';
 import { publishEvent } from '../lib/events';
 import { resolveCachedAffiliateLink } from '../lib/ml-links';
 import { publishOfferForTenant, type PublishOfferFn } from '../lib/publish-offer';
+import { rewriteOfferLinksForTenant, type RewriteOfferLinksFn } from '../lib/rewrite-offer-links';
 import { enqueueSendTelegram } from '../lib/queue-helpers';
 import { getRedis } from '../lib/redis';
 import { TokenBucket, jitter, waitForToken } from '../lib/rate-limit';
@@ -55,6 +56,8 @@ export interface SendOfferDeps {
   generateCta?: typeof generateCta;
   /** Injetável em testes; por padrão publica a oferta no site (lib/publish-offer.ts). */
   publishOffer?: PublishOfferFn;
+  /** Injetável em testes; por padrão troca os links de loja do texto livre pela página do site. */
+  rewriteOfferLinks?: RewriteOfferLinksFn;
   enqueueTelegram?: (job: SendTelegramJob & { jobId: string }) => Promise<void>;
 }
 
@@ -141,28 +144,30 @@ export async function sendOffer(
 
   try {
     if (item.customText) {
+      const rewrite = deps.rewriteOfferLinks ?? rewriteOfferLinksForTenant;
+      const customText = await rewrite(tenantId, item.customText);
       let message: OutgoingMessage;
       if (item.customImageData) {
         message = {
           kind: 'image',
           imageBuffer: Buffer.from(item.customImageData),
-          caption: item.customText,
+          caption: customText,
         };
       } else if (item.customImageUrl) {
-        message = { kind: 'image', imageUrl: item.customImageUrl, caption: item.customText };
+        message = { kind: 'image', imageUrl: item.customImageUrl, caption: customText };
       } else {
-        const urlMatch = item.customText.match(/https?:\/\/[^\s<>"')]+/);
+        const urlMatch = customText.match(/https?:\/\/[^\s<>"')]+/);
         if (urlMatch) {
           message = {
             kind: 'preview',
-            text: item.customText,
+            text: customText,
             url: urlMatch[0],
             title: 'Oferta',
             description: '',
             thumbnailUrl: '',
           };
         } else {
-          message = { kind: 'text', text: item.customText };
+          message = { kind: 'text', text: customText };
         }
       }
       return sendPlainMessages(
@@ -171,7 +176,7 @@ export async function sendOffer(
           id: item.id,
           productId: null,
           couponId: null,
-          customText: item.customText,
+          customText,
           customImageUrl: item.customImageUrl,
           hasCustomImageData: Boolean(item.customImageData),
         },
