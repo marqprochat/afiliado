@@ -6,6 +6,7 @@ import { createTenantWithUser, cleanupTenant } from './helpers';
 const app = await buildApp({ logger: false });
 let other: Awaited<ReturnType<typeof createTenantWithUser>>;
 let owner: Awaited<ReturnType<typeof createTenantWithUser>>;
+let demotedSuperAdminIds: string[] = [];
 
 const master = (tenantId: string, slug: string) =>
   prisma.masterProduct.create({
@@ -21,6 +22,17 @@ const master = (tenantId: string, slug: string) =>
   });
 
 beforeAll(async () => {
+  // O banco compartilhado de testes é semeado com um superadmin: rebaixa-o durante o teste e
+  // restaura no afterAll (os testes deste pacote rodam em série).
+  demotedSuperAdminIds = (
+    await prisma.user.findMany({ where: { isSuperAdmin: true }, select: { id: true } })
+  ).map((u) => u.id);
+  if (demotedSuperAdminIds.length > 0) {
+    await prisma.user.updateMany({
+      where: { id: { in: demotedSuperAdminIds } },
+      data: { isSuperAdmin: false },
+    });
+  }
   // O tenant sem superadmin é criado ANTES: o fallback antigo ("primeiro tenant com MasterProduct")
   // tenderia a escolhê-lo.
   other = await createTenantWithUser('Outro com vitrine');
@@ -31,6 +43,12 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (demotedSuperAdminIds.length > 0) {
+    await prisma.user.updateMany({
+      where: { id: { in: demotedSuperAdminIds } },
+      data: { isSuperAdmin: true },
+    });
+  }
   await cleanupTenant(other.tenantId);
   await cleanupTenant(owner.tenantId);
   await app.close();
@@ -38,11 +56,6 @@ afterAll(async () => {
 
 describe('GET /api/v1/deals/:slug anônimo', () => {
   it('serve as ofertas do tenant do superadmin', async () => {
-    const others = await prisma.user.count({
-      where: { isSuperAdmin: true, tenantId: { not: owner.tenantId } },
-    });
-    expect(others, 'há outro superadmin sobrando no banco de testes').toBe(0);
-
     const dono = await app.inject({ method: 'GET', url: '/api/v1/deals/produto-do-dono-0001' });
     expect(dono.statusCode).toBe(200);
     const outro = await app.inject({ method: 'GET', url: '/api/v1/deals/produto-do-outro-0001' });
