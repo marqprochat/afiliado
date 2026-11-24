@@ -322,7 +322,10 @@ export async function mirrorMessage(
       knownOriginals.set(replacements.get(l.textUrl) ?? l.textUrl, l.targetUrl);
     }
     const rewriteOffers = deps.rewriteOfferLinks ?? rewriteOfferLinksForTenant;
-    const newText = await rewriteOffers(tenantId, affiliateText, knownOriginals);
+    // Falha ao publicar no site não pode derrubar o espelhamento: segue com os links de afiliado.
+    const newText = await rewriteOffers(tenantId, affiliateText, knownOriginals).catch(
+      () => affiliateText,
+    );
     if (rule.mediaMode === 'IMAGE' && hasImage(jobData.message)) {
       const imageBuffer = await downloadMedia(jobData.sessionId, jobData.message);
       outgoingMessages.push({ kind: 'image', imageBuffer, caption: newText });
@@ -336,7 +339,9 @@ export async function mirrorMessage(
   } else if (template) {
     const publish = deps.publishOffer ?? publishOfferForTenant;
     for (const item of templateProducts) {
-      const link = (await publish(tenantId, item.product, item.convertedUrl)) ?? item.convertedUrl;
+      const link =
+        (await publish(tenantId, item.product, item.convertedUrl).catch(() => null)) ??
+        item.convertedUrl;
       const body = renderTemplate(template.body, item.product, {
         affiliateLink: link,
         now: t.toISOString(),
