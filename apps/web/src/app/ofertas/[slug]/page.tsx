@@ -126,6 +126,37 @@ export default function OfertaDetailPage() {
     );
   }
 
+  // Produto sem nenhuma loja em estoque (o link pode ter sido postado antes): o preço gravado
+  // ficou velho e não há onde comprar, então não mostra preço nem botão de compra.
+  if (deal.listings.length === 0) {
+    return (
+      <div className="min-h-screen bg-[#080a0f] text-slate-100 flex flex-col justify-between">
+        <LandingNav />
+        <main className="flex-1 max-w-md mx-auto w-full px-4 pt-28 pb-16 text-center">
+          {deal.imageUrl && (
+            <div className="aspect-square w-full max-w-xs mx-auto rounded-3xl bg-black/60 border border-slate-800 p-6 flex items-center justify-center mb-6 overflow-hidden opacity-70">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={deal.imageUrl} alt={deal.cleanTitle} className="w-full h-full object-contain" />
+            </div>
+          )}
+          <h1 className="text-xl font-bold text-white mb-3">{deal.cleanTitle}</h1>
+          <p className="text-amber-400 font-semibold mb-2">Oferta indisponível no momento</p>
+          <p className="text-slate-400 text-sm mb-6">
+            Nenhuma loja tem este produto em estoque agora. Confira outras ofertas na vitrine.
+          </p>
+          <Link
+            href="/ofertas"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-black font-bold rounded-xl text-sm transition"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Ver todas as ofertas
+          </Link>
+        </main>
+        <LandingFooter />
+      </div>
+    );
+  }
+
   const bestListing = deal.listings[0] ?? null;
   const isAllTimeLow = deal.analysis.badge === 'ALL_TIME_LOW';
 
