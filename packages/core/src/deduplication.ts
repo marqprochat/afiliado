@@ -101,6 +101,11 @@ export function normalizeProductTitle(rawTitle: string): {
 
   text = text.replace(/(\d+),(\d+)/g, '$1.$2');
   text = normalizeSynonyms(text);
+  // Antes de remover os símbolos: o "+" do modelo e as aspas de polegada distinguem variantes
+  // ("S24+" ≠ "S24", 55" ≠ 50"). Só muda cleanTitle/slug de produtos NOVOS; os gravados ficam.
+  text = text
+    .replace(/\b([a-z]+\d+)\+/gi, '$1 plus')
+    .replace(/(\d)\s?(?:''|["″“”])/g, '$1 pol');
 
   text = text
     .replace(/[^\w\s\d\-áàâãéèêíïóôõöúçñÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇÑ]/gi, ' ')
@@ -431,6 +436,21 @@ export function cleanEanValue(ean: string | null | undefined): string | null {
 }
 
 /**
+ * Conflito de variantes entre dois títulos. Só conta se aparece nos títulos como vieram E depois
+ * de passar os dois pela mesma normalização (normalizeProductTitle): assim um título bruto nunca
+ * conflita com o próprio cleanTitle, que é o título gravado na página do produto.
+ */
+function titlesConflict(titleA: string, titleB: string): boolean {
+  if (!variantsConflict(extractVariantAttributes(titleA), extractVariantAttributes(titleB))) {
+    return false;
+  }
+  return variantsConflict(
+    extractVariantAttributes(normalizeProductTitle(titleA).cleanTitle),
+    extractVariantAttributes(normalizeProductTitle(titleB).cleanTitle),
+  );
+}
+
+/**
  * true quando dois produtos certamente são diferentes: EANs válidos e diferentes, ou variantes em
  * conflito. EAN igual vence o título.
  */
@@ -441,7 +461,25 @@ export function productsConflict(
   const eanA = cleanEanValue(a.ean);
   const eanB = cleanEanValue(b.ean);
   if (eanA && eanB) return eanA !== eanB;
-  return variantsConflict(extractVariantAttributes(a.title), extractVariantAttributes(b.title));
+  return titlesConflict(a.title, b.title);
+}
+
+/** O que a normalização antiga apagava do título: "+" do modelo e aspas de polegada. */
+function stripLegacySymbols(title: string): string {
+  return title.replace(/[+"″“”]|''/g, ' ');
+}
+
+/**
+ * Uma listagem que JÁ está num produto só sai dele quando certamente é outro produto. Páginas
+ * gravadas antes da correção perderam o "+" e as aspas no título ("Galaxy S24+" virou
+ * "Galaxy S24"): o conflito só conta se persistir com esses símbolos removidos também da listagem.
+ */
+export function listingConflictsWithMaster(
+  listing: { title: string; ean?: string | null | undefined },
+  master: { title: string; ean?: string | null | undefined },
+): boolean {
+  if (!productsConflict(listing, master)) return false;
+  return productsConflict({ ...listing, title: stripLegacySymbols(listing.title) }, master);
 }
 
 /** Diferença de preço máxima aceita entre o produto e o candidato. */
@@ -494,7 +532,9 @@ export function findBestProductMatch(
     }
 
     const variantCand = extractVariantAttributes(candidate.title);
-    if (variantsConflict(variantNew, variantCand)) continue;
+    if (variantsConflict(variantNew, variantCand) && titlesConflict(newProduct.title, candidate.title)) {
+      continue;
+    }
 
     const tokenSim = calculateTokenSimilarity(normNew.tokens, normCand.tokens);
     const strSim = stringSimilarity(normNew.cleanTitle, normCand.cleanTitle);

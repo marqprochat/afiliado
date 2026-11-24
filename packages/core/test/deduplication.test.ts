@@ -5,6 +5,8 @@ import {
   analyzeDealPromotion,
   extractVariantAttributes,
   variantsConflict,
+  productsConflict,
+  listingConflictsWithMaster,
 } from '../src/deduplication';
 
 describe('deduplication & price engine', () => {
@@ -266,5 +268,61 @@ describe('findBestProductMatch junta o mesmo produto', () => {
       cand('promax', 'Apple iPhone 17 Pro Max 256 GB - azul intenso', 9999),
     ]);
     expect(m?.id).toBe('pro256');
+  });
+});
+
+describe('título bruto x o próprio cleanTitle (regressão: página nova a cada envio)', () => {
+  const RAW_TITLES = [
+    'Samsung Galaxy S24+ 256GB Preto',
+    'Smartphone Samsung Galaxy S24+ 5G 512GB 12GB RAM Violeta',
+    'Apple iPhone 15 Pro Max 256GB Titânio Natural',
+    'Smart TV LG 55" 4K UHD ThinQ AI 55UR8750PSA',
+    'Smart TV Samsung 65″ Crystal UHD 4K',
+    "TV 50'' Philco 4K",
+    'Fralda Pampers Confort Sec XG 86 Unidades',
+    'Smartphone Motorola Moto G86 256GB 8GB RAM 5G Cosmic Sky',
+    'Monitor 24" LG 24GS60F-B UltraGear IPS 180Hz',
+    'Monitor Gamer Samsung Odyssey 23,8" FHD 165Hz',
+    'Air Fryer Mondial 4,1 Litros 110V Preta',
+    'Kit 2 Lâmpadas LED 9W Bivolt',
+    'Notebook Lenovo IdeaPad 3 Ryzen 5 8GB 256GB SSD 15.6"',
+  ];
+
+  it.each(RAW_TITLES)('%s não conflita com o próprio cleanTitle', (raw) => {
+    const { cleanTitle } = normalizeProductTitle(raw);
+    expect(productsConflict({ title: raw }, { title: cleanTitle })).toBe(false);
+    const own = { id: 'own', title: cleanTitle, currentBestPrice: 1000 };
+    expect(findBestProductMatch({ title: raw, price: 1000 }, [own])?.id).toBe('own');
+  });
+
+  it('cleanTitle novo mantém "plus" e as polegadas', () => {
+    expect(normalizeProductTitle('Samsung Galaxy S24+ 256GB Preto').cleanTitle).toBe(
+      'Samsung Galaxy S24 plus 256GB preto',
+    );
+    expect(normalizeProductTitle('Smart TV LG 55" 4K').cleanTitle).toBe('Smart TV LG 55 pol 4K');
+  });
+
+  it('S24+ continua diferente do S24', () => {
+    expect(
+      productsConflict(
+        { title: 'Samsung Galaxy S24+ 256GB Preto' },
+        { title: 'Samsung Galaxy S24 256GB Preto' },
+      ),
+    ).toBe(true);
+  });
+
+  it('listagem S24+ fica na página antiga cujo título perdeu o "+" (gravado antes da correção)', () => {
+    expect(
+      listingConflictsWithMaster(
+        { title: 'Samsung Galaxy S24+ 256GB Preto' },
+        { title: 'Samsung Galaxy S24 256GB preto' },
+      ),
+    ).toBe(false);
+    expect(
+      listingConflictsWithMaster(
+        { title: 'Samsung Galaxy S24+ 256GB Preto' },
+        { title: 'Samsung Galaxy S24 512GB preto' },
+      ),
+    ).toBe(true);
   });
 });

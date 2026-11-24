@@ -177,3 +177,79 @@ describe('indexProductInPriceEngine: listagem presa a produto incompatível', ()
     expect(showcase.deals.map((d) => d.id)).toContain(r.masterProductId);
   });
 });
+
+describe('indexProductInPriceEngine: título com "+" e aspas (regressão: página nova a cada envio)', () => {
+  const s24plus: ProductData = {
+    ...fone,
+    externalId: 's24-plus',
+    title: 'Samsung Galaxy S24+ 256GB Preto',
+    price: 4500,
+    originalUrl: 'https://shopee.com.br/product/1/904',
+  };
+
+  it('reindexar o mesmo S24+ mantém o produto e o slug', async () => {
+    const db = forTenant(tenantId);
+    const first = await indexProductInPriceEngine(db, tenantId, s24plus);
+    const again = await indexProductInPriceEngine(db, tenantId, { ...s24plus, price: 4400 });
+    const third = await indexProductInPriceEngine(db, tenantId, { ...s24plus, price: 4300 });
+    expect(again.masterProductId).toBe(first.masterProductId);
+    expect(third.masterProductId).toBe(first.masterProductId);
+    expect(again.slug).toBe(first.slug);
+    expect(third.slug).toBe(first.slug);
+    expect(again.isNewMaster).toBe(false);
+  });
+
+  it('TV com polegadas entre aspas também mantém o produto', async () => {
+    const db = forTenant(tenantId);
+    const tv: ProductData = {
+      ...fone,
+      externalId: 'tv-aspas',
+      title: 'Smart TV LG 55" 4K UHD ThinQ AI 55UR8750PSA',
+      price: 2800,
+      originalUrl: 'https://shopee.com.br/product/1/905',
+    };
+    const first = await indexProductInPriceEngine(db, tenantId, tv);
+    const again = await indexProductInPriceEngine(db, tenantId, { ...tv, price: 2700 });
+    expect(again.masterProductId).toBe(first.masterProductId);
+    expect(again.slug).toBe(first.slug);
+  });
+
+  it('listagem S24+ presa a página antiga (título gravado sem o "+") não é movida', async () => {
+    const db = forTenant(tenantId);
+    const legacy = await prisma.masterProduct.create({
+      data: {
+        tenantId,
+        title: 'Samsung Galaxy S24 512GB preto',
+        cleanTitle: 'Samsung Galaxy S24 512GB preto',
+        slug: 'samsung-galaxy-s24-512gb-preto-old1',
+        brand: 'Samsung',
+        lowestPriceEver: 5200,
+        averagePrice30d: 5200,
+        currentBestPrice: 5200,
+        listingsCount: 1,
+      },
+    });
+    await prisma.productListing.create({
+      data: {
+        tenantId,
+        masterProductId: legacy.id,
+        source: 'SHOPEE',
+        storeName: 'Shopee',
+        externalId: 's24-plus-legacy',
+        title: 'Samsung Galaxy S24+ 512GB Preto',
+        originalUrl: 'https://shopee.com.br/product/1/906',
+        affiliateUrl: 'https://s.shopee.com.br/LEG',
+        currentPrice: 5200,
+      },
+    });
+    const r = await indexProductInPriceEngine(db, tenantId, {
+      ...s24plus,
+      externalId: 's24-plus-legacy',
+      title: 'Samsung Galaxy S24+ 512GB Preto',
+      price: 5100,
+      originalUrl: 'https://shopee.com.br/product/1/906',
+    });
+    expect(r.masterProductId).toBe(legacy.id);
+    expect(r.slug).toBe('samsung-galaxy-s24-512gb-preto-old1');
+  });
+});

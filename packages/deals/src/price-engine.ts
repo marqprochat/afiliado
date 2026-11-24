@@ -4,7 +4,7 @@ import { MARKETPLACE_KINDS, type MarketplaceKind, type ProductData } from '@afil
 import {
   normalizeProductTitle,
   findBestProductMatch,
-  productsConflict,
+  listingConflictsWithMaster,
   analyzeDealPromotion,
   formatBRL,
   type DealAnalysis,
@@ -102,7 +102,7 @@ export async function indexProductInPriceEngine(
     });
     if (
       currentMaster &&
-      productsConflict({ title: item.title, ean: cleanEan }, currentMaster)
+      listingConflictsWithMaster({ title: item.title, ean: cleanEan }, currentMaster)
     ) {
       displacedMasterId = currentMaster.id;
     } else {

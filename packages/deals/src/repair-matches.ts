@@ -2,7 +2,7 @@ import type { TenantClient } from '@afilados/db';
 import {
   findBestProductMatch,
   normalizeProductTitle,
-  productsConflict,
+  listingConflictsWithMaster,
   MAX_MATCH_PRICE_RATIO,
   type MatchingCandidate,
 } from '@afilados/core';
@@ -111,7 +111,7 @@ export async function repairDealMatches(
     if (group.length < 2) continue;
     report.mastersScanned += 1;
 
-    const titleOk = group.filter((l) => !productsConflict({ title: l.title }, master));
+    const titleOk = group.filter((l) => !listingConflictsWithMaster({ title: l.title }, master));
     if (titleOk.length === 0) {
       report.mastersWithoutAnchor += 1;
       continue;
