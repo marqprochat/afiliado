@@ -1,6 +1,6 @@
 import { prisma } from '@afilados/db';
 import { forTenant } from '@afilados/db';
-import { indexProductInPriceEngine } from '../apps/api/src/lib/price-engine';
+import { indexProductInPriceEngine } from '../packages/deals/src/price-engine';
 import type { ProductData } from '@afilados/shared';
 
 async function main() {

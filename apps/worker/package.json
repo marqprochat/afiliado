@@ -12,6 +12,7 @@
   "dependencies": {
     "@afilados/core": "workspace:*",
     "@afilados/db": "workspace:*",
+    "@afilados/deals": "workspace:*",
     "@afilados/marketplaces": "workspace:*",
     "@afilados/shared": "workspace:*",
     "@afilados/telegram": "workspace:*",

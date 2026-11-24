@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Product, TenantClient } from '@afilados/db';
 import type { ProductData } from '@afilados/shared';
-import { indexProductInPriceEngine } from './price-engine';
+import { indexProductInPriceEngine } from '@afilados/deals';
 
 export function toApiProduct(p: Product) {
   return {

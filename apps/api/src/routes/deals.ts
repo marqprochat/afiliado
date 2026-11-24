@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma, forTenant } from '@afilados/db';
 import { ApiError } from '@afilados/shared';
-import { getDealsShowcase, getDealDetailBySlug, syncDealsCatalog } from '../lib/price-engine';
+import { getDealsShowcase, getDealDetailBySlug, syncDealsCatalog } from '@afilados/deals';
 import { forbidAffiliate, requireAuth } from '../plugins/auth';
 
 const dealsQuerySchema = z.object({

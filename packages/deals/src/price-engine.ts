@@ -50,6 +50,18 @@ function inferCategory(title: string): string {
   return 'Geral & Ofertas';
 }
 
+export interface IndexProductOptions {
+  /** Link de afiliado convertido no envio. Sem ele, a listagem mantém o link já gravado. */
+  affiliateUrl?: string;
+}
+
+export interface IndexProductResult {
+  masterProductId: string;
+  slug: string;
+  isNewMaster: boolean;
+  isPriceDrop: boolean;
+}
+
 /**
  * Registra ou atualiza um produto no PriceEngine:
  * deduplica produtos idênticos entre marketplaces, alimenta o histórico de preços
@@ -59,7 +71,8 @@ export async function indexProductInPriceEngine(
   db: TenantClient,
   tenantId: string,
   item: ProductData,
-): Promise<{ masterProductId: string; isNewMaster: boolean; isPriceDrop: boolean }> {
+  opts: IndexProductOptions = {},
+): Promise<IndexProductResult> {
   const norm = normalizeProductTitle(item.title);
   const externalId = item.externalId ?? createHash('sha1').update(item.originalUrl).digest('hex');
   const storeName = formatStoreName(item.source, item.shopName);
@@ -187,7 +200,7 @@ export async function indexProductInPriceEngine(
         storeName,
         title: item.title,
         originalUrl: item.originalUrl,
-        affiliateUrl: item.originalUrl,
+        affiliateUrl: opts.affiliateUrl ?? existingListing.affiliateUrl ?? item.originalUrl,
         currentPrice: currentPriceNum,
         originalPrice: originalPriceNum,
         discountPct: item.discountPct ?? null,
@@ -207,7 +220,7 @@ export async function indexProductInPriceEngine(
         externalId,
         title: item.title,
         originalUrl: item.originalUrl,
-        affiliateUrl: item.originalUrl,
+        affiliateUrl: opts.affiliateUrl ?? item.originalUrl,
         currentPrice: currentPriceNum,
         originalPrice: originalPriceNum,
         discountPct: item.discountPct ?? null,
@@ -252,10 +265,11 @@ export async function indexProductInPriceEngine(
 
   const currentMaster = await db.masterProduct.findFirst({
     where: { id: masterId },
-    select: { lowestPriceEver: true },
+    select: { lowestPriceEver: true, slug: true },
   });
+  if (!currentMaster) throw new Error(`MasterProduct ${masterId} não encontrado após indexar`);
 
-  const prevLowest = currentMaster ? Number(currentMaster.lowestPriceEver) : bestPrice;
+  const prevLowest = Number(currentMaster.lowestPriceEver);
   const newLowestEver = Math.min(prevLowest, bestPrice);
 
   await db.masterProduct.updateMany({
@@ -273,7 +287,7 @@ export async function indexProductInPriceEngine(
   // 5. Verifica e processa alertas cadastrados
   await checkAndNotifyPriceAlerts(db, masterId, bestPrice);
 
-  return { masterProductId: masterId, isNewMaster, isPriceDrop };
+  return { masterProductId: masterId, slug: currentMaster.slug, isNewMaster, isPriceDrop };
 }
 
 /**
