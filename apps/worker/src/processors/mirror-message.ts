@@ -35,6 +35,8 @@ import {
 } from '@afilados/shared';
 
 import { publishEvent } from '../lib/events';
+import { publishOfferForTenant, type PublishOfferFn } from '../lib/publish-offer';
+import { rewriteOfferLinksForTenant, type RewriteOfferLinksFn } from '../lib/rewrite-offer-links';
 import { getRedis } from '../lib/redis';
 import { TokenBucket, jitter, waitForToken } from '../lib/rate-limit';
 import { expandLinkedGroupJids } from '../group-links/settings';
@@ -55,6 +57,10 @@ export interface MirrorMessageDeps {
   rng?: () => number;
   bucketFor?: (sessionId: string, ratePerMin: number) => { take(): Promise<number> };
   resolveShortLinks?: (text: string) => Promise<Map<string, string>>;
+  /** Injetável em testes; por padrão publica a oferta no site (modo TEMPLATE). */
+  publishOffer?: PublishOfferFn;
+  /** Injetável em testes; por padrão troca os links de loja pela página do site (modo CLONE). */
+  rewriteOfferLinks?: RewriteOfferLinksFn;
 }
 
 export type MirrorMessageResult =
@@ -309,7 +315,14 @@ export async function mirrorMessage(
 
   const outgoingMessages: OutgoingMessage[] = [];
   if (effectiveMode === 'CLONE') {
-    const newText = rewriteLinks(text, replacements);
+    const affiliateText = rewriteLinks(text, replacements);
+    // O link original de cada URL já convertida é conhecido aqui: evita resolver encurtador de novo.
+    const knownOriginals = new Map<string, string>();
+    for (const l of resolvedLinks) {
+      knownOriginals.set(replacements.get(l.textUrl) ?? l.textUrl, l.targetUrl);
+    }
+    const rewriteOffers = deps.rewriteOfferLinks ?? rewriteOfferLinksForTenant;
+    const newText = await rewriteOffers(tenantId, affiliateText, knownOriginals);
     if (rule.mediaMode === 'IMAGE' && hasImage(jobData.message)) {
       const imageBuffer = await downloadMedia(jobData.sessionId, jobData.message);
       outgoingMessages.push({ kind: 'image', imageBuffer, caption: newText });
@@ -321,9 +334,11 @@ export async function mirrorMessage(
       outgoingMessages.push({ kind: 'text', text: newText });
     }
   } else if (template) {
+    const publish = deps.publishOffer ?? publishOfferForTenant;
     for (const item of templateProducts) {
+      const link = (await publish(tenantId, item.product, item.convertedUrl)) ?? item.convertedUrl;
       const body = renderTemplate(template.body, item.product, {
-        affiliateLink: item.convertedUrl,
+        affiliateLink: link,
         now: t.toISOString(),
       });
       const firstImg = item.product.images?.[0];
@@ -336,7 +351,7 @@ export async function mirrorMessage(
           title: item.product.title,
           description: `R$ ${Number(item.product.price).toFixed(2).replace('.', ',')}`,
           thumbnailUrl: firstImg ?? '',
-          url: item.convertedUrl,
+          url: link,
         });
       }
     }
