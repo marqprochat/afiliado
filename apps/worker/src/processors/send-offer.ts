@@ -31,6 +31,7 @@ import type { ProductData, SendOfferJob, SendTelegramJob, TagCredentials } from 
 import { resolveItemCta } from '../lib/ai-cta';
 import { publishEvent } from '../lib/events';
 import { resolveCachedAffiliateLink } from '../lib/ml-links';
+import { publishOfferForTenant, type PublishOfferFn } from '../lib/publish-offer';
 import { enqueueSendTelegram } from '../lib/queue-helpers';
 import { getRedis } from '../lib/redis';
 import { TokenBucket, jitter, waitForToken } from '../lib/rate-limit';
@@ -52,6 +53,8 @@ export interface SendOfferDeps {
   getTagAdapter?: typeof getTagAdapter;
   /** Injetável em testes; por padrão usa o cliente real (packages/core/src/ai-cta.ts). */
   generateCta?: typeof generateCta;
+  /** Injetável em testes; por padrão publica a oferta no site (lib/publish-offer.ts). */
+  publishOffer?: PublishOfferFn;
   enqueueTelegram?: (job: SendTelegramJob & { jobId: string }) => Promise<void>;
 }
 
@@ -316,6 +319,8 @@ export async function sendOffer(
       ...(product.couponCode ? { couponCode: product.couponCode } : {}),
       ...(product.couponValue !== null ? { couponValue: Number(product.couponValue) } : {}),
     };
+    const publish = deps.publishOffer ?? publishOfferForTenant;
+    const link = (await publish(tenantId, pd, affiliateLink)) ?? affiliateLink;
     const cta = await resolveItemCta({
       settings,
       templateBody: batch.template.body,
@@ -325,7 +330,7 @@ export async function sendOffer(
       ...(deps.generateCta ? { generate: deps.generateCta } : {}),
     });
     const text = renderTemplate(batch.template.body, pd, {
-      affiliateLink,
+      affiliateLink: link,
       now: t.toISOString(),
       cta,
     });
@@ -345,7 +350,7 @@ export async function sendOffer(
             title: product.title,
             description: `R$ ${Number(product.price).toFixed(2).replace('.', ',')}`,
             thumbnailUrl: image ?? '',
-            url: affiliateLink,
+            url: link,
           };
 
     const bucket = bucketFor(batch.sessionId, ratePerMin);

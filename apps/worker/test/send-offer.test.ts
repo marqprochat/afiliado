@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
-import { prisma, encryptJson } from '@afilados/db';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
+import { prisma, encryptJson, forTenant } from '@afilados/db';
 import {
   createShopeeAdapter,
   createAwinAdapter,
@@ -8,6 +8,7 @@ import {
 import { sendOffer, type SendOfferDeps } from '../src/processors/send-offer';
 import type { OutgoingMessage, WhatsAppGateway } from '../src/wa/gateway';
 import { closeRedis } from '../src/lib/redis';
+import { publishOffer } from '../src/lib/publish-offer';
 
 class FakeGateway implements WhatsAppGateway {
   sent: { jid: string; msg: OutgoingMessage }[] = [];
@@ -972,6 +973,50 @@ describe('sendOffer com afiliado', () => {
       expect(r).toEqual({ outcome: 'skipped', reason: 'tenant-inactive' });
     } finally {
       await cleanup();
+    }
+  });
+});
+
+describe('sendOffer com link do site (siteLinks)', () => {
+  const withSite: SendOfferDeps = {
+    ...deps,
+    publishOffer: (tid, p, aff) =>
+      publishOffer(forTenant(tid), tid, p, aff, { siteUrl: 'https://site.test' }),
+  };
+
+  afterEach(async () => {
+    await prisma.setting.deleteMany({ where: { tenantId, key: 'siteLinks' } });
+  });
+
+  it('chave ligada: texto e prévia levam a página do site; a listagem guarda o link de afiliado', async () => {
+    await prisma.setting.create({
+      data: { tenantId, key: 'siteLinks', value: { enabled: true } },
+    });
+    const { item } = await makeBatch({ mediaMode: 'PREVIEW', groups: ['g1@g.us'] });
+    await sendOffer(withSite, item.id);
+
+    const master = await prisma.masterProduct.findFirstOrThrow({ where: { tenantId } });
+    const siteLink = `https://site.test/ofertas/${master.slug}`;
+    const m = gateway.sent[0]!.msg;
+    expect(m.kind).toBe('preview');
+    if (m.kind === 'preview') {
+      expect(m.url).toBe(siteLink);
+      expect(m.text).toBe(`*Fone* R$ 99,90\n${siteLink}`);
+    }
+    const listing = await prisma.productListing.findFirstOrThrow({
+      where: { tenantId, source: 'SHOPEE', externalId: '1' },
+    });
+    expect(listing.affiliateUrl).toBe('https://s.shopee.com.br/MOCK123');
+  });
+
+  it('chave desligada: comportamento atual, com o link de afiliado', async () => {
+    const { item } = await makeBatch({ mediaMode: 'PREVIEW', groups: ['g1@g.us'] });
+    await sendOffer(withSite, item.id);
+    const m = gateway.sent[0]!.msg;
+    expect(m.kind).toBe('preview');
+    if (m.kind === 'preview') {
+      expect(m.url).toBe('https://s.shopee.com.br/MOCK123');
+      expect(m.text).toBe('*Fone* R$ 99,90\nhttps://s.shopee.com.br/MOCK123');
     }
   });
 });

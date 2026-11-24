@@ -27,6 +27,7 @@ import {
 import { TelegramClient } from '@afilados/telegram';
 import type { ProductData, SendTelegramJob, TagCredentials } from '@afilados/shared';
 import { resolveCachedAffiliateLink } from '../lib/ml-links';
+import { publishOfferForTenant, type PublishOfferFn } from '../lib/publish-offer';
 
 const log = pino({ name: 'send-telegram' });
 
@@ -40,6 +41,8 @@ export interface SendTelegramDeps {
   now?: () => Date;
   getTagAdapter?: typeof getTagAdapter;
   makeClient?: (token: string) => TelegramClient;
+  /** Injetável em testes; por padrão publica a oferta no site (lib/publish-offer.ts). */
+  publishOffer?: PublishOfferFn;
 }
 
 export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob): Promise<void> {
@@ -187,8 +190,10 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
         ...(product.couponCode ? { couponCode: product.couponCode } : {}),
         ...(product.couponValue !== null ? { couponValue: Number(product.couponValue) } : {}),
       };
+      const publish = deps.publishOffer ?? publishOfferForTenant;
+      const link = (await publish(job.tenantId, pd, affiliateLink)) ?? affiliateLink;
       text = renderTemplate(template.body, pd, {
-        affiliateLink,
+        affiliateLink: link,
         now: t.toISOString(),
         ...(job.cta ? { cta: job.cta } : {}),
       });
