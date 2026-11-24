@@ -24,6 +24,8 @@ const fakeDb = (value: unknown) =>
     },
   }) as unknown as TenantClient;
 
+const owner = async () => true;
+
 const indexOk = () =>
   vi.fn<IndexFn>(async () => ({
     masterProductId: 'm1',
@@ -36,6 +38,7 @@ describe('publishOffer', () => {
   it('chave ausente → null, sem indexar', async () => {
     const index = indexOk();
     const r = await publishOffer(fakeDb(undefined), 't1', product, 'https://aff', {
+      isOwnerTenant: owner,
       siteUrl: 'https://site.test',
       index,
     });
@@ -45,6 +48,7 @@ describe('publishOffer', () => {
 
   it('chave desligada → null', async () => {
     const r = await publishOffer(fakeDb({ enabled: false }), 't1', product, 'https://aff', {
+      isOwnerTenant: owner,
       siteUrl: 'https://site.test',
       index: indexOk(),
     });
@@ -54,6 +58,7 @@ describe('publishOffer', () => {
   it('sem PUBLIC_SITE_URL → null', async () => {
     const index = indexOk();
     const r = await publishOffer(fakeDb({ enabled: true }), 't1', product, 'https://aff', {
+      isOwnerTenant: owner,
       siteUrl: undefined,
       index,
     });
@@ -65,6 +70,7 @@ describe('publishOffer', () => {
     const index = indexOk();
     const db = fakeDb({ enabled: true });
     const r = await publishOffer(db, 't1', product, 'https://s.shopee.com.br/AFF', {
+      isOwnerTenant: owner,
       siteUrl: 'https://site.test/',
       index,
     });
@@ -74,11 +80,25 @@ describe('publishOffer', () => {
     });
   });
 
+  it('chave ligada em tenant que não é do dono (raiz com superadmin) → null, sem indexar', async () => {
+    const index = indexOk();
+    const isOwnerTenant = vi.fn(async () => false);
+    const r = await publishOffer(fakeDb({ enabled: true }), 't9', product, 'https://aff', {
+      isOwnerTenant,
+      siteUrl: 'https://site.test',
+      index,
+    });
+    expect(r).toBeNull();
+    expect(isOwnerTenant).toHaveBeenCalledWith('t9');
+    expect(index).not.toHaveBeenCalled();
+  });
+
   it('exceção ao indexar → null', async () => {
     const index = vi.fn<IndexFn>(async () => {
       throw new Error('db fora');
     });
     const r = await publishOffer(fakeDb({ enabled: true }), 't1', product, 'https://aff', {
+      isOwnerTenant: owner,
       siteUrl: 'https://site.test',
       index,
     });
@@ -96,6 +116,7 @@ describe('publishOffer', () => {
         isPriceDrop: false,
       });
     const r = await publishOffer(fakeDb({ enabled: true }), 't1', product, 'https://aff', {
+      isOwnerTenant: owner,
       siteUrl: 'https://site.test',
       index,
     });
@@ -106,6 +127,7 @@ describe('publishOffer', () => {
   it('indexação acima do teto de tempo → null', async () => {
     const index = vi.fn<IndexFn>(() => new Promise(() => {}));
     const r = await publishOffer(fakeDb({ enabled: true }), 't1', product, 'https://aff', {
+      isOwnerTenant: owner,
       siteUrl: 'https://site.test',
       timeoutMs: 20,
       index,

@@ -56,7 +56,7 @@ export type RewriteOfferLinksFn = (
  * mantém o link de afiliado.
  */
 export async function rewriteOfferLinks(text: string, ctx: RewriteOfferLinksCtx): Promise<string> {
-  const isEnabled = ctx.isEnabled ?? ((t: string) => isSiteLinksEnabled(forTenant(t)));
+  const isEnabled = ctx.isEnabled ?? ((t: string) => isSiteLinksEnabled(forTenant(t), t));
   const enabled = await isEnabled(ctx.tenantId).catch((err: unknown) => {
     log.warn(
       { tenantId: ctx.tenantId, err: err instanceof Error ? err.message : String(err) },

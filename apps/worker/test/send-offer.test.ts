@@ -981,7 +981,11 @@ describe('sendOffer com link do site (siteLinks)', () => {
   const withSite: SendOfferDeps = {
     ...deps,
     publishOffer: (tid, p, aff) =>
-      publishOffer(forTenant(tid), tid, p, aff, { siteUrl: 'https://site.test' }),
+      publishOffer(forTenant(tid), tid, p, aff, {
+        siteUrl: 'https://site.test',
+        // O tenant de teste faz o papel do dono (conta raiz com superadmin).
+        isOwnerTenant: async () => true,
+      }),
   };
 
   afterEach(async () => {

@@ -8,8 +8,9 @@ import { useMe, useSettings, useSiteLinks } from '@/lib/queries';
 export default function ContaPage() {
   const { data: me } = useMe();
   const { data: settings } = useSettings();
-  const isOwner = me ? !me.isAffiliate : false;
-  const { data: siteLinks } = useSiteLinks(isOwner);
+  // O link do site é só do dono da aplicação (superadmin da conta raiz, sem personificação).
+  const isSiteOwner = me ? me.user.isSuperAdmin && !me.isAffiliate && !me.impersonating : false;
+  const { data: siteLinks } = useSiteLinks(isSiteOwner);
   const save = useApiMutation(
     (patch: SettingsPatch) => apiFetch('/settings', { method: 'PUT', json: patch }),
     {
@@ -49,7 +50,7 @@ export default function ContaPage() {
           saving={save.isPending}
         />
       )}
-      {isOwner && siteLinks && (
+      {isSiteOwner && siteLinks && (
         <SiteLinksToggle
           enabled={siteLinks.enabled}
           onChange={(v) => saveSiteLinks.mutate(v)}

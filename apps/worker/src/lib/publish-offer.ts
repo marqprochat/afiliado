@@ -1,5 +1,5 @@
 import pino from 'pino';
-import { forTenant, type TenantClient } from '@afilados/db';
+import { prisma, forTenant, type TenantClient } from '@afilados/db';
 import { indexProductInPriceEngine } from '@afilados/deals';
 import { SITE_LINKS_KEY, siteLinksEnabled, type ProductData } from '@afilados/shared';
 import { config } from '../config';
@@ -16,6 +16,8 @@ export interface PublishOfferOptions {
   siteUrl?: string | undefined;
   timeoutMs?: number;
   index?: typeof indexProductInPriceEngine;
+  /** Injetável em testes; omitido = `isOwnerTenant`. */
+  isOwnerTenant?: (tenantId: string) => Promise<boolean>;
 }
 
 export type PublishOfferFn = (
@@ -24,9 +26,27 @@ export type PublishOfferFn = (
   affiliateUrl: string,
 ) => Promise<string | null>;
 
-export async function isSiteLinksEnabled(db: TenantClient): Promise<boolean> {
+/**
+ * O site público é do dono da aplicação: conta raiz (sem conta-mãe) com um usuário superadmin.
+ * Só ela publica ofertas no site; em qualquer outra conta a página nem abriria (o link daria 404).
+ */
+export async function isOwnerTenant(tenantId: string): Promise<boolean> {
+  const owner = await prisma.user.findFirst({
+    where: { tenantId, isSuperAdmin: true, tenant: { parentTenantId: null } },
+    select: { id: true },
+  });
+  return owner !== null;
+}
+
+/** Chave `siteLinks` ligada E a conta é a do dono; uma chave perdida em outra conta é ignorada. */
+export async function isSiteLinksEnabled(
+  db: TenantClient,
+  tenantId: string,
+  isOwner: (tenantId: string) => Promise<boolean> = isOwnerTenant,
+): Promise<boolean> {
   const row = await db.setting.findFirst({ where: { key: SITE_LINKS_KEY } });
-  return siteLinksEnabled(row?.value);
+  if (!siteLinksEnabled(row?.value)) return false;
+  return isOwner(tenantId);
 }
 
 export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -43,7 +63,8 @@ function isUniqueConflict(err: unknown): boolean {
 
 /**
  * Publica a oferta na página /ofertas/<slug> do site e devolve a URL dela. Devolve `null` (e o
- * chamador usa o link de afiliado) quando a chave `siteLinks` do tenant está desligada, quando
+ * chamador usa o link de afiliado) quando a chave `siteLinks` do tenant está desligada ou o
+ * tenant não é o do dono (conta raiz com superadmin), quando
  * falta `PUBLIC_SITE_URL`, em qualquer erro ou quando a indexação passa do teto de tempo.
  */
 export async function publishOffer(
@@ -54,7 +75,7 @@ export async function publishOffer(
   opts: PublishOfferOptions = {},
 ): Promise<string | null> {
   try {
-    if (!(await isSiteLinksEnabled(db))) return null;
+    if (!(await isSiteLinksEnabled(db, tenantId, opts.isOwnerTenant))) return null;
     const siteUrl = 'siteUrl' in opts ? opts.siteUrl : config.PUBLIC_SITE_URL;
     if (!siteUrl) {
       if (!warnedMissingSiteUrl) {

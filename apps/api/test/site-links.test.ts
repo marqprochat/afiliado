@@ -7,6 +7,8 @@ const app = await buildApp({ logger: false });
 let root: Awaited<ReturnType<typeof createTenantWithUser>>;
 let rootCookie: string;
 let affCookie: string;
+let plain: Awaited<ReturnType<typeof createTenantWithUser>> | undefined;
+let plainCookie: string;
 
 const call = (method: 'GET' | 'PUT', cookie: string, payload?: object) =>
   app.inject({
@@ -18,14 +20,22 @@ const call = (method: 'GET' | 'PUT', cookie: string, payload?: object) =>
 
 beforeAll(async () => {
   root = await createTenantWithUser('raiz-site-links');
+  // Só o dono (superadmin da conta raiz) liga o link do site.
+  await prisma.user.update({ where: { id: root.userId }, data: { isSuperAdmin: true } });
   const aff = await createTenantWithUser('afiliado-site-links', root.tenantId);
+  plain = await createTenantWithUser('outra-conta-site-links');
+  plainCookie = await loginCookie(app, plain.email, plain.password);
   rootCookie = await loginCookie(app, root.email, root.password);
   affCookie = await loginCookie(app, aff.email, aff.password);
 });
 
 afterAll(async () => {
-  await cleanupTenant(root.tenantId);
-  await app.close();
+  try {
+    if (root) await cleanupTenant(root.tenantId);
+    if (plain) await cleanupTenant(plain.tenantId);
+  } finally {
+    await app.close();
+  }
 });
 
 describe('settings/site-links', () => {
@@ -49,6 +59,15 @@ describe('settings/site-links', () => {
   it('PUT com corpo inválido → 400', async () => {
     const res = await call('PUT', rootCookie, { enabled: 'sim' });
     expect(res.statusCode).toBe(400);
+  });
+
+  it('dono de outra conta (não superadmin) não lê nem altera → 403', async () => {
+    expect((await call('GET', plainCookie)).statusCode).toBe(403);
+    expect((await call('PUT', plainCookie, { enabled: true })).statusCode).toBe(403);
+    const row = await prisma.setting.findFirst({
+      where: { tenantId: plain!.tenantId, key: 'siteLinks' },
+    });
+    expect(row).toBeNull();
   });
 
   it('afiliado não lê nem altera → 403', async () => {

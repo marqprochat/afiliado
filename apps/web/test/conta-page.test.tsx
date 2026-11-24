@@ -17,14 +17,17 @@ const settings = {
   subIdPattern: '{yyyyMMdd}-{batchId}',
 };
 
-function mockApi(isAffiliate: boolean) {
+function mockApi(
+  isAffiliate: boolean,
+  { isSuperAdmin = !isAffiliate, impersonating = null as { by: string } | null } = {},
+) {
   apiFetchMock.mockImplementation(async (url: string, opts?: unknown) => {
     if (url === '/me')
       return {
-        user: { id: 'u', email: 'dono@teste.local', name: 'Dono', role: 'OWNER', isSuperAdmin: !isAffiliate },
+        user: { id: 'u', email: 'dono@teste.local', name: 'Dono', role: 'OWNER', isSuperAdmin },
         tenant: { id: 't', name: 'T' },
         isAffiliate,
-        impersonating: null,
+        impersonating,
       } as never;
     if (url === '/settings') return settings as never;
     if (url === '/settings/site-links') return (opts ? { enabled: true } : { enabled: false }) as never;
@@ -63,5 +66,20 @@ describe('Minha Conta > link do site', () => {
     await screen.findByText(/dono@teste.local/);
     expect(screen.queryByRole('switch', { name: /link do site/i })).toBeNull();
     expect(apiFetchMock).not.toHaveBeenCalledWith('/settings/site-links');
+  });
+
+  it('dono de outra conta (não superadmin) não vê a chave nem consulta a configuração', async () => {
+    mockApi(false, { isSuperAdmin: false });
+    renderPage();
+    await screen.findByText(/dono@teste.local/);
+    expect(screen.queryByRole('switch', { name: /link do site/i })).toBeNull();
+    expect(apiFetchMock).not.toHaveBeenCalledWith('/settings/site-links');
+  });
+
+  it('superadmin personificando outra conta não vê a chave', async () => {
+    mockApi(false, { isSuperAdmin: true, impersonating: { by: 'admin' } });
+    renderPage();
+    await screen.findByText(/dono@teste.local/);
+    expect(screen.queryByRole('switch', { name: /link do site/i })).toBeNull();
   });
 });
