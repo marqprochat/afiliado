@@ -4,6 +4,7 @@ import { MARKETPLACE_KINDS, type MarketplaceKind, type ProductData } from '@afil
 import {
   normalizeProductTitle,
   findBestProductMatch,
+  productsConflict,
   analyzeDealPromotion,
   formatBRL,
   type DealAnalysis,
@@ -90,8 +91,26 @@ export async function indexProductInPriceEngine(
     where: { source: item.source, externalId },
   });
 
+  // 0. A oferta já existe: só continua no produto atual se ele for compatível (mesmo EAN ou
+  // mesmas variantes). Se não for, refaz o match; o histórico é da listagem e vai junto.
+  let matchedMasterId: string | null = null;
+  let displacedMasterId: string | null = null;
+  if (existingListing) {
+    const currentMaster = await db.masterProduct.findFirst({
+      where: { id: existingListing.masterProductId },
+      select: { id: true, title: true, ean: true },
+    });
+    if (
+      currentMaster &&
+      productsConflict({ title: item.title, ean: cleanEan }, currentMaster)
+    ) {
+      displacedMasterId = currentMaster.id;
+    } else {
+      matchedMasterId = existingListing.masterProductId;
+    }
+  }
+
   // 1. Busca por EAN exato se disponível
-  let matchedMasterId: string | null = existingListing?.masterProductId ?? null;
   if (cleanEan) {
     const byEan = await db.masterProduct.findFirst({
       where: { ean: cleanEan },
@@ -104,7 +123,10 @@ export async function indexProductInPriceEngine(
   // 2. Se não achou por EAN, busca candidatos recentes por tokens ou marca
   if (!matchedMasterId) {
     const recentMasters = await db.masterProduct.findMany({
-      where: norm.brand ? { brand: norm.brand } : {},
+      where: {
+        ...(norm.brand ? { brand: norm.brand } : {}),
+        ...(displacedMasterId ? { id: { not: displacedMasterId } } : {}),
+      },
       take: 40,
       orderBy: { updatedAt: 'desc' },
       select: {
@@ -146,38 +168,19 @@ export async function indexProductInPriceEngine(
   // Se não encontrou nenhum match, cria um novo MasterProduct
   if (!masterId) {
     isNewMaster = true;
-    const baseSlug = norm.slug;
-    const randomSuffix = Math.random().toString(36).substring(2, 6);
-    const uniqueSlug = `${baseSlug}-${randomSuffix}`;
-    const category = inferCategory(item.title);
-
-    const newMaster = await db.masterProduct.create({
-      data: {
-        tenantId,
-        title: norm.cleanTitle,
-        cleanTitle: norm.cleanTitle,
-        slug: uniqueSlug,
-        brand: norm.brand ?? null,
-        ean: cleanEan,
-        category,
-        imageUrl: item.images[0] ?? null,
-        images: item.images,
-        lowestPriceEver: item.price,
-        averagePrice30d: item.price,
-        currentBestPrice: item.price,
-        listingsCount: 1,
-      },
+    masterId = await createMasterProduct(db, tenantId, {
+      title: item.title,
+      ean: cleanEan,
+      images: item.images,
+      price: item.price,
     });
-    masterId = newMaster.id;
   }
 
   // 3. Atualiza ou cria a oferta da loja (ProductListing)
-  let listingId: string;
   const currentPriceNum = Number(item.price);
   const originalPriceNum = item.originalPrice ? Number(item.originalPrice) : null;
 
   if (existingListing) {
-    listingId = existingListing.id;
     const oldPrice = Number(existingListing.currentPrice);
     if (currentPriceNum < oldPrice) {
       isPriceDrop = true;
@@ -229,7 +232,6 @@ export async function indexProductInPriceEngine(
         inStock: true,
       },
     });
-    listingId = createdListing.id;
 
     // Registra primeiro ponto no histórico
     await db.priceHistory.create({
@@ -241,54 +243,115 @@ export async function indexProductInPriceEngine(
     });
   }
 
-  // 4. Recalcula métricas do MasterProduct
-  const allListings = await db.productListing.findMany({
+  // 4. Recalcula métricas do MasterProduct (e do antigo, se a listagem saiu dele)
+  const metrics = await recomputeMasterMetrics(db, masterId);
+  if (!metrics) throw new Error(`MasterProduct ${masterId} não encontrado após indexar`);
+  if (displacedMasterId && displacedMasterId !== masterId) {
+    await recomputeMasterMetrics(db, displacedMasterId);
+  }
+
+  // 5. Verifica e processa alertas cadastrados
+  await checkAndNotifyPriceAlerts(db, masterId, metrics.currentBestPrice ?? currentPriceNum);
+
+  return { masterProductId: masterId, slug: metrics.slug, isNewMaster, isPriceDrop };
+}
+
+/** Cria a página (MasterProduct) de um produto novo; o slug ganha um sufixo aleatório. */
+export async function createMasterProduct(
+  db: TenantClient,
+  tenantId: string,
+  data: { title: string; ean: string | null; images: string[]; price: number },
+): Promise<string> {
+  const norm = normalizeProductTitle(data.title);
+  const randomSuffix = Math.random().toString(36).substring(2, 6);
+  const created = await db.masterProduct.create({
+    data: {
+      tenantId,
+      title: norm.cleanTitle,
+      cleanTitle: norm.cleanTitle,
+      slug: `${norm.slug}-${randomSuffix}`,
+      brand: norm.brand ?? null,
+      ean: data.ean,
+      category: inferCategory(data.title),
+      imageUrl: data.images[0] ?? null,
+      images: data.images,
+      lowestPriceEver: data.price,
+      averagePrice30d: data.price,
+      currentBestPrice: data.price,
+      listingsCount: 1,
+    },
+  });
+  return created.id;
+}
+
+export interface MasterMetrics {
+  slug: string;
+  /** null quando o produto ficou sem listagens em estoque (os campos de preço não mudam). */
+  currentBestPrice: number | null;
+  listingsCount: number;
+}
+
+/**
+ * Recalcula currentBestPrice, lowestPriceEver, averagePrice30d, bestListingId e listingsCount
+ * a partir das listagens em estoque do produto e do histórico delas. Produto sem listagens é
+ * mantido (pode ter alertas), só com listingsCount 0 e sem melhor listagem.
+ * Devolve null se o produto não existe.
+ */
+export async function recomputeMasterMetrics(
+  db: TenantClient,
+  masterId: string,
+): Promise<MasterMetrics | null> {
+  const master = await db.masterProduct.findFirst({
+    where: { id: masterId },
+    select: { slug: true, lowestPriceEver: true },
+  });
+  if (!master) return null;
+
+  const listings = await db.productListing.findMany({
     where: { masterProductId: masterId, inStock: true },
     select: { id: true, currentPrice: true },
   });
 
-  const activePrices = allListings.map((l) => Number(l.currentPrice)).filter((p) => p > 0);
-  const bestPrice = activePrices.length > 0 ? Math.min(...activePrices) : currentPriceNum;
-  const bestListing = allListings.find((l) => Number(l.currentPrice) === bestPrice) ?? null;
+  if (listings.length === 0) {
+    await db.masterProduct.updateMany({
+      where: { id: masterId },
+      data: { listingsCount: 0, bestListingId: null },
+    });
+    return { slug: master.slug, currentBestPrice: null, listingsCount: 0 };
+  }
 
-  // Busca histórico consolidado para média de 30 dias
-  const allListingIds = allListings.map((l) => l.id);
-  const historyEntries = await db.priceHistory.findMany({
-    where: { listingId: { in: allListingIds } },
+  const priced = listings.filter((l) => Number(l.currentPrice) > 0);
+  const bestListing =
+    priced.length > 0
+      ? priced.reduce((best, l) => (Number(l.currentPrice) < Number(best.currentPrice) ? l : best))
+      : listings[0]!;
+  const bestPrice = Number(bestListing.currentPrice);
+
+  const history = await db.priceHistory.findMany({
+    where: { listingId: { in: listings.map((l) => l.id) } },
     select: { price: true },
   });
-
-  const allRecordedPrices = historyEntries.map((h) => Number(h.price));
+  const recorded = history.map((h) => Number(h.price)).filter((p) => p > 0);
   const avg30d =
-    allRecordedPrices.length > 0
-      ? Number((allRecordedPrices.reduce((a, b) => a + b, 0) / allRecordedPrices.length).toFixed(2))
+    recorded.length > 0
+      ? Number((recorded.reduce((a, b) => a + b, 0) / recorded.length).toFixed(2))
       : bestPrice;
-
-  const currentMaster = await db.masterProduct.findFirst({
-    where: { id: masterId },
-    select: { lowestPriceEver: true, slug: true },
-  });
-  if (!currentMaster) throw new Error(`MasterProduct ${masterId} não encontrado após indexar`);
-
-  const prevLowest = Number(currentMaster.lowestPriceEver);
-  const newLowestEver = Math.min(prevLowest, bestPrice);
+  // Menor preço só das listagens que ficaram: listagem de outro produto que saiu leva junto o
+  // preço dela (antes o mínimo era acumulado e ficava poluído para sempre).
+  const lowestEver = Math.min(bestPrice, ...recorded);
 
   await db.masterProduct.updateMany({
     where: { id: masterId },
     data: {
       currentBestPrice: bestPrice,
-      lowestPriceEver: newLowestEver,
+      lowestPriceEver: lowestEver,
       averagePrice30d: avg30d,
-      bestListingId: bestListing ? bestListing.id : listingId,
-      listingsCount: allListings.length,
+      bestListingId: bestListing.id,
+      listingsCount: listings.length,
       updatedAt: new Date(),
     },
   });
-
-  // 5. Verifica e processa alertas cadastrados
-  await checkAndNotifyPriceAlerts(db, masterId, bestPrice);
-
-  return { masterProductId: masterId, slug: currentMaster.slug, isNewMaster, isPriceDrop };
+  return { slug: master.slug, currentBestPrice: bestPrice, listingsCount: listings.length };
 }
 
 /**
@@ -432,7 +495,8 @@ export async function getDealsShowcase(
   const limit = Math.min(50, Math.max(1, options.limit ?? 24));
   const skip = (page - 1) * limit;
 
-  const where: Record<string, unknown> = {};
+  // Produto que ficou sem listagens (ofertas movidas para o produto certo) não aparece na vitrine.
+  const where: Record<string, unknown> = { listingsCount: { gt: 0 } };
 
   if (options.category && options.category !== 'ALL') {
     where.category = options.category;
