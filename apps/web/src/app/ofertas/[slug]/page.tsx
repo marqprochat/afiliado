@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   TrendingDown,
   RefreshCw,
+  Share2,
 } from 'lucide-react';
 import { LandingNav } from '@/components/landing/landing-nav';
 import { LandingFooter } from '@/components/landing/landing-footer';
@@ -73,6 +74,26 @@ export default function OfertaDetailPage() {
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [alertOpen, setAlertOpen] = useState(false);
+  const [copiedShare, setCopiedShare] = useState(false);
+
+  async function handleShare() {
+    if (!deal) return;
+    const url = typeof window !== 'undefined' ? window.location.href : '';
+    const text = `${deal.cleanTitle} por ${formatCurrency(deal.currentBestPrice)} — veja o histórico de preços:`;
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ title: deal.cleanTitle, text, url });
+        return;
+      } catch {
+        // usuário cancelou ou fallback para clipboard
+      }
+    }
+    if (typeof navigator !== 'undefined' && navigator.clipboard && url) {
+      await navigator.clipboard.writeText(`${text} ${url}`);
+      setCopiedShare(true);
+      setTimeout(() => setCopiedShare(false), 2500);
+    }
+  }
 
   useEffect(() => {
     if (!slug) return;
@@ -280,10 +301,20 @@ export default function OfertaDetailPage() {
 
                   <button
                     onClick={() => setAlertOpen(true)}
-                    className="w-full sm:w-auto py-3.5 px-5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm flex items-center justify-center gap-2 border border-slate-700 transition cursor-pointer"
+                    className="w-full sm:w-auto py-3.5 px-5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm flex items-center justify-center gap-2 border border-emerald-500/40 transition cursor-pointer"
                   >
                     <Bell className="w-4 h-4 text-emerald-400" />
-                    <span>Criar Alerta de Preço</span>
+                    <span>Quer pagar quanto?</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    title="Compartilhar oferta"
+                    className="w-full sm:w-auto py-3.5 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-200 font-semibold text-sm flex items-center justify-center gap-2 border border-slate-700 transition cursor-pointer"
+                  >
+                    <Share2 className="w-4 h-4 text-cyan-400" />
+                    <span>{copiedShare ? 'Link copiado!' : 'Compartilhar'}</span>
                   </button>
                 </div>
               </div>

@@ -83,6 +83,23 @@ describe('deduplication & price engine', () => {
     expect(match).toBeNull();
   });
 
+  it('does NOT match accessories (capa, película, cabo) with the main device', () => {
+    const candidate = {
+      id: 'prod-s24',
+      title: 'Smartphone Samsung Galaxy S24 256GB 5G',
+      ean: null,
+      brand: 'Samsung',
+      currentBestPrice: 3800,
+    };
+    const accessory = {
+      title: 'Capa Protetora Case Silicone Samsung Galaxy S24 256GB',
+      ean: null,
+      brand: 'Samsung',
+      price: 2999,
+    };
+    expect(findBestProductMatch(accessory, [candidate])).toBeNull();
+  });
+
   it('analyzes deal and detects ALL_TIME_LOW', () => {
     const history = [
       { price: 5000 },

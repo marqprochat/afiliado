@@ -417,6 +417,15 @@ function sharedModelTokens(a: VariantAttributes, b: VariantAttributes): string[]
 
 const SCALAR_ATTRIBUTES = ['storage', 'ram', 'inches', 'voltage', 'quantity', 'size'] as const;
 
+const ACCESSORY_HINT =
+  /\b(capa|capinha|case|pelicula|pel[ií]cula|suporte|controle|cabo|carregador|adaptador|pulseira|alca|al[cç]a|protetor|protetora|bag|bolsa|mochila)\b/i;
+
+function accessoryMismatch(titleA: string, titleB: string): boolean {
+  const normA = removeAccents(titleA);
+  const normB = removeAccents(titleB);
+  return ACCESSORY_HINT.test(normA) !== ACCESSORY_HINT.test(normB);
+}
+
 /** true quando os títulos descrevem variantes diferentes (na dúvida entre atributos presentes, separa). */
 export function variantsConflict(a: VariantAttributes, b: VariantAttributes): boolean {
   for (const key of SCALAR_ATTRIBUTES) {
@@ -443,6 +452,7 @@ export function cleanEanValue(ean: string | null | undefined): string | null {
  * conflita com o próprio cleanTitle, que é o título gravado na página do produto.
  */
 function titlesConflict(titleA: string, titleB: string): boolean {
+  if (accessoryMismatch(titleA, titleB)) return true;
   if (!variantsConflict(extractVariantAttributes(titleA), extractVariantAttributes(titleB))) {
     return false;
   }
@@ -487,7 +497,7 @@ export function listingConflictsWithMaster(
 /** Diferença de preço máxima aceita entre o produto e o candidato. */
 export const MAX_MATCH_PRICE_RATIO = 1.8;
 /** Score mínimo padrão (75% tokens + 25% Levenshtein, + bônus por código de modelo). */
-export const DEFAULT_MATCH_THRESHOLD = 0.6;
+export const DEFAULT_MATCH_THRESHOLD = 0.68;
 /** Bônus quando os dois títulos citam o mesmo código de modelo longo (≥ 5 caracteres). */
 const MODEL_CODE_BONUS = 0.2;
 
@@ -530,6 +540,10 @@ export function findBestProductMatch(
       : 1;
 
     if (priceRatio > MAX_MATCH_PRICE_RATIO) {
+      continue;
+    }
+
+    if (accessoryMismatch(newProduct.title, candidate.title)) {
       continue;
     }
 

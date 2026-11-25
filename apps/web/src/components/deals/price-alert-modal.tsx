@@ -102,7 +102,7 @@ export function PriceAlertModal({
                 <Bell className="w-6 h-6 animate-bounce" />
               </div>
               <div>
-                <h3 className="font-bold text-lg text-white">Criar Alerta de Preço</h3>
+                <h3 className="font-bold text-lg text-white">Quer pagar quanto?</h3>
                 <p className="text-xs text-slate-400 line-clamp-1">{productTitle}</p>
               </div>
             </div>
@@ -180,17 +180,34 @@ export function PriceAlertModal({
               </div>
 
               {!notifyOnAnyDrop && (
-                <div className="relative">
-                  <span className="absolute left-3.5 top-2.5 text-slate-400 text-sm font-semibold">
-                    R$
-                  </span>
-                  <input
-                    type="text"
-                    required={!notifyOnAnyDrop}
-                    value={targetPrice}
-                    onChange={(e) => setTargetPrice(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-900/80 border border-slate-800 rounded-xl text-white text-sm font-bold focus:outline-none focus:border-emerald-500 transition"
-                  />
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {[5, 10, 15, 20].map((pct) => {
+                      const suggested = (currentPrice * (1 - pct / 100)).toFixed(2).replace('.', ',');
+                      return (
+                        <button
+                          key={pct}
+                          type="button"
+                          onClick={() => setTargetPrice(suggested)}
+                          className="rounded-lg border border-slate-700 bg-slate-900/80 px-2.5 py-1 text-[11px] font-semibold text-slate-300 hover:border-emerald-500 hover:text-emerald-400 transition cursor-pointer"
+                        >
+                          -{pct}% (R$ {suggested})
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-2.5 text-slate-400 text-sm font-semibold">
+                      R$
+                    </span>
+                    <input
+                      type="text"
+                      required={!notifyOnAnyDrop}
+                      value={targetPrice}
+                      onChange={(e) => setTargetPrice(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-900/80 border border-slate-800 rounded-xl text-white text-sm font-bold focus:outline-none focus:border-emerald-500 transition"
+                    />
+                  </div>
                 </div>
               )}
             </div>
