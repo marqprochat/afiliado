@@ -113,8 +113,11 @@ export function parseAmazonSearchHtml(html: string): ProductData[] {
     const asin = card.attr('data-asin');
     if (!asin || !/^[A-Z0-9]{10}$/.test(asin)) return;
 
-    const title = clean(card.find('h2').first().text());
-    const image = card.find('img.s-image').first().attr('src');
+    const title =
+      clean(card.find('h2').first().text()) ||
+      clean(card.find('img.s-image').first().attr('alt') ?? '');
+    const image =
+      card.find('img.s-image').first().attr('src') || card.find('img').first().attr('src');
     const p = priced(
       brl(card.find('.a-price:not(.a-text-price) .a-offscreen').first().text()),
       brl(card.find('.a-price.a-text-price .a-offscreen').first().text()),
@@ -251,11 +254,20 @@ export async function fetchAmazonListing(
           'User-Agent': UA,
           Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'Upgrade-Insecure-Requests': '1',
           ...(withCookie ? { Cookie: cookie } : {}),
         },
       });
       // 503 é a resposta clássica de "robot check" da Amazon
-      if (res.status === 403 || res.status === 429 || res.status === 503) {
+      if (
+        res.status === 403 ||
+        res.status === 429 ||
+        res.status === 503 ||
+        (!withCookie && res.status >= 500 && Boolean(cookie))
+      ) {
         return { html: '', blockedStatus: true };
       }
       if (!res.ok) {

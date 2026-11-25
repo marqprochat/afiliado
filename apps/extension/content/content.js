@@ -1175,12 +1175,39 @@
   // busca/listagem (dezenas de cards) quanto numa página de produto único (0 ou 1 link).
   // Extrair esses metadados aqui evita depender de o backend raspar cada URL depois (o que
   // para Mercado Livre/Magalu esbarra em bloqueio anti-bot e não retorna dados reais).
+  function isPollutedCardElement(a) {
+    const pollutedSelector = [
+      '.AdHolder',
+      '[data-component-type="sp-sponsored-result"]',
+      '[cel_widget_id*="sp_"]',
+      '[data-cel-widget*="rhf"]',
+      '#rhf',
+      '[data-cel-widget*="sims-"]',
+      '[data-cel-widget*="percolate"]',
+      '.s-shopping-ad',
+      '[aria-label*="Patrocinado" i]',
+      '.ui-recommendations-carousel',
+      '[data-testid="recommendations"]',
+      '.advertising',
+    ].join(', ');
+    if (a.closest(pollutedSelector)) return true;
+    const href = a.getAttribute('href') || '';
+    if (/click\d*\.mercadolivre/i.test(href)) return true;
+    return false;
+  }
+
   function extractProductsFromPage() {
     const seen = new Set();
     const seenContainers = new Set();
     const items = [];
+    const hasMainAmazonGrid = Boolean(
+      document.querySelector(
+        '[data-component-type="s-search-result"][data-asin], [data-testid="product-card"]',
+      ),
+    );
     document.querySelectorAll('a[href]').forEach((a) => {
       if (items.length >= 200) return;
+      if (isPollutedCardElement(a)) return;
       let absolute;
       try {
         absolute = new URL(a.getAttribute('href'), window.location.href).toString();
@@ -1211,7 +1238,7 @@
       const structuralCard =
         a.closest(
           '[data-testid="product-card"], [data-testid="product-card-container"], [data-component-type="s-search-result"][data-asin]:not([data-asin=""]), .s-result-item[data-asin]:not([data-asin=""]), .dcl-product-wrapper, .ui-search-layout__item, .poly-card',
-        ) || a.closest('[data-asin]:not([data-asin=""])');
+        ) || (hasMainAmazonGrid ? null : a.closest('[data-asin]:not([data-asin=""])'));
 
       // Prioridade 2 (fallback p/ marketplaces sem marcação estrutural): sobe até achar um
       // ancestral com imagem + valor em R$ (até 6 níveis), parando assim que o próximo

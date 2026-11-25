@@ -174,13 +174,13 @@ export default function ProdutosPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold">Buscar Produtos</h1>
         <span className="rounded-md border border-border bg-surface px-3 py-1 text-sm">
           Produtos salvos na fila <b className="text-brand">{queue?.count ?? 0}</b>
         </span>
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {MARKETS.map((m) => (
           <button
             key={m.key}
@@ -197,7 +197,7 @@ export default function ProdutosPage() {
           </button>
         ))}
       </div>
-      <div className="flex gap-4 border-b border-border text-sm">
+      <div className="flex flex-wrap gap-4 border-b border-border text-sm">
         {SUBTABS.map((t) => {
           const isDisabled = isKeywordDisabled && t.key === 'keyword';
           if (isDisabled) {

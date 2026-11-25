@@ -144,7 +144,7 @@ function parsePolycards($: cheerio.CheerioAPI, html: string, now: Date): Product
         parsed && !isNaN(parsed.getTime()) ? parsed.toISOString() : endOfDaySaoPaulo(now);
     }
 
-    const titleEl = card.find('a.poly-component__title').first();
+    const titleEl = card.find('a.poly-component__title, .poly-component__title a').first();
     const title = clean(titleEl.text());
     const url = cleanMlProductUrl(titleEl.attr('href') ?? '');
     if (!title || !url) continue;
@@ -152,8 +152,8 @@ function parsePolycards($: cheerio.CheerioAPI, html: string, now: Date): Product
     // sem id MLB o link não é de produto (ex.: "#" vira a home do ML)
     if (parsedUrl.source !== 'MERCADOLIVRE' || !parsedUrl.externalId) continue;
 
-    const imgEl = card.find('img.poly-component__picture').first();
-    const image = [imgEl.attr('src'), imgEl.attr('data-src')].find((s) => s?.startsWith('http'));
+    const imgEl = card.find('img.poly-component__picture, img').first();
+    const image = [imgEl.attr('data-src'), imgEl.attr('src')].find((s) => s?.startsWith('http'));
     const price = moneyOf(card.find('.poly-price__current .andes-money-amount').first());
     if (!image || !price) continue;
 
@@ -304,11 +304,20 @@ export async function fetchMlListing(
           'User-Agent': UA,
           Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'Upgrade-Insecure-Requests': '1',
           ...(withCookie ? { Cookie: cookie } : {}),
         },
       });
       const finalUrl = res.url || url;
-      if (res.status === 403 || res.status === 429) {
+      if (
+        res.status === 403 ||
+        res.status === 429 ||
+        res.status === 503 ||
+        (!withCookie && res.status >= 500 && Boolean(cookie))
+      ) {
         return { html: '', finalUrl, blockedStatus: true };
       }
       if (!res.ok) {

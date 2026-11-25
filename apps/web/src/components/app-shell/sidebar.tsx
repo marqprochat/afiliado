@@ -55,7 +55,17 @@ const CONFIG = [
   { href: '/config/conta', label: 'Minha Conta', icon: User },
 ];
 
-function Group({ title, items, path }: { title: string; items: typeof PRINCIPAL; path: string }) {
+function Group({
+  title,
+  items,
+  path,
+  onNavigate,
+}: {
+  title: string;
+  items: typeof PRINCIPAL;
+  path: string;
+  onNavigate?: () => void;
+}) {
   return (
     <div className="mb-4">
       <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -67,12 +77,13 @@ function Group({ title, items, path }: { title: string; items: typeof PRINCIPAL;
           <Link
             key={href}
             href={href}
+            onClick={onNavigate}
             className={cn(
               'flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-surface-2',
               active && 'bg-brand/15 text-brand',
             )}
           >
-            <Icon className="h-4 w-4" /> {label}
+            <Icon className="h-4 w-4 shrink-0" /> {label}
           </Link>
         );
       })}
@@ -80,7 +91,13 @@ function Group({ title, items, path }: { title: string; items: typeof PRINCIPAL;
   );
 }
 
-export function Sidebar() {
+export function Sidebar({
+  className,
+  onNavigate,
+}: {
+  className?: string;
+  onNavigate?: () => void;
+} = {}) {
   const path = usePathname();
   const { data: me } = useMe();
   const principal = PRINCIPAL.filter((i) => i.href !== '/afiliados' || me?.user.isSuperAdmin);
@@ -89,14 +106,19 @@ export function Sidebar() {
     window.location.assign('/login');
   }
   return (
-    <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-border bg-surface p-3">
+    <aside
+      className={cn(
+        'flex h-screen w-64 shrink-0 flex-col border-r border-border bg-surface p-3',
+        className,
+      )}
+    >
       <div className="mb-4 flex items-center gap-2.5 px-3">
         <img src="/icon.png" alt="Logo" className="h-6 w-6 shrink-0 object-contain" />
         <span className="text-sm font-bold tracking-tight leading-snug">Super Ofertas e Descontos</span>
       </div>
       <nav className="flex-1 overflow-y-auto">
-        <Group title="Principal" items={principal} path={path} />
-        <Group title="Configurações" items={CONFIG} path={path} />
+        <Group title="Principal" items={principal} path={path} onNavigate={onNavigate} />
+        <Group title="Configurações" items={CONFIG} path={path} onNavigate={onNavigate} />
       </nav>
       <button
         onClick={logout}
