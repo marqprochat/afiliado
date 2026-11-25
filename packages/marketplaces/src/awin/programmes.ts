@@ -50,7 +50,7 @@ export async function listAwinProgrammes(
 
   if (res.status === 401 || res.status === 403) {
     throw new AwinApiError(
-      'Token de API da Awin inválido ou não autorizado',
+      'Token de API da Awin inválido, expirado ou não autorizado (se for um Personal Access Token, confira a validade e renove no painel da Awin)',
       'AWIN_UNAUTHORIZED',
     );
   }
@@ -188,10 +188,13 @@ export async function generateAwinTrackingLinkViaApi(
       });
 
       if (res.ok) {
-        const json = (await res.json()) as { url?: string; shortenedUrl?: string };
-        const generatedUrl = json.url || json.shortenedUrl;
-        if (generatedUrl) {
-          return { url: generatedUrl, shortened: Boolean(params.shorten) };
+        // Resposta documentada: { url, shortUrl } — shortUrl (tidd.ly) só vem com shorten=true.
+        const json = (await res.json()) as { url?: string; shortUrl?: string };
+        if (params.shorten && json.shortUrl) {
+          return { url: json.shortUrl, shortened: true };
+        }
+        if (json.url) {
+          return { url: json.url, shortened: false };
         }
       }
     } catch {

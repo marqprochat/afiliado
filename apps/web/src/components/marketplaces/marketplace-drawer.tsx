@@ -15,6 +15,7 @@ import {
   DrawerTitle,
 } from '@/components/ui/drawer';
 import { formatDateTime } from '@/lib/format';
+import { awinTokenAlert } from '@/lib/awin-token-alert';
 import type { MarketplaceConnection } from '@/lib/types';
 import { MARKETPLACE_CONFIGS, type MarketplaceFieldKey } from './marketplace-config';
 import { AwinProgramsPanel } from './awin-programs-panel';
@@ -50,6 +51,8 @@ function initialFieldValue(key: MarketplaceFieldKey, connection?: MarketplaceCon
       return connection?.aliexpressTrackingId ?? '';
     case 'publisherId':
       return connection?.awinPublisherId ?? '';
+    case 'offersApiTokenExpiresAt':
+      return connection?.awinTokenExpiresAt ?? '';
     case 'secret':
     case 'amazonClientSecret':
     case 'feedListUrl':
@@ -140,6 +143,7 @@ export function MarketplaceDrawer({
 
   const session = sessionStatus(kind, connection);
   const status = connection?.status ?? 'UNCONFIGURED';
+  const tokenAlert = kind === 'AWIN' ? awinTokenAlert(connection) : null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -151,6 +155,13 @@ export function MarketplaceDrawer({
         // esvaziar a etiqueta que já estava salva limpa-a (volta à etiqueta padrão da conta)
         if (field.key === 'mlTag' && initialFieldValue('mlTag', connection) !== '') {
           fields.mlTag = '';
+        }
+        // idem para a validade do token da Awin
+        if (
+          field.key === 'offersApiTokenExpiresAt' &&
+          initialFieldValue('offersApiTokenExpiresAt', connection) !== ''
+        ) {
+          fields.offersApiTokenExpiresAt = '';
         }
         continue;
       }
@@ -184,6 +195,27 @@ export function MarketplaceDrawer({
             <StatusPill label={status} status={status} />
           </div>
           <DrawerDescription>{config.description}</DrawerDescription>
+          {tokenAlert && (
+            <p
+              role="alert"
+              data-tone={tokenAlert.tone}
+              className={`rounded-md border px-2.5 py-1.5 text-xs ${
+                tokenAlert.tone === 'error'
+                  ? 'border-red-500/40 bg-red-500/15 text-red-300'
+                  : 'border-amber-500/40 bg-amber-500/15 text-amber-300'
+              }`}
+            >
+              {tokenAlert.message}.{' '}
+              <a
+                href="https://ui.awin.com"
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium underline"
+              >
+                Renovar na Awin
+              </a>
+            </p>
+          )}
           <a
             href={config.platformUrl}
             target="_blank"

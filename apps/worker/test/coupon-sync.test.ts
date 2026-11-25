@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { prisma, encryptJson } from '@afilados/db';
-import type { CouponUpsertInput } from '@afilados/marketplaces';
+import { AwinApiError, type CouponUpsertInput } from '@afilados/marketplaces';
 import { upsertCoupon } from '../src/lib/coupon-upsert';
-import { createCouponSyncProcessor } from '../src/processors/coupon-sync';
+import { createCouponSyncProcessor, AWIN_TOKEN_ERROR } from '../src/processors/coupon-sync';
 
 const { publishEvent } = vi.hoisted(() => ({
   publishEvent: vi.fn(async () => {}),
@@ -315,5 +315,77 @@ describe('createCouponSyncProcessor', () => {
 
     // Verifica que o evento coupons.updated foi publicado
     expect(publishEvent).toHaveBeenCalledWith(tenantId, { type: 'coupons.updated' });
+  });
+});
+
+describe('createCouponSyncProcessor — token da Awin', () => {
+  async function awinRow() {
+    return prisma.marketplaceConnection.findFirstOrThrow({ where: { tenantId, kind: 'AWIN' } });
+  }
+
+  it('marca a conexão como ERROR quando a Awin responde AWIN_UNAUTHORIZED', async () => {
+    await prisma.marketplaceConnection.updateMany({
+      where: { tenantId, kind: 'AWIN' },
+      data: { status: 'OK', lastError: null },
+    });
+    const processor = createCouponSyncProcessor({
+      fetchAliexpressPromoCodes: vi.fn().mockResolvedValue([]) as any,
+      listAwinVouchers: vi
+        .fn()
+        .mockRejectedValue(new AwinApiError('token recusado', 'AWIN_UNAUTHORIZED')) as any,
+      now: () => now,
+    });
+
+    const results = await processor({ data: { tenantId, trigger: 'schedule' } } as any);
+
+    expect(results.find((r) => r.source === 'AWIN')).toMatchObject({ ok: false });
+    const row = await awinRow();
+    expect(row.status).toBe('ERROR');
+    expect(row.lastError).toBe(AWIN_TOKEN_ERROR);
+    expect(row.lastCheckedAt?.toISOString()).toBe(now.toISOString());
+  });
+
+  it('não mexe na conexão em erro genérico da Awin', async () => {
+    await prisma.marketplaceConnection.updateMany({
+      where: { tenantId, kind: 'AWIN' },
+      data: { status: 'OK', lastError: null },
+    });
+    const processor = createCouponSyncProcessor({
+      fetchAliexpressPromoCodes: vi.fn().mockResolvedValue([]) as any,
+      listAwinVouchers: vi
+        .fn()
+        .mockRejectedValue(new AwinApiError('HTTP 500', 'AWIN_ERROR')) as any,
+      now: () => now,
+    });
+    await processor({ data: { tenantId, trigger: 'schedule' } } as any);
+    const row = await awinRow();
+    expect(row.status).toBe('OK');
+    expect(row.lastError).toBeNull();
+  });
+
+  it('limpa o erro no sucesso somente quando o erro anterior era o de token', async () => {
+    const okProcessor = createCouponSyncProcessor({
+      fetchAliexpressPromoCodes: vi.fn().mockResolvedValue([]) as any,
+      listAwinVouchers: vi.fn().mockResolvedValue([]) as any,
+      now: () => now,
+    });
+
+    await prisma.marketplaceConnection.updateMany({
+      where: { tenantId, kind: 'AWIN' },
+      data: { status: 'ERROR', lastError: 'outro erro qualquer' },
+    });
+    await okProcessor({ data: { tenantId, trigger: 'schedule' } } as any);
+    let row = await awinRow();
+    expect(row.status).toBe('ERROR');
+    expect(row.lastError).toBe('outro erro qualquer');
+
+    await prisma.marketplaceConnection.updateMany({
+      where: { tenantId, kind: 'AWIN' },
+      data: { status: 'ERROR', lastError: AWIN_TOKEN_ERROR },
+    });
+    await okProcessor({ data: { tenantId, trigger: 'schedule' } } as any);
+    row = await awinRow();
+    expect(row.status).toBe('OK');
+    expect(row.lastError).toBeNull();
   });
 });

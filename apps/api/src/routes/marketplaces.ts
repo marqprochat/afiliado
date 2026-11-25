@@ -95,6 +95,10 @@ export async function marketplacesRoutes(app: FastifyInstance) {
                   publisherId: body.publisherId !== undefined ? body.publisherId : prev.publisherId,
                   offersApiToken:
                     body.offersApiToken !== undefined ? body.offersApiToken : prev.offersApiToken,
+                  offersApiTokenExpiresAt:
+                    body.offersApiTokenExpiresAt !== undefined
+                      ? body.offersApiTokenExpiresAt || undefined
+                      : prev.offersApiTokenExpiresAt,
                 }
               : kind === 'MERCADOLIVRE'
                 ? {
@@ -127,15 +131,16 @@ export async function marketplacesRoutes(app: FastifyInstance) {
                       : {}),
                   },
       (merged, existing) => {
-        const onlyAwinFeedSelection =
+        // Só feedIds e/ou validade do token mudaram: não invalida a conexão já verificada.
+        const preservesAwinStatus =
           kind === 'AWIN' &&
-          body.feedIds !== undefined &&
+          (body.feedIds !== undefined || body.offersApiTokenExpiresAt !== undefined) &&
           body.feedListUrl === undefined &&
           body.publisherId === undefined &&
           body.offersApiToken === undefined;
         return {
-          status: onlyAwinFeedSelection ? (existing?.status ?? 'UNCONFIGURED') : 'UNCONFIGURED',
-          ...(onlyAwinFeedSelection
+          status: preservesAwinStatus ? (existing?.status ?? 'UNCONFIGURED') : 'UNCONFIGURED',
+          ...(preservesAwinStatus
             ? {
                 lastError: existing?.lastError ?? null,
                 lastCheckedAt: existing?.lastCheckedAt ?? null,

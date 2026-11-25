@@ -11,6 +11,7 @@ export type MarketplaceFieldKey =
   | 'feedListUrl'
   | 'publisherId'
   | 'offersApiToken'
+  | 'offersApiTokenExpiresAt'
   | 'appKey'
   | 'appSecret'
   | 'trackingId'
@@ -19,7 +20,7 @@ export type MarketplaceFieldKey =
 export interface MarketplaceFieldDef {
   key: MarketplaceFieldKey;
   label: string;
-  type: 'text' | 'password';
+  type: 'text' | 'password' | 'date';
   required: boolean;
   placeholder?: string;
   helpTitle?: string;
@@ -185,12 +186,21 @@ export const MARKETPLACE_CONFIGS: Record<MarketplaceKind, MarketplaceConfig> = {
       },
       {
         key: 'offersApiToken',
-        label: 'Token da Offers API (para Cupons)',
+        label: 'Token de API da Awin (para Cupons e Links)',
         type: 'password',
         required: false,
-        helpTitle: 'Onde encontro o token da Offers API?',
+        helpTitle: 'Onde encontro o token de API da Awin?',
         helpContent:
-          'No painel da Awin: API Credentials / Offers API. É o token de autorização Bearer da API de promoções e cupons.',
+          'No painel da Awin: Settings → User settings → API credentials. Recomendado: aba "Personal Access Token" → Create token (copie na hora, ele só aparece uma vez, e anote a validade; quando expirar, renove e cole aqui de novo). O "Classic Token" antigo também funciona e não expira.',
+      },
+      {
+        key: 'offersApiTokenExpiresAt',
+        label: 'Validade do token (opcional)',
+        type: 'date',
+        required: false,
+        helpTitle: 'Para que serve a validade?',
+        helpContent:
+          'O Personal Access Token (PAT) tem uma validade que você escolhe ao criá-lo ou renová-lo. Informe a data aqui para o painel avisar antes de o token vencer. Deixe vazio se usa o Classic Token (não expira).',
       },
     ],
     supportsSession: false,

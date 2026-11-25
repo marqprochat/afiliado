@@ -83,7 +83,7 @@ export async function listAwinVouchers(
 
     if (res.status === 401 || res.status === 403) {
       throw new AwinApiError(
-        'Token da API de Ofertas da Awin inválido ou não autorizado',
+        'Token de API da Awin inválido, expirado ou não autorizado (se for um Personal Access Token, confira a validade e renove no painel da Awin)',
         'AWIN_UNAUTHORIZED',
       );
     }

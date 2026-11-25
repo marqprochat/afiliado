@@ -212,7 +212,7 @@ describe('MarketplaceDrawer', () => {
 
     // Modifica o publisherId e preenche novo token
     fireEvent.change(pubIdInput, { target: { value: '112233' } });
-    fireEvent.change(screen.getByLabelText(/token da offers api/i), {
+    fireEvent.change(screen.getByLabelText(/token de api da awin/i), {
       target: { value: 'token-offers-secret' },
     });
 
@@ -225,5 +225,55 @@ describe('MarketplaceDrawer', () => {
       },
       cookie: '',
     });
+  });
+
+  function renderAwin(over: Partial<MarketplaceConnection>, onSubmit = vi.fn(async () => {})) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <MarketplaceDrawer
+          kind="AWIN"
+          connection={{ ...baseConnection, kind: 'AWIN', hasAwinFeedListUrl: true, ...over }}
+          open
+          onOpenChange={vi.fn()}
+          onSubmit={onSubmit}
+          pending={false}
+          feedback={null}
+        />
+      </QueryClientProvider>,
+    );
+    return onSubmit;
+  }
+
+  it('Awin: envia a validade do token quando preenchida', () => {
+    const onSubmit = renderAwin({});
+    fireEvent.change(screen.getByLabelText(/validade do token/i), {
+      target: { value: '2027-03-10' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /testar e salvar/i }));
+    expect(onSubmit).toHaveBeenCalledWith({
+      fields: { offersApiTokenExpiresAt: '2027-03-10' },
+      cookie: '',
+    });
+  });
+
+  it('Awin: esvaziar a validade já salva envia string vazia para limpar', () => {
+    const onSubmit = renderAwin({ awinTokenExpiresAt: '2027-03-10', awinTokenDaysLeft: 100 });
+    const input = screen.getByLabelText(/validade do token/i) as HTMLInputElement;
+    expect(input.value).toBe('2027-03-10');
+    fireEvent.change(input, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: /testar e salvar/i }));
+    expect(onSubmit).toHaveBeenCalledWith({
+      fields: { offersApiTokenExpiresAt: '' },
+      cookie: '',
+    });
+  });
+
+  it('Awin: mostra aviso de vencimento com link para renovar', () => {
+    renderAwin({ awinTokenExpiresAt: '2026-11-27', awinTokenDaysLeft: 2 });
+    expect(screen.getByRole('alert').textContent).toContain('Token da Awin vence em 2 dias');
+    expect(screen.getByRole('link', { name: /renovar na awin/i }).getAttribute('href')).toBe(
+      'https://ui.awin.com',
+    );
   });
 });

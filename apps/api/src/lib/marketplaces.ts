@@ -27,6 +27,28 @@ export function getShopeeAdapter() {
   return shopee;
 }
 
+const SP_OFFSET_MS = -3 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Dias de calendário entre hoje (America/Sao_Paulo, UTC-3 fixo, sem horário de verão) e a data
+ * de validade do token. 0 = vence hoje; negativo = vencido; null = sem data/data inválida.
+ */
+export function awinTokenDaysLeft(
+  expiresAt: string | null | undefined,
+  now: Date = new Date(),
+): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(expiresAt ?? '');
+  if (!m) return null;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const target = new Date(Date.UTC(y, mo - 1, d));
+  if (target.getUTCFullYear() !== y || target.getUTCMonth() !== mo - 1 || target.getUTCDate() !== d)
+    return null;
+  const sp = new Date(now.getTime() + SP_OFFSET_MS);
+  const today = Date.UTC(sp.getUTCFullYear(), sp.getUTCMonth(), sp.getUTCDate());
+  return Math.round((target.getTime() - today) / DAY_MS);
+}
+
 type AnyCreds = {
   appId?: string;
   secret?: string;
@@ -34,6 +56,7 @@ type AnyCreds = {
   feedIds?: string[];
   publisherId?: string;
   offersApiToken?: string;
+  offersApiTokenExpiresAt?: string;
   appKey?: string;
   appSecret?: string;
   trackingId?: string;
@@ -65,6 +88,8 @@ export function publicConnection(
     awinFeedIds: creds?.feedIds ?? [],
     awinPublisherId: creds?.publisherId ?? null,
     hasAwinOffersApiToken: Boolean(creds?.offersApiToken),
+    awinTokenExpiresAt: creds?.offersApiTokenExpiresAt ?? null,
+    awinTokenDaysLeft: awinTokenDaysLeft(creds?.offersApiTokenExpiresAt),
     aliexpressAppKey: creds?.appKey ?? null,
     hasAliexpressAppSecret: Boolean(creds?.appSecret),
     aliexpressTrackingId: creds?.trackingId ?? null,

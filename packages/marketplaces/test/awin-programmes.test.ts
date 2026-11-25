@@ -101,8 +101,10 @@ describe('Awin Programmes & Tracking Link Builder', () => {
       return {
         ok: true,
         status: 200,
+        // Formato documentado: url (longa, awin1.com) + shortUrl (tidd.ly) quando shorten=true.
         json: async () => ({
-          url: 'https://tidd.ly/xyz123',
+          url: 'https://www.awin1.com/cread.php?awinmid=68224&awinaffid=691887',
+          shortUrl: 'https://tidd.ly/xyz123',
         }),
       } as any;
     });

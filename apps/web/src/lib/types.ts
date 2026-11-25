@@ -124,6 +124,9 @@ export interface MarketplaceConnection {
   awinFeedIds: string[];
   awinPublisherId: string | null;
   hasAwinOffersApiToken: boolean;
+  /** Validade do token da Awin informada pelo usuário (YYYY-MM-DD) e dias restantes (negativo = vencido). */
+  awinTokenExpiresAt?: string | null;
+  awinTokenDaysLeft?: number | null;
   aliexpressAppKey: string | null;
   hasAliexpressAppSecret: boolean;
   aliexpressTrackingId: string | null;

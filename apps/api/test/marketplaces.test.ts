@@ -340,6 +340,51 @@ describe('marketplaces', () => {
     expect(JSON.stringify(r.json())).not.toContain(feedListUrl);
   });
 
+  it('PUT AWIN só com a validade do token preserva status e salva/limpa a data', async () => {
+    const other = await createTenantWithUser();
+    const otherCookie = await loginCookie(app, other.email, other.password);
+    try {
+      await app.inject({
+        method: 'PUT',
+        url: '/api/v1/marketplaces/AWIN',
+        headers: { cookie: otherCookie },
+        payload: { feedListUrl: 'https://ui.awin.com/feedList/key1', feedIds: ['1'] },
+      });
+      const checkedAt = new Date('2026-11-01T10:00:00.000Z');
+      await prisma.marketplaceConnection.updateMany({
+        where: { tenantId: other.tenantId, kind: 'AWIN' },
+        data: { status: 'OK', lastError: null, lastCheckedAt: checkedAt },
+      });
+      const r = await app.inject({
+        method: 'PUT',
+        url: '/api/v1/marketplaces/AWIN',
+        headers: { cookie: otherCookie },
+        payload: { offersApiTokenExpiresAt: '2030-01-15' },
+      });
+      expect(r.statusCode).toBe(200);
+      expect(r.json()).toMatchObject({
+        status: 'OK',
+        awinTokenExpiresAt: '2030-01-15',
+        hasAwinFeedListUrl: true,
+      });
+      const row = await prisma.marketplaceConnection.findFirstOrThrow({
+        where: { tenantId: other.tenantId, kind: 'AWIN' },
+      });
+      expect(row.lastCheckedAt?.toISOString()).toBe(checkedAt.toISOString());
+
+      const cleared = await app.inject({
+        method: 'PUT',
+        url: '/api/v1/marketplaces/AWIN',
+        headers: { cookie: otherCookie },
+        payload: { offersApiTokenExpiresAt: '' },
+      });
+      expect(cleared.json()).toMatchObject({ status: 'OK', awinTokenExpiresAt: null });
+      expect(cleared.json().awinTokenDaysLeft).toBeNull();
+    } finally {
+      await cleanupTenant(other.tenantId);
+    }
+  });
+
   it('PUT AWIN rejeita link de host inválido (400)', async () => {
     const r = await app.inject({
       method: 'PUT',

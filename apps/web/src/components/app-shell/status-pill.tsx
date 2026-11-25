@@ -12,12 +12,15 @@ export function StatusPill({
   label,
   status,
   title,
+  tone: toneOverride,
 }: {
   label: string;
   status: string;
   title?: string;
+  /** Força a cor da pílula (ex.: aviso de token prestes a vencer com a conexão ainda OK). */
+  tone?: keyof typeof TONE;
 }) {
-  const tone = statusTone(status);
+  const tone = toneOverride ?? statusTone(status);
   return (
     <span
       data-tone={tone}

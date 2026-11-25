@@ -105,7 +105,16 @@ export const marketplaceUpdateSchema = z.object({
     .optional(),
   feedIds: z.array(z.string().min(1).max(40)).max(200).optional(),
   publisherId: z.string().min(1).max(60).optional(),
-  offersApiToken: z.string().min(1).max(200).optional(),
+  /**
+   * Token de API da Awin: aceita o Classic Token (curto, não expira) e o Personal Access Token
+   * (PAT), bem mais longo e com validade. A Awin não documenta o tamanho do PAT, então o limite
+   * é folgado; espaços/quebras de linha coladas por engano são removidos.
+   */
+  offersApiToken: z.string().trim().min(1).max(4096).optional(),
+  /** Validade (YYYY-MM-DD) do token informada pelo usuário; '' limpa. A Awin não expõe essa data. */
+  offersApiTokenExpiresAt: z
+    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal('')])
+    .optional(),
   appKey: z.string().min(1).optional(),
   appSecret: z.string().min(1).optional(),
   trackingId: z.string().min(1).max(100).optional(),
@@ -263,7 +272,6 @@ export const extensionAwinGenerateLinkSchema = z.object({
   shorten: z.boolean().optional(),
 });
 export type ExtensionAwinGenerateLinkBody = z.infer<typeof extensionAwinGenerateLinkSchema>;
-
 
 // Descoberta feita pela extensão: ela abre a busca do marketplace no Chrome do usuário (sem
 // bloqueio anti-bot) e envia os cards lidos. O servidor aplica os filtros da automação.

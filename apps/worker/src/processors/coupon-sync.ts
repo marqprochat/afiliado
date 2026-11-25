@@ -5,6 +5,7 @@ import type { CouponSyncJob } from '@afilados/shared';
 import {
   fetchAliexpressPromoCodes,
   listAwinVouchers,
+  AwinApiError,
   type AliexpressCredentials,
   type AwinCredentials,
 } from '@afilados/marketplaces';
@@ -12,6 +13,10 @@ import { upsertCoupon } from '../lib/coupon-upsert';
 import { publishEvent } from '../lib/events';
 
 const log = pino({ name: 'coupon-sync-processor' });
+
+/** Erro gravado na conexão AWIN quando a Awin recusa o token (401/403). Limpo no próximo sucesso. */
+export const AWIN_TOKEN_ERROR =
+  'Token de API da Awin inválido ou expirado — renove em Settings → API credentials';
 
 export interface CouponSyncResult {
   source: 'ALIEXPRESS' | 'AWIN' | 'EXPIRY';
@@ -152,10 +157,31 @@ export function createCouponSyncProcessor(deps: CouponSyncProcessorDeps = {}) {
           }
 
           results.push({ source: 'AWIN', ok: true, created, updated, expired });
+
+          // Token voltou a funcionar: limpa somente o erro de token (outros erros não são nossos).
+          if (awinConn.lastError === AWIN_TOKEN_ERROR) {
+            await prisma.marketplaceConnection.update({
+              where: { id: awinConn.id },
+              data: { status: 'OK', lastError: null, lastCheckedAt: now },
+            });
+          }
         }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         log.error({ tenantId, err: errorMsg }, 'falha ao sincronizar cupons da Awin');
+        if (err instanceof AwinApiError && err.code === 'AWIN_UNAUTHORIZED') {
+          try {
+            await prisma.marketplaceConnection.update({
+              where: { id: awinConn.id },
+              data: { status: 'ERROR', lastError: AWIN_TOKEN_ERROR, lastCheckedAt: now },
+            });
+          } catch (updateErr) {
+            log.error(
+              { tenantId, err: String(updateErr) },
+              'falha ao marcar conexão Awin com erro',
+            );
+          }
+        }
         results.push({
           source: 'AWIN',
           ok: false,

@@ -4,6 +4,7 @@ import { Menu, X } from 'lucide-react';
 import { useMarketplaces, useSessions } from '@/lib/queries';
 import { Sidebar } from './sidebar';
 import { StatusPill } from './status-pill';
+import { awinTokenAlert } from '@/lib/awin-token-alert';
 
 const LABEL: Record<string, string> = {
   SHOPEE: 'Shopee',
@@ -34,14 +35,19 @@ export function Topbar() {
           {(sessions ?? []).map((s) => (
             <StatusPill key={s.id} label={`WhatsApp · ${s.label}`} status={s.status} />
           ))}
-          {(markets ?? []).map((m) => (
-            <StatusPill
-              key={m.kind}
-              label={LABEL[m.kind] ?? m.kind}
-              status={m.status}
-              title={m.lastError ?? m.status}
-            />
-          ))}
+          {(markets ?? []).map((m) => {
+            // Status ERROR real tem prioridade; senão, avisa token da Awin perto de vencer/vencido.
+            const alert = m.kind === 'AWIN' && m.status !== 'ERROR' ? awinTokenAlert(m) : null;
+            return (
+              <StatusPill
+                key={m.kind}
+                label={LABEL[m.kind] ?? m.kind}
+                status={m.status}
+                {...(alert ? { tone: alert.tone } : {})}
+                title={alert?.message ?? m.lastError ?? m.status}
+              />
+            );
+          })}
         </div>
       </header>
       {mobileOpen && (
