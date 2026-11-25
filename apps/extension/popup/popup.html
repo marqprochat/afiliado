@@ -189,7 +189,25 @@
           <div id="group-links-report" class="group-links-container"></div>
 
           <!-- Prévia da Mensagem Final & Edição Rápida -->
-          <div class="card-header-flex" style="margin-top: 12px; margin-bottom: 4px;">
+          <div class="card-header-flex" style="margin-top: 12px; margin-bottom: 6px;">
+            <label class="label" style="margin: 0;" for="group-coupon-input">Cupom (opcional)</label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#94a3b8;cursor:pointer;">
+              <input id="group-auto-rewrite" type="checkbox" checked />
+              Reescrever no padrão próprio
+            </label>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:10px;">
+            <input
+              id="group-coupon-input"
+              type="text"
+              class="input"
+              placeholder="Ex: BLACK10 (insere 🎟️ automático)"
+              style="flex:1;text-transform:uppercase;font-family:monospace;"
+            />
+            <button id="btn-rewrite-copy" class="btn-secondary-sm" type="button">✨ Reescrever</button>
+          </div>
+
+          <div class="card-header-flex" style="margin-top: 6px; margin-bottom: 4px;">
             <label class="label" style="margin: 0;">Prévia da Mensagem Final</label>
             <button id="btn-toggle-edit" class="btn-secondary-sm" type="button">✏️ Editar rápido</button>
           </div>

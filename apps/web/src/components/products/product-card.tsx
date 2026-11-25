@@ -74,9 +74,23 @@ export function ProductCard({
       <div className="mb-2 aspect-square overflow-hidden rounded bg-surface-2">
         {p.images[0] && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={p.images[0]} alt="" className="h-full w-full object-cover" loading="lazy" />
+          <img
+            src={p.images[0]}
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+            decoding="async"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
         )}
       </div>
+      {p.shopName && (
+        <span className="mb-0.5 truncate text-[10px] font-medium text-muted-foreground">
+          {p.shopName}
+        </span>
+      )}
       <p className="mb-1 line-clamp-2 text-xs font-medium" title={p.title}>
         {p.title}
       </p>

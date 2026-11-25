@@ -74,6 +74,13 @@ export const useAwinFeeds = (enabled: boolean) =>
     enabled,
     queryFn: () => apiFetch<{ feeds: AwinFeed[] }>('/marketplaces/awin/feeds'),
   });
+export const useAwinStores = (enabled: boolean) =>
+  useQuery({
+    queryKey: ['products', 'awin-stores'],
+    enabled,
+    staleTime: 5 * 60_000,
+    queryFn: () => apiFetch<{ stores: string[] }>('/products/awin-stores'),
+  });
 export const useAliexpressCategories = (enabled: boolean) =>
   useQuery({
     queryKey: ['marketplaces', 'aliexpress', 'categories'],

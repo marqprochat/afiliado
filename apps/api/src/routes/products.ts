@@ -43,7 +43,7 @@ import {
 import { mapMlListingError, mlListingDeps, toMlListingSource } from '../lib/ml-listing';
 import { toApiProduct, upsertProducts } from '../lib/products';
 import { getQueue } from '../lib/redis';
-import { searchAwinCatalog, fetchAwinCatalogByUrls } from '../lib/awin-catalog';
+import { searchAwinCatalog, fetchAwinCatalogByUrls, listAwinCatalogStores } from '../lib/awin-catalog';
 import { parseSpreadsheetBuffer, parseSpreadsheetText } from '../lib/spreadsheet';
 
 const idsQuery = z.object({ ids: z.string().min(1) });
@@ -89,6 +89,11 @@ export async function productsRoutes(app: FastifyInstance) {
     return { products: rows.map(toApiProduct) };
   });
 
+  app.get('/products/awin-stores', async (req) => {
+    const stores = await listAwinCatalogStores(req.db);
+    return { stores };
+  });
+
   app.post('/products/search', async (req) => {
     const q = searchQuerySchema.parse(req.body);
 
@@ -118,7 +123,7 @@ export async function productsRoutes(app: FastifyInstance) {
 
     if (q.source === 'AWIN') {
       if (!q.query) throw ApiError.validation('Informe uma palavra-chave');
-      const found = await searchAwinCatalog(req.db, q.query, q.limit);
+      const found = await searchAwinCatalog(req.db, q.query, q.limit, q.awinAdvertiser);
       const rows = await upsertProducts(req.db, req.tenantId, applySearchFilters(found, q));
       return { products: rows.map(toApiProduct) };
     }

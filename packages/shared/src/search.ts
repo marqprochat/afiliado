@@ -70,6 +70,7 @@ export const searchQuerySchema = z
     freeShippingOnly: z.boolean().default(false),
     mlListing: mlListingSchema.optional(),
     amazonListing: amazonListingSchema.optional(),
+    awinAdvertiser: z.string().trim().min(1).optional(),
   })
   .superRefine((q, ctx) => {
     if (q.mode === 'keyword' && !q.query)

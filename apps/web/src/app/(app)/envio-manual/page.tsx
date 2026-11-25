@@ -36,6 +36,7 @@ export default function ManualSendPage() {
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [couponTemplateId, setCouponTemplateId] = useState('');
+  const [manualCouponCode, setManualCouponCode] = useState('');
   const { data: couponTemplates } = useTemplates('COUPON');
   const { data: coupons } = useCoupons({ includeExpired: false });
 
@@ -97,6 +98,15 @@ export default function ManualSendPage() {
       onSuccess: (out) => setText((prev) => (prev.trim() ? `${prev}\n\n${out.text}` : out.text)),
     },
   );
+
+  function insertManualCoupon() {
+    const code = manualCouponCode.trim().toUpperCase();
+    if (!code) return;
+    const snippet = `🎟️ *Cupom:* \`${code}\``;
+    setText((prev) => (prev.trim() ? `${prev}\n\n${snippet}` : snippet));
+    setManualCouponCode('');
+    toast.success(`Cupom ${code} inserido`);
+  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -277,6 +287,36 @@ export default function ManualSendPage() {
 
         <aside className="space-y-3 rounded-lg border border-border bg-surface p-4">
           <h2 className="font-semibold">Inserir cupom</h2>
+          <div className="space-y-1.5 rounded-md border border-border bg-surface-2 p-2.5">
+            <Label htmlFor="manual-coupon-code" className="text-xs">
+              Cupom rápido (manual)
+            </Label>
+            <div className="flex gap-1.5">
+              <Input
+                id="manual-coupon-code"
+                value={manualCouponCode}
+                onChange={(e) => setManualCouponCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    insertManualCoupon();
+                  }
+                }}
+                placeholder="Ex: BLACK10"
+                className="h-8 font-mono text-xs uppercase"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={!manualCouponCode.trim()}
+                onClick={insertManualCoupon}
+                className="h-8 shrink-0 text-xs"
+              >
+                Inserir
+              </Button>
+            </div>
+          </div>
           {(couponTemplates?.length ?? 0) === 0 ? (
             <p className="text-xs text-muted-foreground">
               Crie um template de cupom em Template das mensagens para inserir cupons aqui.

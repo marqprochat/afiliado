@@ -1,5 +1,6 @@
 'use client';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Search, Trash2, X } from 'lucide-react';
 import type { MarketplaceKind, SearchMode, SearchQuery } from '@afilados/shared';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ import { formatBRL } from '@/lib/format';
 import { useApiMutation } from '@/lib/mutations';
 import { useMarketplaces, useQueue } from '@/lib/queries';
 import type { ApiProduct } from '@/lib/types';
+import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
@@ -51,6 +53,7 @@ export default function ProdutosPage() {
   const [sub, setSub] = useState<SearchMode | 'import'>('keyword');
   const [products, setProducts] = useState<ApiProduct[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [listFilter, setListFilter] = useState('');
   const { data: marketplaces } = useMarketplaces();
   const mlApiConnected = Boolean(marketplaces?.find((m) => m.kind === 'MERCADOLIVRE')?.hasMlApi);
   const DISABLED_KEYWORD_SOURCES = SCRAPED_KEYWORD_SOURCES.filter(
@@ -130,6 +133,19 @@ export default function ProdutosPage() {
     },
   );
 
+  const normalizedListFilter = listFilter.trim().toLowerCase();
+  const visibleProducts = useMemo(() => {
+    if (!normalizedListFilter) return products;
+    return products.filter(
+      (p) =>
+        p.title.toLowerCase().includes(normalizedListFilter) ||
+        (p.shopName?.toLowerCase().includes(normalizedListFilter) ?? false),
+    );
+  }, [products, normalizedListFilter]);
+
+  const allVisibleSelected =
+    visibleProducts.length > 0 && visibleProducts.every((p) => selected.has(p.id));
+
   function toggle(id: string) {
     const s = new Set(selected);
     if (s.has(id)) s.delete(id);
@@ -137,7 +153,19 @@ export default function ProdutosPage() {
     setSelected(s);
   }
   function toggleAll() {
-    setSelected(selected.size === products.length ? new Set() : new Set(products.map((p) => p.id)));
+    const next = new Set(selected);
+    if (allVisibleSelected) {
+      for (const p of visibleProducts) next.delete(p.id);
+    } else {
+      for (const p of visibleProducts) next.add(p.id);
+    }
+    setSelected(next);
+  }
+  function removeSelectedFromList() {
+    if (selected.size === 0) return;
+    setProducts((prev) => prev.filter((p) => !selected.has(p.id)));
+    setSelected(new Set());
+    toast.success('Itens selecionados removidos da lista');
   }
   async function copy(p: ApiProduct) {
     await copyToClipboard(`${p.title}\n${formatBRL(p.price)}\n${p.originalUrl}`);
@@ -225,13 +253,53 @@ export default function ProdutosPage() {
 
       {products.length > 0 && (
         <>
-          <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2 text-sm">
-            <Button size="sm" variant="secondary" onClick={toggleAll}>
-              {selected.size === products.length
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2 text-sm">
+            <div className="relative flex-1 min-w-[180px] max-w-xs">
+              <Search className="pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={listFilter}
+                onChange={(e) => setListFilter(e.target.value)}
+                placeholder="Filtrar lista por palavra-chave..."
+                aria-label="Filtrar resultados por palavra-chave"
+                className="h-7 pl-7 pr-7 text-xs"
+              />
+              {listFilter && (
+                <button
+                  type="button"
+                  onClick={() => setListFilter('')}
+                  aria-label="Limpar filtro da lista"
+                  className="absolute right-2 top-1.5 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            {normalizedListFilter && (
+              <span className="text-xs text-muted-foreground">
+                {visibleProducts.length} de {products.length}
+              </span>
+            )}
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={visibleProducts.length === 0}
+              onClick={toggleAll}
+            >
+              {allVisibleSelected
                 ? 'Desmarcar todos'
-                : `Selecionar todos (${products.length})`}
+                : `Selecionar todos (${visibleProducts.length})`}
             </Button>
             <span className="text-muted-foreground">{selected.size} selecionado(s)</span>
+            {selected.size > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={removeSelectedFromList}
+                className="text-red-300 hover:text-red-200"
+              >
+                <Trash2 className="mr-1 h-3.5 w-3.5" /> Remover selecionados
+              </Button>
+            )}
             <Button
               size="sm"
               className="ml-auto bg-brand text-white hover:bg-brand/90"
@@ -242,7 +310,7 @@ export default function ProdutosPage() {
             </Button>
           </div>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
-            {products.map((p) => (
+            {visibleProducts.map((p) => (
               <ProductCard
                 key={p.id}
                 product={p}

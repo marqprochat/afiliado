@@ -43,6 +43,37 @@ describe('searchAwinCatalog', () => {
     expect(found[0]!.source).toBe('AWIN');
   });
 
+  it('filtra por nome da loja (advertiserName) quando informado', async () => {
+    await prisma.awinCatalogProduct.create({
+      data: {
+        tenantId,
+        feedId: 'f2',
+        advertiserName: 'Drogal BR',
+        externalId: 'p3',
+        title: 'Fralda Pampers M',
+        price: 59.9,
+        deepLink: 'https://www.awin1.com/cread.php?x=3',
+        raw: {},
+      },
+    });
+    await prisma.awinCatalogProduct.create({
+      data: {
+        tenantId,
+        feedId: 'f3',
+        advertiserName: 'Petz BR',
+        externalId: 'p4',
+        title: 'Fralda Pet Descartável',
+        price: 39.9,
+        deepLink: 'https://www.awin1.com/cread.php?x=4',
+        raw: {},
+      },
+    });
+    const db = forTenant(tenantId);
+    const found = await searchAwinCatalog(db, 'fralda', 20, 'Drogal');
+    expect(found).toHaveLength(1);
+    expect(found[0]!.title).toBe('Fralda Pampers M');
+  });
+
   it('não retorna nada para outro tenant', async () => {
     const other = (await prisma.tenant.create({ data: { name: 'awin-catalog-other' } })).id;
     const db = forTenant(other);

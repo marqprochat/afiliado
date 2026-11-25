@@ -74,6 +74,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnToggleEdit = document.getElementById('btn-toggle-edit');
   const groupPreviewBubble = document.getElementById('group-preview-bubble');
   const groupEditTextarea = document.getElementById('group-edit-textarea');
+  const groupCouponInput = document.getElementById('group-coupon-input');
+  const groupAutoRewrite = document.getElementById('group-auto-rewrite');
+  const btnRewriteCopy = document.getElementById('btn-rewrite-copy');
   const groupCaptureTarget = document.getElementById('group-capture-target');
   const btnSendGroup = document.getElementById('btn-send-group');
   const groupSendStatus = document.getElementById('group-send-status');
@@ -529,9 +532,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Cupom
-    if (detected.coupon) {
+    const detectedCoupon = detected.coupon ? String(detected.coupon).trim().toUpperCase() : '';
+    if (groupCouponInput) groupCouponInput.value = detectedCoupon;
+    if (detectedCoupon) {
       tagCoupon.classList.remove('hidden');
-      valCoupon.textContent = detected.coupon;
+      valCoupon.textContent = detectedCoupon;
     } else {
       tagCoupon.classList.add('hidden');
     }
@@ -584,8 +589,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Prévia e Edição Rápida
-    groupPreviewBubble.textContent = convertedText;
-    groupEditTextarea.value = convertedText;
+    const initialText =
+      groupAutoRewrite && groupAutoRewrite.checked
+        ? buildRewrittenGroupCopy(data, groupCouponInput?.value)
+        : convertedText;
+    groupPreviewBubble.textContent = initialText;
+    groupEditTextarea.value = initialText;
     isEditing = false;
     groupPreviewBubble.classList.remove('hidden');
     groupEditTextarea.classList.add('hidden');
@@ -593,6 +602,99 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     updateCaptureButtonLabel();
     groupSendStatus.textContent = '';
+  }
+
+  function formatBrlExt(value) {
+    return `R$ ${Number(value).toFixed(2).replace('.', ',')}`;
+  }
+
+  function buildRewrittenGroupCopy(data, manualCouponRaw) {
+    const { detected = {}, convertedText = '' } = data || {};
+    const coupon = (manualCouponRaw ?? detected.coupon ?? '').trim().toUpperCase();
+    const links = (detected.links || [])
+      .map((l) => (l.converted && l.affiliateUrl ? l.affiliateUrl : l.originalUrl))
+      .filter(Boolean);
+
+    const ignoredLineRe =
+      /^(?:https?:\/\/|.*https?:\/\/|(?:de|por|apenas|cupom|c[oó]digo|link|compre|resgate|acesse|aproveite)\b.*[:\-]?\s*$|🔥|🚨|⚡|🎟️|🏷️|🛒|👇)/i;
+    const rawLines = convertedText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l && !/https?:\/\//i.test(l));
+
+    const titleLines = rawLines.filter((l) => {
+      if (ignoredLineRe.test(l)) return false;
+      if (/^r\$\s*\d+/i.test(l)) return false;
+      if (coupon && l.toUpperCase() === coupon) return false;
+      return true;
+    });
+    const headline = (titleLines[0] || rawLines[0] || 'Oferta selecionada').replace(/^[*_~]+|[*_~]+$/g, '');
+
+    const parts = ['🔥 *OFERTA ENCONTRADA*', '', `📦 ${headline}`];
+
+    if (detected.price) {
+      const priceStr = formatBrlExt(detected.price);
+      const discStr = detected.discountPct ? ` (-${detected.discountPct}%)` : '';
+      if (detected.originalPrice && detected.originalPrice > detected.price) {
+        parts.push('', `💰 ~De ${formatBrlExt(detected.originalPrice)}~ por *${priceStr}*${discStr}`);
+      } else {
+        parts.push('', `💰 *Por apenas ${priceStr}*${discStr}`);
+      }
+    }
+
+    if (coupon) {
+      parts.push(`🎟️ *Cupom:* \`${coupon}\``);
+    }
+
+    if (links.length > 0) {
+      parts.push('', '🛒 *Compre aqui:*', ...links);
+    }
+
+    return parts.join('\n');
+  }
+
+  if (groupAutoRewrite) {
+    chrome.storage.local.get(['autoRewriteGroupCopy'], (res) => {
+      if (typeof res.autoRewriteGroupCopy === 'boolean') {
+        groupAutoRewrite.checked = res.autoRewriteGroupCopy;
+      }
+    });
+    groupAutoRewrite.addEventListener('change', () => {
+      chrome.storage.local.set({ autoRewriteGroupCopy: groupAutoRewrite.checked });
+      if (!currentParsedResult) return;
+      const next = groupAutoRewrite.checked
+        ? buildRewrittenGroupCopy(currentParsedResult, groupCouponInput?.value)
+        : currentParsedResult.convertedText;
+      groupPreviewBubble.textContent = next;
+      groupEditTextarea.value = next;
+    });
+  }
+
+  if (btnRewriteCopy) {
+    btnRewriteCopy.addEventListener('click', () => {
+      if (!currentParsedResult) return;
+      const next = buildRewrittenGroupCopy(currentParsedResult, groupCouponInput?.value);
+      groupPreviewBubble.textContent = next;
+      groupEditTextarea.value = next;
+    });
+  }
+
+  if (groupCouponInput) {
+    groupCouponInput.addEventListener('input', () => {
+      const code = groupCouponInput.value.trim().toUpperCase();
+      if (code) {
+        tagCoupon.classList.remove('hidden');
+        valCoupon.textContent = code;
+      } else {
+        tagCoupon.classList.add('hidden');
+      }
+      if (!currentParsedResult) return;
+      if (groupAutoRewrite?.checked) {
+        const next = buildRewrittenGroupCopy(currentParsedResult, code);
+        groupPreviewBubble.textContent = next;
+        groupEditTextarea.value = next;
+      }
+    });
   }
 
   // Alternar edição rápida

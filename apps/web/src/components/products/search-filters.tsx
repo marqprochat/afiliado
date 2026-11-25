@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { NativeCheckbox } from '@/components/ui/native-checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useAliexpressCategories } from '@/lib/queries';
+import { useAliexpressCategories, useAwinStores } from '@/lib/queries';
 
 export const SORT_LABELS: Record<SearchSort, string> = {
   DISCOUNT_DESC: 'Maiores descontos',
@@ -67,9 +67,11 @@ export function SearchFilters({
   const [listingKind, setListingKind] = useState<MlListingKind>('deals');
   const [listingCategory, setListingCategory] = useState('');
   const [amazonKind, setAmazonKind] = useState<AmazonListingKind>('deals');
+  const [awinAdvertiser, setAwinAdvertiser] = useState('');
   const [formError, setFormError] = useState('');
 
   const isShopee = source === 'SHOPEE';
+  const isAwin = source === 'AWIN';
   const isAmazonListing = mode === 'listing' && source === 'AMAZON';
   const isAliexpress = source === 'ALIEXPRESS';
   // Categoria/mais buscados existem tanto na API oficial da Shopee quanto na do AliExpress;
@@ -78,6 +80,7 @@ export function SearchFilters({
   const { data: aliexpressCategories, isLoading: loadingCategories } = useAliexpressCategories(
     isAliexpress && mode === 'category',
   );
+  const { data: awinStores } = useAwinStores(isAwin && mode === 'keyword');
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -90,7 +93,10 @@ export function SearchFilters({
       extraCommission: isShopee && extraCommission,
       freeShippingOnly,
     };
-    if (mode === 'keyword') raw.query = text;
+    if (mode === 'keyword') {
+      raw.query = text;
+      if (isAwin && awinAdvertiser) raw.awinAdvertiser = awinAdvertiser;
+    }
     if (mode === 'shop') raw.shopId = text;
     if (mode === 'category') raw.categoryId = categoryId;
     if (mode === 'listing') {
@@ -123,12 +129,29 @@ export function SearchFilters({
     <form onSubmit={submit} className="space-y-3 rounded-lg border border-border bg-surface p-4">
       <div className="flex gap-2">
         {mode === 'keyword' && (
-          <Input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Buscar por palavra-chave…"
-            className="flex-1"
-          />
+          <div className="flex flex-1 flex-wrap gap-2">
+            <Input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Buscar por palavra-chave…"
+              className="min-w-48 flex-1"
+            />
+            {isAwin && (
+              <select
+                aria-label="Filtrar por loja Awin"
+                value={awinAdvertiser}
+                onChange={(e) => setAwinAdvertiser(e.target.value)}
+                className={`${selectCls} w-52`}
+              >
+                <option value="">Todas as lojas</option>
+                {(awinStores?.stores ?? []).map((store) => (
+                  <option key={store} value={store}>
+                    {store}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         )}
         {mode === 'shop' && (
           <Input

@@ -1,7 +1,9 @@
 'use client';
-import { Trash2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Search, Trash2, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { NativeCheckbox } from '@/components/ui/native-checkbox';
 import {
   Table,
@@ -35,11 +37,27 @@ export function QueueTable({
   onClearSent: () => void;
   onSendToBatch?: () => void;
 }) {
-  const allSelected = data.items.length > 0 && data.items.every((i) => i.selected);
+  const [keyword, setKeyword] = useState('');
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  const visibleItems = useMemo(() => {
+    if (!normalizedKeyword) return data.items;
+    return data.items.filter(
+      (i) =>
+        i.product.title.toLowerCase().includes(normalizedKeyword) ||
+        i.product.source.toLowerCase().includes(normalizedKeyword),
+    );
+  }, [data.items, normalizedKeyword]);
+
+  const pendingVisibleIds = visibleItems
+    .filter((i) => i.status === 'PENDING')
+    .map((i) => i.id);
+  const allSelected =
+    pendingVisibleIds.length > 0 &&
+    visibleItems.filter((i) => i.status === 'PENDING').every((i) => i.selected);
   const selectedCount = data.items.filter((i) => i.selected && i.status === 'PENDING').length;
   return (
     <div className="rounded-lg border border-border bg-surface">
-      <div className="flex items-center gap-3 border-b border-border px-4 py-2 text-sm">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2 text-sm">
         <b>Produtos salvos ({data.items.length})</b>
         <span
           className="text-xs text-muted-foreground"
@@ -47,15 +65,36 @@ export function QueueTable({
         >
           fila {data.count}
         </span>
+        <div className="relative flex-1 min-w-[180px] max-w-xs">
+          <Search className="pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            placeholder="Filtrar por palavra-chave..."
+            aria-label="Filtrar fila por palavra-chave"
+            className="h-7 pl-7 pr-7 text-xs"
+          />
+          {keyword && (
+            <button
+              type="button"
+              onClick={() => setKeyword('')}
+              aria-label="Limpar filtro"
+              className="absolute right-2 top-1.5 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        {normalizedKeyword && (
+          <span className="text-xs text-muted-foreground">
+            {visibleItems.length} de {data.items.length}
+          </span>
+        )}
         <Button
           size="sm"
           variant="secondary"
-          onClick={() =>
-            onSelect(
-              data.items.map((i) => i.id),
-              !allSelected,
-            )
-          }
+          disabled={pendingVisibleIds.length === 0}
+          onClick={() => onSelect(pendingVisibleIds, !allSelected)}
         >
           {allSelected ? 'Desmarcar todos' : 'Selecionar todos'}
         </Button>
@@ -87,7 +126,7 @@ export function QueueTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.items.map((i) => (
+          {visibleItems.map((i) => (
             <TableRow key={i.id} className={i.status !== 'PENDING' ? 'opacity-60' : ''}>
               <TableCell>
                 <NativeCheckbox
@@ -131,10 +170,12 @@ export function QueueTable({
               </TableCell>
             </TableRow>
           ))}
-          {data.items.length === 0 && (
+          {visibleItems.length === 0 && (
             <TableRow>
               <TableCell colSpan={7} className="text-center text-muted-foreground">
-                Fila vazia — salve produtos em “Buscar Produtos”.
+                {normalizedKeyword
+                  ? `Nenhum produto encontrado para "${keyword.trim()}".`
+                  : 'Fila vazia — salve produtos em “Buscar Produtos”.'}
               </TableCell>
             </TableRow>
           )}

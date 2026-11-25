@@ -70,4 +70,38 @@ describe('QueueTable - Enviar para lote', () => {
     fireEvent.click(btn);
     expect(onSendToBatch).toHaveBeenCalledTimes(1);
   });
+
+  it('filtra itens por palavra-chave e seleciona apenas os itens visíveis', () => {
+    const onSelect = vi.fn();
+    const base = makeQueueData(false);
+    const data: QueueResponse = {
+      count: 2,
+      items: [
+        ...base.items,
+        {
+          ...base.items[0],
+          id: 'q2',
+          productId: 'p2',
+          product: { ...base.items[0].product, id: 'p2', title: 'Galaxy S24 Samsung' },
+        },
+      ],
+    };
+    render(
+      <QueueTable
+        data={data}
+        onSelect={onSelect}
+        onRemove={vi.fn()}
+        onClearSent={vi.fn()}
+      />,
+    );
+
+    const input = screen.getByLabelText(/filtrar fila por palavra-chave/i);
+    fireEvent.change(input, { target: { value: 'Samsung' } });
+
+    expect(screen.queryByText('Produto 1')).not.toBeInTheDocument();
+    expect(screen.getByText('Galaxy S24 Samsung')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /selecionar todos/i }));
+    expect(onSelect).toHaveBeenCalledWith(['q2'], true);
+  });
 });
