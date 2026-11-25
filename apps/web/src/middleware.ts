@@ -7,6 +7,8 @@ function isPublicPath(pathname: string): boolean {
     pathname.startsWith('/landpage/') ||
     pathname === '/ofertas' ||
     pathname.startsWith('/ofertas/') ||
+    pathname === '/cupons' ||
+    pathname.startsWith('/cupons/') ||
     pathname === '/lp' ||
     pathname.startsWith('/lp/') ||
     pathname.startsWith('/g/') ||

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Flame, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Flame, ShieldCheck, ArrowRight, Ticket } from 'lucide-react';
 
 export function LandingNav() {
   return (
@@ -35,7 +35,14 @@ export function LandingNav() {
         </nav>
 
         {/* CTAs */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Link
+            href="/cupons"
+            className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/60 text-slate-200 text-xs font-semibold transition cursor-pointer"
+          >
+            <Ticket className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Cupons</span>
+          </Link>
           <Link
             href="/ofertas"
             className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/60 text-slate-200 text-xs font-semibold transition cursor-pointer"
