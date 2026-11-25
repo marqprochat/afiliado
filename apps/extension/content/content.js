@@ -506,27 +506,17 @@
       // mas o `src` puro também é uma imagem válida da Amazon (mesmo quando o caminho
       // contém "MEASUREMENT" — é só o nome do bucket de teste A/B da Amazon, não indica
       // formato quebrado) e não deve ser descartado.
-      const imgEl = document.querySelector('#landingImage, #imgBlkFront');
+      const imgEl = document.querySelector('#landingImage, #imgBlkFront, #main-image-container img');
       if (imgEl) {
-        let src = imgEl.getAttribute('data-old-hires');
-        if (!src) {
-          const dynamic = imgEl.getAttribute('data-a-dynamic-image');
-          if (dynamic) {
-            try {
-              const parsed = JSON.parse(dynamic);
-              const keys = Object.keys(parsed);
-              if (keys.length > 0 && keys[0].startsWith('http')) src = keys[0];
-            } catch {}
-          }
-        }
-        if (!src) src = imgEl.getAttribute('src');
-        if (src && src.startsWith('http')) images.push(src);
+        const best = extractBestUrlFromImg(imgEl);
+        if (best) images.push(best);
       }
       if (images.length === 0) {
         const ogImage = document
           .querySelector('meta[property="og:image"]')
           ?.getAttribute('content');
-        if (ogImage && ogImage.startsWith('http')) images.push(ogImage);
+        const upgradedOg = normalizeAndUpgradeImageUrl(ogImage);
+        if (upgradedOg && !isBadProductImageUrl(upgradedOg)) images.push(upgradedOg);
       }
 
       if (document.querySelector('.a-icon-prime, #primeSavingsUpsell')) shipping = 'FREE';
@@ -571,18 +561,23 @@
         discountPct = Math.round(((originalPrice - price) / originalPrice) * 100);
       }
 
-      const imgEl = document.querySelector(
-        '[data-testid="image-selected-thumbnail"], [data-testid="main-image"], img.image-gallery-image',
+      const imgCandidate = document.querySelector(
+        '[data-testid="main-image"] img, [data-testid="main-image"], [data-testid="media-gallery"] img, [data-testid="image-selected-thumbnail"] img, [data-testid="image-selected-thumbnail"], img.image-gallery-image',
       );
+      const imgEl =
+        imgCandidate && imgCandidate.tagName !== 'IMG'
+          ? imgCandidate.querySelector('img')
+          : imgCandidate;
       if (imgEl) {
-        const src = imgEl.getAttribute('src');
-        if (src && src.startsWith('http')) images.push(upgradeMagaluImage(src));
+        const best = extractBestUrlFromImg(imgEl);
+        if (best) images.push(best);
       }
       if (images.length === 0) {
         const ogImage = document
           .querySelector('meta[property="og:image"]')
           ?.getAttribute('content');
-        if (ogImage && ogImage.startsWith('http')) images.push(upgradeMagaluImage(ogImage));
+        const upgradedOg = normalizeAndUpgradeImageUrl(ogImage);
+        if (upgradedOg && !isBadProductImageUrl(upgradedOg)) images.push(upgradedOg);
       }
 
       if (/frete grátis|retira rápido|retira grátis/i.test(document.body.innerText))
@@ -615,8 +610,8 @@
         'img._11-H3t, img.pointer, [class*="product-image"] img',
       );
       if (imgEl) {
-        const src = imgEl.getAttribute('src');
-        if (src && src.startsWith('http')) images.push(src);
+        const best = extractBestUrlFromImg(imgEl);
+        if (best) images.push(best);
       }
 
       if (/frete grátis/i.test(document.body.innerText)) shipping = 'FREE';
@@ -693,19 +688,8 @@
         '[class*="magnifier--image"], [class*="slider--active"] img, [class*="slider--img"] img, [class*="image-view"] img, [class*="gallery"] img, [class*="pdp-mini-info-left"] img, [class*="pdp-info-left"] img, [class*="main-image"] img',
       );
       if (galleryImg) {
-        let src =
-          galleryImg.getAttribute('src') || galleryImg.getAttribute('data-src') || galleryImg.src;
-        if (src) {
-          if (src.startsWith('//')) src = `https:${src}`;
-          if (
-            src.startsWith('http') &&
-            !src.includes('evaluate') &&
-            !src.includes('avatar') &&
-            !src.includes('stars')
-          ) {
-            images.push(src);
-          }
-        }
+        const best = extractBestUrlFromImg(galleryImg);
+        if (best) images.push(best);
       }
 
       // Prioridade 2: Foto da variação de SKU selecionada no modal/página
@@ -714,11 +698,8 @@
           '[class*="sku-item--selected"] img, [class*="sku--selected"] img, [class*="skuItem--selected"] img',
         );
         if (skuImg) {
-          let src = skuImg.getAttribute('src') || skuImg.getAttribute('data-src') || skuImg.src;
-          if (src) {
-            if (src.startsWith('//')) src = `https:${src}`;
-            if (src.startsWith('http')) images.push(src);
-          }
+          const best = extractBestUrlFromImg(skuImg);
+          if (best) images.push(best);
         }
       }
 
@@ -732,8 +713,9 @@
           (ogImage.includes('HTB18eCBQXXXXXXfXXXX760XFXXXa') ||
             ogImage.includes('logo') ||
             ogImage.includes('icon'));
-        if (ogImage && ogImage.startsWith('http') && !isGenericOgImage) {
-          images.push(ogImage);
+        const upgradedOg = normalizeAndUpgradeImageUrl(ogImage);
+        if (upgradedOg && !isBadProductImageUrl(upgradedOg) && !isGenericOgImage) {
+          images.push(upgradedOg);
         }
       }
 
@@ -743,11 +725,8 @@
           'img.AIC-MI-img, [class*="AIC-MI-container"] img, [class*="productContainer"] img, [class*="productSliderList"] img, [class*="product-img"] img, [class*="product-image"] img, [class*="detail-gallery"] img, [class*="item-image"] img',
         );
         if (cardImg) {
-          let src = cardImg.getAttribute('src') || cardImg.getAttribute('data-src') || cardImg.src;
-          if (src) {
-            if (src.startsWith('//')) src = `https:${src}`;
-            if (src.startsWith('http')) images.push(src);
-          }
+          const best = extractBestUrlFromImg(cardImg);
+          if (best) images.push(best);
         }
       }
 
@@ -851,50 +830,209 @@
     return false;
   }
 
-  // O CDN do Magalu (mlcdn) serve a mesma imagem em vários tamanhos pelo trecho "/LxA/" do
-  // caminho; a página usa miniaturas (ex.: 200x200) e guardar essa URL deixa a foto embaçada.
-  // Trocar o trecho por um tamanho grande devolve a imagem em alta resolução.
-  function upgradeMagaluImage(url) {
-    if (typeof url !== 'string' || !/\.mlcdn\.com\.br\//.test(url)) return url;
-    return url.replace(/(\.mlcdn\.com\.br\/)\d+x\d+\//, '$11500x1500/');
+  // Desembrulha proxies de imagem (ex: /_next/image?url=...) e troca URLs de miniatura
+  // por versões em alta resolução nos CDNs dos marketplaces suportados (Magalu, Amazon,
+  // Shopee, AliExpress).
+  function normalizeAndUpgradeImageUrl(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== 'string') return null;
+    let url = rawUrl.trim();
+    if (!url || url.startsWith('data:') || url.startsWith('blob:')) return null;
+    if (url.startsWith('//')) url = `https:${url}`;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      try {
+        url = new URL(url, window.location.href).toString();
+      } catch {
+        return null;
+      }
+    }
+
+    // Next.js Image Optimization proxy (comum no Magalu e parceiros): extrai a URL original
+    try {
+      const parsed = new URL(url);
+      if (parsed.pathname === '/_next/image' && parsed.searchParams.get('url')) {
+        const inner = parsed.searchParams.get('url').trim();
+        if (inner.startsWith('//')) url = `https:${inner}`;
+        else if (inner.startsWith('http://') || inner.startsWith('https://')) url = inner;
+        else if (inner.startsWith('/')) url = new URL(inner, parsed.origin).toString();
+      }
+    } catch {}
+
+    // Magalu (mlcdn): troca /LxA/ (ex: /200x200/, /280x210/) por /1500x1500/
+    if (/\.mlcdn\.com\.br\//i.test(url)) {
+      url = url.replace(/(\.mlcdn\.com\.br\/(?:fit-in\/)?)\d+x\d+\//i, '$11500x1500/');
+    }
+
+    // Amazon (media-amazon / ssl-images-amazon): troca modificador de miniatura
+    // (ex: ._AC_UL320_.jpg, ._AC_SR160,160_.jpg, ._SS40_.jpg) por ._AC_SL1500_.
+    if (/(?:media-amazon\.com|ssl-images-amazon\.com|images-amazon\.com)\/images\/[IP]\//i.test(url)) {
+      url = url.replace(
+        /(\/images\/[IP]\/[^/?#]+?)\._[^/]+_\.(jpe?g|png|webp)(\?.*)?$/i,
+        '$1._AC_SL1500_.$2$3',
+      );
+    }
+
+    // Shopee: remove sufixo _tn de miniatura
+    if (/susercontent\.com|shopee\.com\.br/i.test(url)) {
+      url = url.replace(/_tn(\.(?:jpe?g|png|webp))?(\?.*)?$/i, '$1$2');
+    }
+
+    // AliExpress: remove sufixo _LxA após a extensão real
+    if (/alicdn\.com/i.test(url)) {
+      url = url.replace(/\.(jpe?g|png|webp)_\d+x\d+[^/?#]*(\?.*)?$/i, '.$1$2');
+    }
+
+    return url;
   }
 
-  // Helper para extrair imagem de um container/card de produto em listagens de busca,
-  // com suporte a lazy-load (data-src, data-original, data-lazy-src, data-zoom, srcset etc.)
-  // e descarte de placeholders vazios / pixels data:.
-  function extractCardImage(container) {
-    if (!container) return null;
-    const imgEls = Array.from(container.querySelectorAll('img'));
-    for (const img of imgEls) {
-      const candidates = [
-        img.getAttribute('src'),
-        img.getAttribute('data-src'),
-        img.getAttribute('data-original'),
-        img.getAttribute('data-lazy-src'),
-        img.getAttribute('data-old-hires'),
-        img.getAttribute('data-zoom'),
-        img.currentSrc,
-        img.src,
-      ];
+  function isBadProductImageUrl(url) {
+    if (!url || typeof url !== 'string') return true;
+    if (!/^https?:\/\//i.test(url)) return true;
+    // Assets de UI da Amazon (selos Prime, estrelas, pixels transparentes) ficam em /images/G/
+    if (/(?:media-amazon\.com|ssl-images-amazon\.com|images-amazon\.com)\/images\/G\//i.test(url)) {
+      return true;
+    }
+    return /(?:transparent-pixel|grey-pixel|1x1|spacer|placeholder|loading|spinner|evaluate|avatar|stars|rating|sprite|favicon|prime-logo|prime_badge|selo-|bandeira)/i.test(
+      url,
+    );
+  }
 
-      const srcset = img.getAttribute('srcset') || img.getAttribute('data-srcset');
-      if (srcset) {
-        const firstSrc = srcset.split(',')[0].trim().split(/\s+/)[0];
-        if (firstSrc) candidates.push(firstSrc);
-      }
-
-      for (let url of candidates) {
-        if (!url || typeof url !== 'string') continue;
-        url = url.trim();
-        if (url.startsWith('data:') || url.startsWith('blob:')) continue;
-        if (url.startsWith('//')) url = `https:${url}`;
-        if (url.startsWith('http://') || url.startsWith('https://')) {
-          if (url.includes('evaluate') || url.includes('avatar') || url.includes('stars')) continue;
-          return upgradeMagaluImage(url);
+  // Escolhe a maior resolução em um srcset / data-srcset sem quebrar URLs que contêm
+  // vírgula nos parâmetros (ex: Amazon ._AC_SR160,160_.jpg).
+  function parseSrcsetBest(srcset) {
+    if (!srcset || typeof srcset !== 'string') return null;
+    const entries = srcset.trim().split(/,\s+(?=\S)/);
+    let bestUrl = null;
+    let bestScore = -1;
+    for (const entry of entries) {
+      const parts = entry.trim().split(/\s+/);
+      const rawUrl = parts[0];
+      if (!rawUrl || rawUrl.startsWith('data:') || rawUrl.startsWith('blob:')) continue;
+      let score = 1;
+      const desc = parts[1];
+      if (desc) {
+        const num = parseFloat(desc);
+        if (!isNaN(num)) {
+          score = desc.endsWith('w') ? num : desc.endsWith('x') ? num * 1000 : num;
         }
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestUrl = rawUrl;
+      }
+    }
+    return bestUrl;
+  }
+
+  function parseAmazonDynamicImageBest(raw) {
+    if (!raw || typeof raw !== 'string') return null;
+    try {
+      const parsed = JSON.parse(raw);
+      let bestUrl = null;
+      let bestArea = -1;
+      for (const [u, dims] of Object.entries(parsed)) {
+        if (!u || !u.startsWith('http')) continue;
+        const area = Array.isArray(dims) && dims.length >= 2 ? Number(dims[0]) * Number(dims[1]) : 0;
+        if (area > bestArea) {
+          bestArea = area;
+          bestUrl = u;
+        }
+      }
+      return bestUrl;
+    } catch {
+      return null;
+    }
+  }
+
+  // Extrai a melhor URL de um elemento <img> priorizando atributos de alta resolução e
+  // lazy-load (data-old-hires, data-zoom, data-a-dynamic-image, srcset, data-src) antes do
+  // `src` padrão (que frequentemente traz só um preview borrado ou placeholder).
+  function extractBestUrlFromImg(img) {
+    if (!img) return null;
+    const candidates = [
+      img.getAttribute('data-old-hires'),
+      img.getAttribute('data-zoom-image'),
+      img.getAttribute('data-zoom'),
+      img.getAttribute('data-large'),
+      parseAmazonDynamicImageBest(img.getAttribute('data-a-dynamic-image')),
+    ];
+
+    if (img.parentElement && img.parentElement.tagName === 'PICTURE') {
+      const sources = img.parentElement.querySelectorAll('source');
+      for (const source of sources) {
+        const sBest = parseSrcsetBest(
+          source.getAttribute('data-srcset') || source.getAttribute('srcset'),
+        );
+        if (sBest) candidates.push(sBest);
+      }
+    }
+
+    const srcsetBest = parseSrcsetBest(
+      img.getAttribute('data-srcset') || img.getAttribute('srcset'),
+    );
+    if (srcsetBest) candidates.push(srcsetBest);
+
+    candidates.push(
+      img.getAttribute('data-src'),
+      img.getAttribute('data-original'),
+      img.getAttribute('data-lazy-src'),
+      img.getAttribute('data-lazy'),
+      img.currentSrc,
+      img.getAttribute('src'),
+      img.src,
+    );
+
+    for (const raw of candidates) {
+      const upgraded = normalizeAndUpgradeImageUrl(raw);
+      if (upgraded && !isBadProductImageUrl(upgraded)) {
+        return upgraded;
       }
     }
     return null;
+  }
+
+  // Helper para extrair a imagem principal de um container/card de produto em listagens,
+  // ranqueando os <img> para evitar selos/swatches/ícones e priorizando alta resolução.
+  function extractCardImage(container) {
+    if (!container) return null;
+    const imgEls = Array.from(container.querySelectorAll('img'));
+    let bestUrl = null;
+    let bestScore = -1;
+
+    for (const img of imgEls) {
+      const cls = `${img.className || ''} ${img.id || ''}`;
+      if (/(?:badge|selo|swatch|stars|rating|avatar|logo|prime|flag)/i.test(cls)) continue;
+
+      const attrW = parseInt(img.getAttribute('width') || '', 10);
+      const attrH = parseInt(img.getAttribute('height') || '', 10);
+      if ((!isNaN(attrW) && attrW > 0 && attrW < 40) || (!isNaN(attrH) && attrH > 0 && attrH < 40)) {
+        continue;
+      }
+
+      const rect = typeof img.getBoundingClientRect === 'function' ? img.getBoundingClientRect() : null;
+      const rw = rect ? rect.width : img.clientWidth || 0;
+      const rh = rect ? rect.height : img.clientHeight || 0;
+      if (rw > 0 && rw < 40 && rh > 0 && rh < 40) continue;
+
+      const url = extractBestUrlFromImg(img);
+      if (!url) continue;
+
+      let score = 0;
+      if (
+        img.matches?.(
+          'img.s-image, [data-testid="image"], [data-testid*="product-image"] img, .ui-search-result-image__element, .poly-component__picture, .dcl-product-image-container img',
+        )
+      ) {
+        score += 1_000_000;
+      }
+      const area = rw > 0 && rh > 0 ? rw * rh : (img.naturalWidth || 0) * (img.naturalHeight || 0);
+      score += area;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestUrl = url;
+      }
+    }
+    return bestUrl;
   }
 
   // Extrai preço/preço original de um card usando seletores estruturados específicos do
@@ -1070,9 +1208,10 @@
       // onde a âncora da imagem e a do título apontam para ASINs de variações diferentes).
       // Seletores exatos (não `*=`) para não bater com a própria âncora, que no Magalu tem
       // data-testid="product-card-link" (conteria "product-card" num match parcial).
-      const structuralCard = a.closest(
-        '[data-testid="product-card"], [data-testid="product-card-container"], [data-asin]',
-      );
+      const structuralCard =
+        a.closest(
+          '[data-testid="product-card"], [data-testid="product-card-container"], [data-component-type="s-search-result"][data-asin]:not([data-asin=""]), .s-result-item[data-asin]:not([data-asin=""]), .dcl-product-wrapper, .ui-search-layout__item, .poly-card',
+        ) || a.closest('[data-asin]:not([data-asin=""])');
 
       // Prioridade 2 (fallback p/ marketplaces sem marcação estrutural): sobe até achar um
       // ancestral com imagem + valor em R$ (até 6 níveis), parando assim que o próximo
