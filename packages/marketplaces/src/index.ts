@@ -18,6 +18,7 @@ export * from './awin/offers';
 export * from './awin/programmes';
 export * from './awin/channel-refs';
 export * from './awin/transactions';
+export * from './awin/image-fallback';
 export * from './aliexpress';
 export * from './aliexpress/coupons';
 export * from './coupons';
