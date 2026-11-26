@@ -245,6 +245,7 @@ export default function ProdutosPage() {
 
       {effectiveSub === 'import' ? (
         <ImportPanel
+          source={source}
           onImported={(r) => {
             setProducts(r.products);
             setSelected(new Set(r.products.map((p) => p.id)));

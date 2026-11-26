@@ -3,9 +3,20 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { apiFetch } from '@/lib/api';
+import { copyToClipboard } from '@/lib/clipboard';
 import { useApiMutation } from '@/lib/mutations';
 import type { ApiProduct } from '@/lib/types';
-import type { ProductsImportItem } from '@afilados/shared';
+import type { AwinLinksBatchItem, ProductsImportItem } from '@afilados/shared';
+import { toast } from 'sonner';
+
+/** Limite da rota de lote da Awin (`POST /marketplaces/awin/links/batch`). */
+const AWIN_BATCH_MAX = 200;
+
+/** URLs únicas do texto colado (uma por linha, planilha ou texto solto), na ordem. */
+export function extractUrls(text: string): string[] {
+  const found = text.match(/https?:\/\/[^\s,;"'<>]+/gi) ?? [];
+  return [...new Set(found)];
+}
 
 export type ImportResult = {
   products: ApiProduct[];
@@ -44,8 +55,32 @@ function parsePastedText(text: string): {
   return { textPayload: text.trim(), droppedNoPrice: 0 };
 }
 
-export function ImportPanel({ onImported }: { onImported: (r: ImportResult) => void }) {
+export function ImportPanel({
+  onImported,
+  source,
+}: {
+  onImported: (r: ImportResult) => void;
+  /** Marketplace selecionado; na Awin aparece a conversão de links em lote. */
+  source?: string;
+}) {
   const [text, setText] = useState('');
+  const [awinLinks, setAwinLinks] = useState<AwinLinksBatchItem[]>([]);
+  const awinBatch = useApiMutation(
+    (urls: string[]) =>
+      apiFetch<{ items: AwinLinksBatchItem[] }>('/marketplaces/awin/links/batch', {
+        method: 'POST',
+        json: { items: urls.map((url) => ({ url })) },
+      }),
+    { onSuccess: (r) => setAwinLinks(r.items) },
+  );
+  const awinUrls = source === 'AWIN' ? extractUrls(text) : [];
+
+  async function copyAwinLinks() {
+    const links = awinLinks.flatMap((l) => (l.url ? [l.url] : []));
+    if (links.length === 0) return;
+    await copyToClipboard(links.join('\n'));
+    toast.success(`${links.length} link(s) copiado(s)`);
+  }
   const [unsupported, setUnsupported] = useState<ImportResult['unsupported']>([]);
   const [droppedNoPrice, setDroppedNoPrice] = useState(0);
   const imp = useApiMutation(
@@ -86,7 +121,7 @@ export function ImportPanel({ onImported }: { onImported: (r: ImportResult) => v
           'Ou envie o arquivo Excel (.xlsx, .xls) ou CSV diretamente pelo botão abaixo.'
         }
       />
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button
           className="bg-brand text-white hover:bg-brand/90"
           disabled={imp.isPending || !text.trim()}
@@ -94,6 +129,16 @@ export function ImportPanel({ onImported }: { onImported: (r: ImportResult) => v
         >
           {imp.isPending ? 'Importando…' : 'Importar produtos'}
         </Button>
+        {source === 'AWIN' && (
+          <Button
+            variant="outline"
+            disabled={awinBatch.isPending || awinUrls.length === 0 || awinUrls.length > AWIN_BATCH_MAX}
+            onClick={() => awinBatch.mutate(awinUrls)}
+            title="Gera os links de afiliado da Awin de todas as URLs coladas de uma vez"
+          >
+            {awinBatch.isPending ? 'Gerando…' : 'Gerar links Awin'}
+          </Button>
+        )}
         <label className="cursor-pointer text-sm text-brand underline hover:text-brand/80">
           ou enviar Planilha (.xlsx, .xls, .csv)
           <input
@@ -111,6 +156,37 @@ export function ImportPanel({ onImported }: { onImported: (r: ImportResult) => v
           />
         </label>
       </div>
+      {source === 'AWIN' && awinUrls.length > AWIN_BATCH_MAX && (
+        <p className="text-xs text-amber-300">
+          Cole no máximo {AWIN_BATCH_MAX} links por vez para gerar os links da Awin.
+        </p>
+      )}
+      {awinLinks.length > 0 && (
+        <div className="space-y-2 rounded-md border border-border bg-surface-2 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium">
+              Links da Awin ({awinLinks.filter((l) => l.url).length} de {awinLinks.length})
+            </p>
+            <Button size="sm" variant="secondary" onClick={() => void copyAwinLinks()}>
+              Copiar todos
+            </Button>
+          </div>
+          <ul className="max-h-60 space-y-1.5 overflow-y-auto text-xs">
+            {awinLinks.map((l) => (
+              <li key={l.input} className="min-w-0">
+                <p className="truncate text-muted-foreground" title={l.input}>
+                  {l.input}
+                </p>
+                {l.url ? (
+                  <p className="break-all text-foreground">{l.url}</p>
+                ) : (
+                  <p className="text-amber-300">{l.error}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {droppedNoPrice > 0 && (
         <p className="text-xs text-amber-300">
           {droppedNoPrice} produto(s) ignorado(s) por não terem preço detectado.
