@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Search, Flame, Sparkles, Filter, ShieldCheck, RefreshCw, ArrowRight, Database } from 'lucide-react';
+import { Search, Flame, Sparkles, ShieldCheck, RefreshCw, ArrowRight } from 'lucide-react';
 import { LandingNav } from '@/components/landing/landing-nav';
 import { LandingFooter } from '@/components/landing/landing-footer';
 import { DealCard, type DealCardProps } from '@/components/deals/deal-card';
@@ -14,7 +14,6 @@ export default function OfertasPage() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [allTimeLowOnly, setAllTimeLowOnly] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
-  const [syncing, setSyncing] = useState<boolean>(false);
 
   function loadDeals() {
     setLoading(true);
@@ -50,22 +49,9 @@ export default function OfertasPage() {
     loadDeals();
   }, [searchQuery, selectedCategory, allTimeLowOnly]);
 
-  async function handleManualSync() {
-    setSyncing(true);
-    try {
-      await fetch('/api/v1/deals/sync', { method: 'POST' });
-      loadCategories();
-      loadDeals();
-    } catch {
-      // ignore
-    } finally {
-      setSyncing(false);
-    }
-  }
-
   return (
     <div className="min-h-screen bg-[#080a0f] text-slate-100 font-sans selection:bg-[#25D366] selection:text-black flex flex-col">
-      <LandingNav />
+      <LandingNav minimal />
 
       {/* Hero Section */}
       <section className="pt-28 pb-10 px-4 sm:px-6 max-w-6xl mx-auto w-full text-center">
@@ -134,16 +120,6 @@ export default function OfertasPage() {
               {c.category} ({c.count})
             </button>
           ))}
-
-          <button
-            onClick={handleManualSync}
-            disabled={syncing}
-            className="px-3 py-1.5 rounded-full text-xs font-bold transition cursor-pointer border bg-slate-800/80 text-slate-300 border-slate-700 hover:text-emerald-400 hover:border-emerald-500/40 flex items-center gap-1.5 disabled:opacity-50"
-            title="Sincronizar produtos importados de Marketplaces e Awin"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin text-emerald-400' : ''}`} />
-            <span>{syncing ? 'Sincronizando...' : 'Atualizar Catálogo'}</span>
-          </button>
         </div>
       </section>
 
@@ -157,31 +133,22 @@ export default function OfertasPage() {
         ) : deals.length === 0 ? (
           <div className="text-center py-16 bg-[#121622]/50 border border-slate-800 rounded-3xl p-8 max-w-lg mx-auto">
             <ShieldCheck className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-            <h3 className="text-lg font-bold text-white mb-2">Nenhum produto exibido no momento</h3>
+            <h3 className="text-lg font-bold text-white mb-2">Nenhuma oferta encontrada no momento</h3>
             <p className="text-slate-400 text-xs mb-6 leading-relaxed">
-              Você já importou produtos ou catálogo da Awin? Clique no botão abaixo para indexar e carregar todos os produtos existentes agora mesmo na vitrine!
+              Tente ajustar os filtros ou volte em instantes para conferir novas ofertas.
             </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-              <button
-                onClick={handleManualSync}
-                disabled={syncing}
-                className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-black font-extrabold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition cursor-pointer disabled:opacity-50"
-              >
-                <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-                <span>{syncing ? 'Carregando Produtos...' : 'Sincronizar Meus Produtos Importados'}</span>
-              </button>
-
+            {(searchQuery || selectedCategory !== 'ALL' || allTimeLowOnly) && (
               <button
                 onClick={() => {
                   setSearchQuery('');
                   setSelectedCategory('ALL');
                   setAllTimeLowOnly(false);
                 }}
-                className="w-full sm:w-auto px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition cursor-pointer"
               >
                 Limpar Filtros
               </button>
-            </div>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
@@ -214,7 +181,7 @@ export default function OfertasPage() {
         </div>
       </main>
 
-      <LandingFooter />
+      <LandingFooter minimal />
     </div>
   );
 }

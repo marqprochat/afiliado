@@ -3,9 +3,13 @@
 import React from 'react';
 import { Youtube, Instagram, ExternalLink, ShieldCheck, Heart } from 'lucide-react';
 
-export function LandingFooter() {
+interface LandingFooterProps {
+  minimal?: boolean;
+}
+
+export function LandingFooter({ minimal = false }: LandingFooterProps) {
   return (
-    <footer className="border-t border-white/10 bg-[#050609] py-14 px-4 sm:px-6 lg:px-8">
+    <footer className={`border-t border-white/10 bg-[#050609] ${minimal ? 'py-8' : 'py-14'} px-4 sm:px-6 lg:px-8`}>
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-8">
         {/* Brand & Authority */}
         <div className="flex flex-col items-center md:items-start gap-2">
@@ -19,41 +23,45 @@ export function LandingFooter() {
               COMUNIDADE VIP
             </span>
           </div>
-          <p className="text-slate-500 text-xs text-center md:text-left max-w-sm">
-            Curadoria especializada e radar diário dos maiores descontos, cupons e bugs de tecnologia da internet.
-          </p>
+          {!minimal && (
+            <p className="text-slate-500 text-xs text-center md:text-left max-w-sm">
+              Curadoria especializada e radar diário dos maiores descontos, cupons e bugs de tecnologia da internet.
+            </p>
+          )}
         </div>
 
         {/* Channels */}
-        <div className="flex flex-wrap items-center justify-center gap-6 text-xs text-slate-400">
-          <a
-            href="https://www.youtube.com/channel/UCIhmXuqtOQVJCPbh_tXns1g"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-red-400 transition flex items-center gap-1.5 font-bold"
-          >
-            <Youtube className="w-4 h-4 text-red-500" />
-            <span>YouTube (+3.5M)</span>
-          </a>
-          <a
-            href="https://www.instagram.com/dudurocha.oficial"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-pink-400 transition flex items-center gap-1.5 font-bold"
-          >
-            <Instagram className="w-4 h-4 text-pink-500" />
-            <span>Instagram</span>
-          </a>
-          <a
-            href="https://dudurochatec.com.br/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-white transition flex items-center gap-1.5 font-bold"
-          >
-            <span>dudurochatec.com.br</span>
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
-        </div>
+        {!minimal && (
+          <div className="flex flex-wrap items-center justify-center gap-6 text-xs text-slate-400">
+            <a
+              href="https://www.youtube.com/channel/UCIhmXuqtOQVJCPbh_tXns1g"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-red-400 transition flex items-center gap-1.5 font-bold"
+            >
+              <Youtube className="w-4 h-4 text-red-500" />
+              <span>YouTube (+3.5M)</span>
+            </a>
+            <a
+              href="https://www.instagram.com/dudurocha.oficial"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-pink-400 transition flex items-center gap-1.5 font-bold"
+            >
+              <Instagram className="w-4 h-4 text-pink-500" />
+              <span>Instagram</span>
+            </a>
+            <a
+              href="https://dudurochatec.com.br/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-white transition flex items-center gap-1.5 font-bold"
+            >
+              <span>dudurochatec.com.br</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
+        )}
 
         {/* Copyright */}
         <div className="flex flex-col items-center md:items-end text-xs text-slate-500 gap-1 font-mono">
