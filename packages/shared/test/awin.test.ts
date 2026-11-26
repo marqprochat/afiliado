@@ -42,4 +42,23 @@ describe('mapAwinCatalogRowToProductData', () => {
     expect(result.originalPrice).toBeUndefined();
     expect(result.images).toEqual([]);
   });
+
+  it('usa o nome da loja (advertiserName) como shopName quando informado', () => {
+    const base = {
+      feedId: 'f1',
+      externalId: 'p3',
+      title: 'Protetor',
+      price: 30,
+      originalPrice: null,
+      imageUrl: null,
+      deepLink: 'https://www.awin1.com/cread.php?awinmid=1&awinaffid=2&ued=x',
+      raw: {},
+    };
+    expect(mapAwinCatalogRowToProductData({ ...base, advertiserName: 'Drogal BR' }).shopName).toBe(
+      'Drogal BR',
+    );
+    expect(
+      mapAwinCatalogRowToProductData({ ...base, advertiserName: null }).shopName,
+    ).toBeUndefined();
+  });
 });

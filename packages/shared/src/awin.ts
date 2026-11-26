@@ -9,6 +9,8 @@ export interface AwinCatalogRow {
   imageUrl: string | null;
   deepLink: string;
   raw: unknown;
+  /** Nome da loja no feed; vira `shopName` (usado no ranking por EPC e no filtro da lista). */
+  advertiserName?: string | null;
 }
 
 export function mapAwinCatalogRowToProductData(row: AwinCatalogRow): ProductData {
@@ -23,6 +25,7 @@ export function mapAwinCatalogRowToProductData(row: AwinCatalogRow): ProductData
     images: row.imageUrl ? [row.imageUrl] : [],
     shipping: 'UNKNOWN',
     originalUrl: row.deepLink,
+    ...(row.advertiserName?.trim() ? { shopName: row.advertiserName.trim() } : {}),
     raw: row.raw,
   };
 }

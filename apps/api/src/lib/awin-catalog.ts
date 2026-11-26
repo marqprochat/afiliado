@@ -73,8 +73,10 @@ function toRow(r: {
   imageUrl: string | null;
   deepLink: string;
   raw: unknown;
+  advertiserName?: string | null;
 }) {
   return {
+    advertiserName: r.advertiserName ?? null,
     feedId: r.feedId,
     externalId: r.externalId,
     title: r.title,

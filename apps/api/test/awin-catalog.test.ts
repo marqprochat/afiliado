@@ -72,6 +72,8 @@ describe('searchAwinCatalog', () => {
     const found = await searchAwinCatalog(db, 'fralda', 20, 'Drogal');
     expect(found).toHaveLength(1);
     expect(found[0]!.title).toBe('Fralda Pampers M');
+    // O nome da loja vai como shopName (ranking por EPC e filtro da lista na web).
+    expect(found[0]!.shopName).toBe('Drogal BR');
   });
 
   it('não retorna nada para outro tenant', async () => {
