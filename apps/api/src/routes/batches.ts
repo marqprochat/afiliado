@@ -138,17 +138,13 @@ export async function batchesRoutes(app: FastifyInstance) {
       throw new ApiError('WA_NOT_CONNECTED', 'WhatsApp não está conectado', 400);
     await assertTargets(req, session.id, body);
 
-    // produtos que já estão em um lote (não cancelado) não entram em outro
-    const notBatched = {
-      product: { batchItems: { none: { batch: { status: { not: 'CANCELLED' as const } } } } },
-    };
     const queueItems = body.productIds
       ? await req.db.queueItem.findMany({
-          where: { productId: { in: body.productIds }, ...notBatched },
+          where: { productId: { in: body.productIds } },
           include: { product: true },
         })
       : await req.db.queueItem.findMany({
-          where: { selected: true, status: 'PENDING', ...notBatched },
+          where: { selected: true, status: 'PENDING' },
           include: { product: true },
         });
     if (queueItems.length === 0) throw ApiError.validation('Nenhum produto selecionado na fila');

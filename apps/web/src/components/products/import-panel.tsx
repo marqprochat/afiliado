@@ -145,8 +145,11 @@ export function ImportPanel({
             type="file"
             accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
             className="hidden"
+            disabled={imp.isPending}
             onChange={(e) => {
               const f = e.target.files?.[0];
+              // Limpa o value para permitir reenviar o mesmo arquivo CSV/planilha quantas vezes quiser
+              e.target.value = '';
               if (f) {
                 const fd = new FormData();
                 fd.append('file', f);

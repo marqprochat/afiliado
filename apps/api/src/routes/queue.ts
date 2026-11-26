@@ -18,19 +18,13 @@ export async function queueRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireAuth);
 
   app.get('/queue', async (req) => {
-    // A lista mostra só o que ainda não foi para um lote (o resto vive no gerenciador do lote);
-    // `count` segue contando tudo, inclusive o que já está em lotes.
-    const [items, count] = await Promise.all([
-      req.db.queueItem.findMany({
-        where: { product: { batchItems: { none: { batch: { status: { not: 'CANCELLED' } } } } } },
-        include: { product: true },
-        orderBy: { addedAt: 'asc' },
-      }),
-      req.db.queueItem.count(),
-    ]);
+    const items = await req.db.queueItem.findMany({
+      include: { product: true },
+      orderBy: { addedAt: 'asc' },
+    });
     return {
       items: items.map((i) => ({ ...i, product: toApiProduct(i.product) })),
-      count,
+      count: items.length,
     };
   });
 
