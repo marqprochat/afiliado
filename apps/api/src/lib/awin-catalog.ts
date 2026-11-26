@@ -17,6 +17,7 @@ interface ImageRow {
   imageUrl: string | null;
   imageOriginalUrl: string | null;
   deepLink: string;
+  title: string;
 }
 
 /**
@@ -37,7 +38,11 @@ async function fixDeadImages<T extends ImageRow>(
   const fixed = await runWithBudget(
     pending,
     async (r) => {
-      const res = await resolveImage({ imageUrl: r.imageUrl, deepLink: r.deepLink });
+      const res = await resolveImage({
+        imageUrl: r.imageUrl,
+        deepLink: r.deepLink,
+        title: r.title,
+      });
       if (res.status !== 'resolved' || !res.url || res.url === r.imageUrl) return undefined;
       await db.awinCatalogProduct.updateMany({
         where: { id: r.id, imageUrl: r.imageUrl },

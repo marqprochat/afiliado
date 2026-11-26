@@ -70,7 +70,7 @@ describe('fixAwinDealImages', () => {
       },
     });
 
-    expect(calls).toEqual([{ imageUrl: DEAD, deepLink: DEEP_LINK }]);
+    expect(calls).toEqual([{ imageUrl: DEAD, deepLink: DEEP_LINK, title: 'Fralda Pampers RN' }]);
     expect(fixed.imageUrl).toBe(FIXED);
     expect(fixed.images).toEqual([FIXED]);
     const byStore = Object.fromEntries(fixed.listings.map((l) => [l.storeName, l.imageUrl]));

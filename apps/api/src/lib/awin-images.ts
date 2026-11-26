@@ -1,5 +1,6 @@
 import {
   resolveFallbackImage,
+  type FallbackImageInput,
   type FallbackImageResult,
   type ImageFallbackCache,
 } from '@afilados/marketplaces';
@@ -13,10 +14,7 @@ export const redisImageCache: ImageFallbackCache = {
   },
 };
 
-export type ResolveAwinImage = (input: {
-  imageUrl: string | null;
-  deepLink: string;
-}) => Promise<FallbackImageResult>;
+export type ResolveAwinImage = (input: FallbackImageInput) => Promise<FallbackImageResult>;
 
 /** Imagem do produto Awin (a do feed, ou a da loja se a do feed saiu do ar), com cache no Redis. */
 export const resolveAwinImage: ResolveAwinImage = (input) =>

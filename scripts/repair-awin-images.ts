@@ -5,7 +5,8 @@
  * Verifica as imagens do catálogo Awin (AwinCatalogProduct) e das ofertas Awin do site
  * (ProductListing + MasterProduct): primeiro uma amostra por host (host com a amostra toda no ar
  * é pulado), depois URL a URL. Para cada imagem fora do ar procura a imagem atual na loja (VTEX)
- * pelo link de afiliado.
+ * sem nunca requisitar o link de rastreio da Awin (loja pelo `ued` ou pelo id do anunciante; slug
+ * pelo `ued`, pelo nome do arquivo da imagem ou busca pelo título).
  *
  * Dry-run por padrão (só imprime); `--apply` grava. `--advertiser=<id>` limita a um anunciante;
  * `--limit=<n>` limita quantos registros de cada tabela são lidos.
@@ -57,6 +58,7 @@ interface Candidate {
   id: string;
   imageUrl: string;
   deepLink: string;
+  title: string;
   imageOriginalUrl?: string | null;
 }
 
@@ -78,14 +80,14 @@ async function main() {
   // Catálogo: só as que ainda não foram trocadas (imageUrl = imagem do feed).
   const catalog = await prisma.awinCatalogProduct.findMany({
     where: { imageUrl: { not: null }, ...(advertiser ? { advertiserId: advertiser } : {}) },
-    select: { id: true, imageUrl: true, imageOriginalUrl: true, deepLink: true },
+    select: { id: true, imageUrl: true, imageOriginalUrl: true, deepLink: true, title: true },
     ...(limit ? { take: limit } : {}),
   });
   const advertiserRe = advertiser ? new RegExp(`[?&](m|awinmid|mid)=${advertiser}(&|$)`) : null;
   const listings = (
     await prisma.productListing.findMany({
       where: { source: 'AWIN', imageUrl: { not: null } },
-      select: { id: true, imageUrl: true, originalUrl: true },
+      select: { id: true, imageUrl: true, originalUrl: true, title: true },
       ...(limit && !advertiserRe ? { take: limit } : {}),
     })
   )
@@ -100,6 +102,7 @@ async function main() {
         id: r.id,
         imageUrl: r.imageUrl!,
         deepLink: r.deepLink,
+        title: r.title,
         imageOriginalUrl: r.imageOriginalUrl,
       })),
     ...listings.map((l) => ({
@@ -107,6 +110,7 @@ async function main() {
       id: l.id,
       imageUrl: l.imageUrl!,
       deepLink: l.originalUrl,
+      title: l.title,
     })),
   ];
   console.log(
@@ -139,7 +143,8 @@ async function main() {
   const suspects = candidates.filter((c) => suspectHosts.has(hostOf(c.imageUrl)));
   const outcomes = await runWithBudget(
     suspects,
-    async (c) => resolveFallbackImage({ imageUrl: c.imageUrl, deepLink: c.deepLink }, deps),
+    async (c) =>
+      resolveFallbackImage({ imageUrl: c.imageUrl, deepLink: c.deepLink, title: c.title }, deps),
     { concurrency: CONCURRENCY, budgetMs: NO_BUDGET },
   );
 

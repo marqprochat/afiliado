@@ -1,20 +1,24 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   isImageAlive,
   resolveMerchantUrl,
   resolveVtexImage,
   resolveFallbackImage,
+  slugFromImageUrl,
+  titlesMatch,
+  defaultMerchantOrigins,
   runWithBudget,
   type ImageFallbackCache,
 } from '../src/awin/image-fallback';
 
-const DEAD_IMG =
-  'https://io.convertiez.com.br/m/drogal/shop/products/images/9992251/large/fralda_31925.jpg';
+const SLUG = 'fraldas-pampers-premium-care-rn-36';
+const DEAD_IMG = `https://io.convertiez.com.br/m/drogal/shop/products/images/9992251/large/${SLUG}_31925.jpg`;
 const PCLICK = 'https://www.awin1.com/pclick.php?p=36610899908&a=691887&m=68224';
-const MERCHANT = 'https://www.drogal.com.br/fraldas-pampers-premium-care-rn-36/p?utm_source=awin';
-const VTEX_API =
-  'https://www.drogal.com.br/api/catalog_system/pub/products/search/fraldas-pampers-premium-care-rn-36/p';
+const MERCHANT = `https://www.drogal.com.br/${SLUG}/p?utm_source=awin`;
+const VTEX_API = `https://www.drogal.com.br/api/catalog_system/pub/products/search/${SLUG}/p`;
 const VTEX_IMG = 'https://drogal.vteximg.com.br/arquivos/ids/265637/178278.jpg?v=1';
+const TITLE = 'Fraldas Pampers Recém Nascido Premium Care Rn 36 Unidades';
+const FT_API = `https://www.drogal.com.br/api/catalog_system/pub/products/search?ft=${encodeURIComponent(TITLE)}&_from=0&_to=0`;
 
 /** DNS falso: tudo resolve para um IP público, exceto hosts "internos". */
 const lookup = async (host: string) =>
@@ -24,9 +28,17 @@ const lookup = async (host: string) =>
 
 type Handler = (url: string, init: RequestInit) => Response | Promise<Response>;
 
+/** Toda URL pedida a qualquer fetch falso; nenhuma pode ser da Awin. */
+const requested: string[] = [];
+afterEach(() => {
+  expect(requested.filter((u) => /(^|\.)awin1\.com$/i.test(new URL(u).hostname))).toEqual([]);
+  requested.length = 0;
+});
+
 function fakeFetch(routes: Record<string, Handler>) {
   return vi.fn(async (input: string | URL | Request, init: RequestInit = {}) => {
     const url = String(input);
+    requested.push(url);
     const handler = routes[url];
     if (!handler) return new Response('not found', { status: 404 });
     return handler(url, init);
@@ -34,8 +46,8 @@ function fakeFetch(routes: Record<string, Handler>) {
 }
 
 const image = () => new Response(null, { status: 200, headers: { 'content-type': 'image/jpeg' } });
-const vtexJson = (imageUrl: string) =>
-  new Response(JSON.stringify([{ items: [{ images: [{ imageUrl }] }] }]), {
+const vtexJson = (imageUrl: string, productName = 'Produto') =>
+  new Response(JSON.stringify([{ productName, items: [{ images: [{ imageUrl }] }] }]), {
     status: 200,
     headers: { 'content-type': 'application/json' },
   });
@@ -58,8 +70,7 @@ describe('isImageAlive', () => {
   });
 
   it('false para 404', async () => {
-    const fetchImpl = fakeFetch({});
-    expect(await isImageAlive(DEAD_IMG, { fetchImpl, lookup })).toBe(false);
+    expect(await isImageAlive(DEAD_IMG, { fetchImpl: fakeFetch({}), lookup })).toBe(false);
   });
 
   it('false quando o 200 não é imagem (página de erro HTML)', async () => {
@@ -86,40 +97,91 @@ describe('isImageAlive', () => {
     expect(await isImageAlive('http://interno.local/a.jpg', { fetchImpl, lookup })).toBe(false);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
+
+  it('não acessa link da Awin nem segue redirect para ela', async () => {
+    const fetchImpl = vi.fn(
+      async () => new Response(null, { status: 302, headers: { location: PCLICK } }),
+    ) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
+    expect(await isImageAlive(PCLICK, { fetchImpl, lookup })).toBe(false);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(await isImageAlive('https://cdn.loja.com/a.jpg', { fetchImpl, lookup })).toBe(false);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
 });
 
-describe('resolveMerchantUrl', () => {
-  it('lê o parâmetro ued do cread.php sem fazer requisição', async () => {
+describe('resolveMerchantUrl (sem rede)', () => {
+  it('cread.php: usa o parâmetro ued', async () => {
     const fetchImpl = fakeFetch({});
     const link = `https://www.awin1.com/cread.php?awinmid=68224&awinaffid=1&ued=${encodeURIComponent(MERCHANT)}`;
-    expect(await resolveMerchantUrl(link, { fetchImpl, lookup })).toBe(MERCHANT);
+    expect(await resolveMerchantUrl(link, { fetchImpl, lookup })).toEqual({
+      origin: 'https://www.drogal.com.br',
+      productUrl: MERCHANT,
+    });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it('lê o Location do pclick.php com redirect manual', async () => {
-    const fetchImpl = fakeFetch({
-      [PCLICK]: () => new Response(null, { status: 302, headers: { location: MERCHANT } }),
+  it('pclick.php: mapeia o anunciante (m) para a origem da loja', async () => {
+    const fetchImpl = fakeFetch({});
+    expect(await resolveMerchantUrl(PCLICK, { fetchImpl, lookup })).toEqual({
+      origin: 'https://www.drogal.com.br',
+      productUrl: null,
     });
-    expect(await resolveMerchantUrl(PCLICK, { fetchImpl, lookup })).toBe(MERCHANT);
-    expect((fetchImpl.mock.calls[0]![1] as RequestInit).redirect).toBe('manual');
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it('rejeita Location para host privado ou não https', async () => {
-    const toPrivate = fakeFetch({
-      [PCLICK]: () =>
-        new Response(null, { status: 302, headers: { location: 'https://interno.local/p' } }),
-    });
-    expect(await resolveMerchantUrl(PCLICK, { fetchImpl: toPrivate, lookup })).toBeNull();
-    const toFile = fakeFetch({
-      [PCLICK]: () =>
-        new Response(null, { status: 302, headers: { location: 'file:///etc/passwd' } }),
-    });
-    expect(await resolveMerchantUrl(PCLICK, { fetchImpl: toFile, lookup })).toBeNull();
+  it('cread.php sem ued usa awinmid; mapa injetado tem prioridade', async () => {
+    const link = 'https://www.awin1.com/cread.php?awinmid=999&awinaffid=1';
+    expect(await resolveMerchantUrl(link, { lookup })).toBeNull();
+    expect(
+      await resolveMerchantUrl(link, {
+        lookup,
+        merchantOrigins: { '999': 'https://www.loja.com' },
+      }),
+    ).toEqual({ origin: 'https://www.loja.com', productUrl: null });
   });
 
-  it('rejeita ued apontando para host privado', async () => {
-    const link = `https://www.awin1.com/cread.php?ued=${encodeURIComponent('https://interno.local/x/p')}`;
-    expect(await resolveMerchantUrl(link, { fetchImpl: fakeFetch({}), lookup })).toBeNull();
+  it('mapa padrão vem de DEFAULT_AWIN_PARTNERS', () => {
+    expect(defaultMerchantOrigins()['68224']).toBe('https://www.drogal.com.br');
+  });
+
+  it('rejeita destino privado ou não https', async () => {
+    const priv = `https://www.awin1.com/cread.php?ued=${encodeURIComponent('https://interno.local/x/p')}`;
+    expect(await resolveMerchantUrl(priv, { lookup })).toBeNull();
+    const http = `https://www.awin1.com/cread.php?ued=${encodeURIComponent('http://www.drogal.com.br/x/p')}`;
+    expect(await resolveMerchantUrl(http, { lookup })).toBeNull();
+    expect(
+      await resolveMerchantUrl(PCLICK, {
+        lookup,
+        merchantOrigins: { '68224': 'https://interno.local' },
+      }),
+    ).toBeNull();
+  });
+});
+
+describe('slugFromImageUrl', () => {
+  it('tira extensão e o sufixo _<dígitos>', () => {
+    expect(
+      slugFromImageUrl(
+        'https://io.convertiez.com.br/m/drogal/shop/products/images/9992251/large/fraldas-pampers-premium-care-recem-nascido-rn-36-unidades_31925.jpg',
+      ),
+    ).toBe('fraldas-pampers-premium-care-recem-nascido-rn-36-unidades');
+  });
+
+  it('null para nome que não parece slug', () => {
+    expect(slugFromImageUrl('https://cdn.loja.com/img/123456.jpg')).toBeNull();
+    expect(slugFromImageUrl('https://cdn.loja.com/img/a%20b-c.jpg')).toBeNull();
+    expect(slugFromImageUrl(null)).toBeNull();
+  });
+});
+
+describe('titlesMatch', () => {
+  it('ignora ordem, acentos, caixa e pontuação', () => {
+    expect(titlesMatch(TITLE, 'Fraldas Pampers Premium Care Recém-Nascido RN 36 Unidades')).toBe(
+      true,
+    );
+  });
+  it('produto diferente não bate', () => {
+    expect(titlesMatch(TITLE, 'Fraldas Pampers Premium Care M 80 Unidades')).toBe(false);
   });
 });
 
@@ -162,10 +224,9 @@ describe('resolveFallbackImage', () => {
     expect(r).toEqual({ url: VTEX_IMG, status: 'alive' });
   });
 
-  it('imagem morta → resolve pela loja VTEX e grava no cache (7 dias)', async () => {
+  it('pclick + imagem morta → slug do nome do arquivo na VTEX, sem tocar na Awin; cache 7 dias', async () => {
     const { cache, store } = memoryCache();
     const fetchImpl = fakeFetch({
-      [PCLICK]: () => new Response(null, { status: 302, headers: { location: MERCHANT } }),
       [VTEX_API]: () => vtexJson(VTEX_IMG),
       [VTEX_IMG]: () => image(),
     });
@@ -174,24 +235,61 @@ describe('resolveFallbackImage', () => {
       { fetchImpl, lookup, cache },
     );
     expect(r).toEqual({ url: VTEX_IMG, status: 'resolved' });
-    const ttls = [...store.values()].map((v) => v.ttl);
-    expect(ttls).toContain(7 * 24 * 3600);
+    expect([...store.values()].map((v) => v.ttl)).toContain(7 * 24 * 3600);
+  });
+
+  it('slug do ued tem preferência sobre o do nome da imagem', async () => {
+    const other = 'https://www.drogal.com.br/outro-slug/p';
+    const otherApi =
+      'https://www.drogal.com.br/api/catalog_system/pub/products/search/outro-slug/p';
+    const fetchImpl = fakeFetch({
+      [otherApi]: () => vtexJson(VTEX_IMG),
+      [VTEX_IMG]: () => image(),
+    });
+    const link = `https://www.awin1.com/cread.php?awinmid=68224&ued=${encodeURIComponent(other)}`;
+    const r = await resolveFallbackImage(
+      { imageUrl: DEAD_IMG, deepLink: link },
+      { fetchImpl, lookup },
+    );
+    expect(r.status).toBe('resolved');
+    const vtexCalls = requested.filter((u) => u.includes('/api/catalog_system/'));
+    expect(vtexCalls[0]).toBe(otherApi);
+  });
+
+  it('sem slug: busca pelo título e aceita só se o nome bater', async () => {
+    const noSlugImg = 'https://io.convertiez.com.br/m/drogal/123.jpg';
+    const ok = fakeFetch({
+      [FT_API]: () =>
+        vtexJson(VTEX_IMG, 'Fraldas Pampers Premium Care Recém-Nascido RN 36 Unidades'),
+      [VTEX_IMG]: () => image(),
+    });
+    expect(
+      await resolveFallbackImage(
+        { imageUrl: noSlugImg, deepLink: PCLICK, title: TITLE },
+        { fetchImpl: ok, lookup },
+      ),
+    ).toEqual({ url: VTEX_IMG, status: 'resolved' });
+
+    const wrong = fakeFetch({
+      [FT_API]: () => vtexJson(VTEX_IMG, 'Fraldas Pampers Premium Care G 64 Unidades'),
+      [VTEX_IMG]: () => image(),
+    });
+    expect(
+      (
+        await resolveFallbackImage(
+          { imageUrl: noSlugImg, deepLink: PCLICK, title: TITLE },
+          { fetchImpl: wrong, lookup },
+        )
+      ).status,
+    ).toBe('unresolved');
   });
 
   it('cache hit: não faz nenhuma requisição', async () => {
     const { cache } = memoryCache();
-    const routes = {
-      [PCLICK]: () => new Response(null, { status: 302, headers: { location: MERCHANT } }),
-      [VTEX_API]: () => vtexJson(VTEX_IMG),
-      [VTEX_IMG]: () => image(),
-    };
+    const routes = { [VTEX_API]: () => vtexJson(VTEX_IMG), [VTEX_IMG]: () => image() };
     await resolveFallbackImage(
       { imageUrl: DEAD_IMG, deepLink: PCLICK },
-      {
-        fetchImpl: fakeFetch(routes),
-        lookup,
-        cache,
-      },
+      { fetchImpl: fakeFetch(routes), lookup, cache },
     );
     const second = fakeFetch(routes);
     const r = await resolveFallbackImage(
@@ -204,19 +302,16 @@ describe('resolveFallbackImage', () => {
 
   it('miss também vai para o cache (1 dia) e não repete as requisições', async () => {
     const { cache, store } = memoryCache();
-    const first = fakeFetch({
-      [PCLICK]: () =>
-        new Response(null, { status: 302, headers: { location: 'https://loja.com.br/x/123' } }),
-    });
+    const unknownAdvertiser = 'https://www.awin1.com/pclick.php?p=1&m=999';
     const r = await resolveFallbackImage(
-      { imageUrl: DEAD_IMG, deepLink: PCLICK },
-      { fetchImpl: first, lookup, cache },
+      { imageUrl: DEAD_IMG, deepLink: unknownAdvertiser },
+      { fetchImpl: fakeFetch({}), lookup, cache },
     );
     expect(r).toEqual({ url: DEAD_IMG, status: 'unresolved' });
     expect([...store.values()].map((v) => v.ttl)).toContain(24 * 3600);
     const second = fakeFetch({});
     const again = await resolveFallbackImage(
-      { imageUrl: DEAD_IMG, deepLink: PCLICK },
+      { imageUrl: DEAD_IMG, deepLink: unknownAdvertiser },
       { fetchImpl: second, lookup, cache },
     );
     expect(again.status).toBe('unresolved');
@@ -224,7 +319,8 @@ describe('resolveFallbackImage', () => {
   });
 
   it('erro de rede vira unresolved, nunca exceção', async () => {
-    const fetchImpl = vi.fn(async () => {
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      requested.push(String(input));
       throw new Error('ECONNRESET');
     }) as unknown as typeof fetch;
     const r = await resolveFallbackImage(

@@ -1,7 +1,11 @@
 import pino from 'pino';
 import { prisma, forTenant, type TenantClient } from '@afilados/db';
 import { indexProductInPriceEngine, resolveOwnerTenantId } from '@afilados/deals';
-import { resolveFallbackImage, type FallbackImageResult } from '@afilados/marketplaces';
+import {
+  resolveFallbackImage,
+  type FallbackImageInput,
+  type FallbackImageResult,
+} from '@afilados/marketplaces';
 import { SITE_LINKS_KEY, siteLinksEnabled, type ProductData } from '@afilados/shared';
 import { config } from '../config';
 import { getRedis } from './redis';
@@ -23,10 +27,7 @@ export interface PublishOfferOptions {
   /** Injetável em testes; omitido = `isOwnerTenant`. */
   isOwnerTenant?: (tenantId: string) => Promise<boolean>;
   /** Injetável em testes; omitido = `resolveFallbackImage` com cache no Redis. */
-  resolveImage?: (input: {
-    imageUrl: string | null;
-    deepLink: string;
-  }) => Promise<FallbackImageResult>;
+  resolveImage?: (input: FallbackImageInput) => Promise<FallbackImageResult>;
   imageBudgetMs?: number;
 }
 
@@ -52,7 +53,11 @@ async function withAwinImage(
   const resolve = opts.resolveImage ?? defaultResolveImage;
   try {
     const res = await withTimeout(
-      resolve({ imageUrl: product.images[0] ?? null, deepLink: product.originalUrl }),
+      resolve({
+        imageUrl: product.images[0] ?? null,
+        deepLink: product.originalUrl,
+        title: product.title,
+      }),
       opts.imageBudgetMs ?? IMAGE_BUDGET_MS,
     );
     if (res.status !== 'resolved' || !res.url) return product;

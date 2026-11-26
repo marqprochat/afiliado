@@ -32,12 +32,16 @@ export async function fixAwinDealImages<T extends DealWithImages>(
   const resolveImage = opts.resolveImage ?? resolveAwinImage;
   const rows = await db.productListing.findMany({
     where: { id: { in: awinIds } },
-    select: { id: true, imageUrl: true, originalUrl: true },
+    select: { id: true, imageUrl: true, originalUrl: true, title: true },
   });
   const results = await runWithBudget(
     rows,
     async (row) => {
-      const res = await resolveImage({ imageUrl: row.imageUrl, deepLink: row.originalUrl });
+      const res = await resolveImage({
+        imageUrl: row.imageUrl,
+        deepLink: row.originalUrl,
+        title: row.title,
+      });
       if (res.status !== 'resolved' || !res.url || res.url === row.imageUrl) return undefined;
       await db.productListing.updateMany({
         where: { id: row.id, imageUrl: row.imageUrl },

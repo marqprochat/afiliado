@@ -156,6 +156,7 @@ describe('publishOffer', () => {
     expect(resolveImage).toHaveBeenCalledWith({
       imageUrl: 'https://morta/a.jpg',
       deepLink: 'https://www.awin1.com/pclick.php?p=1',
+      title: 'Fone',
     });
     expect(index.mock.calls[0]![2].images).toEqual(['https://drogal.vteximg.com.br/a.jpg']);
   });
