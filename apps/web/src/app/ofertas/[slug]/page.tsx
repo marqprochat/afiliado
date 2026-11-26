@@ -117,11 +117,11 @@ export default function OfertaDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#080a0f] text-slate-100 flex flex-col justify-between">
+      <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col justify-between">
         <LandingNav minimal />
         <div className="flex flex-col items-center justify-center py-40">
-          <RefreshCw className="w-9 h-9 text-emerald-400 animate-spin mb-4" />
-          <p className="text-slate-400 text-sm">Carregando comparador e histórico de preços...</p>
+          <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin mb-4" />
+          <p className="text-slate-500 text-sm">Carregando comparador e histórico de preços...</p>
         </div>
         <LandingFooter minimal />
       </div>
@@ -130,19 +130,19 @@ export default function OfertaDetailPage() {
 
   if (!deal) {
     return (
-      <div className="min-h-screen bg-[#080a0f] text-slate-100 flex flex-col justify-between">
+      <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col justify-between">
         <LandingNav minimal />
         <div className="text-center py-40 max-w-md mx-auto px-4">
-          <h2 className="text-2xl font-bold text-white mb-2">Produto não encontrado</h2>
-          <p className="text-slate-400 text-sm mb-6">
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">Produto não encontrado</h2>
+          <p className="text-slate-500 text-sm mb-6">
             O link pode estar expirado ou o produto foi removido.
           </p>
           <Link
             href="/ofertas"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-black font-bold rounded-xl text-sm transition"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            Voltar para a Vitrine de Ofertas
+            Voltar para a vitrine de ofertas
           </Link>
         </div>
         <LandingFooter minimal />
@@ -154,29 +154,29 @@ export default function OfertaDetailPage() {
   // ficou velho e não há onde comprar, então não mostra preço nem botão de compra.
   if (deal.listings.length === 0) {
     return (
-      <div className="min-h-screen bg-[#080a0f] text-slate-100 flex flex-col justify-between">
+      <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col justify-between">
         <LandingNav minimal />
         <main className="flex-1 max-w-md mx-auto w-full px-4 pt-28 pb-16 text-center">
           {deal.imageUrl && (
-            <div className="aspect-square w-full max-w-xs mx-auto rounded-3xl bg-black/60 border border-slate-800 p-6 flex items-center justify-center mb-6 overflow-hidden opacity-70">
+            <div className="aspect-square w-full max-w-xs mx-auto rounded-2xl bg-white border border-slate-200 p-6 flex items-center justify-center mb-6 overflow-hidden opacity-80">
               <ProductImage
                 src={deal.imageUrl}
                 alt={deal.cleanTitle}
                 loading="eager"
                 className="w-full h-full object-contain"
-                placeholderClassName="rounded-2xl bg-slate-900/60 text-slate-600"
+                placeholderClassName="rounded-xl bg-slate-100 text-slate-400"
                 iconClassName="h-12 w-12"
               />
             </div>
           )}
-          <h1 className="text-xl font-bold text-white mb-3">{deal.cleanTitle}</h1>
-          <p className="text-amber-400 font-semibold mb-2">Oferta indisponível no momento</p>
-          <p className="text-slate-400 text-sm mb-6">
+          <h1 className="text-xl font-bold text-slate-900 mb-3">{deal.cleanTitle}</h1>
+          <p className="text-amber-700 font-semibold mb-2">Oferta indisponível no momento</p>
+          <p className="text-slate-500 text-sm mb-6">
             Nenhuma loja tem este produto em estoque agora. Confira outras ofertas na vitrine.
           </p>
           <Link
             href="/ofertas"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-black font-bold rounded-xl text-sm transition"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Ver todas as ofertas
@@ -191,40 +191,40 @@ export default function OfertaDetailPage() {
   const isAllTimeLow = deal.analysis.badge === 'ALL_TIME_LOW';
 
   return (
-    <div className="min-h-screen bg-[#080a0f] text-slate-100 font-sans flex flex-col justify-between">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col justify-between">
       <LandingNav minimal />
 
-      <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 pt-28 pb-16">
+      <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 pt-24 pb-16">
         {/* Navegação Topo */}
-        <div className="flex items-center gap-2 text-xs text-slate-400 mb-6">
-          <Link href="/ofertas" className="hover:text-emerald-400 transition flex items-center gap-1">
+        <div className="flex items-center gap-2 text-xs text-slate-500 mb-6">
+          <Link href="/ofertas" className="hover:text-slate-900 transition-colors flex items-center gap-1 font-medium">
             <ArrowLeft className="w-3.5 h-3.5" />
-            Todas as Ofertas
+            Todas as ofertas
           </Link>
-          <span>/</span>
-          <span className="text-slate-500">{deal.category ?? 'Produtos'}</span>
-          <span>/</span>
-          <span className="text-slate-300 truncate max-w-xs">{deal.cleanTitle}</span>
+          <span className="text-slate-300">/</span>
+          <span>{deal.category ?? 'Produtos'}</span>
+          <span className="text-slate-300">/</span>
+          <span className="text-slate-700 font-medium truncate max-w-xs">{deal.cleanTitle}</span>
         </div>
 
         {/* Bloco Principal do Produto */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-8 mb-10">
           {/* Coluna Visual (Foto & Miniaturas) */}
           <div className="md:col-span-5 flex flex-col items-center">
-            <div className="relative aspect-square w-full max-w-sm rounded-3xl bg-black/60 border border-slate-800 p-6 flex items-center justify-center shadow-2xl mb-4 overflow-hidden">
+            <div className="relative aspect-square w-full max-w-sm rounded-2xl bg-white border border-slate-200 p-6 flex items-center justify-center shadow-xs mb-3 overflow-hidden">
               <ProductImage
                 src={selectedImage || deal.imageUrl}
                 alt={deal.cleanTitle}
                 loading="eager"
                 className="w-full h-full object-contain"
-                placeholderClassName="rounded-2xl bg-slate-900/60 text-slate-600"
+                placeholderClassName="rounded-xl bg-slate-100 text-slate-400"
                 iconClassName="h-12 w-12"
               />
 
               {isAllTimeLow && (
-                <div className="absolute top-4 left-4 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500 text-black font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/30">
-                  <Flame className="w-3.5 h-3.5 fill-black" />
-                  Mínima Histórica
+                <div className="absolute top-3.5 left-3.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-xs">
+                  <Flame className="w-3.5 h-3.5 text-emerald-600" />
+                  Menor preço histórico
                 </div>
               )}
             </div>
@@ -234,16 +234,17 @@ export default function OfertaDetailPage() {
                 {deal.images.slice(0, 5).map((img, idx) => (
                   <button
                     key={idx}
+                    type="button"
                     onClick={() => setSelectedImage(img)}
-                    className={`relative w-14 h-14 rounded-xl bg-black/40 border p-1 transition cursor-pointer shrink-0 ${
-                      selectedImage === img ? 'border-emerald-500 shadow-md' : 'border-slate-800 hover:border-slate-700'
+                    className={`relative w-14 h-14 rounded-xl bg-white border p-1.5 transition-colors cursor-pointer shrink-0 ${
+                      selectedImage === img ? 'border-slate-900 shadow-xs' : 'border-slate-200 hover:border-slate-300'
                     }`}
                   >
                     <ProductImage
                       src={img}
                       alt=""
                       className="w-full h-full object-contain"
-                      placeholderClassName="bg-slate-900/60 text-slate-600"
+                      placeholderClassName="bg-slate-100 text-slate-400"
                       iconClassName="h-4 w-4"
                     />
                   </button>
@@ -257,54 +258,50 @@ export default function OfertaDetailPage() {
             <div>
               <div className="flex flex-wrap items-center gap-2 mb-3">
                 {deal.brand && (
-                  <span className="px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold">
+                  <span className="px-2.5 py-0.5 rounded-full bg-white border border-slate-200 text-slate-700 text-xs font-semibold">
                     {deal.brand}
                   </span>
                 )}
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
                   {deal.analysis.badgeLabel}
                 </span>
               </div>
 
-              <h1 className="text-xl sm:text-2xl font-black text-white mb-4 leading-snug">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 mb-5 leading-snug">
                 {deal.cleanTitle}
               </h1>
 
               {/* Box de Menor Preço (Buy Box) */}
-              <div className="p-6 rounded-3xl bg-gradient-to-br from-[#121824] to-[#0d121c] border border-emerald-500/40 shadow-xl mb-6 relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-4 opacity-10 text-emerald-400 pointer-events-none">
-                  <ShieldCheck className="w-24 h-24" />
-                </div>
-
-                <div className="text-xs text-slate-400 mb-1 flex items-center gap-1.5">
-                  <Store className="w-4 h-4 text-emerald-400" />
+              <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs mb-6">
+                <div className="text-xs text-slate-500 mb-1.5 flex items-center gap-1.5">
+                  <Store className="w-4 h-4 text-emerald-600" />
                   Melhor preço disponível em{' '}
-                  <strong className="text-white font-bold">{bestListing?.storeName || 'Loja Parceira'}</strong>:
+                  <strong className="text-slate-900 font-semibold">{bestListing?.storeName || 'Loja Parceira'}</strong>
                 </div>
 
-                <div className="flex items-baseline gap-3 mb-2">
-                  <span className="text-3xl sm:text-4xl font-black text-white">
+                <div className="flex items-baseline gap-3 mb-4 tabular-nums">
+                  <span className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900">
                     {formatCurrency(deal.currentBestPrice)}
                   </span>
                   {bestListing?.originalPrice && bestListing.originalPrice > deal.currentBestPrice && (
-                    <span className="text-sm text-slate-500 line-through">
+                    <span className="text-sm text-slate-400 line-through">
                       {formatCurrency(bestListing.originalPrice)}
                     </span>
                   )}
                 </div>
 
-                <div className="text-xs text-slate-400 mb-6 flex items-center gap-4">
+                <div className="px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs text-slate-600 mb-6 flex flex-wrap items-center gap-x-6 gap-y-1.5 tabular-nums">
                   <span>
                     Média de 30 dias:{' '}
-                    <strong className="text-cyan-400">{formatCurrency(deal.averagePrice30d)}</strong>
+                    <strong className="text-slate-900">{formatCurrency(deal.averagePrice30d)}</strong>
                   </span>
                   <span>
                     Menor histórico:{' '}
-                    <strong className="text-emerald-400">{formatCurrency(deal.lowestPriceEver)}</strong>
+                    <strong className="text-emerald-700">{formatCurrency(deal.lowestPriceEver)}</strong>
                   </span>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-center gap-3">
+                <div className="flex flex-col sm:flex-row items-center gap-2.5">
                   <a
                     href={
                       bestListing?.affiliateUrl
@@ -313,28 +310,29 @@ export default function OfertaDetailPage() {
                     }
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 font-extrabold text-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 transition cursor-pointer"
+                    className="w-full sm:w-auto flex-1 py-3 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 font-semibold text-white text-sm flex items-center justify-center gap-2 transition-[background-color,transform] duration-150 active:scale-[0.98] cursor-pointer"
                   >
                     <span>Ir para {bestListing?.storeName || 'Loja'}</span>
                     <ExternalLink className="w-4 h-4" />
                   </a>
 
                   <button
+                    type="button"
                     onClick={() => setAlertOpen(true)}
-                    className="w-full sm:w-auto py-3.5 px-5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm flex items-center justify-center gap-2 border border-emerald-500/40 transition cursor-pointer"
+                    className="w-full sm:w-auto py-3 px-4 rounded-xl bg-white hover:bg-slate-50 text-slate-800 font-semibold text-sm flex items-center justify-center gap-2 border border-slate-300 transition-[background-color,transform] duration-150 active:scale-[0.98] cursor-pointer"
                   >
-                    <Bell className="w-4 h-4 text-emerald-400" />
-                    <span>Quer pagar quanto?</span>
+                    <Bell className="w-4 h-4 text-emerald-600" />
+                    <span>Criar alerta</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={handleShare}
                     title="Compartilhar oferta"
-                    className="w-full sm:w-auto py-3.5 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-200 font-semibold text-sm flex items-center justify-center gap-2 border border-slate-700 transition cursor-pointer"
+                    className="w-full sm:w-auto py-3 px-4 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-semibold text-sm flex items-center justify-center gap-2 border border-slate-200 transition-[background-color,transform] duration-150 active:scale-[0.98] cursor-pointer"
                   >
-                    <Share2 className="w-4 h-4 text-cyan-400" />
-                    <span>{copiedShare ? 'Link copiado!' : 'Compartilhar'}</span>
+                    <Share2 className="w-4 h-4 text-slate-500" />
+                    <span>{copiedShare ? 'Copiado!' : 'Compartilhar'}</span>
                   </button>
                 </div>
               </div>
@@ -345,49 +343,49 @@ export default function OfertaDetailPage() {
         </div>
 
         {/* Comparativo Lado a Lado de Todas as Lojas */}
-        <section className="mb-12">
-          <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-            <Store className="w-5 h-5 text-emerald-400" />
-            <span>Comparador de Preços em Todas as Lojas ({deal.listings.length})</span>
+        <section className="mb-10">
+          <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+            <Store className="w-5 h-5 text-emerald-600" />
+            <span>Comparador de preços ({deal.listings.length})</span>
           </h2>
 
-          <div className="bg-[#0e121a] border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-            <div className="divide-y divide-slate-800/80">
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+            <div className="divide-y divide-slate-100">
               {deal.listings.map((l, index) => {
                 const isWinner = index === 0;
                 return (
                   <div
                     key={l.id}
-                    className={`p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition ${
-                      isWinner ? 'bg-emerald-500/5' : 'hover:bg-slate-900/40'
+                    className={`p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-colors ${
+                      isWinner ? 'bg-emerald-50/40' : 'hover:bg-slate-50'
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center font-bold text-xs text-slate-300 shrink-0">
+                      <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-xs text-slate-700 shrink-0">
                         {l.storeName.slice(0, 2).toUpperCase()}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-white text-sm">{l.storeName}</h4>
+                          <h4 className="font-semibold text-slate-900 text-sm">{l.storeName}</h4>
                           {isWinner && (
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-[#25D366] text-[10px] font-black border border-emerald-500/40">
-                              🏆 MENOR PREÇO
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wide">
+                              Menor preço
                             </span>
                           )}
                         </div>
-                        <span className="text-[11px] text-slate-400">
+                        <span className="text-[11px] text-slate-500">
                           {l.source} • Estoque confirmado
                         </span>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto">
-                      <div className="text-left sm:text-right">
-                        <div className="text-lg font-black text-white">
+                      <div className="text-left sm:text-right tabular-nums">
+                        <div className="text-lg font-bold text-slate-900">
                           {formatCurrency(l.currentPrice)}
                         </div>
                         {l.originalPrice && l.originalPrice > l.currentPrice && (
-                          <div className="text-xs text-slate-500 line-through">
+                          <div className="text-xs text-slate-400 line-through">
                             {formatCurrency(l.originalPrice)}
                           </div>
                         )}
@@ -397,13 +395,13 @@ export default function OfertaDetailPage() {
                         href={l.affiliateUrl ? offerRedirectHref(l.id, trackQuery) : '#'}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={`py-2 px-4 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
+                        className={`py-2 px-4 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-[background-color,transform] duration-150 active:scale-[0.98] ${
                           isWinner
-                            ? 'bg-emerald-500 text-black hover:bg-emerald-600'
-                            : 'bg-slate-800 hover:bg-slate-700 text-white'
+                            ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-800'
                         }`}
                       >
-                        <span>Acessar Loja</span>
+                        <span>Acessar loja</span>
                         <ExternalLink className="w-3.5 h-3.5" />
                       </a>
                     </div>

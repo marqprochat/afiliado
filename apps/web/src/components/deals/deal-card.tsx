@@ -59,33 +59,34 @@ export function DealCard({ deal }: { deal: DealCardProps }) {
 
   return (
     <>
-      <div className="group relative flex flex-col justify-between bg-gradient-to-b from-[#121722] to-[#0e121a] border border-slate-800/80 hover:border-emerald-500/50 rounded-2xl p-4 shadow-lg hover:shadow-emerald-500/10 transition-all duration-300">
+      <article className="group relative flex flex-col justify-between bg-white border border-slate-200/90 hover:border-slate-300 rounded-2xl p-4 shadow-xs hover:shadow-md transition-[border-color,box-shadow] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]">
         <div>
           {/* Top Badges */}
           <div className="flex items-center justify-between gap-2 mb-3">
             {isAllTimeLow ? (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-[#25D366] text-[11px] font-black uppercase tracking-wider animate-pulse">
-                <Flame className="w-3.5 h-3.5 text-[#25D366]" />
-                Mínima Histórica
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-bold tracking-tight">
+                <Flame className="w-3.5 h-3.5 text-emerald-600" />
+                Menor preço
               </span>
             ) : isGreatDeal ? (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-400 text-[11px] font-bold">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-sky-50 border border-sky-200 text-sky-700 text-[11px] font-semibold">
                 <Sparkles className="w-3 h-3" />
                 {deal.analysis.badgeLabel}
               </span>
             ) : isInflated ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[10px] font-semibold">
-                Desconto Inflado
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-semibold">
+                Desconto inflado
               </span>
             ) : (
-              <span className="text-[11px] font-medium text-slate-400">
+              <span className="text-[11px] font-medium text-slate-500 truncate">
                 {deal.brand ?? deal.category ?? 'Oferta'}
               </span>
             )}
 
             <button
+              type="button"
               onClick={() => setAlertOpen(true)}
-              className="p-1.5 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition"
+              className="p-1.5 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors duration-150 cursor-pointer active:scale-95"
               title="Criar alerta de preço para este produto"
               aria-label="Criar alerta"
             >
@@ -94,32 +95,35 @@ export function DealCard({ deal }: { deal: DealCardProps }) {
           </div>
 
           {/* Imagem do Produto */}
-          <Link href={`/ofertas/${deal.slug}`} className="block relative aspect-square w-full rounded-xl bg-black/40 border border-slate-800/60 overflow-hidden mb-3 p-3">
+          <Link
+            href={`/ofertas/${deal.slug}`}
+            className="block relative aspect-square w-full rounded-xl bg-white overflow-hidden mb-3 p-3"
+          >
             <ProductImage
               src={deal.imageUrl}
               alt={deal.cleanTitle}
-              className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
-              placeholderClassName="rounded-lg bg-slate-900/60 text-slate-600"
+              className="w-full h-full object-contain group-hover:scale-[1.03] transition-transform duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]"
+              placeholderClassName="rounded-lg bg-slate-100 text-slate-400"
             />
           </Link>
 
           {/* Título */}
           <Link href={`/ofertas/${deal.slug}`}>
-            <h3 className="text-sm font-semibold text-slate-100 group-hover:text-emerald-400 transition line-clamp-2 mb-2 leading-snug">
+            <h3 className="text-sm font-semibold text-slate-900 group-hover:text-emerald-700 transition-colors duration-150 line-clamp-2 mb-2 leading-snug">
               {deal.cleanTitle}
             </h3>
           </Link>
 
           {/* Comparativo de lojas */}
           <div className="flex flex-wrap items-center gap-1.5 mb-3">
-            <span className="text-[11px] text-slate-400 flex items-center gap-1">
-              <Store className="w-3 h-3 text-slate-500" />
-              {deal.listingsCount} {deal.listingsCount === 1 ? 'loja' : 'lojas'}:
+            <span className="text-[11px] text-slate-500 flex items-center gap-1">
+              <Store className="w-3 h-3 text-slate-400" />
+              {deal.listingsCount} {deal.listingsCount === 1 ? 'loja' : 'lojas'}
             </span>
-            {deal.availableStores.slice(0, 3).map((st, i) => (
+            {deal.availableStores.slice(0, 2).map((st, i) => (
               <span
                 key={i}
-                className="px-1.5 py-0.5 rounded bg-slate-800/80 border border-slate-700/60 text-[10px] text-slate-300 font-medium"
+                className="px-1.5 py-0.5 rounded-md bg-slate-100 text-[10px] text-slate-600 font-medium"
               >
                 {st.storeName}
               </span>
@@ -128,20 +132,20 @@ export function DealCard({ deal }: { deal: DealCardProps }) {
         </div>
 
         {/* Preço e Botões de Ação */}
-        <div className="pt-2 border-t border-slate-800/60">
-          <div className="mb-2">
-            <div className="text-[11px] text-slate-400 flex items-center justify-between">
-              <span>Menor preço em {deal.bestListing?.storeName || 'Loja'}:</span>
+        <div className="pt-3 border-t border-slate-100">
+          <div className="mb-3">
+            <div className="text-[11px] text-slate-500 flex items-center justify-between gap-2 mb-0.5">
+              <span className="truncate">Em {deal.bestListing?.storeName || 'Loja'}</span>
               {deal.analysis.realDiscountPct > 0 && (
-                <span className="text-emerald-400 font-bold">
+                <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold tabular-nums shrink-0">
                   -{deal.analysis.realDiscountPct}%
                 </span>
               )}
             </div>
-            <div className="text-lg font-black text-white flex items-baseline gap-1.5">
+            <div className="text-xl font-bold tracking-tight text-slate-900 flex items-baseline gap-2 tabular-nums">
               <span>{formatCurrency(deal.currentBestPrice)}</span>
               {deal.bestListing?.originalPrice && deal.bestListing.originalPrice > deal.currentBestPrice && (
-                <span className="text-xs text-slate-500 line-through font-normal">
+                <span className="text-xs text-slate-400 line-through font-normal">
                   {formatCurrency(deal.bestListing.originalPrice)}
                 </span>
               )}
@@ -153,21 +157,22 @@ export function DealCard({ deal }: { deal: DealCardProps }) {
               href={affiliateLink}
               target="_blank"
               rel="noopener noreferrer"
-              className="col-span-4 py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-black font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 transition cursor-pointer"
+              className="col-span-4 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition-[background-color,transform] duration-150 active:scale-[0.98] cursor-pointer"
             >
-              <span>Pegar Oferta</span>
+              <span>Pegar oferta</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
             <Link
               href={`/ofertas/${deal.slug}`}
-              className="col-span-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition"
+              className="col-span-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-[background-color,transform] duration-150 active:scale-[0.97]"
               title="Ver histórico e comparador"
+              aria-label="Ver histórico e comparador"
             >
               <TrendingDown className="w-4 h-4" />
             </Link>
           </div>
         </div>
-      </div>
+      </article>
 
       <PriceAlertModal
         isOpen={alertOpen}

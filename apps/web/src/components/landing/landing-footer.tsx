@@ -8,8 +8,31 @@ interface LandingFooterProps {
 }
 
 export function LandingFooter({ minimal = false }: LandingFooterProps) {
+  if (minimal) {
+    return (
+      <footer className="border-t border-slate-200 bg-white py-8 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 px-2.5 bg-slate-950 rounded-lg flex items-center justify-center">
+              <span className="text-xs font-black text-white tracking-tight">
+                DUDU ROCHA <span className="text-red-500">TEC</span>
+              </span>
+            </div>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Comunidade VIP
+            </span>
+          </div>
+
+          <div className="text-xs text-slate-500">
+            &copy; {new Date().getFullYear()} DUDU ROCHA TEC. Todos os direitos reservados.
+          </div>
+        </div>
+      </footer>
+    );
+  }
+
   return (
-    <footer className={`border-t border-white/10 bg-[#050609] ${minimal ? 'py-8' : 'py-14'} px-4 sm:px-6 lg:px-8`}>
+    <footer className="border-t border-white/10 bg-[#050609] py-14 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-8">
         {/* Brand & Authority */}
         <div className="flex flex-col items-center md:items-start gap-2">

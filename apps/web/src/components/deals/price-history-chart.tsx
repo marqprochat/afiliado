@@ -25,7 +25,7 @@ export function PriceHistoryChart({
 }: PriceHistoryChartProps) {
   if (!history || history.length === 0) {
     return (
-      <div className="p-6 rounded-2xl bg-slate-900/40 border border-slate-800 text-center text-slate-400 text-sm">
+      <div className="p-6 rounded-2xl bg-white border border-slate-200 text-center text-slate-500 text-sm">
         Monitorando histórico deste produto. As variações de preço entre lojas aparecerão aqui conforme registradas.
       </div>
     );
@@ -58,25 +58,25 @@ export function PriceHistoryChart({
   const avgY = paddingY + chartH - ((averagePrice - minP) / range) * chartH;
 
   return (
-    <div className="w-full bg-[#0d1117] border border-slate-800/80 rounded-2xl p-5 shadow-xl relative overflow-hidden">
+    <div className="w-full bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-xs relative overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
         <div>
-          <h4 className="text-white font-bold text-base flex items-center gap-2">
-            <span>📈 Histórico & Média de Preço</span>
+          <h4 className="text-slate-900 font-bold text-base">
+            Histórico e média de preço
           </h4>
-          <p className="text-slate-400 text-xs">
+          <p className="text-slate-500 text-xs mt-0.5">
             Acompanhamento em tempo real entre todas as lojas monitoradas
           </p>
         </div>
 
-        <div className="flex items-center gap-4 text-xs font-semibold">
+        <div className="flex items-center gap-4 text-xs font-semibold tabular-nums">
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-            <span className="text-slate-300">Menor: {formatCurrency(lowestPrice)}</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
+            <span className="text-slate-700">Menor: {formatCurrency(lowestPrice)}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-0.5 bg-cyan-400 border-dashed" />
-            <span className="text-slate-400">Média: {formatCurrency(averagePrice)}</span>
+            <span className="w-3 h-0.5 bg-sky-600" />
+            <span className="text-slate-600">Média: {formatCurrency(averagePrice)}</span>
           </div>
         </div>
       </div>
@@ -88,8 +88,8 @@ export function PriceHistoryChart({
         >
           <defs>
             <linearGradient id="chartGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#10b981" stopOpacity="0.3" />
-              <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+              <stop offset="0%" stopColor="#059669" stopOpacity="0.16" />
+              <stop offset="100%" stopColor="#059669" stopOpacity="0.0" />
             </linearGradient>
           </defs>
 
@@ -99,7 +99,7 @@ export function PriceHistoryChart({
             y1={paddingY}
             x2={width - paddingX}
             y2={paddingY}
-            stroke="#1e293b"
+            stroke="#e2e8f0"
             strokeDasharray="3 3"
           />
           <line
@@ -107,7 +107,7 @@ export function PriceHistoryChart({
             y1={height - paddingY}
             x2={width - paddingX}
             y2={height - paddingY}
-            stroke="#1e293b"
+            stroke="#e2e8f0"
           />
 
           {/* Linha de Média Histórica */}
@@ -118,16 +118,17 @@ export function PriceHistoryChart({
                 y1={avgY}
                 x2={width - paddingX}
                 y2={avgY}
-                stroke="#06b6d4"
+                stroke="#0284c7"
                 strokeWidth="1.5"
                 strokeDasharray="4 4"
-                opacity="0.8"
+                opacity="0.85"
               />
               <text
                 x={width - paddingX + 5}
                 y={avgY + 4}
-                fill="#06b6d4"
+                fill="#0284c7"
                 fontSize="10"
+                fontWeight="600"
                 fontFamily="sans-serif"
               >
                 Média
@@ -145,7 +146,7 @@ export function PriceHistoryChart({
             <path
               d={pathD}
               fill="none"
-              stroke="#10b981"
+              stroke="#059669"
               strokeWidth="2.5"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -159,7 +160,7 @@ export function PriceHistoryChart({
                 cx={p.x}
                 cy={p.y}
                 r="4.5"
-                className="fill-emerald-400 stroke-[#0d1117] stroke-2 group-hover:r-6 transition-all duration-200"
+                className="fill-emerald-600 stroke-white stroke-2 group-hover:r-6 transition-all duration-150"
               />
               <title>{`${p.store}: ${formatCurrency(p.price)} em ${p.date.toLocaleDateString('pt-BR')}`}</title>
             </g>
@@ -167,7 +168,7 @@ export function PriceHistoryChart({
         </svg>
       </div>
 
-      <div className="flex justify-between items-center text-[11px] text-slate-500 mt-2 px-2">
+      <div className="flex justify-between items-center text-[11px] text-slate-400 mt-2 px-2">
         <span>Primeiro registro</span>
         <span>Última verificação</span>
       </div>
