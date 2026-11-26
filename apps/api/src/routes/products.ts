@@ -90,8 +90,9 @@ export async function productsRoutes(app: FastifyInstance) {
   });
 
   app.get('/products/awin-stores', async (req) => {
-    const stores = await listAwinCatalogStores(req.db);
-    return { stores };
+    // `stores` (só nomes) continua para compatibilidade; `items` traz o EPC na ordem do ranking.
+    const items = await listAwinCatalogStores(req.db);
+    return { stores: items.map((i) => i.name), items };
   });
 
   app.post('/products/search', async (req) => {

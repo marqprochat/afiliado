@@ -1,7 +1,12 @@
 import { forTenant, getParentTenantId, type TenantClient } from '@afilados/db';
-import { runWithBudget } from '@afilados/marketplaces';
-import { mapAwinCatalogRowToProductData, type ProductData } from '@afilados/shared';
+import { compareProgrammeStats, runWithBudget } from '@afilados/marketplaces';
+import {
+  mapAwinCatalogRowToProductData,
+  type AwinStoreOption,
+  type ProductData,
+} from '@afilados/shared';
 import { resolveAwinImage, type ResolveAwinImage } from './awin-images';
+import { listAwinProgrammeStats } from './awin-programme-stats';
 
 /** Tempo máximo que a busca espera pelas imagens substitutas; o resto fica para a próxima. */
 const IMAGE_BUDGET_MS = 4_000;
@@ -103,16 +108,58 @@ export async function searchAwinCatalog(
   return withImages.map((r) => mapAwinCatalogRowToProductData(toRow(r)));
 }
 
-export async function listAwinCatalogStores(db: TenantClient): Promise<string[]> {
+const normalizeStoreName = (v: string) =>
+  v.normalize('NFD').replace(/\p{M}/gu, '').trim().toLowerCase();
+
+/**
+ * Lojas do catálogo Awin para o seletor da busca, ordenadas pelo score do programa (EPC); as que
+ * ainda não têm indicadores vão para o fim, em ordem alfabética. O indicador é associado pelo
+ * advertiserId e, sem ele, pelo nome da loja.
+ */
+export async function listAwinCatalogStores(db: TenantClient): Promise<AwinStoreOption[]> {
   const ownerTenantId = (await getParentTenantId(db.$tenantId)) ?? db.$tenantId;
-  const rows = await forTenant(ownerTenantId).awinCatalogProduct.findMany({
-    distinct: ['advertiserName'],
-    where: { advertiserName: { not: null } },
-    select: { advertiserName: true },
-    orderBy: { advertiserName: 'asc' },
-    take: 200,
+  const owner = forTenant(ownerTenantId);
+  const [rows, stats] = await Promise.all([
+    owner.awinCatalogProduct.findMany({
+      distinct: ['advertiserName'],
+      where: { advertiserName: { not: null } },
+      select: { advertiserName: true, advertiserId: true },
+      orderBy: { advertiserName: 'asc' },
+      take: 200,
+    }),
+    listAwinProgrammeStats(ownerTenantId),
+  ]);
+  const byId = new Map(stats.map((s) => [s.advertiserId, s]));
+  const byName = new Map(stats.map((s) => [normalizeStoreName(s.name), s]));
+  const entries = rows
+    .filter((r): r is { advertiserName: string; advertiserId: string | null } =>
+      Boolean(r.advertiserName?.trim()),
+    )
+    .map((r) => {
+      const stat =
+        (r.advertiserId ? byId.get(r.advertiserId) : undefined) ??
+        byName.get(normalizeStoreName(r.advertiserName)) ??
+        null;
+      return {
+        name: r.advertiserName,
+        advertiserId: r.advertiserId ?? stat?.advertiserId ?? null,
+        stat,
+      };
+    });
+  entries.sort((a, b) => {
+    if (a.stat && b.stat)
+      return compareProgrammeStats(a.stat, b.stat) || a.name.localeCompare(b.name, 'pt-BR');
+    if (a.stat) return -1;
+    if (b.stat) return 1;
+    return a.name.localeCompare(b.name, 'pt-BR');
   });
-  return rows.map((r) => r.advertiserName).filter((n): n is string => Boolean(n?.trim()));
+  return entries.map(({ name, advertiserId, stat }) => ({
+    name,
+    advertiserId,
+    epc: stat?.epc ?? null,
+    currency: stat?.currency ?? null,
+    score: stat?.score ?? null,
+  }));
 }
 
 export async function fetchAwinCatalogByUrls(

@@ -5,6 +5,7 @@ import {
   ApiError,
   MARKETPLACE_KINDS,
   QUEUE_AWIN_IMPORT,
+  QUEUE_AWIN_PROGRAMME_STATS,
   marketplaceKindParam,
   marketplaceUpdateSchema,
   marketplaceSessionSchema,
@@ -12,6 +13,7 @@ import {
   supportsSessionCookie,
   SESSION_FIELD_BY_KIND,
   type AwinImportJob,
+  type AwinProgrammeStatsJob,
 } from '@afilados/shared';
 import { forbidAffiliate, requireAuth } from '../plugins/auth';
 import {
@@ -29,7 +31,12 @@ import {
 import { getQueue, getQueueEvents, getRedis } from '../lib/redis';
 import { completeMlOAuth, startMlOAuth } from '../lib/ml-api';
 import { readMlLinkBatchError } from '../lib/ml-links';
-import { getAliexpressCategories, listDatafeeds } from '@afilados/marketplaces';
+import {
+  getAliexpressCategories,
+  listDatafeeds,
+  type AwinCredentials,
+} from '@afilados/marketplaces';
+import { listAwinProgrammeStats } from '../lib/awin-programme-stats';
 
 const kindParams = z.object({ kind: marketplaceKindParam });
 const mlOAuthCallbackSchema = z.object({ code: z.string().min(1), state: z.string().min(1) });
@@ -275,6 +282,42 @@ export async function marketplacesRoutes(app: FastifyInstance) {
       throw new ApiError('MARKETPLACE_ERROR', message, 502);
     }
   });
+
+  /** Indicadores (EPC, conversão, aprovação…) dos programas Awin, na ordem do ranking. */
+  app.get('/marketplaces/awin/programme-stats', async (req) => {
+    const items = await listAwinProgrammeStats(req.tenantId);
+    const fetchedAt = items.reduce<string | null>(
+      (latest, i) => (latest === null || i.fetchedAt > latest ? i.fetchedAt : latest),
+      null,
+    );
+    return { items, fetchedAt };
+  });
+
+  /** Enfileira a atualização dos indicadores; o jobId fixo por tenant evita rodadas duplicadas. */
+  app.post(
+    '/marketplaces/awin/programme-stats/refresh',
+    { preHandler: forbidAffiliate },
+    async (req, reply) => {
+      const conn = await req.db.marketplaceConnection.findFirst({ where: { kind: 'AWIN' } });
+      const creds = conn?.encryptedCredentials
+        ? decryptJson<Partial<AwinCredentials>>(Buffer.from(conn.encryptedCredentials))
+        : {};
+      if (!creds.publisherId || !creds.offersApiToken) {
+        throw new ApiError(
+          'MARKETPLACE_ERROR',
+          'Informe o Publisher ID e o token de API da Awin para buscar os indicadores',
+          400,
+        );
+      }
+      const jobId = `awin-programme-stats-${req.tenantId}-manual`;
+      await getQueue<AwinProgrammeStatsJob>(QUEUE_AWIN_PROGRAMME_STATS).add(
+        'awin-programme-stats',
+        { tenantId: req.tenantId, trigger: 'manual' },
+        { jobId, attempts: 1, removeOnComplete: true, removeOnFail: true },
+      );
+      return reply.status(202).send({ queued: true, jobId });
+    },
+  );
 
   app.get('/marketplaces/awin/import/:jobId', async (req) => {
     const { jobId } = z.object({ jobId: z.string().min(1).max(200) }).parse(req.params);
