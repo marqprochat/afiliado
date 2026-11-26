@@ -29,6 +29,7 @@ import { TelegramClient } from '@afilados/telegram';
 import type { ProductData, SendTelegramJob, TagCredentials } from '@afilados/shared';
 import { resolveCachedAffiliateLink } from '../lib/ml-links';
 import { channelizeLink } from '../lib/channel-link';
+import { createAwinShortener, type AwinShortenerDeps } from '../lib/awin-short-links';
 import { publishOfferForTenant, type PublishOfferFn } from '../lib/publish-offer';
 
 const log = pino({ name: 'send-telegram' });
@@ -45,6 +46,8 @@ export interface SendTelegramDeps {
   makeClient?: (token: string) => TelegramClient;
   /** Injetável em testes; por padrão publica a oferta no site (lib/publish-offer.ts). */
   publishOffer?: PublishOfferFn;
+  /** Injetável em testes; por padrão usa a API da Awin e o Redis (links curtos, `awinShortLinks`). */
+  awinShortener?: AwinShortenerDeps;
 }
 
 export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob): Promise<void> {
@@ -194,11 +197,25 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
       };
       const publish = deps.publishOffer ?? publishOfferForTenant;
       const siteLink = await publish(job.tenantId, pd, affiliateLink);
-      const link = await channelLinkForChat(job, {
+      let link = await channelLinkForChat(job, {
         link: siteLink ?? affiliateLink,
         viaSite: siteLink !== null,
         source: product.source,
       });
+      // Links curtos da Awin (setting `awinShortLinks`): só para o cread.php direto, nunca o do site.
+      if (product.source === 'AWIN' && siteLink === null) {
+        link = await createAwinShortener(
+          {
+            tenantId: job.tenantId,
+            settings,
+            creds: conn?.encryptedCredentials
+              ? decryptJson<AwinCredentials>(Buffer.from(conn.encryptedCredentials))
+              : null,
+            channels: 1,
+          },
+          deps.awinShortener,
+        ).shorten(link);
+      }
       text = renderTemplate(template.body, pd, {
         affiliateLink: link,
         now: t.toISOString(),

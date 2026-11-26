@@ -31,6 +31,7 @@ import {
 import type { ProductData, SendOfferJob, SendTelegramJob, TagCredentials } from '@afilados/shared';
 import { resolveItemCta } from '../lib/ai-cta';
 import { channelizeLink, swapLinkInMessage } from '../lib/channel-link';
+import { createAwinShortener, type AwinShortenerDeps } from '../lib/awin-short-links';
 import { publishEvent } from '../lib/events';
 import { resolveCachedAffiliateLink } from '../lib/ml-links';
 import { publishOfferForTenant, type PublishOfferFn } from '../lib/publish-offer';
@@ -61,6 +62,8 @@ export interface SendOfferDeps {
   /** Injetável em testes; por padrão troca os links de loja do texto livre pela página do site. */
   rewriteOfferLinks?: RewriteOfferLinksFn;
   enqueueTelegram?: (job: SendTelegramJob & { jobId: string }) => Promise<void>;
+  /** Injetável em testes; por padrão usa a API da Awin e o Redis (links curtos, `awinShortLinks`). */
+  awinShortener?: AwinShortenerDeps;
 }
 
 export type SendOfferResult =
@@ -370,29 +373,46 @@ export async function sendOffer(
     // Link por grupo: o template foi renderizado uma vez; aqui só o link é trocado pelo do canal
     // (site → ?c=&b=, Awin direto → clickref2/3) para atribuir vendas ao grupo.
     const productSource = product.source;
+    // Links curtos da Awin (setting `awinShortLinks`): só para o cread.php direto, nunca o do site.
+    const shortener =
+      productSource === 'AWIN' && siteLink === null
+        ? createAwinShortener(
+            {
+              tenantId,
+              settings,
+              creds: conn?.encryptedCredentials
+                ? decryptJson<AwinCredentials>(Buffer.from(conn.encryptedCredentials))
+                : null,
+              channels: batch.groupJids.length + batch.telegramChatIds.length,
+            },
+            deps.awinShortener,
+          )
+        : null;
     const personalize = async (groupJid: string): Promise<OutgoingMessage> => {
+      let channelLink = link;
       try {
         const group = await prisma.waGroup.findFirst({
           where: { tenantId, sessionId: batch.sessionId, jid: groupJid },
           select: { id: true },
         });
-        if (!group) return message;
-        const trackCode = await ensureTrackCode(prisma, { kind: 'WHATSAPP', id: group.id });
-        const channelLink = channelizeLink({
-          link,
-          viaSite: siteLink !== null,
-          source: productSource,
-          trackCode,
-          batchId: batch.id,
-        });
-        return swapLinkInMessage(message, link, channelLink);
+        if (group) {
+          const trackCode = await ensureTrackCode(prisma, { kind: 'WHATSAPP', id: group.id });
+          channelLink = channelizeLink({
+            link,
+            viaSite: siteLink !== null,
+            source: productSource,
+            trackCode,
+            batchId: batch.id,
+          });
+        }
       } catch (err) {
         log.warn(
           { batchItemId: item.id, groupJid, err: err instanceof Error ? err.message : String(err) },
           'falha ao montar o link do canal; enviando o link padrão',
         );
-        return message;
       }
+      if (shortener) channelLink = await shortener.shorten(channelLink);
+      return swapLinkInMessage(message, link, channelLink);
     };
 
     const bucket = bucketFor(batch.sessionId, ratePerMin);

@@ -9,6 +9,7 @@ import { sendOffer, type SendOfferDeps } from '../src/processors/send-offer';
 import type { OutgoingMessage, WhatsAppGateway } from '../src/wa/gateway';
 import { closeRedis } from '../src/lib/redis';
 import { publishOffer } from '../src/lib/publish-offer';
+import { memoryShortenerStore } from '../src/lib/awin-short-links';
 
 class FakeGateway implements WhatsAppGateway {
   sent: { jid: string; msg: OutgoingMessage }[] = [];
@@ -1221,5 +1222,157 @@ describe('sendOffer: link por canal (atribuição de vendas)', () => {
     expect(urls.map((u) => u.searchParams.get('clickref2'))).toEqual([ca, cb]);
     expect(urls.every((u) => u.searchParams.get('clickref3') === batch.id)).toBe(true);
     expect(urls.every((u) => u.searchParams.get('clickref'))).toBe(true);
+  });
+});
+
+describe('sendOffer: links curtos da Awin (awinShortLinks)', () => {
+  const shortGroups = ['curto-a@g.us', 'curto-b@g.us'];
+  const CREAD =
+    'https://www.awin1.com/cread.php?awinmid=68224&awinaffid=691887&platform=dl&ued=https%3A%2F%2Fwww.drogal.com.br%2Fp';
+  let awinProductId: string;
+
+  function shortDeps(quota: { limit: number | null; usage: number; remaining: number | null }) {
+    let n = 0;
+    const generate = vi.fn(async () => ({ url: CREAD, shortUrl: `https://tidd.ly/c${++n}` }));
+    const getQuota = vi.fn(async () => quota);
+    let clock = 0;
+    const d: SendOfferDeps = {
+      ...deps,
+      awinShortener: {
+        store: memoryShortenerStore(),
+        generate,
+        getQuota,
+        now: () => clock,
+        sleep: async (ms) => {
+          clock += ms;
+        },
+      },
+    };
+    return { d, generate, getQuota };
+  }
+
+  async function awinBatch() {
+    const batch = await prisma.batch.create({
+      data: {
+        tenantId,
+        sessionId,
+        templateId,
+        name: 'b-curto',
+        groupJids: shortGroups,
+        telegramChatIds: [],
+        intervalMin: 1,
+        mediaMode: 'IMAGE',
+        status: 'SCHEDULED',
+        items: { create: [{ productId: awinProductId, order: 0, runAt: new Date() }] },
+      },
+      include: { items: true },
+    });
+    return batch.items[0]!;
+  }
+
+  const sentLinks = () =>
+    gateway.sent.map((s) => {
+      const caption = s.msg.kind === 'image' ? s.msg.caption : s.msg.text;
+      return caption.split('\n').pop()!;
+    });
+
+  beforeAll(async () => {
+    for (const [i, jid] of shortGroups.entries()) {
+      await prisma.waGroup.create({ data: { tenantId, sessionId, jid, name: `Curto ${i}` } });
+    }
+    await prisma.marketplaceConnection.upsert({
+      where: { tenantId_kind: { tenantId, kind: 'AWIN' } },
+      create: { tenantId, kind: 'AWIN', status: 'OK' },
+      update: {},
+    });
+    await prisma.marketplaceConnection.update({
+      where: { tenantId_kind: { tenantId, kind: 'AWIN' } },
+      data: {
+        encryptedCredentials: encryptJson({
+          feedListUrl: 'https://ui.awin.com/f',
+          feedIds: ['f1'],
+          publisherId: '691887',
+          offersApiToken: 'tok',
+        }),
+      },
+    });
+    awinProductId = (
+      await prisma.product.create({
+        data: {
+          tenantId,
+          source: 'AWIN',
+          externalId: 'curto-awin',
+          title: 'Produto Curto',
+          price: 10,
+          images: [],
+          originalUrl: CREAD,
+          raw: {},
+        },
+      })
+    ).id;
+  });
+  afterEach(async () => {
+    await prisma.setting.deleteMany({
+      where: { tenantId, key: { in: ['awinShortLinks', 'siteLinks'] } },
+    });
+  });
+
+  it('setting desligado: igual a hoje (cread.php por canal, sem chamar a Awin)', async () => {
+    const { d, generate, getQuota } = shortDeps({ limit: 50, usage: 0, remaining: 50 });
+    await sendOffer(d, (await awinBatch()).id);
+    const links = sentLinks();
+    expect(links).toHaveLength(2);
+    expect(links.every((l) => l.startsWith('https://www.awin1.com/cread.php?'))).toBe(true);
+    expect(generate).not.toHaveBeenCalled();
+    expect(getQuota).not.toHaveBeenCalled();
+  });
+
+  it('ligado + cota ok: um link curto por canal, gerado com o clickref2 do canal', async () => {
+    await prisma.setting.create({ data: { tenantId, key: 'awinShortLinks', value: true } });
+    const { d, generate } = shortDeps({ limit: 50, usage: 0, remaining: 50 });
+    await sendOffer(d, (await awinBatch()).id);
+    expect(sentLinks()).toEqual(['https://tidd.ly/c1', 'https://tidd.ly/c2']);
+    const rows = await prisma.waGroup.findMany({
+      where: { tenantId, jid: { in: shortGroups } },
+      orderBy: { jid: 'asc' },
+    });
+    const refs = generate.mock.calls.map(
+      (c) => ((c as unknown[])[1] as { parameters: { clickref2: string } }).parameters.clickref2,
+    );
+    expect(refs).toEqual(rows.map((r) => r.trackCode));
+  });
+
+  it('ligado + cota insuficiente: mantém o link longo', async () => {
+    await prisma.setting.create({ data: { tenantId, key: 'awinShortLinks', value: true } });
+    const { d, generate } = shortDeps({ limit: 50, usage: 49, remaining: 1 });
+    await sendOffer(d, (await awinBatch()).id);
+    expect(sentLinks().every((l) => l.startsWith('https://www.awin1.com/cread.php?'))).toBe(true);
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it('ligado + erro na Awin: mantém o link longo', async () => {
+    await prisma.setting.create({ data: { tenantId, key: 'awinShortLinks', value: true } });
+    const { d, generate } = shortDeps({ limit: 50, usage: 0, remaining: 50 });
+    generate.mockRejectedValue(new Error('429'));
+    await sendOffer(d, (await awinBatch()).id);
+    expect(sentLinks().every((l) => l.startsWith('https://www.awin1.com/cread.php?'))).toBe(true);
+  });
+
+  it('link do site nunca é encurtado', async () => {
+    await prisma.setting.create({ data: { tenantId, key: 'awinShortLinks', value: true } });
+    await prisma.setting.create({ data: { tenantId, key: 'siteLinks', value: { enabled: true } } });
+    const { d, generate, getQuota } = shortDeps({ limit: 50, usage: 0, remaining: 50 });
+    const withSite: SendOfferDeps = {
+      ...d,
+      publishOffer: (tid, p, aff) =>
+        publishOffer(forTenant(tid), tid, p, aff, {
+          siteUrl: 'https://site.test',
+          isOwnerTenant: async () => true,
+        }),
+    };
+    await sendOffer(withSite, (await awinBatch()).id);
+    expect(sentLinks().every((l) => l.startsWith('https://site.test/ofertas/'))).toBe(true);
+    expect(generate).not.toHaveBeenCalled();
+    expect(getQuota).not.toHaveBeenCalled();
   });
 });
