@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ExternalLink, Bell, TrendingDown, Store, Flame, Sparkles } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { offerRedirectHref, useTrackQuery } from '@/lib/offer-redirect';
+import { ProductImage } from '@/components/ui/product-image';
 import { PriceAlertModal } from './price-alert-modal';
 
 export interface DealCardProps {
@@ -94,19 +95,12 @@ export function DealCard({ deal }: { deal: DealCardProps }) {
 
           {/* Imagem do Produto */}
           <Link href={`/ofertas/${deal.slug}`} className="block relative aspect-square w-full rounded-xl bg-black/40 border border-slate-800/60 overflow-hidden mb-3 p-3">
-            {deal.imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={deal.imageUrl}
-                alt={deal.cleanTitle}
-                className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
-                loading="lazy"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-slate-600 text-xs">
-                Sem foto
-              </div>
-            )}
+            <ProductImage
+              src={deal.imageUrl}
+              alt={deal.cleanTitle}
+              className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+              placeholderClassName="rounded-lg bg-slate-900/60 text-slate-600"
+            />
           </Link>
 
           {/* Título */}

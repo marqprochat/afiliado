@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { copyToClipboard } from '@/lib/clipboard';
 import { NativeCheckbox } from '@/components/ui/native-checkbox';
 import { Button } from '@/components/ui/button';
+import { ProductImage } from '@/components/ui/product-image';
 import { formatBRL } from '@/lib/format';
 import type { ApiProduct } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -72,19 +73,12 @@ export function ProductCard({
         )}
       </div>
       <div className="mb-2 aspect-square overflow-hidden rounded bg-surface-2">
-        {p.images[0] && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={p.images[0]}
-            alt=""
-            className="h-full w-full object-cover"
-            loading="lazy"
-            decoding="async"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
-        )}
+        <ProductImage
+          src={p.images[0]}
+          alt={p.title}
+          className="h-full w-full object-cover"
+          placeholderClassName="bg-surface-2"
+        />
       </div>
       {p.shopName && (
         <span className="mb-0.5 truncate text-[10px] font-medium text-muted-foreground">

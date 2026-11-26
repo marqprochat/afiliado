@@ -21,6 +21,7 @@ import { LandingFooter } from '@/components/landing/landing-footer';
 import { PriceHistoryChart } from '@/components/deals/price-history-chart';
 import { PriceAlertModal } from '@/components/deals/price-alert-modal';
 import { DealCouponBlock, type DealCoupon } from '@/components/deals/deal-coupon-block';
+import { ProductImage } from '@/components/ui/product-image';
 import { formatCurrency } from '@/lib/format';
 import { offerRedirectHref, useTrackQuery } from '@/lib/offer-redirect';
 
@@ -158,8 +159,14 @@ export default function OfertaDetailPage() {
         <main className="flex-1 max-w-md mx-auto w-full px-4 pt-28 pb-16 text-center">
           {deal.imageUrl && (
             <div className="aspect-square w-full max-w-xs mx-auto rounded-3xl bg-black/60 border border-slate-800 p-6 flex items-center justify-center mb-6 overflow-hidden opacity-70">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={deal.imageUrl} alt={deal.cleanTitle} className="w-full h-full object-contain" />
+              <ProductImage
+                src={deal.imageUrl}
+                alt={deal.cleanTitle}
+                loading="eager"
+                className="w-full h-full object-contain"
+                placeholderClassName="rounded-2xl bg-slate-900/60 text-slate-600"
+                iconClassName="h-12 w-12"
+              />
             </div>
           )}
           <h1 className="text-xl font-bold text-white mb-3">{deal.cleanTitle}</h1>
@@ -205,11 +212,13 @@ export default function OfertaDetailPage() {
           {/* Coluna Visual (Foto & Miniaturas) */}
           <div className="md:col-span-5 flex flex-col items-center">
             <div className="relative aspect-square w-full max-w-sm rounded-3xl bg-black/60 border border-slate-800 p-6 flex items-center justify-center shadow-2xl mb-4 overflow-hidden">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={selectedImage || deal.imageUrl || ''}
+              <ProductImage
+                src={selectedImage || deal.imageUrl}
                 alt={deal.cleanTitle}
+                loading="eager"
                 className="w-full h-full object-contain"
+                placeholderClassName="rounded-2xl bg-slate-900/60 text-slate-600"
+                iconClassName="h-12 w-12"
               />
 
               {isAllTimeLow && (
@@ -230,8 +239,13 @@ export default function OfertaDetailPage() {
                       selectedImage === img ? 'border-emerald-500 shadow-md' : 'border-slate-800 hover:border-slate-700'
                     }`}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={img} alt="" className="w-full h-full object-contain" />
+                    <ProductImage
+                      src={img}
+                      alt=""
+                      className="w-full h-full object-contain"
+                      placeholderClassName="bg-slate-900/60 text-slate-600"
+                      iconClassName="h-4 w-4"
+                    />
                   </button>
                 ))}
               </div>
