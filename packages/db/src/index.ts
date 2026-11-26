@@ -45,6 +45,7 @@ const TENANT_MODELS = new Set([
   'AffiliateLandingPage',
   'OfferClick',
   'AffiliateSale',
+  'AwinProgrammeStats',
 ]);
 
 const FILTERED_OPS = new Set([

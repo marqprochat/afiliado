@@ -10,6 +10,7 @@ export const QUEUE_GROUP_LINK_SYNC = 'group-link-sync';
 export const QUEUE_ML_LINKS_PREWARM = 'ml-links-prewarm';
 export const QUEUE_METRICS_DAILY = 'metrics-daily';
 export const QUEUE_AWIN_SALES_SYNC = 'awin-sales-sync';
+export const QUEUE_AWIN_PROGRAMME_STATS = 'awin-programme-stats';
 
 export type WaCommand =
   | 'connect'
@@ -123,5 +124,11 @@ export interface AwinSalesSyncJob {
   tenantId: string;
   /** Janela de busca das transações: 7 (de hora em hora) ou 31 (1×/dia). */
   windowDays: number;
+  trigger: 'schedule' | 'manual';
+}
+
+/** Indicadores (EPC, conversão, aprovação…) dos programas Awin aprovados; 1×/dia ou manual. */
+export interface AwinProgrammeStatsJob {
+  tenantId: string;
   trigger: 'schedule' | 'manual';
 }

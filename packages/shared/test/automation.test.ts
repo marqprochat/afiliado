@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   automationRuleCreateSchema,
+  automationRuleUpdateSchema,
   automationQueueLinkSchema,
   automationQueueCouponSchema,
   automationDiscoveringKey,
@@ -87,5 +88,38 @@ describe('automationDiscoveringKey', () => {
   it('gera uma chave estável e única por regra', () => {
     expect(automationDiscoveringKey('rule-1')).toBe('automation-discovering:rule-1');
     expect(automationDiscoveringKey('rule-2')).not.toBe(automationDiscoveringKey('rule-1'));
+  });
+});
+
+describe('opções de EPC da Awin na regra', () => {
+  const base = {
+    name: 'Awin',
+    marketplaces: ['AWIN'],
+    keywords: ['protetor'],
+    sessionId: 'sess1',
+    groupJids: ['g1@g.us'],
+    templateId: 'tpl1',
+  };
+
+  it('padrão: não prioriza e sem EPC mínimo', () => {
+    const parsed = automationRuleCreateSchema.parse(base);
+    expect(parsed.awinPrioritizeEpc).toBe(false);
+    expect(parsed.awinMinEpc).toBeUndefined();
+  });
+
+  it('aceita prioridade e EPC mínimo; rejeita EPC negativo', () => {
+    const parsed = automationRuleCreateSchema.parse({
+      ...base,
+      awinPrioritizeEpc: true,
+      awinMinEpc: 0.25,
+    });
+    expect(parsed).toMatchObject({ awinPrioritizeEpc: true, awinMinEpc: 0.25 });
+    expect(() => automationRuleCreateSchema.parse({ ...base, awinMinEpc: -1 })).toThrow();
+  });
+
+  it('edição aceita limpar o EPC mínimo com null e não força a prioridade', () => {
+    const parsed = automationRuleUpdateSchema.parse({ awinMinEpc: null });
+    expect(parsed.awinMinEpc).toBeNull();
+    expect(parsed.awinPrioritizeEpc).toBeUndefined();
   });
 });

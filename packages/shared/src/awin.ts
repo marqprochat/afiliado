@@ -26,3 +26,32 @@ export function mapAwinCatalogRowToProductData(row: AwinCatalogRow): ProductData
     raw: row.raw,
   };
 }
+
+/** Indicadores de um programa Awin como a API devolve (ordenados por score). */
+export interface AwinProgrammeStatsItem {
+  advertiserId: string;
+  name: string;
+  logoUrl: string | null;
+  displayUrl: string | null;
+  currency: string | null;
+  epc: number | null;
+  conversionRate: number | null;
+  approvalPercentage: number | null;
+  averagePaymentTime: number | null;
+  validationDays: number | null;
+  awinIndex: number | null;
+  commissionMin: number | null;
+  commissionMax: number | null;
+  commissionType: string | null;
+  score: number | null;
+  fetchedAt: string;
+}
+
+/** Loja do catálogo Awin no seletor da busca (ordenada pelo score do programa). */
+export interface AwinStoreOption {
+  name: string;
+  advertiserId: string | null;
+  epc: number | null;
+  currency: string | null;
+  score: number | null;
+}

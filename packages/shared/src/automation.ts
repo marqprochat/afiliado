@@ -16,6 +16,10 @@ export const automationRuleCreateSchema = z.object({
   telegramChatIds: z.array(z.string().min(1)).default([]),
   templateId: z.string().min(1),
   mediaMode: z.enum(MEDIA_MODES).default('IMAGE'),
+  /** Awin: ordena os candidatos pelo score (EPC) da loja. */
+  awinPrioritizeEpc: z.boolean().default(false),
+  /** Awin: EPC mínimo da loja (null limpa). */
+  awinMinEpc: z.number().min(0).max(10_000).nullable().optional(),
 });
 export type AutomationRuleCreateBody = z.infer<typeof automationRuleCreateSchema>;
 
