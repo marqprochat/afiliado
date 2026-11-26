@@ -1,4 +1,4 @@
-import { prisma, decryptJson, resolveConnection } from '@afilados/db';
+import { prisma, decryptJson, getParentTenantId, resolveConnection } from '@afilados/db';
 import type { AutomationRule } from '@afilados/db';
 import {
   createShopeeAdapter,
@@ -8,6 +8,7 @@ import {
   discoverMlCatalogUrls,
   discoverAmazonByKeyword,
   discoverMagaluByKeyword,
+  compareProgrammeStats,
   type AliexpressCredentials,
   type ShopeeCredentials,
 } from '@afilados/marketplaces';
@@ -216,12 +217,51 @@ async function discoverAliexpress(
   return search(creds, keyword);
 }
 
+/** Candidatos lidos do catálogo Awin por rodada (e quantos sobram após o ranking por EPC). */
+const AWIN_CANDIDATES = 20;
+const AWIN_RANKED_POOL = 100;
+
 async function discoverAwin(rule: AutomationRule, keyword: string): Promise<ProductData[]> {
+  const minEpc = rule.awinMinEpc !== null ? Number(rule.awinMinEpc) : null;
+  const useEpc = rule.awinPrioritizeEpc || minEpc !== null;
   const rows = await prisma.awinCatalogProduct.findMany({
     where: { tenantId: rule.tenantId, title: { contains: keyword, mode: 'insensitive' } },
-    take: 20,
+    take: useEpc ? AWIN_RANKED_POOL : AWIN_CANDIDATES,
   });
-  return rows.map((r) =>
+  let ranked = rows;
+  if (useEpc) {
+    // Indicadores ficam na conta dona das credenciais (afiliados compartilham o publisher).
+    const ownerTenantId = (await getParentTenantId(rule.tenantId)) ?? rule.tenantId;
+    const stats = await prisma.awinProgrammeStats.findMany({
+      where: { tenantId: ownerTenantId },
+      select: {
+        advertiserId: true,
+        epc: true,
+        score: true,
+        conversionRate: true,
+        averagePaymentTime: true,
+      },
+    });
+    const byAdvertiser = new Map(stats.map((s) => [s.advertiserId, s]));
+    const statOf = (r: (typeof rows)[number]) =>
+      r.advertiserId ? byAdvertiser.get(r.advertiserId) : undefined;
+    if (minEpc !== null) {
+      // Sem EPC conhecido a loja não comprova o mínimo: fica de fora.
+      ranked = ranked.filter((r) => {
+        const epc = statOf(r)?.epc;
+        return epc !== undefined && epc !== null && Number(epc) >= minEpc;
+      });
+    }
+    if (rule.awinPrioritizeEpc) {
+      const none = { score: null, conversionRate: null, averagePaymentTime: null };
+      // sort é estável: dentro da mesma loja/score, mantém a ordem do catálogo.
+      ranked = [...ranked].sort((a, b) =>
+        compareProgrammeStats(statOf(a) ?? none, statOf(b) ?? none),
+      );
+    }
+    ranked = ranked.slice(0, AWIN_CANDIDATES);
+  }
+  return ranked.map((r) =>
     mapAwinCatalogRowToProductData({
       feedId: r.feedId,
       externalId: r.externalId,
