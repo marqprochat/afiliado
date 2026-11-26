@@ -40,7 +40,7 @@ const ALERT_PAGE_SIZE = 8;
  * sessão de quem está logado (outro tenant, afiliado) é ignorada de propósito, senão o link
  * postado no grupo daria 404 para quem abre o site logado.
  */
-async function resolvePublicTenantId(): Promise<string | null> {
+export async function resolvePublicTenantId(): Promise<string | null> {
   // 1. Tenant do dono da aplicação: as páginas publicadas no envio das ofertas são dele.
   const ownerTenantId = await resolveOwnerTenantId();
   if (ownerTenantId) return ownerTenantId;
