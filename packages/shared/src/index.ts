@@ -18,3 +18,4 @@ export * from './metrics';
 export * from './affiliates';
 export * from './affiliate-landing';
 export * from './site-links';
+export * from './sales';

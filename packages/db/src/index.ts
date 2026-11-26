@@ -4,6 +4,8 @@ export * from '@prisma/client';
 export * from './crypto';
 export * from './affiliate';
 export * from './defaults';
+export * from './track-code';
+export * from './affiliate-sales';
 export { prisma };
 
 /** Modelos que possuem coluna tenantId e devem ser filtrados automaticamente. */
@@ -41,6 +43,8 @@ const TENANT_MODELS = new Set([
   'ProductListing',
   'PriceAlert',
   'AffiliateLandingPage',
+  'OfferClick',
+  'AffiliateSale',
 ]);
 
 const FILTERED_OPS = new Set([

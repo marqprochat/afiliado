@@ -9,6 +9,7 @@ export const QUEUE_GROUP_LINK_ROTATE = 'group-link-rotate';
 export const QUEUE_GROUP_LINK_SYNC = 'group-link-sync';
 export const QUEUE_ML_LINKS_PREWARM = 'ml-links-prewarm';
 export const QUEUE_METRICS_DAILY = 'metrics-daily';
+export const QUEUE_AWIN_SALES_SYNC = 'awin-sales-sync';
 
 export type WaCommand =
   | 'connect'
@@ -80,6 +81,8 @@ export interface SendTelegramJob {
   customImageItemId?: string;
   /** CTA gerado pela IA no send-offer (um por item); vazio/ausente = sem CTA. */
   cta?: string;
+  /** Lote de origem: vai no link (clickref3 da Awin / ?b= do site) para atribuir vendas. */
+  batchId?: string;
 }
 
 export interface AwinImportJob {
@@ -113,5 +116,12 @@ export interface MlLinksPrewarmJob {
 }
 
 export interface MetricsDailyJob {
+  trigger: 'schedule' | 'manual';
+}
+
+export interface AwinSalesSyncJob {
+  tenantId: string;
+  /** Janela de busca das transações: 7 (de hora em hora) ou 31 (1×/dia). */
+  windowDays: number;
   trigger: 'schedule' | 'manual';
 }

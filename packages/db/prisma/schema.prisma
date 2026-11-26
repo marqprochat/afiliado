@@ -50,6 +50,8 @@ model Tenant {
   productListings      ProductListing[]
   priceAlerts          PriceAlert[]
   affiliateLandingPage AffiliateLandingPage?
+  offerClicks          OfferClick[]
+  affiliateSales       AffiliateSale[]
 
   @@index([parentTenantId])
 }
@@ -167,8 +169,11 @@ model WaGroup {
   description  String?
   announceOnly Boolean     @default(false)
   syncedAt     DateTime    @default(now())
+  /// Código curto do canal (ex.: wK7p2Q) usado no clickref2 da Awin e no ?c= do site.
+  trackCode    String?
 
   @@unique([sessionId, jid])
+  @@unique([tenantId, trackCode])
   @@index([tenantId])
 }
 
@@ -232,8 +237,11 @@ model TelegramChat {
   kind       String
   botIsAdmin Boolean     @default(false)
   syncedAt   DateTime    @default(now())
+  /// Código curto do canal (ex.: tK7p2Q) usado no clickref2 da Awin e no ?c= do site.
+  trackCode  String?
 
   @@unique([botId, chatId])
+  @@unique([tenantId, trackCode])
   @@index([tenantId])
 }
 
@@ -1017,4 +1025,76 @@ model AffiliateLandingPage {
   updatedAt      DateTime @updatedAt
 
   @@index([slug])
+}
+
+/// Clique no botão "comprar" do site (GET /api/v1/r/:listingId?c=&b=).
+model OfferClick {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  listingId   String
+  channelCode String?
+  batchId     String?
+  clickedAt   DateTime @default(now())
+
+  @@index([tenantId, clickedAt])
+  @@index([tenantId, channelCode])
+}
+
+enum AffiliateNetwork {
+  AWIN
+}
+
+enum AffiliateSaleStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  DELETED
+}
+
+enum SaleChannelKind {
+  WHATSAPP
+  TELEGRAM
+}
+
+enum AffiliateSaleSource {
+  API
+  WEBHOOK
+}
+
+/// Venda/comissão de rede de afiliados (Awin), atribuída ao canal pelo clickRef2 (= trackCode).
+model AffiliateSale {
+  id               String              @id @default(cuid())
+  tenantId         String
+  tenant           Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  network          AffiliateNetwork    @default(AWIN)
+  externalId       String
+  advertiserId     String
+  advertiserName   String?
+  saleAmount       Decimal             @db.Decimal(12, 2)
+  commissionAmount Decimal             @db.Decimal(12, 2)
+  currency         String              @default("BRL")
+  status           AffiliateSaleStatus @default(PENDING)
+  transactionDate  DateTime
+  validationDate   DateTime?
+  clickRef         String?
+  clickRef2        String?
+  clickRef3        String?
+  clickRef4        String?
+  clickRef5        String?
+  clickRef6        String?
+  channelKind      SaleChannelKind?
+  /// WaGroup.id ou TelegramChat.id
+  channelId        String?
+  /// Nome do canal no momento da atribuição
+  channelName      String?
+  batchId          String?
+  source           AffiliateSaleSource
+  raw              Json
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@unique([tenantId, network, externalId])
+  @@index([tenantId, transactionDate])
+  @@index([tenantId, channelId])
 }
