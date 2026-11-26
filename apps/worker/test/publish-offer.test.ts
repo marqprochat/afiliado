@@ -134,4 +134,54 @@ describe('publishOffer', () => {
     });
     expect(r).toBeNull();
   });
+
+  it('AWIN com imagem fora do ar → indexa com a imagem substituta', async () => {
+    const index = indexOk();
+    const awin: ProductData = {
+      ...product,
+      source: 'AWIN',
+      images: ['https://morta/a.jpg'],
+      originalUrl: 'https://www.awin1.com/pclick.php?p=1',
+    };
+    const resolveImage = vi.fn(async () => ({
+      url: 'https://drogal.vteximg.com.br/a.jpg',
+      status: 'resolved' as const,
+    }));
+    await publishOffer(fakeDb({ enabled: true }), 't1', awin, 'https://aff', {
+      isOwnerTenant: owner,
+      siteUrl: 'https://site.test',
+      index,
+      resolveImage,
+    });
+    expect(resolveImage).toHaveBeenCalledWith({
+      imageUrl: 'https://morta/a.jpg',
+      deepLink: 'https://www.awin1.com/pclick.php?p=1',
+    });
+    expect(index.mock.calls[0]![2].images).toEqual(['https://drogal.vteximg.com.br/a.jpg']);
+  });
+
+  it('AWIN: falha ou demora ao resolver a imagem não impede a publicação', async () => {
+    const index = indexOk();
+    const awin: ProductData = { ...product, source: 'AWIN', images: ['https://morta/a.jpg'] };
+    const r = await publishOffer(fakeDb({ enabled: true }), 't1', awin, 'https://aff', {
+      isOwnerTenant: owner,
+      siteUrl: 'https://site.test',
+      index,
+      imageBudgetMs: 20,
+      resolveImage: () => new Promise(() => undefined),
+    });
+    expect(r).toBe('https://site.test/ofertas/fone-ab12');
+    expect(index.mock.calls[0]![2].images).toEqual(['https://morta/a.jpg']);
+  });
+
+  it('outras fontes não consultam a imagem substituta', async () => {
+    const resolveImage = vi.fn();
+    await publishOffer(fakeDb({ enabled: true }), 't1', product, 'https://aff', {
+      isOwnerTenant: owner,
+      siteUrl: 'https://site.test',
+      index: indexOk(),
+      resolveImage,
+    });
+    expect(resolveImage).not.toHaveBeenCalled();
+  });
 });

@@ -1,13 +1,17 @@
 import pino from 'pino';
 import { prisma, forTenant, type TenantClient } from '@afilados/db';
 import { indexProductInPriceEngine, resolveOwnerTenantId } from '@afilados/deals';
+import { resolveFallbackImage, type FallbackImageResult } from '@afilados/marketplaces';
 import { SITE_LINKS_KEY, siteLinksEnabled, type ProductData } from '@afilados/shared';
 import { config } from '../config';
+import { getRedis } from './redis';
 
 const log = pino({ name: 'publish-offer' });
 
 /** Teto de tempo da indexação por produto; acima disso a mensagem sai com o link de afiliado. */
 export const PUBLISH_TIMEOUT_MS = 5_000;
+/** Parte do teto acima reservada para achar a imagem substituta de produto Awin. */
+export const IMAGE_BUDGET_MS = 2_500;
 
 let warnedMissingSiteUrl = false;
 
@@ -18,6 +22,44 @@ export interface PublishOfferOptions {
   index?: typeof indexProductInPriceEngine;
   /** Injetável em testes; omitido = `isOwnerTenant`. */
   isOwnerTenant?: (tenantId: string) => Promise<boolean>;
+  /** Injetável em testes; omitido = `resolveFallbackImage` com cache no Redis. */
+  resolveImage?: (input: {
+    imageUrl: string | null;
+    deepLink: string;
+  }) => Promise<FallbackImageResult>;
+  imageBudgetMs?: number;
+}
+
+const defaultResolveImage: NonNullable<PublishOfferOptions['resolveImage']> = (input) =>
+  resolveFallbackImage(input, {
+    cache: {
+      get: (key) => getRedis().get(key),
+      set: async (key, value, ttl) => {
+        await getRedis().set(key, value, 'EX', ttl);
+      },
+    },
+  });
+
+/**
+ * Produto Awin com a imagem do feed fora do ar ganha a imagem atual da loja antes de ir para a
+ * página do site. Erro ou demora acima do orçamento: segue com o produto como veio.
+ */
+async function withAwinImage(
+  product: ProductData,
+  opts: PublishOfferOptions,
+): Promise<ProductData> {
+  if (product.source !== 'AWIN') return product;
+  const resolve = opts.resolveImage ?? defaultResolveImage;
+  try {
+    const res = await withTimeout(
+      resolve({ imageUrl: product.images[0] ?? null, deepLink: product.originalUrl }),
+      opts.imageBudgetMs ?? IMAGE_BUDGET_MS,
+    );
+    if (res.status !== 'resolved' || !res.url) return product;
+    return { ...product, images: [res.url, ...product.images.slice(1)] };
+  } catch {
+    return product;
+  }
 }
 
 export type PublishOfferFn = (
@@ -77,19 +119,23 @@ export async function publishOffer(
     if (!siteUrl) {
       if (!warnedMissingSiteUrl) {
         warnedMissingSiteUrl = true;
-        log.warn({ tenantId }, 'PUBLIC_SITE_URL não definido; ofertas seguem com o link de afiliado');
+        log.warn(
+          { tenantId },
+          'PUBLIC_SITE_URL não definido; ofertas seguem com o link de afiliado',
+        );
       }
       return null;
     }
     const index = opts.index ?? indexProductInPriceEngine;
     const run = async () => {
+      const item = await withAwinImage(product, opts);
       try {
-        return await index(db, tenantId, product, { affiliateUrl });
+        return await index(db, tenantId, item, { affiliateUrl });
       } catch (err) {
         // A importação indexa o mesmo produto em paralelo (fire-and-forget): na segunda tentativa
         // a listagem já existe e o motor só a atualiza.
         if (!isUniqueConflict(err)) throw err;
-        return index(db, tenantId, product, { affiliateUrl });
+        return index(db, tenantId, item, { affiliateUrl });
       }
     };
     const indexing = run();
