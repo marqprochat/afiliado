@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { ProductData } from './product';
 
 export interface AwinCatalogRow {
@@ -57,4 +58,41 @@ export interface AwinStoreOption {
   epc: number | null;
   currency: string | null;
   score: number | null;
+}
+
+/** Conversão de links da Awin em lote (`POST /marketplaces/awin/links/batch`). */
+export const awinLinksBatchSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        url: z.string().trim().url().max(4000),
+        subId: z
+          .string()
+          .regex(/^[A-Za-z0-9_-]{1,50}$/, 'subId: só letras, números, _ e -, até 50')
+          .optional(),
+      }),
+    )
+    .min(1)
+    .max(200),
+});
+export type AwinLinksBatchBody = z.infer<typeof awinLinksBatchSchema>;
+
+export interface AwinLinksBatchItem {
+  input: string;
+  /** Link de rastreio; `null` quando o site não é parceiro (ver `error`). */
+  url: string | null;
+  source?: 'api' | 'canonical';
+  error?: string;
+}
+
+export const awinShortLinksSchema = z.object({ enabled: z.boolean() });
+
+/** `GET /marketplaces/awin/links/quota`. */
+export interface AwinLinkQuotaResponse {
+  /** Setting `awinShortLinks`. */
+  enabled: boolean;
+  /** Há Publisher ID e token para consultar a cota. */
+  available: boolean;
+  quota: { limit: number | null; usage: number; remaining: number | null } | null;
+  error?: string;
 }

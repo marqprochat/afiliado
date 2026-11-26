@@ -6,6 +6,8 @@ import {
   MARKETPLACE_KINDS,
   QUEUE_AWIN_IMPORT,
   QUEUE_AWIN_PROGRAMME_STATS,
+  awinLinksBatchSchema,
+  awinShortLinksSchema,
   marketplaceKindParam,
   marketplaceUpdateSchema,
   marketplaceSessionSchema,
@@ -13,6 +15,7 @@ import {
   supportsSessionCookie,
   SESSION_FIELD_BY_KIND,
   type AwinImportJob,
+  type AwinLinkQuotaResponse,
   type AwinProgrammeStatsJob,
 } from '@afilados/shared';
 import { forbidAffiliate, requireAuth } from '../plugins/auth';
@@ -37,6 +40,12 @@ import {
   type AwinCredentials,
 } from '@afilados/marketplaces';
 import { listAwinProgrammeStats } from '../lib/awin-programme-stats';
+import {
+  convertAwinLinksBatch,
+  getAwinQuotaForTenant,
+  getAwinShortLinksEnabled,
+  setAwinShortLinksEnabled,
+} from '../lib/awin-links';
 
 const kindParams = z.object({ kind: marketplaceKindParam });
 const mlOAuthCallbackSchema = z.object({ code: z.string().min(1), state: z.string().min(1) });
@@ -318,6 +327,34 @@ export async function marketplacesRoutes(app: FastifyInstance) {
       return reply.status(202).send({ queued: true, jobId });
     },
   );
+
+  /** Converte vários links da Awin numa chamada de lote (fallback canônico por item). */
+  app.post('/marketplaces/awin/links/batch', async (req) => {
+    const body = awinLinksBatchSchema.parse(req.body);
+    return { items: await convertAwinLinksBatch(req.tenantId, body.items) };
+  });
+
+  /** Cota de links curtos da Awin (cache de 10 min) e o setting que os liga no envio. */
+  app.get('/marketplaces/awin/links/quota', async (req): Promise<AwinLinkQuotaResponse> => {
+    const enabled = await getAwinShortLinksEnabled(req.db);
+    try {
+      const quota = await getAwinQuotaForTenant(req.tenantId);
+      return { enabled, available: quota !== null, quota };
+    } catch (err) {
+      return {
+        enabled,
+        available: true,
+        quota: null,
+        error: err instanceof Error ? err.message : 'Falha ao consultar a cota da Awin',
+      };
+    }
+  });
+
+  app.put('/marketplaces/awin/short-links', async (req) => {
+    const { enabled } = awinShortLinksSchema.parse(req.body);
+    await setAwinShortLinksEnabled(req.db, req.tenantId, enabled);
+    return { enabled };
+  });
 
   app.get('/marketplaces/awin/import/:jobId', async (req) => {
     const { jobId } = z.object({ jobId: z.string().min(1).max(200) }).parse(req.params);
