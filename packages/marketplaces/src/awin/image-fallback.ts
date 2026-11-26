@@ -253,11 +253,26 @@ export async function resolveVtexImageBySlug(
   slug: string,
   deps: ImageFallbackDeps = {},
 ): Promise<string | null> {
+  return (await resolveVtexProductBySlug(origin, slug, deps))?.imageUrl ?? null;
+}
+
+/** Nome e primeira imagem do produto VTEX pelo slug; erro/loja não VTEX/sem imagem → null. */
+export async function resolveVtexProductBySlug(
+  origin: string,
+  slug: string,
+  deps: ImageFallbackDeps = {},
+): Promise<{ imageUrl: string; productName: string | null } | null> {
   try {
     if (!SLUG_RE.test(slug)) return null;
     const base = new URL(origin).origin;
     const api = `${base}/api/catalog_system/pub/products/search/${encodeURIComponent(slug)}/p`;
-    return firstImage((await vtexSearch(api, deps))?.[0]);
+    const first = (await vtexSearch(api, deps))?.[0];
+    const imageUrl = firstImage(first);
+    if (!imageUrl) return null;
+    return {
+      imageUrl,
+      productName: typeof first?.productName === 'string' ? first.productName : null,
+    };
   } catch {
     return null;
   }
@@ -283,8 +298,9 @@ const tokens = (s: string) =>
       .normalize('NFD')
       .replace(/[̀-ͯ]/g, '')
       .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter(Boolean),
+      // `+` faz parte do termo: "RN" e "RN+" são produtos diferentes na loja.
+      .split(/[^a-z0-9+]+/)
+      .filter((t) => /[a-z0-9]/.test(t)),
   );
 
 /** Mesmo produto pelo nome: mesmos termos (ordem/acentos/pontuação ignorados) ou ≥ 90% em comum. */
@@ -385,13 +401,18 @@ export async function resolveFallbackImage(
   }
 }
 
-/** Slug do `ued` -> slug do nome da imagem -> busca pelo título; só vale imagem que está no ar. */
+/**
+ * Slug do `ued` -> slug do nome da imagem -> busca pelo título; só vale imagem que está no ar.
+ * Com título, o produto achado pelo slug precisa ter o mesmo nome; se não tiver, a busca pelo
+ * título tem preferência e o achado pelo slug fica de reserva (imagem quase igual > nenhuma).
+ */
 async function findReplacement(
   input: FallbackImageInput,
   deps: ImageFallbackDeps,
 ): Promise<string | null> {
   const target = await resolveMerchantUrl(input.deepLink, deps);
   if (!target) return null;
+  const title = input.title?.trim() || null;
   const slugs = [
     ...new Set(
       [slugFromProductUrl(target.productUrl), slugFromImageUrl(input.imageUrl)].filter(
@@ -399,15 +420,20 @@ async function findReplacement(
       ),
     ),
   ];
+  let reserve: string | null = null;
   for (const slug of slugs) {
-    const candidate = await resolveVtexImageBySlug(target.origin, slug, deps);
+    const product = await resolveVtexProductBySlug(target.origin, slug, deps);
+    if (!product || !(await isImageAlive(product.imageUrl, deps))) continue;
+    if (!title || (product.productName && titlesMatch(title, product.productName))) {
+      return product.imageUrl;
+    }
+    reserve ??= product.imageUrl;
+  }
+  if (title) {
+    const candidate = await resolveVtexImageByTitle(target.origin, title, deps);
     if (candidate && (await isImageAlive(candidate, deps))) return candidate;
   }
-  if (input.title) {
-    const candidate = await resolveVtexImageByTitle(target.origin, input.title, deps);
-    if (candidate && (await isImageAlive(candidate, deps))) return candidate;
-  }
-  return null;
+  return reserve;
 }
 
 /**

@@ -180,6 +180,11 @@ describe('titlesMatch', () => {
       true,
     );
   });
+  it('RN e RN+ são produtos diferentes', () => {
+    expect(titlesMatch(TITLE, 'Fraldas Pampers Recém Nascido Premium Care RN+ 36 Unidades')).toBe(
+      false,
+    );
+  });
   it('produto diferente não bate', () => {
     expect(titlesMatch(TITLE, 'Fraldas Pampers Premium Care M 80 Unidades')).toBe(false);
   });
@@ -282,6 +287,53 @@ describe('resolveFallbackImage', () => {
         )
       ).status,
     ).toBe('unresolved');
+  });
+
+  describe('com título: confere o nome do produto achado pelo slug', () => {
+    const RN_PLUS = 'Fraldas Pampers Recém Nascido Premium Care RN+ 36 Unidades';
+    const RN = 'Fraldas Pampers Recém Nascido Premium Care RN 36 Unidades';
+    const TITLE_IMG = 'https://drogal.vteximg.com.br/arquivos/ids/288819/206416.jpg';
+
+    it('slug com nome igual ao título: aceita sem buscar pelo título', async () => {
+      const fetchImpl = fakeFetch({
+        [VTEX_API]: () => vtexJson(VTEX_IMG, RN),
+        [VTEX_IMG]: () => image(),
+      });
+      const r = await resolveFallbackImage(
+        { imageUrl: DEAD_IMG, deepLink: PCLICK, title: TITLE },
+        { fetchImpl, lookup },
+      );
+      expect(r).toEqual({ url: VTEX_IMG, status: 'resolved' });
+      expect(requested).not.toContain(FT_API);
+    });
+
+    it('slug com outro nome e busca pelo título acha o produto: usa a da busca', async () => {
+      const fetchImpl = fakeFetch({
+        [VTEX_API]: () => vtexJson(VTEX_IMG, RN_PLUS),
+        [VTEX_IMG]: () => image(),
+        [FT_API]: () => vtexJson(TITLE_IMG, RN),
+        [TITLE_IMG]: () => image(),
+      });
+      const r = await resolveFallbackImage(
+        { imageUrl: DEAD_IMG, deepLink: PCLICK, title: TITLE },
+        { fetchImpl, lookup },
+      );
+      expect(r).toEqual({ url: TITLE_IMG, status: 'resolved' });
+    });
+
+    it('slug com outro nome e busca sem produto equivalente: fica com a do slug', async () => {
+      const fetchImpl = fakeFetch({
+        [VTEX_API]: () => vtexJson(VTEX_IMG, RN_PLUS),
+        [VTEX_IMG]: () => image(),
+        [FT_API]: () => vtexJson(TITLE_IMG, 'Lenço Umedecido Pampers 48 Unidades'),
+        [TITLE_IMG]: () => image(),
+      });
+      const r = await resolveFallbackImage(
+        { imageUrl: DEAD_IMG, deepLink: PCLICK, title: TITLE },
+        { fetchImpl, lookup },
+      );
+      expect(r).toEqual({ url: VTEX_IMG, status: 'resolved' });
+    });
   });
 
   it('cache hit: não faz nenhuma requisição', async () => {
