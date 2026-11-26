@@ -9,6 +9,7 @@ import {
   resolveOwnerTenantId,
 } from '@afilados/deals';
 import { forbidAffiliate, requireAuth } from '../plugins/auth';
+import { fixAwinDealImages } from '../lib/deal-images';
 
 const dealsQuerySchema = z.object({
   q: z.string().optional(),
@@ -267,7 +268,12 @@ export async function dealsRoutes(app: FastifyInstance) {
       throw ApiError.notFound('Produto não encontrado');
     }
 
-    return reply.send(deal);
+    // Oferta Awin com imagem do feed fora do ar: troca pela da loja (dentro de um prazo curto).
+    const withImages = await fixAwinDealImages(db, deal).catch((err: unknown) => {
+      req.log.warn({ err, slug }, 'falha ao reparar imagem da oferta Awin');
+      return deal;
+    });
+    return reply.send(withImages);
   });
 
   /**
