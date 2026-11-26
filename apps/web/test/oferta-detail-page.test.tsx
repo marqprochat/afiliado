@@ -74,4 +74,25 @@ describe('/ofertas/[slug]', () => {
     expect(screen.queryByText('Oferta indisponível no momento')).toBeNull();
     expect(screen.getAllByText(/2\.999,00/).length).toBeGreaterThan(0);
   });
+
+  it('botão comprar passa pelo redirecionamento com c/b da página', async () => {
+    window.history.replaceState({}, '', '/ofertas/tv-55-ab12?c=wAbc12&b=lote1');
+    mockFetch(
+      deal([
+        {
+          id: 'l1',
+          storeName: 'Shopee',
+          source: 'SHOPEE',
+          currentPrice: 2999,
+          affiliateUrl: 'https://aff.test/1',
+        },
+      ]),
+    );
+    render(<OfertaDetailPage />);
+    const buy = await screen.findByRole('link', { name: /Ir para Shopee/ });
+    expect(buy.getAttribute('href')).toBe('/api/v1/r/l1?c=wAbc12&b=lote1');
+    const store = screen.getByRole('link', { name: /Acessar Loja/ });
+    expect(store.getAttribute('href')).toBe('/api/v1/r/l1?c=wAbc12&b=lote1');
+    window.history.replaceState({}, '', '/');
+  });
 });

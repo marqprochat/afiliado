@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import {
   BarChart3,
   Bot,
+  CircleDollarSign,
   Globe,
   Home,
   Link2,
@@ -32,6 +33,7 @@ import { useMe } from '@/lib/queries';
 const PRINCIPAL = [
   { href: '/', label: 'Visão Geral', icon: Home },
   { href: '/dashboard', label: 'Dashboard & Métricas', icon: BarChart3 },
+  { href: '/vendas', label: 'Vendas', icon: CircleDollarSign },
   { href: '/produtos', label: 'Buscar Produtos', icon: Search },
   { href: '/catalogo-ofertas', label: 'Catálogo da Vitrine', icon: Store },
   { href: '/automacoes', label: 'Automações', icon: Zap },

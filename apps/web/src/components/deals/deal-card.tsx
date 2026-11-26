@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { ExternalLink, Bell, TrendingDown, Store, Flame, Sparkles } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
+import { offerRedirectHref, useTrackQuery } from '@/lib/offer-redirect';
 import { PriceAlertModal } from './price-alert-modal';
 
 export interface DealCardProps {
@@ -50,7 +51,10 @@ export function DealCard({ deal }: { deal: DealCardProps }) {
   const isGreatDeal = deal.analysis.badge === 'GREAT_DEAL';
   const isInflated = deal.analysis.badge === 'INFLATED_DISCOUNT';
 
-  const affiliateLink = deal.bestListing?.affiliateUrl || `/ofertas/${deal.slug}`;
+  const trackQuery = useTrackQuery();
+  const affiliateLink = deal.bestListing?.affiliateUrl
+    ? offerRedirectHref(deal.bestListing.id, trackQuery)
+    : `/ofertas/${deal.slug}`;
 
   return (
     <>

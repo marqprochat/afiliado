@@ -22,6 +22,7 @@ import { PriceHistoryChart } from '@/components/deals/price-history-chart';
 import { PriceAlertModal } from '@/components/deals/price-alert-modal';
 import { DealCouponBlock, type DealCoupon } from '@/components/deals/deal-coupon-block';
 import { formatCurrency } from '@/lib/format';
+import { offerRedirectHref, useTrackQuery } from '@/lib/offer-redirect';
 
 interface ListingItem {
   id: string;
@@ -75,6 +76,7 @@ export default function OfertaDetailPage() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [alertOpen, setAlertOpen] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
+  const trackQuery = useTrackQuery();
 
   async function handleShare() {
     if (!deal) return;
@@ -290,7 +292,11 @@ export default function OfertaDetailPage() {
 
                 <div className="flex flex-col sm:flex-row items-center gap-3">
                   <a
-                    href={bestListing?.affiliateUrl || '#'}
+                    href={
+                      bestListing?.affiliateUrl
+                        ? offerRedirectHref(bestListing.id, trackQuery)
+                        : '#'
+                    }
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-full sm:w-auto flex-1 py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 font-extrabold text-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 transition cursor-pointer"
@@ -374,7 +380,7 @@ export default function OfertaDetailPage() {
                       </div>
 
                       <a
-                        href={l.affiliateUrl || '#'}
+                        href={l.affiliateUrl ? offerRedirectHref(l.id, trackQuery) : '#'}
                         target="_blank"
                         rel="noopener noreferrer"
                         className={`py-2 px-4 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
