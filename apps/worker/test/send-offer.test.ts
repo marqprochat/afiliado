@@ -222,6 +222,7 @@ describe('sendOffer', () => {
         chatId: '-100999',
         templateId,
         productId,
+        batchId: item.batchId,
       },
     ]);
   });
@@ -1100,5 +1101,125 @@ describe('sendOffer com link do site (siteLinks)', () => {
     const m = gateway.sent[0]!.msg;
     if (m.kind === 'preview' || m.kind === 'text') expect(m.text).toBe('Olha https://s.shopee.com.br/AFF1');
     else throw new Error(`kind inesperado: ${m.kind}`);
+  });
+});
+
+describe('sendOffer: link por canal (atribuição de vendas)', () => {
+  const withSite: SendOfferDeps = {
+    ...deps,
+    publishOffer: (tid, p, aff) =>
+      publishOffer(forTenant(tid), tid, p, aff, {
+        siteUrl: 'https://site.test',
+        isOwnerTenant: async () => true,
+      }),
+  };
+  const groups = ['canal-a@g.us', 'canal-b@g.us'];
+
+  beforeAll(async () => {
+    for (const [i, jid] of groups.entries()) {
+      await prisma.waGroup.create({ data: { tenantId, sessionId, jid, name: `Canal ${i}` } });
+    }
+  });
+  afterEach(async () => {
+    await prisma.setting.deleteMany({ where: { tenantId, key: 'siteLinks' } });
+  });
+
+  async function codes() {
+    const rows = await prisma.waGroup.findMany({
+      where: { tenantId, jid: { in: groups } },
+      orderBy: { jid: 'asc' },
+    });
+    return rows.map((r) => r.trackCode);
+  }
+
+  it('link do site: cada grupo recebe ?c=<código do grupo>&b=<lote>', async () => {
+    await prisma.setting.create({ data: { tenantId, key: 'siteLinks', value: { enabled: true } } });
+    const { batch, item } = await makeBatch({ mediaMode: 'PREVIEW', groups });
+    await sendOffer(withSite, item.id);
+    const master = await prisma.masterProduct.findFirstOrThrow({ where: { tenantId } });
+    const siteLink = `https://site.test/ofertas/${master.slug}`;
+    const [ca, cb] = await codes();
+    expect(ca).toMatch(/^w[A-Za-z0-9]{5}$/);
+    expect(cb).toMatch(/^w[A-Za-z0-9]{5}$/);
+    expect(ca).not.toBe(cb);
+    const byJid = Object.fromEntries(gateway.sent.map((s) => [s.jid, s.msg]));
+    for (const [jid, code] of [
+      ['canal-a@g.us', ca],
+      ['canal-b@g.us', cb],
+    ] as const) {
+      const m = byJid[jid]!;
+      expect(m.kind).toBe('preview');
+      if (m.kind === 'preview') {
+        const expected = `${siteLink}?c=${code}&b=${batch.id}`;
+        expect(m.url).toBe(expected);
+        expect(m.text).toBe(`*Fone* R$ 99,90\n${expected}`);
+      }
+    }
+  });
+
+  it('o código do grupo é reaproveitado no envio seguinte', async () => {
+    const before = await codes();
+    const { item } = await makeBatch({ groups });
+    await sendOffer(deps, item.id);
+    expect(await codes()).toEqual(before);
+  });
+
+  it('demais lojas sem site: todos os grupos recebem o mesmo link', async () => {
+    const { item } = await makeBatch({ groups });
+    await sendOffer(deps, item.id);
+    const captions = gateway.sent.map((s) => (s.msg.kind === 'image' ? s.msg.caption : ''));
+    expect(captions).toEqual([
+      '*Fone* R$ 99,90\nhttps://s.shopee.com.br/MOCK123',
+      '*Fone* R$ 99,90\nhttps://s.shopee.com.br/MOCK123',
+    ]);
+  });
+
+  it('Awin direto: clickref2 = código do grupo, clickref3 = lote, clickref mantido', async () => {
+    await prisma.marketplaceConnection.upsert({
+      where: { tenantId_kind: { tenantId, kind: 'AWIN' } },
+      create: {
+        tenantId,
+        kind: 'AWIN',
+        status: 'OK',
+        encryptedCredentials: encryptJson({ feedListUrl: 'https://ui.awin.com/f', feedIds: ['f1'] }),
+      },
+      update: {},
+    });
+    const awinProduct = await prisma.product.create({
+      data: {
+        tenantId,
+        source: 'AWIN',
+        externalId: 'canal-awin',
+        title: 'Produto Awin',
+        price: 10,
+        images: [],
+        originalUrl: 'https://www.awin1.com/cread.php?awinmid=1&awinaffid=2',
+        raw: {},
+      },
+    });
+    const batch = await prisma.batch.create({
+      data: {
+        tenantId,
+        sessionId,
+        templateId,
+        name: 'b-canal-awin',
+        groupJids: groups,
+        telegramChatIds: [],
+        intervalMin: 1,
+        mediaMode: 'IMAGE',
+        status: 'SCHEDULED',
+        items: { create: [{ productId: awinProduct.id, order: 0, runAt: new Date() }] },
+      },
+      include: { items: true },
+    });
+    await sendOffer(deps, batch.items[0]!.id);
+    const [ca, cb] = await codes();
+    const urls = gateway.sent.map((s) => {
+      const caption = s.msg.kind === 'image' ? s.msg.caption : s.msg.text;
+      return new URL(caption.split('\n').pop()!);
+    });
+    expect(urls.map((u) => u.searchParams.get('clickref2'))).toEqual([ca, cb]);
+    expect(urls.every((u) => u.searchParams.get('clickref3') === batch.id)).toBe(true);
+    expect(urls.every((u) => u.searchParams.get('clickref'))).toBe(true);
   });
 });

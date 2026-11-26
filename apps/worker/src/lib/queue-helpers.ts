@@ -1,9 +1,11 @@
 import {
   QUEUE_AWIN_IMPORT,
+  QUEUE_AWIN_SALES_SYNC,
   QUEUE_COUPON_SYNC,
   QUEUE_SEND_OFFER,
   QUEUE_SEND_TELEGRAM,
   type AwinImportJob,
+  type AwinSalesSyncJob,
   type CouponSyncJob,
   type SendOfferJob,
   type SendTelegramJob,
@@ -71,5 +73,32 @@ export async function enqueueCouponSync(
     'coupon-sync',
     { tenantId, trigger },
     { jobId, attempts: 2, removeOnComplete: true, removeOnFail: 50 },
+  );
+}
+
+/** Sincronização das vendas da Awin; jobId por hora (janela curta) ou por dia (janela longa). */
+export async function enqueueAwinSalesSync(
+  tenantId: string,
+  windowDays: number,
+  trigger: 'schedule' | 'manual' = 'schedule',
+) {
+  const q = getQueue<AwinSalesSyncJob>(QUEUE_AWIN_SALES_SYNC);
+  const bucketMs = windowDays > 7 ? 24 * 60 * 60 * 1000 : 60 * 60 * 1000;
+  const bucket = Math.floor(Date.now() / bucketMs);
+  const jobId =
+    trigger === 'manual'
+      ? `awin-sales-sync-${tenantId}-${windowDays}-${Date.now()}`
+      : `awin-sales-sync-${tenantId}-${windowDays}-${bucket}`;
+  await q.add(
+    'awin-sales-sync',
+    { tenantId, windowDays, trigger },
+    {
+      jobId,
+      attempts: 2,
+      backoff: { type: 'exponential', delay: 60_000 },
+      // Mantém o registro por um dia para a deduplicação valer entre reinícios.
+      removeOnComplete: { age: 26 * 60 * 60, count: 1000 },
+      removeOnFail: 50,
+    },
   );
 }

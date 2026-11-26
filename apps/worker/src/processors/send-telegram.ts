@@ -6,6 +6,7 @@ import {
   resolveConnection,
   resolveSettings,
   isTenantActive,
+  ensureTrackCode,
 } from '@afilados/db';
 import {
   applyAffiliateTag,
@@ -27,6 +28,7 @@ import {
 import { TelegramClient } from '@afilados/telegram';
 import type { ProductData, SendTelegramJob, TagCredentials } from '@afilados/shared';
 import { resolveCachedAffiliateLink } from '../lib/ml-links';
+import { channelizeLink } from '../lib/channel-link';
 import { publishOfferForTenant, type PublishOfferFn } from '../lib/publish-offer';
 
 const log = pino({ name: 'send-telegram' });
@@ -191,7 +193,12 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
         ...(product.couponValue !== null ? { couponValue: Number(product.couponValue) } : {}),
       };
       const publish = deps.publishOffer ?? publishOfferForTenant;
-      const link = (await publish(job.tenantId, pd, affiliateLink)) ?? affiliateLink;
+      const siteLink = await publish(job.tenantId, pd, affiliateLink);
+      const link = await channelLinkForChat(job, {
+        link: siteLink ?? affiliateLink,
+        viaSite: siteLink !== null,
+        source: product.source,
+      });
       text = renderTemplate(template.body, pd, {
         affiliateLink: link,
         now: t.toISOString(),
@@ -265,6 +272,32 @@ export async function sendTelegram(deps: SendTelegramDeps, job: SendTelegramJob)
       { botId: job.botId, chatId: job.chatId, err: e instanceof Error ? e.message : String(e) },
       'falha ao enviar no telegram',
     );
+  }
+}
+
+/** Link do chat (site → ?c=&b=, Awin direto → clickref2/3); qualquer falha mantém o link padrão. */
+async function channelLinkForChat(
+  job: SendTelegramJob,
+  input: { link: string; viaSite: boolean; source: string },
+): Promise<string> {
+  try {
+    const chat = await prisma.telegramChat.findFirst({
+      where: { tenantId: job.tenantId, botId: job.botId, chatId: job.chatId },
+      select: { id: true },
+    });
+    if (!chat) return input.link;
+    const trackCode = await ensureTrackCode(prisma, { kind: 'TELEGRAM', id: chat.id });
+    return channelizeLink({ ...input, trackCode, batchId: job.batchId ?? null });
+  } catch (err) {
+    log.warn(
+      {
+        botId: job.botId,
+        chatId: job.chatId,
+        err: err instanceof Error ? err.message : String(err),
+      },
+      'falha ao montar o link do chat; enviando o link padrão',
+    );
+    return input.link;
   }
 }
 

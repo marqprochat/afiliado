@@ -97,3 +97,28 @@ describe('sendTelegram com link do site', () => {
     );
   });
 });
+
+describe('sendTelegram: link por chat (atribuição de vendas)', () => {
+  it('chat conhecido: link do site leva ?c=<código do chat>&b=<lote> e o código fica gravado', async () => {
+    const chat = await prisma.telegramChat.create({
+      data: { tenantId, botId, chatId: '-1', title: 'Canal TG', kind: 'channel' },
+    });
+    const { deps, sendPhoto } = makeDeps(async () => 'https://site.test/ofertas/mouse-ab12');
+    await sendTelegram(deps, { ...job(), batchId: 'lote42' });
+    const { trackCode } = await prisma.telegramChat.findUniqueOrThrow({ where: { id: chat.id } });
+    expect(trackCode).toMatch(/^t[A-Za-z0-9]{5}$/);
+    expect(sendPhoto).toHaveBeenCalledWith(
+      '-1',
+      'https://img/m.jpg',
+      expect.stringContaining(`https://site.test/ofertas/mouse-ab12?c=${trackCode}&amp;b=lote42`),
+    );
+  });
+
+  it('demais lojas sem site: link inalterado mesmo com chat conhecido', async () => {
+    const { deps, sendPhoto } = makeDeps(async () => null);
+    await sendTelegram(deps, { ...job(), batchId: 'lote42' });
+    const caption = (sendPhoto.mock.calls[0] as unknown as [string, string, string])[2];
+    expect(caption).toContain('https://s.shopee.com.br/AFF7');
+    expect(caption).not.toContain('?c=');
+  });
+});

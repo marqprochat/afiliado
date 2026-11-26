@@ -7,6 +7,7 @@ import {
   resolveConnection,
   resolveSettings,
   isTenantActive,
+  ensureTrackCode,
 } from '@afilados/db';
 import {
   applyAffiliateTag,
@@ -29,6 +30,7 @@ import {
 } from '@afilados/marketplaces';
 import type { ProductData, SendOfferJob, SendTelegramJob, TagCredentials } from '@afilados/shared';
 import { resolveItemCta } from '../lib/ai-cta';
+import { channelizeLink, swapLinkInMessage } from '../lib/channel-link';
 import { publishEvent } from '../lib/events';
 import { resolveCachedAffiliateLink } from '../lib/ml-links';
 import { publishOfferForTenant, type PublishOfferFn } from '../lib/publish-offer';
@@ -331,7 +333,8 @@ export async function sendOffer(
       ...(product.couponValue !== null ? { couponValue: Number(product.couponValue) } : {}),
     };
     const publish = deps.publishOffer ?? publishOfferForTenant;
-    const link = (await publish(tenantId, pd, affiliateLink)) ?? affiliateLink;
+    const siteLink = await publish(tenantId, pd, affiliateLink);
+    const link = siteLink ?? affiliateLink;
     const cta = await resolveItemCta({
       settings,
       templateBody: batch.template.body,
@@ -364,6 +367,34 @@ export async function sendOffer(
             url: link,
           };
 
+    // Link por grupo: o template foi renderizado uma vez; aqui só o link é trocado pelo do canal
+    // (site → ?c=&b=, Awin direto → clickref2/3) para atribuir vendas ao grupo.
+    const productSource = product.source;
+    const personalize = async (groupJid: string): Promise<OutgoingMessage> => {
+      try {
+        const group = await prisma.waGroup.findFirst({
+          where: { tenantId, sessionId: batch.sessionId, jid: groupJid },
+          select: { id: true },
+        });
+        if (!group) return message;
+        const trackCode = await ensureTrackCode(prisma, { kind: 'WHATSAPP', id: group.id });
+        const channelLink = channelizeLink({
+          link,
+          viaSite: siteLink !== null,
+          source: productSource,
+          trackCode,
+          batchId: batch.id,
+        });
+        return swapLinkInMessage(message, link, channelLink);
+      } catch (err) {
+        log.warn(
+          { batchItemId: item.id, groupJid, err: err instanceof Error ? err.message : String(err) },
+          'falha ao montar o link do canal; enviando o link padrão',
+        );
+        return message;
+      }
+    };
+
     const bucket = bucketFor(batch.sessionId, ratePerMin);
     return sendPlainMessages(
       deps,
@@ -376,6 +407,7 @@ export async function sendOffer(
       rng,
       bucket,
       enqueueTelegram,
+      personalize,
     );
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
@@ -426,6 +458,8 @@ async function sendPlainMessages(
   rng: () => number,
   bucket: { take(): Promise<number> },
   enqueueTelegram: (job: SendTelegramJob & { jobId: string }) => Promise<void>,
+  /** Mensagem do grupo (link do canal); ausente = a mesma mensagem para todos. */
+  personalize?: (groupJid: string) => Promise<OutgoingMessage>,
 ): Promise<SendOfferResult> {
   for (const chatId of batch.telegramChatIds) {
     const chat = await prisma.telegramChat
@@ -444,6 +478,7 @@ async function sendPlainMessages(
       ...(item.customImageUrl ? { customImageUrl: item.customImageUrl } : {}),
       ...(item.hasCustomImageData ? { customImageItemId: item.id } : {}),
       ...(item.cta ? { cta: item.cta } : {}),
+      ...(item.productId ? { batchId: batch.id } : {}),
     }).catch((e) =>
       log.warn({ batchId: batch.id, chatId, err: e }, 'falha ao enfileirar envio no telegram'),
     );
@@ -463,7 +498,8 @@ async function sendPlainMessages(
     first = false;
     await waitForToken(bucket, sleep);
     try {
-      const { messageId } = await deps.gateway.sendMessage(batch.sessionId, groupJid, message);
+      const groupMessage = personalize ? await personalize(groupJid) : message;
+      const { messageId } = await deps.gateway.sendMessage(batch.sessionId, groupJid, groupMessage);
       await prisma.sendLog.upsert({
         where: { batchItemId_groupJid: { batchItemId: item.id, groupJid } },
         update: { waMessageId: messageId, status: 'SENT', error: null, sentAt: now() },
