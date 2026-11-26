@@ -118,12 +118,12 @@ export default function OfertaDetailPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#080a0f] text-slate-100 flex flex-col justify-between">
-        <LandingNav />
+        <LandingNav minimal />
         <div className="flex flex-col items-center justify-center py-40">
           <RefreshCw className="w-9 h-9 text-emerald-400 animate-spin mb-4" />
           <p className="text-slate-400 text-sm">Carregando comparador e histórico de preços...</p>
         </div>
-        <LandingFooter />
+        <LandingFooter minimal />
       </div>
     );
   }
@@ -131,7 +131,7 @@ export default function OfertaDetailPage() {
   if (!deal) {
     return (
       <div className="min-h-screen bg-[#080a0f] text-slate-100 flex flex-col justify-between">
-        <LandingNav />
+        <LandingNav minimal />
         <div className="text-center py-40 max-w-md mx-auto px-4">
           <h2 className="text-2xl font-bold text-white mb-2">Produto não encontrado</h2>
           <p className="text-slate-400 text-sm mb-6">
@@ -145,7 +145,7 @@ export default function OfertaDetailPage() {
             Voltar para a Vitrine de Ofertas
           </Link>
         </div>
-        <LandingFooter />
+        <LandingFooter minimal />
       </div>
     );
   }
@@ -155,7 +155,7 @@ export default function OfertaDetailPage() {
   if (deal.listings.length === 0) {
     return (
       <div className="min-h-screen bg-[#080a0f] text-slate-100 flex flex-col justify-between">
-        <LandingNav />
+        <LandingNav minimal />
         <main className="flex-1 max-w-md mx-auto w-full px-4 pt-28 pb-16 text-center">
           {deal.imageUrl && (
             <div className="aspect-square w-full max-w-xs mx-auto rounded-3xl bg-black/60 border border-slate-800 p-6 flex items-center justify-center mb-6 overflow-hidden opacity-70">
@@ -182,7 +182,7 @@ export default function OfertaDetailPage() {
             Ver todas as ofertas
           </Link>
         </main>
-        <LandingFooter />
+        <LandingFooter minimal />
       </div>
     );
   }
@@ -192,7 +192,7 @@ export default function OfertaDetailPage() {
 
   return (
     <div className="min-h-screen bg-[#080a0f] text-slate-100 font-sans flex flex-col justify-between">
-      <LandingNav />
+      <LandingNav minimal />
 
       <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 pt-28 pb-16">
         {/* Navegação Topo */}
@@ -433,7 +433,7 @@ export default function OfertaDetailPage() {
         currentPrice={deal.currentBestPrice}
       />
 
-      <LandingFooter />
+      <LandingFooter minimal />
     </div>
   );
 }

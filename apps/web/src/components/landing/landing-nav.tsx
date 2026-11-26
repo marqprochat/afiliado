@@ -13,7 +13,7 @@ export function LandingNav({ minimal = false }: LandingNavProps) {
     <header className="fixed top-0 left-0 right-0 z-50 bg-[#07090e]/90 backdrop-blur-xl border-b border-white/10 py-3 shadow-2xl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
         {/* Brand Logo & Authority Label */}
-        <Link href="/landpage" className="flex items-center gap-3 group">
+        <Link href={minimal ? '/ofertas' : '/landpage'} className="flex items-center gap-3 group">
           <div className="relative h-10 px-3 py-1 bg-black/90 rounded-xl flex items-center gap-2.5 border border-white/10 group-hover:border-red-500/50 transition shadow-inner">
             <span className="text-sm font-black text-white tracking-tight">
               DUDU ROCHA <span className="text-red-500">TEC</span>
