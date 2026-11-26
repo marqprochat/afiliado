@@ -16,3 +16,4 @@ export * from './batch-position';
 export * from './parse-offer';
 export * from './resolve-short-links';
 export * from './deduplication';
+export * from './channel-link';

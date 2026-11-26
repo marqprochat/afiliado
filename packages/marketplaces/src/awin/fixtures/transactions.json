@@ -1,0 +1,50 @@
+[
+  {
+    "id": 445566778,
+    "url": "https://www.loja-exemplo.com.br/checkout",
+    "advertiserId": 9999,
+    "publisherId": 12345,
+    "commissionSharingPublisherId": null,
+    "siteName": "Super Ofertas",
+    "commissionStatus": "pending",
+    "commissionAmount": { "amount": 12.5, "currency": "BRL" },
+    "saleAmount": { "amount": 250.0, "currency": "BRL" },
+    "ipHash": "-123",
+    "customerCountry": "BR",
+    "clickRefs": { "clickRef": "afiliado1", "clickRef2": "wAbc12", "clickRef3": "cmbatch1" },
+    "clickDate": "2026-11-20T14:55:00",
+    "transactionDate": "2026-11-20T15:00:00",
+    "validationDate": null,
+    "type": "Commission group transaction",
+    "declineReason": null,
+    "voucherCodeUsed": false,
+    "voucherCode": null,
+    "lapseTime": 300,
+    "amended": false,
+    "oldSaleAmount": null,
+    "oldCommissionAmount": null,
+    "clickDevice": "iPhone",
+    "transactionDevice": "iPhone",
+    "advertiserCountry": "BR",
+    "orderRef": "PED-1",
+    "transactionParts": [
+      { "commissionGroupId": 1, "amount": 250.0, "commissionAmount": 12.5, "commissionGroupCode": "DEFAULT", "commissionGroupName": "Padrão" }
+    ],
+    "paidToPublisher": false,
+    "paymentId": 0,
+    "transactionQueryId": 0,
+    "originalSaleAmount": null
+  },
+  {
+    "id": "445566779",
+    "advertiserId": "8888",
+    "advertiserName": "Outra Loja",
+    "commissionStatus": "APPROVED",
+    "commissionAmount": { "amount": "7.30", "currency": "BRL" },
+    "saleAmount": { "amount": "73.00", "currency": "BRL" },
+    "clickRef": "padrao20261120",
+    "clickRef2": "tXyz98",
+    "transactionDate": "2026-11-18T10:00:00Z",
+    "validationDate": "2026-11-24T09:30:00Z"
+  }
+]
