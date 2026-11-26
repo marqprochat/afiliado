@@ -257,4 +257,58 @@ describe('importAwinCatalog', () => {
     expect(rows.map((r) => r.externalId)).toEqual(['p1']);
     await prisma.tenant.deleteMany({ where: { id: tenant2 } });
   });
+
+  it('mantém a imagem substituta enquanto o feed traz a mesma imagem quebrada', async () => {
+    const tenant2 = (await prisma.tenant.create({ data: { name: 'awin-import-image' } })).id;
+    await prisma.marketplaceConnection.create({
+      data: {
+        tenantId: tenant2,
+        kind: 'AWIN',
+        status: 'OK',
+        encryptedCredentials: encryptJson({ feedListUrl, feedIds: ['f1'] }),
+      },
+    });
+    const dead = 'https://io.convertiez.com.br/m/drogal/a.jpg';
+    const fixed = 'https://drogal.vteximg.com.br/arquivos/ids/1/a.jpg';
+    const common = { tenantId: tenant2, feedId: 'f1', price: 1, raw: {}, deepLink: 'https://x' };
+    await prisma.awinCatalogProduct.createMany({
+      data: [
+        { ...common, externalId: 'same', title: 'A', imageUrl: fixed, imageOriginalUrl: dead },
+        { ...common, externalId: 'changed', title: 'B', imageUrl: fixed, imageOriginalUrl: dead },
+      ],
+    });
+    const withImage = (id: string, img: string) => ({
+      ...awinRow(id, '10.00'),
+      merchant_image_url: img,
+    });
+    const deps = {
+      listDatafeeds: async () => [activeEntry('f1', 'https://x/f1')],
+      downloadFeed: async () =>
+        rowsOf([
+          withImage('same', dead),
+          withImage('changed', 'https://cdn.loja.com/novo.jpg'),
+          withImage('fresh', 'https://cdn.loja.com/fresh.jpg'),
+        ]),
+    };
+    await importAwinCatalog(deps, tenant2);
+    const rows = await prisma.awinCatalogProduct.findMany({
+      where: { tenantId: tenant2 },
+      orderBy: { externalId: 'asc' },
+      select: { externalId: true, imageUrl: true, imageOriginalUrl: true },
+    });
+    expect(rows).toEqual([
+      {
+        externalId: 'changed',
+        imageUrl: 'https://cdn.loja.com/novo.jpg',
+        imageOriginalUrl: 'https://cdn.loja.com/novo.jpg',
+      },
+      {
+        externalId: 'fresh',
+        imageUrl: 'https://cdn.loja.com/fresh.jpg',
+        imageOriginalUrl: 'https://cdn.loja.com/fresh.jpg',
+      },
+      { externalId: 'same', imageUrl: fixed, imageOriginalUrl: dead },
+    ]);
+    await prisma.tenant.deleteMany({ where: { id: tenant2 } });
+  });
 });

@@ -54,6 +54,23 @@ async function flushBatch(
 ): Promise<void> {
   if (batch.length === 0) return;
   const ids = batch.map((b) => b.externalId);
+  // Imagem substituta (achada na loja quando a do feed saiu do ar) sobrevive à reimportação
+  // enquanto o feed continuar mandando a mesma imagem original.
+  const existing = await prisma.awinCatalogProduct.findMany({
+    where: { tenantId, feedId, externalId: { in: ids }, imageOriginalUrl: { not: null } },
+    select: { externalId: true, imageUrl: true, imageOriginalUrl: true },
+  });
+  const resolvedById = new Map(
+    existing
+      .filter((r) => r.imageUrl && r.imageUrl !== r.imageOriginalUrl)
+      .map((r) => [r.externalId, r]),
+  );
+  const imageFor = (input: AwinCatalogUpsertInput) => {
+    const prev = resolvedById.get(input.externalId);
+    return prev && input.imageUrl && prev.imageOriginalUrl === input.imageUrl
+      ? prev.imageUrl
+      : input.imageUrl;
+  };
   await prisma.$transaction([
     prisma.awinCatalogProduct.deleteMany({
       where: { tenantId, feedId, externalId: { in: ids } },
@@ -66,7 +83,8 @@ async function flushBatch(
         title: input.title,
         price: input.price,
         originalPrice: input.originalPrice,
-        imageUrl: input.imageUrl,
+        imageUrl: imageFor(input),
+        imageOriginalUrl: input.imageUrl,
         deepLink: input.deepLink,
         advertiserId: input.advertiserId,
         advertiserName: input.advertiserName,

@@ -82,6 +82,55 @@ describe('searchAwinCatalog', () => {
   });
 });
 
+describe('searchAwinCatalog: imagem quebrada', () => {
+  it('troca a imagem fora do ar pela substituta e grava no catálogo', async () => {
+    const dead = 'https://io.convertiez.com.br/m/drogal/pomada.jpg';
+    const alive = 'https://cdn.loja.com/sabonete.jpg';
+    const fixed = 'https://drogal.vteximg.com.br/arquivos/ids/1/pomada.jpg';
+    const common = { tenantId, feedId: 'f9', price: 10, raw: {} };
+    await prisma.awinCatalogProduct.createMany({
+      data: [
+        {
+          ...common,
+          externalId: 'img1',
+          title: 'Pomada Zeta',
+          imageUrl: dead,
+          deepLink: 'https://www.awin1.com/pclick.php?p=1',
+        },
+        {
+          ...common,
+          externalId: 'img2',
+          title: 'Sabonete Zeta',
+          imageUrl: alive,
+          deepLink: 'https://www.awin1.com/pclick.php?p=2',
+        },
+      ],
+    });
+    const calls: string[] = [];
+    const resolveImage = async (input: { imageUrl: string | null; deepLink: string }) => {
+      calls.push(input.imageUrl ?? '');
+      return input.imageUrl === dead
+        ? { url: fixed, status: 'resolved' as const }
+        : { url: input.imageUrl, status: 'alive' as const };
+    };
+    const db = forTenant(tenantId);
+    const found = await searchAwinCatalog(db, 'zeta', 20, undefined, { resolveImage });
+    const byTitle = Object.fromEntries(found.map((p) => [p.title, p.images[0]]));
+    expect(byTitle).toEqual({ 'Pomada Zeta': fixed, 'Sabonete Zeta': alive });
+
+    const saved = await prisma.awinCatalogProduct.findFirstOrThrow({
+      where: { tenantId, externalId: 'img1' },
+    });
+    expect(saved.imageUrl).toBe(fixed);
+    expect(saved.imageOriginalUrl).toBe(dead);
+
+    // Segunda busca: a já resolvida não é verificada de novo.
+    calls.length = 0;
+    await searchAwinCatalog(db, 'zeta', 20, undefined, { resolveImage });
+    expect(calls).toEqual([alive]);
+  });
+});
+
 describe('fetchAwinCatalogByUrls', () => {
   it('resolve produtos por deep link exato', async () => {
     const db = forTenant(tenantId);
