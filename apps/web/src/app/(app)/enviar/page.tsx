@@ -38,6 +38,11 @@ export default function EnviarPage() {
   const remove = useApiMutation((id: string) => apiFetch(`/queue/${id}`, { method: 'DELETE' }), {
     invalidate: [['queue'], ['overview']],
   });
+  const removeSelected = useApiMutation(
+    (ids: string[]) =>
+      apiFetch<{ removed: number }>('/queue/remove', { method: 'POST', json: { ids } }),
+    { invalidate: [['queue'], ['overview']], success: 'Selecionados removidos da fila' },
+  );
   const clearSent = useApiMutation(() => apiFetch('/queue?status=SENT', { method: 'DELETE' }), {
     invalidate: [['queue'], ['overview']],
     success: 'Enviados removidos',
@@ -85,6 +90,8 @@ export default function EnviarPage() {
               data={queue}
               onSelect={(ids, selected) => select.mutate({ ids, selected })}
               onRemove={(id) => remove.mutate(id)}
+              onRemoveSelected={(ids) => removeSelected.mutate(ids)}
+              removingSelected={removeSelected.isPending}
               onClearSent={() => clearSent.mutate(undefined)}
               onSendToBatch={() => setSendToBatchOpen(true)}
             />

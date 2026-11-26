@@ -224,6 +224,26 @@ describe('products + queue', () => {
     expect(
       (await app.inject({ method: 'GET', url: '/api/v1/queue', headers: { cookie } })).json().count,
     ).toBe(2);
+    const rest = (
+      await app.inject({ method: 'GET', url: '/api/v1/queue', headers: { cookie } })
+    ).json().items as { id: string }[];
+    const bulk = await app.inject({
+      method: 'POST',
+      url: '/api/v1/queue/remove',
+      headers: { cookie },
+      payload: { ids: [...rest.map((i) => i.id), 'id-inexistente'] },
+    });
+    expect(bulk.json()).toEqual({ removed: 2 });
+    const empty = await app.inject({
+      method: 'POST',
+      url: '/api/v1/queue/remove',
+      headers: { cookie },
+      payload: { ids: [] },
+    });
+    expect(empty.statusCode).toBe(400);
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/v1/queue', headers: { cookie } })).json().count,
+    ).toBe(0);
   });
 });
 

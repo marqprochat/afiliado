@@ -179,6 +179,9 @@ export const queueSelectSchema = z.object({
   ids: z.array(z.string().min(1)),
   selected: z.boolean(),
 });
+export const queueRemoveSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(5000),
+});
 
 export const templateSchema = z.object({
   name: z.string().min(1).max(60),
@@ -323,6 +326,7 @@ export type MarketplaceUpdateBody = z.infer<typeof marketplaceUpdateSchema>;
 export type ProductsImportBody = z.infer<typeof productsImportSchema>;
 export type QueueAddBody = z.infer<typeof queueAddSchema>;
 export type QueueSelectBody = z.infer<typeof queueSelectSchema>;
+export type QueueRemoveBody = z.infer<typeof queueRemoveSchema>;
 export type TemplateBody = z.infer<typeof templateSchema>;
 export type TemplatePreviewBody = z.infer<typeof templatePreviewSchema>;
 

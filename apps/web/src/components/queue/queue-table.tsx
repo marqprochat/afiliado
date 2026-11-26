@@ -28,12 +28,16 @@ export function QueueTable({
   data,
   onSelect,
   onRemove,
+  onRemoveSelected,
+  removingSelected,
   onClearSent,
   onSendToBatch,
 }: {
   data: QueueResponse;
   onSelect: (ids: string[], selected: boolean) => void;
   onRemove: (id: string) => void;
+  onRemoveSelected?: (ids: string[]) => void;
+  removingSelected?: boolean;
   onClearSent: () => void;
   onSendToBatch?: () => void;
 }) {
@@ -54,7 +58,10 @@ export function QueueTable({
   const allSelected =
     pendingVisibleIds.length > 0 &&
     visibleItems.filter((i) => i.status === 'PENDING').every((i) => i.selected);
-  const selectedCount = data.items.filter((i) => i.selected && i.status === 'PENDING').length;
+  const selectedIds = data.items
+    .filter((i) => i.selected && i.status === 'PENDING')
+    .map((i) => i.id);
+  const selectedCount = selectedIds.length;
   return (
     <div className="rounded-lg border border-border bg-surface">
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2 text-sm">
@@ -107,6 +114,22 @@ export function QueueTable({
             onClick={onSendToBatch}
           >
             Trazer selecionados para lote
+          </Button>
+        )}
+        {onRemoveSelected && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-red-300 hover:text-red-200"
+            disabled={selectedCount === 0 || removingSelected}
+            onClick={() => {
+              if (confirm(`Remover ${selectedCount} produto(s) selecionado(s) da fila?`)) {
+                onRemoveSelected(selectedIds);
+              }
+            }}
+          >
+            <Trash2 className="mr-1 h-3.5 w-3.5" />
+            Remover selecionados
           </Button>
         )}
         <Button size="sm" variant="ghost" className="ml-auto" onClick={onClearSent}>

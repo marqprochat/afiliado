@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { ApiError, queueAddSchema, queueSelectSchema } from '@afilados/shared';
+import { ApiError, queueAddSchema, queueRemoveSchema, queueSelectSchema } from '@afilados/shared';
 import { requireAuth } from '../plugins/auth';
 import { toApiProduct } from '../lib/products';
 import { enqueueMlLinksPrewarm } from '../lib/ml-links';
@@ -71,6 +71,13 @@ export async function queueRoutes(app: FastifyInstance) {
     const { ids, selected } = queueSelectSchema.parse(req.body);
     const r = await req.db.queueItem.updateMany({ where: { id: { in: ids } }, data: { selected } });
     return { updated: r.count };
+  });
+
+  // remoção em lote (os selecionados na tela); ids de outro tenant são ignorados pelo req.db
+  app.post('/queue/remove', async (req) => {
+    const { ids } = queueRemoveSchema.parse(req.body);
+    const r = await req.db.queueItem.deleteMany({ where: { id: { in: ids } } });
+    return { removed: r.count };
   });
 
   app.delete('/queue/:id', async (req, reply) => {
