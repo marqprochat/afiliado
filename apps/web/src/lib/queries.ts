@@ -30,7 +30,12 @@ import type {
   GroupLink,
   ManagedGroup,
 } from './types';
-import type { AwinProgrammeStatsItem, AwinStoreOption, MarketplaceKind } from '@afilados/shared';
+import type {
+  AwinLinkQuotaResponse,
+  AwinProgrammeStatsItem,
+  AwinStoreOption,
+  MarketplaceKind,
+} from '@afilados/shared';
 
 export const useAffiliates = (enabled = true) =>
   useQuery({
@@ -91,6 +96,11 @@ export const useAwinProgrammeStats = (refetchInterval: number | false = false) =
       apiFetch<{ items: AwinProgrammeStatsItem[]; fetchedAt: string | null }>(
         '/marketplaces/awin/programme-stats',
       ),
+  });
+export const useAwinLinkQuota = () =>
+  useQuery({
+    queryKey: ['marketplaces', 'awin', 'links', 'quota'],
+    queryFn: () => apiFetch<AwinLinkQuotaResponse>('/marketplaces/awin/links/quota'),
   });
 export const useAliexpressCategories = (enabled: boolean) =>
   useQuery({
