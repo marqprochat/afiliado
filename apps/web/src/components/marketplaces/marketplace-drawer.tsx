@@ -19,6 +19,7 @@ import { awinTokenAlert } from '@/lib/awin-token-alert';
 import type { MarketplaceConnection } from '@/lib/types';
 import { MARKETPLACE_CONFIGS, type MarketplaceFieldKey } from './marketplace-config';
 import { AwinProgramsPanel } from './awin-programs-panel';
+import { AwinProgrammeStatsPanel } from './awin-programme-stats-panel';
 import { MlApiPanel } from './ml-api-panel';
 
 export interface MarketplaceSubmitPayload {
@@ -321,6 +322,9 @@ export function MarketplaceDrawer({
           )}
 
           {kind === 'AWIN' && connection?.hasAwinFeedListUrl && <AwinProgramsPanel />}
+          {kind === 'AWIN' && connection?.awinPublisherId && connection.hasAwinOffersApiToken && (
+            <AwinProgrammeStatsPanel />
+          )}
 
           {displayedFeedback && (
             <p className={`text-xs ${displayedFeedback.ok ? 'text-emerald-500' : 'text-red-400'}`}>

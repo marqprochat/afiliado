@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { NativeCheckbox } from '@/components/ui/native-checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { awinStoreLabel } from '@/lib/awin-ranking';
 import { useAliexpressCategories, useAwinStores } from '@/lib/queries';
 
 export const SORT_LABELS: Record<SearchSort, string> = {
@@ -141,12 +142,16 @@ export function SearchFilters({
                 aria-label="Filtrar por loja Awin"
                 value={awinAdvertiser}
                 onChange={(e) => setAwinAdvertiser(e.target.value)}
-                className={`${selectCls} w-52`}
+                className={`${selectCls} w-full sm:w-64`}
               >
                 <option value="">Todas as lojas</option>
-                {(awinStores?.stores ?? []).map((store) => (
-                  <option key={store} value={store}>
-                    {store}
+                {/* Ordem do ranking por EPC (melhores lojas primeiro), com o EPC no rótulo. */}
+                {(
+                  awinStores?.items ??
+                  (awinStores?.stores ?? []).map((name) => ({ name, epc: null, currency: null }))
+                ).map((store) => (
+                  <option key={store.name} value={store.name}>
+                    {awinStoreLabel(store)}
                   </option>
                 ))}
               </select>

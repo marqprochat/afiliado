@@ -5,6 +5,8 @@ import { SearchFilters } from '@/components/products/search-filters';
 
 vi.mock('@/lib/api', () => ({ apiFetch: vi.fn(), ApiClientError: class extends Error {} }));
 
+import { apiFetch } from '@/lib/api';
+
 function renderFilters(props: React.ComponentProps<typeof SearchFilters>) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -145,5 +147,40 @@ describe('SearchFilters: listagem do Mercado Livre', () => {
   it('keyword continua com Vendas mín.', () => {
     renderFilters({ source: 'SHOPEE', mode: 'keyword', onSearch: vi.fn() });
     expect(screen.getByLabelText(/vendas mín/i)).toBeTruthy();
+  });
+
+  it('Awin: seletor de loja na ordem do ranking, exibindo o EPC', async () => {
+    vi.mocked(apiFetch).mockImplementation(async (path: string) => {
+      if (path === '/products/awin-stores') {
+        return {
+          stores: ['Loja Top', 'Drogal BR', 'Avulsa'],
+          items: [
+            { name: 'Loja Top', advertiserId: '3', epc: 1, currency: 'BRL', score: 0.8 },
+            { name: 'Drogal BR', advertiserId: '2', epc: 0.42, currency: 'BRL', score: 0.38 },
+            { name: 'Avulsa', advertiserId: null, epc: null, currency: null, score: null },
+          ],
+        };
+      }
+      throw new Error(`unexpected call: ${path}`);
+    });
+    const onSearch = vi.fn();
+    renderFilters({ source: 'AWIN', mode: 'keyword', onSearch });
+    const select = screen.getByLabelText(/filtrar por loja awin/i) as HTMLSelectElement;
+    await vi.waitFor(() => expect(select.options.length).toBe(4));
+    const labels = [...select.options].map((o) => o.textContent!.replace(/ /g, ' '));
+    expect(labels).toEqual([
+      'Todas as lojas',
+      'Loja Top · EPC R$ 1,00',
+      'Drogal BR · EPC R$ 0,42',
+      'Avulsa',
+    ]);
+    fireEvent.change(select, { target: { value: 'Drogal BR' } });
+    fireEvent.change(screen.getByPlaceholderText(/palavra-chave/i), {
+      target: { value: 'fralda' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /buscar/i }));
+    expect(onSearch).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'AWIN', awinAdvertiser: 'Drogal BR', query: 'fralda' }),
+    );
   });
 });

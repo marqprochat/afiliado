@@ -34,6 +34,8 @@ export function RuleForm({ onCreated }: { onCreated: () => void }) {
   const [groupJids, setGroupJids] = useState<Set<string>>(new Set());
   const [telegramChatIds, setTelegramChatIds] = useState<Set<string>>(new Set());
   const [templateId, setTemplateId] = useState('');
+  const [awinPrioritizeEpc, setAwinPrioritizeEpc] = useState(false);
+  const [awinMinEpc, setAwinMinEpc] = useState('');
 
   function toggleMarketplace(kind: MarketplaceKind) {
     setMarketplaces((prev) =>
@@ -46,6 +48,13 @@ export function RuleForm({ onCreated }: { onCreated: () => void }) {
   const { data: templates } = useTemplates();
   const { data: telegramChats } = useTelegramAllChats();
   const adminGroups = useMemo(() => groups?.filter((g) => g.botIsAdmin) ?? [], [groups]);
+
+  const hasAwin = marketplaces.includes('AWIN');
+  const parsedMinEpc = Number(awinMinEpc.trim().replace(',', '.'));
+  const minEpcValue =
+    hasAwin && awinMinEpc.trim() && Number.isFinite(parsedMinEpc) && parsedMinEpc >= 0
+      ? parsedMinEpc
+      : undefined;
 
   const canCreate =
     !!name.trim() &&
@@ -78,6 +87,8 @@ export function RuleForm({ onCreated }: { onCreated: () => void }) {
           groupJids: [...groupJids],
           telegramChatIds: [...telegramChatIds],
           templateId,
+          awinPrioritizeEpc: hasAwin && awinPrioritizeEpc,
+          awinMinEpc: minEpcValue,
         },
       }),
     { invalidate: [['automations']], success: 'Automação criada', onSuccess: onCreated },
@@ -129,6 +140,38 @@ export function RuleForm({ onCreated }: { onCreated: () => void }) {
             colagem manual para Magalu) — sem isso, a regra não encontrará produtos nesses
             marketplaces.
           </p>
+        )}
+        {hasAwin && (
+          <div className="mt-2 space-y-2 rounded-md border border-border bg-surface-2 p-2.5">
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 cursor-pointer rounded border-border accent-brand"
+                checked={awinPrioritizeEpc}
+                onChange={(e) => setAwinPrioritizeEpc(e.target.checked)}
+              />
+              <span>
+                Priorizar lojas com melhor EPC
+                <span className="block text-xs text-muted-foreground">
+                  Os produtos da Awin das lojas que mais convertem e pagam melhor vêm primeiro.
+                </span>
+              </span>
+            </label>
+            <div>
+              <Label htmlFor="rawinminepc">EPC mínimo da loja (R$, opcional)</Label>
+              <Input
+                id="rawinminepc"
+                inputMode="decimal"
+                value={awinMinEpc}
+                onChange={(e) => setAwinMinEpc(e.target.value)}
+                placeholder="sem mínimo"
+                className="mt-1 sm:max-w-40"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Lojas abaixo do mínimo ou ainda sem indicador ficam de fora.
+              </p>
+            </div>
+          </div>
         )}
       </div>
 

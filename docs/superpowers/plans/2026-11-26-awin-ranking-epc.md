@@ -29,7 +29,7 @@ saem quando há mínimo), ordena pelo score da loja (ordem estável) e fica com 
    mantendo `stores: string[]`.
 5. **worker/automação** — `discoverAwin` aplica EPC mínimo e prioridade por score.
 6. **web** — tabela "Indicadores dos programas" no drawer da Awin (ordenada por score, botão
-   "Atualizar indicadores", cartões no celular); seletor de loja com EPC ("Drogal BR · EPC R$ 0,42");
+   "Atualizar indicadores", rolagem horizontal da tabela no celular); seletor de loja com EPC ("Drogal BR · EPC R$ 0,42");
    ordenação "Melhores lojas (EPC)" nos resultados da Awin (score da loja, depois ordem atual);
    opções "Priorizar lojas com melhor EPC" e "EPC mínimo" no formulário de automação quando Awin
    está marcada.

@@ -30,7 +30,7 @@ import type {
   GroupLink,
   ManagedGroup,
 } from './types';
-import type { MarketplaceKind } from '@afilados/shared';
+import type { AwinProgrammeStatsItem, AwinStoreOption, MarketplaceKind } from '@afilados/shared';
 
 export const useAffiliates = (enabled = true) =>
   useQuery({
@@ -79,7 +79,18 @@ export const useAwinStores = (enabled: boolean) =>
     queryKey: ['products', 'awin-stores'],
     enabled,
     staleTime: 5 * 60_000,
-    queryFn: () => apiFetch<{ stores: string[] }>('/products/awin-stores'),
+    // `items` traz as lojas na ordem do ranking por EPC; `stores` fica para compatibilidade.
+    queryFn: () =>
+      apiFetch<{ stores: string[]; items?: AwinStoreOption[] }>('/products/awin-stores'),
+  });
+export const useAwinProgrammeStats = (refetchInterval: number | false = false) =>
+  useQuery({
+    queryKey: ['marketplaces', 'awin', 'programme-stats'],
+    refetchInterval,
+    queryFn: () =>
+      apiFetch<{ items: AwinProgrammeStatsItem[]; fetchedAt: string | null }>(
+        '/marketplaces/awin/programme-stats',
+      ),
   });
 export const useAliexpressCategories = (enabled: boolean) =>
   useQuery({

@@ -12,7 +12,8 @@ import { copyToClipboard } from '@/lib/clipboard';
 import { useRealtime } from '@/lib/realtime';
 import { formatBRL } from '@/lib/format';
 import { useApiMutation } from '@/lib/mutations';
-import { useMarketplaces, useQueue } from '@/lib/queries';
+import { sortByStoreRank } from '@/lib/awin-ranking';
+import { useAwinStores, useMarketplaces, useQueue } from '@/lib/queries';
 import type { ApiProduct } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -54,6 +55,8 @@ export default function ProdutosPage() {
   const [products, setProducts] = useState<ApiProduct[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [listFilter, setListFilter] = useState('');
+  // Awin: "Melhores lojas (EPC)" reordena os resultados pelo score da loja (sem nova busca).
+  const [resultOrder, setResultOrder] = useState<'search' | 'store-epc'>('search');
   const { data: marketplaces } = useMarketplaces();
   const mlApiConnected = Boolean(marketplaces?.find((m) => m.kind === 'MERCADOLIVRE')?.hasMlApi);
   const DISABLED_KEYWORD_SOURCES = SCRAPED_KEYWORD_SOURCES.filter(
@@ -106,6 +109,8 @@ export default function ProdutosPage() {
     });
   });
   const { data: queue } = useQueue();
+  const isAwinSource = source === 'AWIN';
+  const { data: awinStores } = useAwinStores(isAwinSource);
 
   const search = useApiMutation(
     (q: SearchQuery) =>
@@ -135,13 +140,17 @@ export default function ProdutosPage() {
 
   const normalizedListFilter = listFilter.trim().toLowerCase();
   const visibleProducts = useMemo(() => {
-    if (!normalizedListFilter) return products;
-    return products.filter(
-      (p) =>
-        p.title.toLowerCase().includes(normalizedListFilter) ||
-        (p.shopName?.toLowerCase().includes(normalizedListFilter) ?? false),
-    );
-  }, [products, normalizedListFilter]);
+    const filtered = !normalizedListFilter
+      ? products
+      : products.filter(
+          (p) =>
+            p.title.toLowerCase().includes(normalizedListFilter) ||
+            (p.shopName?.toLowerCase().includes(normalizedListFilter) ?? false),
+        );
+    if (!isAwinSource || resultOrder !== 'store-epc') return filtered;
+    const ranked = awinStores?.items?.map((s) => s.name) ?? awinStores?.stores ?? [];
+    return sortByStoreRank(filtered, ranked);
+  }, [products, normalizedListFilter, isAwinSource, resultOrder, awinStores]);
 
   const allVisibleSelected =
     visibleProducts.length > 0 && visibleProducts.every((p) => selected.has(p.id));
@@ -274,6 +283,17 @@ export default function ProdutosPage() {
                 </button>
               )}
             </div>
+            {isAwinSource && (
+              <select
+                aria-label="Ordenar resultados"
+                value={resultOrder}
+                onChange={(e) => setResultOrder(e.target.value as 'search' | 'store-epc')}
+                className="h-7 rounded-md border border-input bg-surface-2 px-2 text-xs"
+              >
+                <option value="search">Ordem da busca</option>
+                <option value="store-epc">Melhores lojas (EPC)</option>
+              </select>
+            )}
             {normalizedListFilter && (
               <span className="text-xs text-muted-foreground">
                 {visibleProducts.length} de {products.length}
