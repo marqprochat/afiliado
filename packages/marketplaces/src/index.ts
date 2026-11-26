@@ -16,6 +16,7 @@ export * from './awin/mapper';
 export * from './awin/adapter';
 export * from './awin/offers';
 export * from './awin/programmes';
+export * from './awin/linkbuilder';
 export * from './awin/channel-refs';
 export * from './awin/transactions';
 export * from './awin/image-fallback';
