@@ -1,10 +1,12 @@
 import {
   QUEUE_AWIN_IMPORT,
+  QUEUE_AWIN_PROGRAMME_STATS,
   QUEUE_AWIN_SALES_SYNC,
   QUEUE_COUPON_SYNC,
   QUEUE_SEND_OFFER,
   QUEUE_SEND_TELEGRAM,
   type AwinImportJob,
+  type AwinProgrammeStatsJob,
   type AwinSalesSyncJob,
   type CouponSyncJob,
   type SendOfferJob,
@@ -97,6 +99,23 @@ export async function enqueueAwinSalesSync(
       attempts: 2,
       backoff: { type: 'exponential', delay: 60_000 },
       // Mantém o registro por um dia para a deduplicação valer entre reinícios.
+      removeOnComplete: { age: 26 * 60 * 60, count: 1000 },
+      removeOnFail: 50,
+    },
+  );
+}
+
+/** Indicadores dos programas Awin: um job por dia e tenant (o jobId deduplica reinícios). */
+export async function enqueueAwinProgrammeStats(tenantId: string) {
+  const q = getQueue<AwinProgrammeStatsJob>(QUEUE_AWIN_PROGRAMME_STATS);
+  const day = new Date().toISOString().slice(0, 10);
+  await q.add(
+    'awin-programme-stats',
+    { tenantId, trigger: 'schedule' },
+    {
+      jobId: `awin-programme-stats-${tenantId}-${day}`,
+      attempts: 2,
+      backoff: { type: 'exponential', delay: 5 * 60_000 },
       removeOnComplete: { age: 26 * 60 * 60, count: 1000 },
       removeOnFail: 50,
     },

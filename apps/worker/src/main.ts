@@ -3,6 +3,7 @@ import pino from 'pino';
 import { prisma } from '@afilados/db';
 import {
   QUEUE_AWIN_IMPORT,
+  QUEUE_AWIN_PROGRAMME_STATS,
   QUEUE_AWIN_SALES_SYNC,
   QUEUE_COUPON_SYNC,
   QUEUE_GROUP_LINK_ROTATE,
@@ -15,6 +16,7 @@ import {
   QUEUE_WA_COMMANDS,
   REDIS_EVENTS_CHANNEL,
   type AwinImportJob,
+  type AwinProgrammeStatsJob,
   type AwinSalesSyncJob,
   type CouponSyncJob,
   type GroupLinkRotateJob,
@@ -45,6 +47,7 @@ import { createProductEnrichProcessor } from './processors/product-enrich';
 import { createAwinImportProcessor } from './processors/awin-import';
 import { createCouponSyncProcessor } from './processors/coupon-sync';
 import { createAwinSalesSyncProcessor } from './processors/awin-sales-sync';
+import { createAwinProgrammeStatsProcessor } from './processors/awin-programme-stats';
 import { createMetricsDailyProcessor, scheduleMetricsDaily } from './processors/metrics-daily';
 import { createGroupLinkRotateProcessor } from './processors/group-link-rotate';
 import { createGroupLinkSyncProcessor } from './processors/group-link-sync';
@@ -56,6 +59,7 @@ import { AutomationScheduler } from './automation/scheduler';
 import { AwinImportScheduler } from './automation/awin-import-scheduler';
 import { CouponSyncScheduler } from './automation/coupon-sync-scheduler';
 import { AwinSalesSyncScheduler } from './automation/awin-sales-sync-scheduler';
+import { AwinProgrammeStatsScheduler } from './automation/awin-programme-stats-scheduler';
 import { TelegramManager } from './telegram/manager';
 import { startHttp } from './http';
 
@@ -69,6 +73,7 @@ const automationScheduler = new AutomationScheduler();
 const awinImportScheduler = new AwinImportScheduler();
 const couponSyncScheduler = new CouponSyncScheduler();
 const awinSalesSyncScheduler = new AwinSalesSyncScheduler();
+const awinProgrammeStatsScheduler = new AwinProgrammeStatsScheduler();
 const telegramManager = new TelegramManager();
 
 const waWorker = new Worker<WaCommandJob>(QUEUE_WA_COMMANDS, processWaCommand(manager), {
@@ -119,6 +124,12 @@ const awinSalesSyncWorker = new Worker<AwinSalesSyncJob>(
   createAwinSalesSyncProcessor(),
   { connection: getRedis(), concurrency: 1 },
 );
+// Indicadores (EPC etc.) dos programas Awin, 1×/dia; uma chamada a cada 3,1 s (limite da API legada).
+const awinProgrammeStatsWorker = new Worker<AwinProgrammeStatsJob>(
+  QUEUE_AWIN_PROGRAMME_STATS,
+  createAwinProgrammeStatsProcessor(),
+  { connection: getRedis(), concurrency: 1 },
+);
 const groupLinkRotateWorker = new Worker<GroupLinkRotateJob>(
   QUEUE_GROUP_LINK_ROTATE,
   createGroupLinkRotateProcessor({ gateway }),
@@ -152,6 +163,7 @@ for (const w of [
   awinImportWorker,
   couponSyncWorker,
   awinSalesSyncWorker,
+  awinProgrammeStatsWorker,
   groupLinkRotateWorker,
   groupLinkSyncWorker,
   mlLinksPrewarmWorker,
@@ -231,6 +243,7 @@ await automationScheduler.start();
 awinImportScheduler.start();
 couponSyncScheduler.start();
 awinSalesSyncScheduler.start();
+awinProgrammeStatsScheduler.start();
 await scheduleMetricsDaily(getQueue<MetricsDailyJob>(QUEUE_METRICS_DAILY)).catch((e) =>
   log.error(e, 'falha ao agendar métricas diárias'),
 );
@@ -247,6 +260,7 @@ async function shutdown() {
     awinImportScheduler.stop();
     couponSyncScheduler.stop();
     awinSalesSyncScheduler.stop();
+    awinProgrammeStatsScheduler.stop();
     telegramManager.stop();
     groupLinkMonitor.stop();
     await Promise.all([
@@ -258,6 +272,7 @@ async function shutdown() {
       awinImportWorker.close(),
       couponSyncWorker.close(),
       awinSalesSyncWorker.close(),
+      awinProgrammeStatsWorker.close(),
       groupLinkRotateWorker.close(),
       groupLinkSyncWorker.close(),
       mlLinksPrewarmWorker.close(),
