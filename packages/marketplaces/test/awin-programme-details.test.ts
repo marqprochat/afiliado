@@ -1,8 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-  getAwinProgrammeDetails,
-  mapAwinProgrammeDetails,
-} from '../src/awin/programme-details';
+import { getAwinProgrammeDetails, mapAwinProgrammeDetails } from '../src/awin/programme-details';
 import { AwinApiError } from '../src/awin/datafeed';
 import fixture from '../src/awin/fixtures/programme-details.json';
 

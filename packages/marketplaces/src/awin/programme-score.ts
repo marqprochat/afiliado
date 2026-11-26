@@ -35,7 +35,10 @@ export interface RankableProgrammeStats {
  * Ordem do ranking: score maior primeiro (null no fim); desempate pela conversão maior e depois
  * pelo prazo médio de pagamento menor (ausentes perdem o desempate).
  */
-export function compareProgrammeStats(a: RankableProgrammeStats, b: RankableProgrammeStats): number {
+export function compareProgrammeStats(
+  a: RankableProgrammeStats,
+  b: RankableProgrammeStats,
+): number {
   const desc = (x: number | null, y: number | null) =>
     x === y ? 0 : x === null ? 1 : y === null ? -1 : y - x;
   const asc = (x: number | null, y: number | null) =>

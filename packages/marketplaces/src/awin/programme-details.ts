@@ -107,7 +107,10 @@ export async function getAwinProgrammeDetails(
     );
   }
   if (!res.ok) {
-    throw new AwinApiError(`Detalhes do programa da Awin responderam HTTP ${res.status}`, 'AWIN_ERROR');
+    throw new AwinApiError(
+      `Detalhes do programa da Awin responderam HTTP ${res.status}`,
+      'AWIN_ERROR',
+    );
   }
   return mapAwinProgrammeDetails(await res.json(), advertiserId);
 }
