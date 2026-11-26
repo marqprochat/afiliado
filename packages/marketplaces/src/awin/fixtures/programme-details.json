@@ -1,0 +1,26 @@
+{
+  "programmeInfo": {
+    "id": 68224,
+    "name": "Drogal BR",
+    "linkStatus": "active",
+    "displayUrl": "https://www.drogal.com.br",
+    "logoUrl": "https://ui.awin.com/images/upload/merchant/profile/68224.png",
+    "clickThroughUrl": "https://www.awin1.com/awclick.php?mid=68224&id=691887",
+    "validDomains": [{ "domain": "drogal.com.br" }],
+    "currencyCode": "BRL",
+    "primarySector": "Saúde e beleza",
+    "primaryRegion": { "name": "Brazil", "countryCode": "BR" }
+  },
+  "kpi": {
+    "averagePaymentTime": "45.5",
+    "approvalPercentage": "87.25",
+    "epc": "0.42",
+    "conversionRate": 3.1,
+    "validationDays": 60,
+    "awinIndex": "1.8"
+  },
+  "commissionRange": [
+    { "min": 2, "max": 5.5, "type": "percentage" },
+    { "min": "1.5", "max": "8", "type": "percentage" }
+  ]
+}
