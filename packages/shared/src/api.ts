@@ -269,6 +269,21 @@ export const extensionConvertTextSchema = z.object({
 });
 export type ExtensionConvertTextBody = z.infer<typeof extensionConvertTextSchema>;
 
+// Renderiza a mensagem de uma oferta com o template do destino escolhido na extensão
+// (lote ou automação). Sem destino, usa o template padrão da conta.
+export const extensionRenderMessageSchema = z.object({
+  batchId: z.string().min(1).nullish(),
+  automationRuleId: z.string().min(1).nullish(),
+  link: z.string().url(),
+  title: z.string().min(1).max(500),
+  price: z.number().positive().nullish(),
+  originalPrice: z.number().positive().nullish(),
+  discountPct: z.number().int().min(1).max(100).nullish(),
+  couponCode: z.string().max(60).nullish(),
+  shipping: z.enum(['NONE', 'FREE', 'FULL', 'UNKNOWN']).nullish(),
+});
+export type ExtensionRenderMessageBody = z.infer<typeof extensionRenderMessageSchema>;
+
 export const extensionAwinGenerateLinkSchema = z.object({
   destinationUrl: z.string().url(),
   advertiserId: z.union([z.string(), z.number()]).optional(),

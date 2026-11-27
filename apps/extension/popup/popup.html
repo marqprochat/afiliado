@@ -98,6 +98,22 @@
             <select id="p-coupon-select" class="input p-coupon-select hidden"></select>
           </div>
 
+          <!-- Cupom próprio: o usuário digita o cupom dele em vez dos detectados/cadastrados -->
+          <div class="p-own-coupon">
+            <label class="p-own-coupon-toggle" for="p-own-coupon-check">
+              <input id="p-own-coupon-check" type="checkbox" />
+              🎟️ Usar meu próprio cupom
+            </label>
+            <input
+              id="p-own-coupon-input"
+              type="text"
+              class="input hidden"
+              maxlength="60"
+              placeholder="Digite seu cupom (ex: BLACK10)"
+              style="text-transform:uppercase;font-family:monospace;"
+            />
+          </div>
+
           <label id="capture-target-label" class="label" for="capture-target">Enviar para qual fila (lote)?</label>
           <select id="capture-target" class="input"></select>
 
@@ -193,7 +209,7 @@
             <label class="label" style="margin: 0;" for="group-coupon-input">Cupom (opcional)</label>
             <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#94a3b8;cursor:pointer;">
               <input id="group-auto-rewrite" type="checkbox" checked />
-              Reescrever no padrão próprio
+              Usar o padrão da mensagem selecionado
             </label>
           </div>
           <div style="display:flex;gap:6px;margin-bottom:10px;">
@@ -206,6 +222,8 @@
             />
             <button id="btn-rewrite-copy" class="btn-secondary-sm" type="button">✨ Reescrever</button>
           </div>
+
+          <div id="group-coupon-suggestions" class="coupon-suggestions hidden"></div>
 
           <div class="card-header-flex" style="margin-top: 6px; margin-bottom: 4px;">
             <label class="label" style="margin: 0;">Prévia da Mensagem Final</label>

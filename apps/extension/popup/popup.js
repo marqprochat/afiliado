@@ -237,6 +237,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   let currentProduct = null;
+  // Cupom próprio digitado pelo usuário (sobrepõe o detectado e os cadastrados)
+  const ownCouponCheck = document.getElementById('p-own-coupon-check');
+  const ownCouponInput = document.getElementById('p-own-coupon-input');
+  let ownCouponActive = false;
+  let couponBeforeOwn = { code: null, value: null };
   let currentTabId = null;
   let config = { apiUrl: 'http://localhost:3011', apiToken: '' };
 
@@ -448,6 +453,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   groupCaptureTarget.addEventListener('change', async () => {
+    if (groupAutoRewrite?.checked) void refreshGroupPreview();
     captureTarget.value = groupCaptureTarget.value;
     updateCaptureButtonLabel();
     await saveCaptureTarget();
@@ -589,12 +595,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Prévia e Edição Rápida
-    const initialText =
-      groupAutoRewrite && groupAutoRewrite.checked
-        ? buildRewrittenGroupCopy(data, groupCouponInput?.value)
-        : convertedText;
-    groupPreviewBubble.textContent = initialText;
-    groupEditTextarea.value = initialText;
+    groupPreviewBubble.textContent = convertedText;
+    groupEditTextarea.value = convertedText;
+    if (groupAutoRewrite && groupAutoRewrite.checked) void refreshGroupPreview();
+    void renderGroupCouponSuggestions(data);
     isEditing = false;
     groupPreviewBubble.classList.remove('hidden');
     groupEditTextarea.classList.add('hidden');
@@ -608,7 +612,56 @@ document.addEventListener('DOMContentLoaded', async () => {
     return `R$ ${Number(value).toFixed(2).replace('.', ',')}`;
   }
 
-  function buildRewrittenGroupCopy(data, manualCouponRaw) {
+  // Sugere cupons cadastrados da mesma loja dos links colados (clique para aplicar).
+  const groupCouponSuggestions = document.getElementById('group-coupon-suggestions');
+  async function renderGroupCouponSuggestions(data) {
+    if (!groupCouponSuggestions) return;
+    groupCouponSuggestions.innerHTML = '';
+    groupCouponSuggestions.classList.add('hidden');
+    const links = data?.detected?.links || [];
+    const main = links.find((l) => l.converted) || links[0];
+    if (!main || !main.marketplace || main.marketplace === 'UNKNOWN' || !config.apiToken) return;
+
+    let query = `store=${encodeURIComponent(main.marketplace)}`;
+    if (main.marketplace === 'AWIN') {
+      try {
+        query += `&domain=${encodeURIComponent(new URL(main.resolvedUrl || main.originalUrl).hostname)}`;
+      } catch {}
+    }
+    try {
+      const res = await fetch(`${normalizeApiUrl(config.apiUrl)}/api/v1/extension/coupons?${query}`, {
+        headers: { Authorization: `Bearer ${config.apiToken}` },
+      });
+      if (!res.ok) return;
+      const body = await res.json();
+      const list = (Array.isArray(body) ? body : body?.coupons || [])
+        .filter((c) => c.code && c.status !== 'INVALID')
+        .slice(0, 4);
+      // Resposta de uma oferta antiga não pode sobrescrever a atual.
+      if (data !== currentParsedResult || list.length === 0) return;
+
+      const label = document.createElement('span');
+      label.textContent = `Cupons de ${main.marketplace}:`;
+      groupCouponSuggestions.appendChild(label);
+      for (const c of list) {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'coupon-suggestion-chip';
+        const discount = c.discountValue ? ` (-R$ ${Number(c.discountValue).toFixed(2)})` : '';
+        chip.textContent = `🎟️ ${c.code}${discount}`;
+        chip.title = c.description || '';
+        chip.addEventListener('click', () => {
+          groupCouponInput.value = c.code;
+          groupCouponInput.dispatchEvent(new Event('input'));
+        });
+        groupCouponSuggestions.appendChild(chip);
+      }
+      groupCouponSuggestions.classList.remove('hidden');
+    } catch {}
+  }
+
+  // Texto de contingência (sem template) caso a API de renderização falhe.
+  function buildFallbackGroupCopy(data, manualCouponRaw) {
     const { detected = {}, convertedText = '' } = data || {};
     const coupon = (manualCouponRaw ?? detected.coupon ?? '').trim().toUpperCase();
     const links = (detected.links || [])
@@ -653,6 +706,74 @@ document.addEventListener('DOMContentLoaded', async () => {
     return parts.join('\n');
   }
 
+  // Extrai o título da oferta colada (mesma heurística do texto de contingência).
+  function groupHeadline(data, coupon) {
+    const { detected = {}, convertedText = '' } = data || {};
+    if (detected.title) return String(detected.title).replace(/^[*_~]+|[*_~]+$/g, '');
+    const ignoredLineRe =
+      /^(?:https?:\/\/|.*https?:\/\/|(?:de|por|apenas|cupom|c[oó]digo|link|compre|resgate|acesse|aproveite)\b.*[:\-]?\s*$|🔥|🚨|⚡|🎟️|🏷️|🛒|👇)/i;
+    const rawLines = convertedText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l && !/https?:\/\//i.test(l));
+    const titleLines = rawLines.filter((l) => {
+      if (ignoredLineRe.test(l)) return false;
+      if (/^r\$\s*\d+/i.test(l)) return false;
+      if (coupon && l.toUpperCase() === coupon) return false;
+      return true;
+    });
+    return (titleLines[0] || rawLines[0] || 'Oferta selecionada').replace(/^[*_~]+|[*_~]+$/g, '');
+  }
+
+  // Monta a mensagem no padrão (template) do destino selecionado: lote, automação ou o padrão da conta.
+  let groupRenderSeq = 0;
+  async function buildRewrittenGroupCopy(data, manualCouponRaw) {
+    const { detected = {} } = data || {};
+    const coupon = (manualCouponRaw ?? detected.coupon ?? '').trim().toUpperCase();
+    const link = (detected.links || [])
+      .map((l) => (l.converted && l.affiliateUrl ? l.affiliateUrl : l.originalUrl))
+      .find((u) => /^https?:\/\//i.test(u || ''));
+    if (!link) return buildFallbackGroupCopy(data, manualCouponRaw);
+
+    const target = parseTarget(groupCaptureTarget.value);
+    try {
+      const res = await fetch(`${normalizeApiUrl(config.apiUrl)}/api/v1/extension/render-message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${config.apiToken}`,
+        },
+        body: JSON.stringify({
+          link,
+          title: groupHeadline(data, coupon),
+          ...(detected.price ? { price: detected.price } : {}),
+          ...(detected.originalPrice ? { originalPrice: detected.originalPrice } : {}),
+          ...(detected.discountPct ? { discountPct: detected.discountPct } : {}),
+          ...(coupon ? { couponCode: coupon } : {}),
+          ...(target.kind === 'rule' ? { automationRuleId: target.id } : {}),
+          ...(target.kind === 'batch' ? { batchId: target.id } : {}),
+        }),
+      });
+      if (!res.ok) return buildFallbackGroupCopy(data, manualCouponRaw);
+      const out = await res.json();
+      return out.text || buildFallbackGroupCopy(data, manualCouponRaw);
+    } catch {
+      return buildFallbackGroupCopy(data, manualCouponRaw);
+    }
+  }
+
+  // Aplica o texto na prévia ignorando respostas antigas (uma digitação rápida dispara várias).
+  async function refreshGroupPreview() {
+    if (!currentParsedResult) return;
+    const seq = ++groupRenderSeq;
+    const next = groupAutoRewrite?.checked
+      ? await buildRewrittenGroupCopy(currentParsedResult, groupCouponInput?.value)
+      : currentParsedResult.convertedText;
+    if (seq !== groupRenderSeq) return;
+    groupPreviewBubble.textContent = next;
+    groupEditTextarea.value = next;
+  }
+
   if (groupAutoRewrite) {
     chrome.storage.local.get(['autoRewriteGroupCopy'], (res) => {
       if (typeof res.autoRewriteGroupCopy === 'boolean') {
@@ -662,20 +783,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     groupAutoRewrite.addEventListener('change', () => {
       chrome.storage.local.set({ autoRewriteGroupCopy: groupAutoRewrite.checked });
       if (!currentParsedResult) return;
-      const next = groupAutoRewrite.checked
-        ? buildRewrittenGroupCopy(currentParsedResult, groupCouponInput?.value)
-        : currentParsedResult.convertedText;
-      groupPreviewBubble.textContent = next;
-      groupEditTextarea.value = next;
+      void refreshGroupPreview();
     });
   }
 
   if (btnRewriteCopy) {
     btnRewriteCopy.addEventListener('click', () => {
       if (!currentParsedResult) return;
-      const next = buildRewrittenGroupCopy(currentParsedResult, groupCouponInput?.value);
-      groupPreviewBubble.textContent = next;
-      groupEditTextarea.value = next;
+      void (async () => {
+        const seq = ++groupRenderSeq;
+        const next = await buildRewrittenGroupCopy(currentParsedResult, groupCouponInput?.value);
+        if (seq !== groupRenderSeq) return;
+        groupPreviewBubble.textContent = next;
+        groupEditTextarea.value = next;
+      })();
     });
   }
 
@@ -689,11 +810,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         tagCoupon.classList.add('hidden');
       }
       if (!currentParsedResult) return;
-      if (groupAutoRewrite?.checked) {
-        const next = buildRewrittenGroupCopy(currentParsedResult, code);
-        groupPreviewBubble.textContent = next;
-        groupEditTextarea.value = next;
-      }
+      if (groupAutoRewrite?.checked) void refreshGroupPreview();
     });
   }
 
@@ -748,7 +865,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       ...(currentParsedResult.detected?.price ? { price: currentParsedResult.detected.price } : {}),
       ...(currentParsedResult.detected?.originalPrice ? { originalPrice: currentParsedResult.detected.originalPrice } : {}),
       ...(currentParsedResult.detected?.discountPct ? { discountPct: currentParsedResult.detected.discountPct } : {}),
-      ...(currentParsedResult.detected?.coupon ? { couponCode: currentParsedResult.detected.coupon } : {}),
+      ...(groupCouponInput?.value.trim() || currentParsedResult.detected?.coupon
+        ? {
+            couponCode: String(groupCouponInput?.value.trim() || currentParsedResult.detected.coupon)
+              .trim()
+              .toUpperCase(),
+          }
+        : {}),
       customText: finalText,
       ...(target.kind === 'rule' ? { automationRuleId: target.id } : {}),
       ...(target.kind === 'batch' ? { batchId: target.id } : {}),
@@ -1003,6 +1126,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
 
+    ownCouponActive = false;
+    if (ownCouponCheck) ownCouponCheck.checked = false;
+    if (ownCouponInput) {
+      ownCouponInput.value = '';
+      ownCouponInput.classList.add('hidden');
+    }
     currentProduct = {
       ...(pageProduct || {}),
       url,
@@ -1040,7 +1169,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           activeStoreCoupons = list;
 
           // Se o produto não tinha cupom ainda, aplica o primeiro automaticamente
-          if (!currentProduct.couponCode) {
+          if (!currentProduct.couponCode && !ownCouponActive) {
             currentProduct.couponCode = activeStoreCoupons[0].code;
             if (activeStoreCoupons[0].discountValue) {
               currentProduct.couponValue = activeStoreCoupons[0].discountValue;
@@ -1056,7 +1185,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   function renderCouponSection() {
     if (!pCouponSection) return;
 
-    if (!currentProduct || (!currentProduct.couponCode && activeStoreCoupons.length === 0)) {
+    if (
+      !currentProduct ||
+      ownCouponActive ||
+      (!currentProduct.couponCode && activeStoreCoupons.length === 0)
+    ) {
       pCouponSection.classList.add('hidden');
       return;
     }
@@ -1120,6 +1253,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderCouponSection();
     renderProductPreview(currentProduct);
   });
+
+  function applyOwnCoupon() {
+    if (!currentProduct) return;
+    const code = (ownCouponInput?.value || '').trim().toUpperCase();
+    currentProduct.couponCode = code || null;
+    currentProduct.couponValue = null;
+    renderProductPreview(currentProduct);
+  }
+
+  ownCouponCheck?.addEventListener('change', () => {
+    if (!currentProduct) {
+      ownCouponCheck.checked = false;
+      return;
+    }
+    ownCouponActive = ownCouponCheck.checked;
+    ownCouponInput.classList.toggle('hidden', !ownCouponActive);
+    if (ownCouponActive) {
+      couponBeforeOwn = { code: currentProduct.couponCode, value: currentProduct.couponValue };
+      ownCouponInput.focus();
+      applyOwnCoupon();
+    } else {
+      currentProduct.couponCode = couponBeforeOwn.code;
+      currentProduct.couponValue = couponBeforeOwn.value;
+      ownCouponInput.value = '';
+      renderProductPreview(currentProduct);
+    }
+    renderCouponSection();
+  });
+
+  ownCouponInput?.addEventListener('input', applyOwnCoupon);
 
   btnRemoveCoupon?.addEventListener('click', () => {
     currentProduct.couponCode = null;

@@ -8,12 +8,13 @@ import {
   extensionCaptureSchema,
   extensionConvertTextSchema,
   extensionDiscoverSchema,
+  extensionRenderMessageSchema,
   extensionSessionSchema,
   ApiError,
   MARKETPLACE_KINDS,
   type ProductData,
 } from '@afilados/shared';
-import { parseProductUrl } from '@afilados/core';
+import { parseProductUrl, renderTemplate } from '@afilados/core';
 import { hashToken } from './api-tokens';
 import { matchesDiscoveryFilters } from '../lib/discovery-filters';
 import { toApiProduct, upsertProducts } from '../lib/products';
@@ -142,6 +143,53 @@ export async function extensionRoutes(app: FastifyInstance) {
     const body = extensionConvertTextSchema.parse(req.body);
     const result = await convertOfferText(tenantId, body.text);
     return { ok: true, ...result };
+  });
+
+  // 1.85 Renderiza a mensagem com o template do destino (lote/automação) ou o padrão da conta
+  app.post('/extension/render-message', async (req) => {
+    const { tenantId } = await authenticateExtension(req);
+    const body = extensionRenderMessageSchema.parse(req.body);
+    const db = forTenant(tenantId);
+
+    let templateId: string | null = null;
+    if (body.batchId) {
+      const batch = await db.batch.findFirst({
+        where: { id: body.batchId },
+        select: { templateId: true },
+      });
+      if (!batch) throw ApiError.notFound('Lote não encontrado');
+      templateId = batch.templateId;
+    } else if (body.automationRuleId) {
+      const rule = await db.automationRule.findFirst({
+        where: { id: body.automationRuleId },
+        select: { templateId: true },
+      });
+      if (!rule) throw ApiError.notFound('Automação não encontrada');
+      templateId = rule.templateId;
+    }
+    const template =
+      (templateId ? await db.template.findFirst({ where: { id: templateId } }) : null) ??
+      (await db.template.findFirst({ where: { isDefault: true, kind: 'PRODUCT' } })) ??
+      (await db.template.findFirst({ where: { kind: 'PRODUCT' }, orderBy: { createdAt: 'asc' } }));
+    if (!template) throw ApiError.validation('Cadastre um template de produto antes de enviar');
+
+    const product: ProductData = {
+      source: 'MERCADOLIVRE',
+      title: body.title,
+      price: body.price ?? 0,
+      originalPrice: body.originalPrice ?? undefined,
+      discountPct: body.discountPct ?? undefined,
+      images: [],
+      shipping: body.shipping ?? 'UNKNOWN',
+      couponCode: body.couponCode?.trim() || undefined,
+      originalUrl: body.link,
+      raw: {},
+    };
+    const text = renderTemplate(template.body, product, {
+      affiliateLink: body.link,
+      now: new Date().toISOString(),
+    });
+    return { ok: true, text, templateId: template.id, templateName: template.name };
   });
 
   // 1.9 Lista anunciantes parceiros da Awin aprovados para o usuário

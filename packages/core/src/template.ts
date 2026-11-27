@@ -17,7 +17,7 @@ export function flashSaleLabel(endsAt: string | undefined, nowIso: string): stri
 function buildVars(p: ProductData, ctx: TemplateContext): Record<string, string> {
   return {
     titulo: p.title,
-    preco: formatBRL(p.price),
+    preco: p.price > 0 ? formatBRL(p.price) : '',
     preco_antigo: p.originalPrice ? formatBRL(p.originalPrice) : '',
     desconto: discountLabel(p.discountPct),
     vendas: p.salesCount !== undefined ? String(p.salesCount) : '',
