@@ -21,12 +21,15 @@ export interface DealCardProps {
   averagePrice30d: number;
   listingsCount: number;
   analysis: {
-    badge: 'ALL_TIME_LOW' | 'GREAT_DEAL' | 'FAIR_PRICE' | 'INFLATED_DISCOUNT';
+    badge: 'ALL_TIME_LOW' | 'GREAT_DEAL' | 'FAIR_PRICE' | 'INFLATED_DISCOUNT' | 'TRACKING';
     badgeLabel: string;
     averagePrice: number;
     lowestPriceEver: number;
     realDiscountPct: number;
     isRealPromotion: boolean;
+    hasHistory?: boolean;
+    trackingSince?: string | null;
+    storeDiscountPct?: number;
   };
   bestListing?: {
     id: string;
@@ -136,11 +139,21 @@ export function DealCard({ deal }: { deal: DealCardProps }) {
           <div className="mb-3">
             <div className="text-[11px] text-slate-500 flex items-center justify-between gap-2 mb-0.5">
               <span className="truncate">Em {deal.bestListing?.storeName || 'Loja'}</span>
-              {deal.analysis.realDiscountPct > 0 && (
-                <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold tabular-nums shrink-0">
+              {deal.analysis.realDiscountPct > 0 ? (
+                <span
+                  className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-bold tabular-nums shrink-0"
+                  title="Desconto contra o histórico de preços"
+                >
                   -{deal.analysis.realDiscountPct}%
                 </span>
-              )}
+              ) : (deal.analysis.storeDiscountPct ?? 0) > 0 ? (
+                <span
+                  className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold tabular-nums shrink-0"
+                  title="Desconto informado pela loja (ainda sem histórico para confirmar)"
+                >
+                  -{deal.analysis.storeDiscountPct}% na loja
+                </span>
+              ) : null}
             </div>
             <div className="text-xl font-bold tracking-tight text-slate-900 flex items-baseline gap-2 tabular-nums">
               <span>{formatCurrency(deal.currentBestPrice)}</span>

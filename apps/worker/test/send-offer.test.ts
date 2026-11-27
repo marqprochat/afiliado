@@ -1002,17 +1002,19 @@ describe('sendOffer com link do site (siteLinks)', () => {
     await sendOffer(withSite, item.id);
 
     const master = await prisma.masterProduct.findFirstOrThrow({ where: { tenantId } });
-    const siteLink = `https://site.test/ofertas/${master.slug}`;
+    const listing = await prisma.productListing.findFirstOrThrow({ where: { tenantId } });
+    // `?l=` = a oferta anunciada; a página põe essa loja no botão principal.
+    const siteLink = `https://site.test/ofertas/${master.slug}?l=${listing.id}`;
     const m = gateway.sent[0]!.msg;
     expect(m.kind).toBe('preview');
     if (m.kind === 'preview') {
       expect(m.url).toBe(siteLink);
       expect(m.text).toBe(`*Fone* R$ 99,90\n${siteLink}`);
     }
-    const listing = await prisma.productListing.findFirstOrThrow({
+    const saved = await prisma.productListing.findFirstOrThrow({
       where: { tenantId, source: 'SHOPEE', externalId: '1' },
     });
-    expect(listing.affiliateUrl).toBe('https://s.shopee.com.br/MOCK123');
+    expect(saved.affiliateUrl).toBe('https://s.shopee.com.br/MOCK123');
   });
 
   it('chave desligada: comportamento atual, com o link de afiliado', async () => {
@@ -1138,7 +1140,8 @@ describe('sendOffer: link por canal (atribuição de vendas)', () => {
     const { batch, item } = await makeBatch({ mediaMode: 'PREVIEW', groups });
     await sendOffer(withSite, item.id);
     const master = await prisma.masterProduct.findFirstOrThrow({ where: { tenantId } });
-    const siteLink = `https://site.test/ofertas/${master.slug}`;
+    const listing = await prisma.productListing.findFirstOrThrow({ where: { tenantId } });
+    const siteLink = `https://site.test/ofertas/${master.slug}?l=${listing.id}`;
     const [ca, cb] = await codes();
     expect(ca).toMatch(/^w[A-Za-z0-9]{5}$/);
     expect(cb).toMatch(/^w[A-Za-z0-9]{5}$/);
@@ -1151,7 +1154,7 @@ describe('sendOffer: link por canal (atribuição de vendas)', () => {
       const m = byJid[jid]!;
       expect(m.kind).toBe('preview');
       if (m.kind === 'preview') {
-        const expected = `${siteLink}?c=${code}&b=${batch.id}`;
+        const expected = `${siteLink}&c=${code}&b=${batch.id}`;
         expect(m.url).toBe(expected);
         expect(m.text).toBe(`*Fone* R$ 99,90\n${expected}`);
       }

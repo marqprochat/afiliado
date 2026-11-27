@@ -29,6 +29,7 @@ const owner = async () => true;
 const indexOk = () =>
   vi.fn<IndexFn>(async () => ({
     masterProductId: 'm1',
+    listingId: 'l1',
     slug: 'fone-ab12',
     isNewMaster: true,
     isPriceDrop: false,
@@ -74,7 +75,7 @@ describe('publishOffer', () => {
       siteUrl: 'https://site.test/',
       index,
     });
-    expect(r).toBe('https://site.test/ofertas/fone-ab12');
+    expect(r).toBe('https://site.test/ofertas/fone-ab12?l=l1');
     expect(index).toHaveBeenCalledWith(db, 't1', product, {
       affiliateUrl: 'https://s.shopee.com.br/AFF',
     });
@@ -111,6 +112,7 @@ describe('publishOffer', () => {
       .mockRejectedValueOnce(Object.assign(new Error('unique'), { code: 'P2002' }))
       .mockResolvedValueOnce({
         masterProductId: 'm1',
+        listingId: 'l1',
         slug: 'fone-ab12',
         isNewMaster: false,
         isPriceDrop: false,
@@ -120,7 +122,7 @@ describe('publishOffer', () => {
       siteUrl: 'https://site.test',
       index,
     });
-    expect(r).toBe('https://site.test/ofertas/fone-ab12');
+    expect(r).toBe('https://site.test/ofertas/fone-ab12?l=l1');
     expect(index).toHaveBeenCalledTimes(2);
   });
 
@@ -171,7 +173,7 @@ describe('publishOffer', () => {
       imageBudgetMs: 20,
       resolveImage: () => new Promise(() => undefined),
     });
-    expect(r).toBe('https://site.test/ofertas/fone-ab12');
+    expect(r).toBe('https://site.test/ofertas/fone-ab12?l=l1');
     expect(index.mock.calls[0]![2].images).toEqual(['https://morta/a.jpg']);
   });
 

@@ -79,9 +79,20 @@ function normalizeSynonyms(str: string): string {
  * só o "35" sai e o "5" do console fica.
  */
 const AMAZON_SCRAPER_SUFFIX = /\d{1,2}\s*off\s*oferta.*$/i;
+/**
+ * Sufixo do selo de oferta relâmpago que a captura da Shopee cola no título ("… null menos 21
+ * preço atual Popular clique entrar em ofertas relâmpago").
+ */
+const SHOPEE_SCRAPER_SUFFIX = /\s*(?:\bnull\s+)?\bmenos\s+\d{1,3}\s+pre[cç]o\s+atual\b.*$/i;
+/** "null" solto no fim (campo vazio concatenado pela captura). */
+const TRAILING_NULL = /(?:\s+\bnull\b)+\s*$/i;
 
 export function stripScraperSuffix(title: string): string {
-  return title.replace(AMAZON_SCRAPER_SUFFIX, '').trim();
+  return title
+    .replace(AMAZON_SCRAPER_SUFFIX, '')
+    .replace(SHOPEE_SCRAPER_SUFFIX, '')
+    .replace(TRAILING_NULL, '')
+    .trim();
 }
 
 /**
@@ -426,6 +437,17 @@ function accessoryMismatch(titleA: string, titleB: string): boolean {
   return ACCESSORY_HINT.test(normA) !== ACCESSORY_HINT.test(normB);
 }
 
+/** Produto que não é novo: usado, seminovo, recondicionado, vitrine, open box, reembalado. */
+const USED_CONDITION =
+  /\b(usad[oa]s?|semi[\s-]?nov[oa]s?|recondicionad[oa]s?|refurbished|renovad[oa]s?|vitrine|open[\s-]?box|reembalad[oa]s?|mostru[aá]rio)\b/i;
+
+/** true quando um título é de produto usado/recondicionado e o outro não. */
+export function conditionMismatch(titleA: string, titleB: string): boolean {
+  return (
+    USED_CONDITION.test(removeAccents(titleA)) !== USED_CONDITION.test(removeAccents(titleB))
+  );
+}
+
 /** true quando os títulos descrevem variantes diferentes (na dúvida entre atributos presentes, separa). */
 export function variantsConflict(a: VariantAttributes, b: VariantAttributes): boolean {
   for (const key of SCALAR_ATTRIBUTES) {
@@ -453,6 +475,7 @@ export function cleanEanValue(ean: string | null | undefined): string | null {
  */
 function titlesConflict(titleA: string, titleB: string): boolean {
   if (accessoryMismatch(titleA, titleB)) return true;
+  if (conditionMismatch(titleA, titleB)) return true;
   if (!variantsConflict(extractVariantAttributes(titleA), extractVariantAttributes(titleB))) {
     return false;
   }
@@ -543,7 +566,10 @@ export function findBestProductMatch(
       continue;
     }
 
-    if (accessoryMismatch(newProduct.title, candidate.title)) {
+    if (
+      accessoryMismatch(newProduct.title, candidate.title) ||
+      conditionMismatch(newProduct.title, candidate.title)
+    ) {
       continue;
     }
 
@@ -569,86 +595,137 @@ export function findBestProductMatch(
   return bestCandidate;
 }
 
-export type DealBadge = 'ALL_TIME_LOW' | 'GREAT_DEAL' | 'FAIR_PRICE' | 'INFLATED_DISCOUNT';
+export type DealBadge =
+  | 'ALL_TIME_LOW'
+  | 'GREAT_DEAL'
+  | 'FAIR_PRICE'
+  | 'INFLATED_DISCOUNT'
+  | 'TRACKING';
 
 export interface DealAnalysis {
   badge: DealBadge;
   badgeLabel: string;
   averagePrice: number;
   lowestPriceEver: number;
+  /** Desconto real contra o histórico; 0 sem histórico suficiente. */
   realDiscountPct: number;
   isRealPromotion: boolean;
+  /** Há histórico suficiente para afirmar algo sobre o preço (ver MIN_HISTORY_*). */
+  hasHistory: boolean;
+  /** Primeiro preço registrado (ISO) ou null. */
+  trackingSince: string | null;
+  /** Desconto que a loja anuncia (preço "De" → preço atual); não é verificado. */
+  storeDiscountPct: number;
 }
 
+export interface PricePoint {
+  price: number;
+  recordedAt?: Date | string | undefined;
+}
+
+/** Preços anteriores (sem o preço atual) necessários para julgar a oferta. */
+export const MIN_HISTORY_POINTS = 2;
+/** Há quantos dias o primeiro preço precisa ter sido registrado. */
+export const MIN_HISTORY_DAYS = 14;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function toTime(d: Date | string | undefined): number | null {
+  if (d === undefined) return null;
+  const t = new Date(d).getTime();
+  return Number.isFinite(t) ? t : null;
+}
+
+/**
+ * Analisa o preço atual contra os preços ANTERIORES do produto (`priorHistory` não inclui os
+ * pontos que representam o preço atual de cada loja). Sem histórico suficiente — menos de
+ * MIN_HISTORY_POINTS preços anteriores ou o primeiro registrado há menos de MIN_HISTORY_DAYS —
+ * não afirma nada: badge TRACKING, sem "menor preço histórico" nem "preço maquiado".
+ * `trackingSince` é o primeiro registro entre `priorHistory` e `firstSeenAt`.
+ */
 export function analyzeDealPromotion(
-  priceHistory: { price: number; recordedAt?: Date | string | undefined }[],
+  priorHistory: PricePoint[],
   currentPrice: number,
   originalPrice?: number | null | undefined,
+  opts: { now?: Date; firstSeenAt?: Date | string | null | undefined } = {},
 ): DealAnalysis {
-  const prices = priceHistory.map((p) => Number(p.price)).filter((p) => p > 0);
+  const now = (opts.now ?? new Date()).getTime();
+  const prior = priorHistory.filter((p) => Number(p.price) > 0);
+  const prices = prior.map((p) => Number(p.price));
+  const times = [
+    ...prior.map((p) => toTime(p.recordedAt)),
+    toTime(opts.firstSeenAt ?? undefined),
+  ].filter((t): t is number => t !== null);
+  const firstTime = times.length > 0 ? Math.min(...times) : null;
+  const trackingSince = firstTime !== null ? new Date(firstTime).toISOString() : null;
 
-  if (prices.length === 0) {
-    const orig = Number(originalPrice ?? 0);
-    const hasDiscount = orig > currentPrice;
-    const discountPct = hasDiscount ? Math.round(((orig - currentPrice) / orig) * 100) : 0;
+  const orig = Number(originalPrice ?? 0);
+  const storeDiscountPct =
+    orig > currentPrice && currentPrice > 0 ? Math.round(((orig - currentPrice) / orig) * 100) : 0;
 
+  const priorTimes = prior.map((p) => toTime(p.recordedAt)).filter((t): t is number => t !== null);
+  const oldestPrior = priorTimes.length > 0 ? Math.min(...priorTimes) : null;
+  const hasHistory =
+    prices.length >= MIN_HISTORY_POINTS &&
+    oldestPrior !== null &&
+    now - oldestPrior >= MIN_HISTORY_DAYS * DAY_MS;
+
+  if (!hasHistory) {
     return {
-      badge: discountPct >= 20 ? 'GREAT_DEAL' : 'FAIR_PRICE',
-      badgeLabel: discountPct >= 20 ? 'Oferta do Dia' : 'Preço Normal',
+      badge: 'TRACKING',
+      badgeLabel: 'Monitorando preço',
       averagePrice: currentPrice,
-      lowestPriceEver: currentPrice,
-      realDiscountPct: discountPct,
-      isRealPromotion: discountPct > 5,
+      lowestPriceEver: prices.length > 0 ? Math.min(...prices, currentPrice) : currentPrice,
+      realDiscountPct: 0,
+      isRealPromotion: false,
+      hasHistory: false,
+      trackingSince,
+      storeDiscountPct,
     };
   }
 
-  const sum = prices.reduce((a, b) => a + b, 0);
-  const averagePrice = Number((sum / prices.length).toFixed(2));
-  const lowestPriceEver = Math.min(...prices, currentPrice);
+  const averagePrice = Number((prices.reduce((a, b) => a + b, 0) / prices.length).toFixed(2));
+  const lowestPrior = Math.min(...prices);
+  const lowestPriceEver = Math.min(lowestPrior, currentPrice);
+  const discountVsAverage =
+    averagePrice > 0 ? Math.round(((averagePrice - currentPrice) / averagePrice) * 100) : 0;
+  const base = { averagePrice, lowestPriceEver, hasHistory: true, trackingSince, storeDiscountPct };
 
-  const discountVsAverage = averagePrice > 0
-    ? Math.round(((averagePrice - currentPrice) / averagePrice) * 100)
-    : 0;
-
-  const orig = Number(originalPrice ?? 0);
-  if (orig > currentPrice && currentPrice >= averagePrice * 0.98) {
+  // Loja anuncia "De R$ X" (5%+ acima), mas o preço está na média de sempre.
+  if (orig > currentPrice * 1.05 && currentPrice >= averagePrice * 0.98) {
     return {
+      ...base,
       badge: 'INFLATED_DISCOUNT',
       badgeLabel: 'Preço Maquiado',
-      averagePrice,
-      lowestPriceEver,
       realDiscountPct: 0,
       isRealPromotion: false,
     };
   }
 
-  if (currentPrice <= lowestPriceEver) {
+  // Igual ou abaixo do menor preço anterior E pelo menos 5% abaixo da média.
+  if (currentPrice <= lowestPrior && discountVsAverage >= 5) {
     return {
+      ...base,
       badge: 'ALL_TIME_LOW',
       badgeLabel: 'Menor Preço Histórico',
-      averagePrice,
-      lowestPriceEver,
-      realDiscountPct: Math.max(discountVsAverage, 1),
+      realDiscountPct: discountVsAverage,
       isRealPromotion: true,
     };
   }
 
   if (discountVsAverage >= 10) {
     return {
+      ...base,
       badge: 'GREAT_DEAL',
       badgeLabel: `${discountVsAverage}% Abaixo da Média`,
-      averagePrice,
-      lowestPriceEver,
       realDiscountPct: discountVsAverage,
       isRealPromotion: true,
     };
   }
 
   return {
+    ...base,
     badge: 'FAIR_PRICE',
     badgeLabel: 'Preço Regular',
-    averagePrice,
-    lowestPriceEver,
     realDiscountPct: Math.max(0, discountVsAverage),
     isRealPromotion: false,
   };

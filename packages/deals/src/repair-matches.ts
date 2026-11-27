@@ -3,6 +3,7 @@ import {
   findBestProductMatch,
   normalizeProductTitle,
   listingConflictsWithMaster,
+  stripScraperSuffix,
   MAX_MATCH_PRICE_RATIO,
   type MatchingCandidate,
 } from '@afilados/core';
@@ -36,6 +37,8 @@ export interface RepairReport {
   mastersWithoutAnchor: number;
   newMasters: number;
   moves: RepairMove[];
+  /** Páginas cujo título tinha lixo da captura ("null menos 21 preço atual…", "23 offOferta…"). */
+  titlesCleaned: { masterId: string; from: string; to: string }[];
 }
 
 function median(values: number[]): number {
@@ -70,6 +73,7 @@ export async function repairDealMatches(
     mastersWithoutAnchor: 0,
     newMasters: 0,
     moves: [],
+    titlesCleaned: [],
   };
 
   const masters = await db.masterProduct.findMany({
@@ -106,6 +110,34 @@ export async function repairDealMatches(
   }));
   const touched = new Set<string>();
 
+  // Índice palavra → candidatos: com centenas de milhares de páginas, comparar cada oferta com
+  // todas seria lento demais. Só entram candidatos que dividem ao menos 2 palavras do título.
+  const tokenIndex = new Map<string, Set<number>>();
+  const indexCandidate = (pos: number) => {
+    for (const t of new Set(normalizeProductTitle(candidates[pos]!.title).tokens)) {
+      const set = tokenIndex.get(t) ?? new Set<number>();
+      set.add(pos);
+      tokenIndex.set(t, set);
+    }
+  };
+  candidates.forEach((_, i) => indexCandidate(i));
+  const MAX_SHORTLIST = 400;
+  const shortlist = (title: string, excludeId: string): MatchingCandidate[] => {
+    const hits = new Map<number, number>();
+    for (const t of new Set(normalizeProductTitle(title).tokens)) {
+      const set = tokenIndex.get(t);
+      // Palavra comum demais ("de", "preto", "smartphone") não ajuda a filtrar.
+      if (!set || set.size > 5000) continue;
+      for (const pos of set) hits.set(pos, (hits.get(pos) ?? 0) + 1);
+    }
+    return [...hits.entries()]
+      .filter(([, n]) => n >= 2)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, MAX_SHORTLIST)
+      .map(([pos]) => candidates[pos]!)
+      .filter((c) => c.id !== excludeId);
+  };
+
   for (const master of masters) {
     const group = byMaster.get(master.id) ?? [];
     if (group.length < 2) continue;
@@ -133,7 +165,7 @@ export async function repairDealMatches(
       const price = Number(listing.currentPrice);
       const match = findBestProductMatch(
         { title: listing.title, ean: null, brand: normalizeProductTitle(listing.title).brand ?? null, price },
-        candidates.filter((c) => c.id !== master.id),
+        shortlist(listing.title, master.id),
       );
 
       let toMasterId: string;
@@ -153,6 +185,7 @@ export async function repairDealMatches(
             })
           : `novo-${report.newMasters}`;
         candidates.push({ id: toMasterId, title: toTitle, ean: null, brand: null, currentBestPrice: price });
+        indexCandidate(candidates.length - 1);
       }
 
       report.moves.push({
@@ -173,6 +206,21 @@ export async function repairDealMatches(
         });
         touched.add(toMasterId);
       }
+    }
+  }
+
+  // Título da página com lixo da captura: limpa título e cleanTitle (o slug fica, links já postados).
+  for (const master of masters) {
+    const stripped = stripScraperSuffix(master.title);
+    if (stripped === master.title.trim() || stripped.length === 0) continue;
+    const to = normalizeProductTitle(stripped).cleanTitle;
+    if (!to || to === master.title) continue;
+    report.titlesCleaned.push({ masterId: master.id, from: master.title, to });
+    if (apply) {
+      await db.masterProduct.updateMany({
+        where: { id: master.id },
+        data: { title: to, cleanTitle: to },
+      });
     }
   }
 

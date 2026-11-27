@@ -105,3 +105,24 @@ describe('repairDealMatches', () => {
     expect(report.moves).toHaveLength(0);
   });
 });
+
+describe('repairDealMatches: títulos com lixo da captura', () => {
+  it('dry-run lista e apply limpa o título sem mudar o slug', async () => {
+    const dirty =
+      'Relogio Smartwatch Xiaomi Mi Band 9 Pro null menos 10 preço atual Popular clique entrar em ofertas relâmpago';
+    const id = await master(dirty, 99);
+    const before = await prisma.masterProduct.findUniqueOrThrow({ where: { id } });
+
+    const dry = await repairDealMatches(forTenant(tenantId), tenantId);
+    expect(dry.titlesCleaned.find((c) => c.masterId === id)?.to).toBe(
+      'Relogio Smartwatch Xiaomi Mi Band 9 Pro',
+    );
+    expect((await prisma.masterProduct.findUniqueOrThrow({ where: { id } })).title).toBe(dirty);
+
+    await repairDealMatches(forTenant(tenantId), tenantId, { apply: true });
+    const after = await prisma.masterProduct.findUniqueOrThrow({ where: { id } });
+    expect(after.title).toBe('Relogio Smartwatch Xiaomi Mi Band 9 Pro');
+    expect(after.cleanTitle).toBe('Relogio Smartwatch Xiaomi Mi Band 9 Pro');
+    expect(after.slug).toBe(before.slug);
+  });
+});

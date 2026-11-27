@@ -146,8 +146,11 @@ export async function publishOffer(
     const indexing = run();
     // Depois do timeout a indexação segue em segundo plano; a rejeição tardia não pode vazar.
     indexing.catch(() => undefined);
-    const { slug } = await withTimeout(indexing, opts.timeoutMs ?? PUBLISH_TIMEOUT_MS);
-    return `${siteUrl.replace(/\/+$/, '')}/ofertas/${slug}`;
+    const { slug, listingId } = await withTimeout(indexing, opts.timeoutMs ?? PUBLISH_TIMEOUT_MS);
+    const page = `${siteUrl.replace(/\/+$/, '')}/ofertas/${slug}`;
+    // `l` = oferta anunciada: a página põe essa loja no botão principal (a mensagem fala dela),
+    // mesmo quando outra loja do comparador está mais barata.
+    return listingId ? `${page}?l=${encodeURIComponent(listingId)}` : page;
   } catch (err) {
     log.warn(
       {

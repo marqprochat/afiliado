@@ -253,3 +253,44 @@ describe('indexProductInPriceEngine: título com "+" e aspas (regressão: págin
     expect(r.slug).toBe('samsung-galaxy-s24-512gb-preto-old1');
   });
 });
+
+describe('indexProductInPriceEngine: preço fora da faixa e selo honesto', () => {
+  const band = (externalId: string, price: number, n: number): ProductData => ({
+    ...fone,
+    externalId,
+    title: 'Relogio Smartwatch Xiaomi Mi Band 9 Active Preto',
+    price,
+    originalUrl: `https://shopee.com.br/product/2/${n}`,
+  });
+
+  it('devolve a listagem gravada', async () => {
+    const r = await indexProductInPriceEngine(forTenant(tenantId), tenantId, band('mb-a', 200, 1));
+    expect(r.listingId).toBe((await listingOf('mb-a')).id);
+  });
+
+  it('oferta que já está na página sai dela quando o preço foge da mediana', async () => {
+    const db = forTenant(tenantId);
+    const a = await indexProductInPriceEngine(db, tenantId, band('mb-b', 210, 2));
+    const b = await indexProductInPriceEngine(db, tenantId, band('mb-c', 205, 3));
+    expect(b.masterProductId).toBe(a.masterProductId);
+    // O anúncio mb-c passou a custar 10× mais: outro produto (ex.: o vendedor trocou o item).
+    const moved = await indexProductInPriceEngine(db, tenantId, band('mb-c', 2050, 3));
+    expect(moved.masterProductId).not.toBe(a.masterProductId);
+  });
+
+  it('produto novo na vitrine não ganha "menor preço histórico" nem "preço maquiado"', async () => {
+    const db = forTenant(tenantId);
+    const r = await indexProductInPriceEngine(db, tenantId, {
+      ...fone,
+      externalId: 'cafeteira-1',
+      title: 'Cafeteira Expresso Oster Primalatte Teste Selo',
+      price: 500,
+      originalPrice: 900,
+      originalUrl: 'https://shopee.com.br/product/3/1',
+    });
+    const showcase = await getDealsShowcase(db, { query: 'Primalatte Teste Selo' });
+    const deal = showcase.deals.find((d) => d.id === r.masterProductId)!;
+    expect(deal.analysis.badge).toBe('TRACKING');
+    expect(deal.analysis.storeDiscountPct).toBe(44);
+  });
+});

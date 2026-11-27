@@ -47,7 +47,9 @@ export async function upsertProducts(
     });
     out.push(row);
 
-    // Indexação no PriceEngine para deduplicação, histórico de preço e alertas
+    // Indexação no PriceEngine para deduplicação, histórico de preço e alertas. Produto-esqueleto
+    // ("Importando…", preço 0) fica de fora: todos teriam o mesmo título e cairiam na mesma página.
+    if (!(it.price > 0)) continue;
     indexProductInPriceEngine(db, tenantId, it).catch((err) => {
       // Log sem travar o pipeline principal
       console.error('[PriceEngine] Erro ao indexar produto:', err);

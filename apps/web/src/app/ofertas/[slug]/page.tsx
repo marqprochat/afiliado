@@ -51,12 +51,15 @@ interface DealDetail {
   averagePrice30d: number;
   listingsCount: number;
   analysis: {
-    badge: 'ALL_TIME_LOW' | 'GREAT_DEAL' | 'FAIR_PRICE' | 'INFLATED_DISCOUNT';
+    badge: 'ALL_TIME_LOW' | 'GREAT_DEAL' | 'FAIR_PRICE' | 'INFLATED_DISCOUNT' | 'TRACKING';
     badgeLabel: string;
     averagePrice: number;
     lowestPriceEver: number;
     realDiscountPct: number;
     isRealPromotion: boolean;
+    hasHistory?: boolean;
+    trackingSince?: string | null;
+    storeDiscountPct?: number;
   };
   listings: ListingItem[];
   priceHistory: {
@@ -78,6 +81,12 @@ export default function OfertaDetailPage() {
   const [alertOpen, setAlertOpen] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
   const trackQuery = useTrackQuery();
+  // `?l=<listagem>`: a oferta que a mensagem do grupo anunciou (vai no botão principal).
+  const [announcedId, setAnnouncedId] = useState<string | null>(null);
+  useEffect(() => {
+    const l = new URLSearchParams(window.location.search).get('l');
+    setAnnouncedId(l ? l.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || null : null);
+  }, []);
 
   async function handleShare() {
     if (!deal) return;
@@ -187,8 +196,21 @@ export default function OfertaDetailPage() {
     );
   }
 
-  const bestListing = deal.listings[0] ?? null;
-  const isAllTimeLow = deal.analysis.badge === 'ALL_TIME_LOW';
+  const cheapest = deal.listings[0] ?? null;
+  const announced = announcedId ? (deal.listings.find((l) => l.id === announcedId) ?? null) : null;
+  // Botão principal: a loja anunciada no grupo (se ainda estiver em estoque); senão, a mais barata.
+  const bestListing = announced ?? cheapest;
+  const cheaperElsewhere =
+    announced && cheapest && cheapest.id !== announced.id && cheapest.currentPrice < announced.currentPrice
+      ? cheapest
+      : null;
+  const mainPrice = bestListing?.currentPrice ?? deal.currentBestPrice;
+  // O selo vale para o menor preço do produto; com outra loja no destaque, não se aplica.
+  const isAllTimeLow = deal.analysis.badge === 'ALL_TIME_LOW' && !cheaperElsewhere;
+  const hasHistory = deal.analysis.hasHistory ?? true;
+  const trackingSinceLabel = deal.analysis.trackingSince
+    ? new Date(deal.analysis.trackingSince).toLocaleDateString('pt-BR')
+    : null;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col justify-between">
@@ -275,30 +297,49 @@ export default function OfertaDetailPage() {
               <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs mb-6">
                 <div className="text-xs text-slate-500 mb-1.5 flex items-center gap-1.5">
                   <Store className="w-4 h-4 text-emerald-600" />
-                  Melhor preço disponível em{' '}
+                  {announced ? 'Oferta anunciada em' : 'Melhor preço disponível em'}{' '}
                   <strong className="text-slate-900 font-semibold">{bestListing?.storeName || 'Loja Parceira'}</strong>
                 </div>
 
                 <div className="flex items-baseline gap-3 mb-4 tabular-nums">
                   <span className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900">
-                    {formatCurrency(deal.currentBestPrice)}
+                    {formatCurrency(mainPrice)}
                   </span>
-                  {bestListing?.originalPrice && bestListing.originalPrice > deal.currentBestPrice && (
+                  {bestListing?.originalPrice && bestListing.originalPrice > mainPrice && (
                     <span className="text-sm text-slate-400 line-through">
                       {formatCurrency(bestListing.originalPrice)}
                     </span>
                   )}
                 </div>
 
+                {cheaperElsewhere && (
+                  <div className="px-3.5 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 mb-3">
+                    Agora está mais barato em <strong>{cheaperElsewhere.storeName}</strong> por{' '}
+                    <strong className="tabular-nums">{formatCurrency(cheaperElsewhere.currentPrice)}</strong>
+                    {' '}— veja no comparador abaixo.
+                  </div>
+                )}
+
                 <div className="px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs text-slate-600 mb-6 flex flex-wrap items-center gap-x-6 gap-y-1.5 tabular-nums">
-                  <span>
-                    Média de 30 dias:{' '}
-                    <strong className="text-slate-900">{formatCurrency(deal.averagePrice30d)}</strong>
-                  </span>
-                  <span>
-                    Menor histórico:{' '}
-                    <strong className="text-emerald-700">{formatCurrency(deal.lowestPriceEver)}</strong>
-                  </span>
+                  {hasHistory ? (
+                    <>
+                      <span>
+                        Preço médio:{' '}
+                        <strong className="text-slate-900">{formatCurrency(deal.analysis.averagePrice)}</strong>
+                      </span>
+                      <span>
+                        Menor preço registrado:{' '}
+                        <strong className="text-emerald-700">{formatCurrency(deal.analysis.lowestPriceEver)}</strong>
+                      </span>
+                    </>
+                  ) : (
+                    <span>
+                      {trackingSinceLabel
+                        ? `Monitorando o preço desde ${trackingSinceLabel}.`
+                        : 'Começamos a monitorar o preço agora.'}{' '}
+                      Ainda não há histórico suficiente para comparar.
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-center gap-2.5">
@@ -353,6 +394,7 @@ export default function OfertaDetailPage() {
             <div className="divide-y divide-slate-100">
               {deal.listings.map((l, index) => {
                 const isWinner = index === 0;
+                const isAnnounced = announced?.id === l.id;
                 return (
                   <div
                     key={l.id}
@@ -370,6 +412,11 @@ export default function OfertaDetailPage() {
                           {isWinner && (
                             <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wide">
                               Menor preço
+                            </span>
+                          )}
+                          {isAnnounced && (
+                            <span className="px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 text-[10px] font-bold uppercase tracking-wide">
+                              Anunciada
                             </span>
                           )}
                         </div>

@@ -7,6 +7,7 @@ import {
   variantsConflict,
   productsConflict,
   listingConflictsWithMaster,
+  conditionMismatch,
 } from '../src/deduplication';
 
 describe('deduplication & price engine', () => {
@@ -102,29 +103,97 @@ describe('deduplication & price engine', () => {
 
   it('analyzes deal and detects ALL_TIME_LOW', () => {
     const history = [
-      { price: 5000 },
-      { price: 4800 },
-      { price: 4600 },
+      { price: 5000, recordedAt: daysAgo(40) },
+      { price: 4800, recordedAt: daysAgo(25) },
+      { price: 4600, recordedAt: daysAgo(10) },
     ];
 
     const currentPrice = 4199;
-    const deal = analyzeDealPromotion(history, currentPrice, 5200);
+    const deal = analyzeDealPromotion(history, currentPrice, 5200, { now: NOW });
 
     expect(deal.badge).toBe('ALL_TIME_LOW');
     expect(deal.isRealPromotion).toBe(true);
+    expect(deal.hasHistory).toBe(true);
     expect(deal.lowestPriceEver).toBe(4199);
   });
 
   it('detects fake promotions / inflated discounts', () => {
     const history = [
-      { price: 300 },
-      { price: 310 },
-      { price: 295 },
+      { price: 300, recordedAt: daysAgo(30) },
+      { price: 310, recordedAt: daysAgo(20) },
+      { price: 295, recordedAt: daysAgo(5) },
     ];
 
-    const deal = analyzeDealPromotion(history, 305, 600);
+    const deal = analyzeDealPromotion(history, 305, 600, { now: NOW });
     expect(deal.badge).toBe('INFLATED_DISCOUNT');
     expect(deal.isRealPromotion).toBe(false);
+  });
+
+  it('sem histórico anterior não afirma menor preço nem preço maquiado', () => {
+    const deal = analyzeDealPromotion([], 199, 399, { now: NOW, firstSeenAt: daysAgo(1) });
+    expect(deal.badge).toBe('TRACKING');
+    expect(deal.hasHistory).toBe(false);
+    expect(deal.isRealPromotion).toBe(false);
+    expect(deal.realDiscountPct).toBe(0);
+    expect(deal.storeDiscountPct).toBe(50);
+    expect(deal.trackingSince).toBe(daysAgo(1).toISOString());
+  });
+
+  it('histórico recente demais (menos de 14 dias) ainda é TRACKING', () => {
+    const history = [
+      { price: 500, recordedAt: daysAgo(6) },
+      { price: 480, recordedAt: daysAgo(3) },
+    ];
+    expect(analyzeDealPromotion(history, 300, null, { now: NOW }).badge).toBe('TRACKING');
+  });
+
+  it('um único preço anterior não basta', () => {
+    const history = [{ price: 500, recordedAt: daysAgo(60) }];
+    expect(analyzeDealPromotion(history, 300, null, { now: NOW }).badge).toBe('TRACKING');
+  });
+
+  it('igual ao menor preço mas perto da média não é menor preço histórico', () => {
+    const history = [
+      { price: 100, recordedAt: daysAgo(40) },
+      { price: 102, recordedAt: daysAgo(20) },
+    ];
+    const deal = analyzeDealPromotion(history, 100, null, { now: NOW });
+    expect(deal.badge).toBe('FAIR_PRICE');
+  });
+});
+
+const NOW = new Date('2026-11-27T12:00:00Z');
+function daysAgo(n: number): Date {
+  return new Date(NOW.getTime() - n * 24 * 60 * 60 * 1000);
+}
+
+describe('limpeza de título e condição do produto', () => {
+  it('remove o sufixo de oferta relâmpago da Shopee', () => {
+    expect(
+      normalizeProductTitle(
+        'Relógio Smartwatch Xiaomi Mi Band 9 Active SmartBand null menos 21 preço atual Popular clique entrar em ofertas relâmpago',
+      ).cleanTitle,
+    ).toBe('Relógio Smartwatch Xiaomi Mi Band 9 Active SmartBand');
+  });
+
+  it('remove o sufixo de oferta da Amazon colado na palavra', () => {
+    expect(
+      normalizeProductTitle(
+        'Ventilador de Parede Oscilante 60cm Bivolt Ventisol Fácil de Instalar23 offOferta Exclusiva PrimeDe',
+      ).cleanTitle,
+    ).toBe('Ventilador de Parede Oscilante 60cm Bivolt Ventisol Fácil de Instalar');
+  });
+
+  it('seminovo e novo não se juntam', () => {
+    const used = 'Celular Samsung Galaxy S25 Ultra 5G 512GB 12GB RAM Titânio azul Seminovo';
+    const fresh = 'Celular Samsung Galaxy S25 Ultra 5G 512GB 12GB RAM Titânio azul';
+    expect(conditionMismatch(used, fresh)).toBe(true);
+    expect(
+      findBestProductMatch({ title: fresh, price: 5000 }, [
+        { id: 'u', title: used, currentBestPrice: 4800 },
+      ]),
+    ).toBeNull();
+    expect(productsConflict({ title: used }, { title: fresh })).toBe(true);
   });
 });
 

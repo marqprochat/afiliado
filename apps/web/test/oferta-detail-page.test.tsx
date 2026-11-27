@@ -91,8 +91,45 @@ describe('/ofertas/[slug]', () => {
     render(<OfertaDetailPage />);
     const buy = await screen.findByRole('link', { name: /Ir para Shopee/ });
     expect(buy.getAttribute('href')).toBe('/api/v1/r/l1?c=wAbc12&b=lote1');
-    const store = screen.getByRole('link', { name: /Acessar Loja/ });
+    const store = screen.getByRole('link', { name: /Acessar loja/i });
     expect(store.getAttribute('href')).toBe('/api/v1/r/l1?c=wAbc12&b=lote1');
     window.history.replaceState({}, '', '/');
+  });
+
+  it('?l= põe a loja anunciada no botão principal e avisa se outra está mais barata', async () => {
+    window.history.replaceState({}, '', '/ofertas/tv-55-ab12?l=l2');
+    mockFetch(
+      deal([
+        { id: 'l1', storeName: 'Amazon Brasil', source: 'AMAZON', currentPrice: 2899, affiliateUrl: 'https://aff.test/1' },
+        { id: 'l2', storeName: 'Mercado Livre', source: 'MERCADOLIVRE', currentPrice: 2999, affiliateUrl: 'https://aff.test/2' },
+      ]),
+    );
+    render(<OfertaDetailPage />);
+    const buy = await screen.findByRole('link', { name: /Ir para Mercado Livre/ });
+    expect(buy.getAttribute('href')).toBe('/api/v1/r/l2');
+    expect(screen.getByText(/Oferta anunciada em/)).toBeTruthy();
+    expect(screen.getByText(/Agora está mais barato em/)).toBeTruthy();
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('sem histórico suficiente mostra "Monitorando" em vez de média e menor preço', async () => {
+    mockFetch({
+      ...deal([{ id: 'l1', storeName: 'Shopee', source: 'SHOPEE', currentPrice: 2999, affiliateUrl: 'https://aff.test/1' }]),
+      analysis: {
+        badge: 'TRACKING',
+        badgeLabel: 'Monitorando preço',
+        averagePrice: 2999,
+        lowestPriceEver: 2999,
+        realDiscountPct: 0,
+        isRealPromotion: false,
+        hasHistory: false,
+        trackingSince: '2026-11-20T12:00:00.000Z',
+        storeDiscountPct: 0,
+      },
+    });
+    render(<OfertaDetailPage />);
+    expect(await screen.findByText(/Monitorando o preço desde 20\/11\/2026/)).toBeTruthy();
+    expect(screen.queryByText(/Menor preço registrado/)).toBeNull();
+    expect(screen.queryByText(/Menor preço histórico/)).toBeNull();
   });
 });

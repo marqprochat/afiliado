@@ -7,6 +7,8 @@ import {
   listingConflictsWithMaster,
   analyzeDealPromotion,
   formatBRL,
+  MAX_MATCH_PRICE_RATIO,
+  type PricePoint,
   type DealAnalysis,
   type MatchingCandidate,
 } from '@afilados/core';
@@ -59,9 +61,66 @@ export interface IndexProductOptions {
 
 export interface IndexProductResult {
   masterProductId: string;
+  /** Listagem (oferta da loja) gravada; a página destaca essa loja quando o link a cita. */
+  listingId: string;
   slug: string;
   isNewMaster: boolean;
   isPriceDrop: boolean;
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+}
+
+function priceRatio(a: number, b: number): number {
+  return a > 0 && b > 0 ? Math.max(a, b) / Math.min(a, b) : 1;
+}
+
+/**
+ * Preço de referência de cada produto para o match: a mediana das ofertas em estoque. O menor
+ * preço sozinho deixava entrar ofertas cada vez mais distantes (uma oferta barata errada puxava o
+ * piso para baixo e a próxima entrava 1,8× acima dele).
+ */
+async function referencePrices(db: TenantClient, masterIds: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (masterIds.length === 0) return out;
+  const rows = await db.productListing.findMany({
+    where: { masterProductId: { in: masterIds }, inStock: true },
+    select: { masterProductId: true, currentPrice: true },
+  });
+  const byMaster = new Map<string, number[]>();
+  for (const r of rows) {
+    const price = Number(r.currentPrice);
+    if (price <= 0) continue;
+    const list = byMaster.get(r.masterProductId) ?? [];
+    list.push(price);
+    byMaster.set(r.masterProductId, list);
+  }
+  for (const [id, prices] of byMaster) out.set(id, median(prices));
+  return out;
+}
+
+/**
+ * Pontos de preço ANTERIORES das listagens: o último registro de cada listagem é o preço atual
+ * dela e fica de fora (senão o preço de hoje sempre parece o "menor histórico").
+ * `firstSeenAt` é o primeiro registro de todas.
+ */
+export function priorPricePoints(
+  listings: { history: { price: unknown; recordedAt: Date }[] }[],
+): { prior: PricePoint[]; firstSeenAt: Date | null } {
+  const prior: PricePoint[] = [];
+  let firstSeenAt: Date | null = null;
+  for (const l of listings) {
+    const sorted = [...l.history].sort((a, b) => a.recordedAt.getTime() - b.recordedAt.getTime());
+    const first = sorted[0];
+    if (first && (!firstSeenAt || first.recordedAt < firstSeenAt)) firstSeenAt = first.recordedAt;
+    for (const h of sorted.slice(0, -1)) {
+      prior.push({ price: Number(h.price), recordedAt: h.recordedAt });
+    }
+  }
+  return { prior, firstSeenAt };
 }
 
 /**
@@ -100,9 +159,24 @@ export async function indexProductInPriceEngine(
       where: { id: existingListing.masterProductId },
       select: { id: true, title: true, ean: true },
     });
+    // Preço muito distante das outras ofertas da página também tira a listagem dela.
+    const others = currentMaster
+      ? await db.productListing.findMany({
+          where: {
+            masterProductId: currentMaster.id,
+            inStock: true,
+            id: { not: existingListing.id },
+          },
+          select: { currentPrice: true },
+        })
+      : [];
+    const otherPrices = others.map((o) => Number(o.currentPrice)).filter((p) => p > 0);
+    const priceOff =
+      otherPrices.length > 0 && priceRatio(Number(item.price), median(otherPrices)) > MAX_MATCH_PRICE_RATIO;
     if (
       currentMaster &&
-      listingConflictsWithMaster({ title: item.title, ean: cleanEan }, currentMaster)
+      (priceOff ||
+        listingConflictsWithMaster({ title: item.title, ean: cleanEan }, currentMaster))
     ) {
       displacedMasterId = currentMaster.id;
     } else {
@@ -138,12 +212,16 @@ export async function indexProductInPriceEngine(
       },
     });
 
+    const refPrices = await referencePrices(
+      db,
+      recentMasters.map((m) => m.id),
+    );
     const candidates: MatchingCandidate[] = recentMasters.map((m) => ({
       id: m.id,
       title: m.title,
       ean: m.ean,
       brand: m.brand,
-      currentBestPrice: Number(m.currentBestPrice),
+      currentBestPrice: refPrices.get(m.id) ?? Number(m.currentBestPrice),
     }));
 
     const match = findBestProductMatch(
@@ -180,7 +258,9 @@ export async function indexProductInPriceEngine(
   const currentPriceNum = Number(item.price);
   const originalPriceNum = item.originalPrice ? Number(item.originalPrice) : null;
 
+  let listingId: string;
   if (existingListing) {
+    listingId = existingListing.id;
     const oldPrice = Number(existingListing.currentPrice);
     if (currentPriceNum < oldPrice) {
       isPriceDrop = true;
@@ -232,6 +312,7 @@ export async function indexProductInPriceEngine(
         inStock: true,
       },
     });
+    listingId = createdListing.id;
 
     // Registra primeiro ponto no histórico
     await db.priceHistory.create({
@@ -253,7 +334,7 @@ export async function indexProductInPriceEngine(
   // 5. Verifica e processa alertas cadastrados
   await checkAndNotifyPriceAlerts(db, masterId, metrics.currentBestPrice ?? currentPriceNum);
 
-  return { masterProductId: masterId, slug: metrics.slug, isNewMaster, isPriceDrop };
+  return { masterProductId: masterId, listingId, slug: metrics.slug, isNewMaster, isPriceDrop };
 }
 
 /** Cria a página (MasterProduct) de um produto novo; o slug ganha um sufixo aleatório. */
@@ -526,6 +607,11 @@ export async function getDealsShowcase(
             discountPct: true,
             affiliateUrl: true,
             imageUrl: true,
+            history: {
+              select: { price: true, recordedAt: true },
+              orderBy: { recordedAt: 'desc' },
+              take: 30,
+            },
           },
         },
       },
@@ -540,11 +626,10 @@ export async function getDealsShowcase(
     const bestListing = item.listings[0] ?? null;
     const originalPrice = bestListing?.originalPrice ? Number(bestListing.originalPrice) : null;
 
-    const dealAnalysis: DealAnalysis = analyzeDealPromotion(
-      [{ price: avgPrice }, { price: lowestEver }],
-      currentPrice,
-      originalPrice,
-    );
+    const { prior, firstSeenAt } = priorPricePoints(item.listings);
+    const dealAnalysis: DealAnalysis = analyzeDealPromotion(prior, currentPrice, originalPrice, {
+      firstSeenAt,
+    });
 
     return {
       id: item.id,
@@ -561,7 +646,12 @@ export async function getDealsShowcase(
       analysis: dealAnalysis,
       bestListing: bestListing
         ? {
-            ...bestListing,
+            id: bestListing.id,
+            source: bestListing.source,
+            storeName: bestListing.storeName,
+            discountPct: bestListing.discountPct,
+            affiliateUrl: bestListing.affiliateUrl,
+            imageUrl: bestListing.imageUrl,
             currentPrice: Number(bestListing.currentPrice),
             originalPrice: bestListing.originalPrice ? Number(bestListing.originalPrice) : null,
           }
@@ -675,7 +765,7 @@ export async function getDealDetailBySlug(db: TenantClient, slug: string) {
         orderBy: { currentPrice: 'asc' },
         include: {
           history: {
-            orderBy: { recordedAt: 'asc' },
+            orderBy: { recordedAt: 'desc' },
             take: 60,
           },
         },
@@ -701,10 +791,12 @@ export async function getDealDetailBySlug(db: TenantClient, slug: string) {
     .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
 
   const bestListing = master.listings[0] ?? null;
+  const { prior, firstSeenAt } = priorPricePoints(master.listings);
   const analysis = analyzeDealPromotion(
-    consolidatedHistory,
+    prior,
     currentPrice,
     bestListing?.originalPrice ? Number(bestListing.originalPrice) : null,
+    { firstSeenAt },
   );
   const coupons = await findDealCoupons(
     db,

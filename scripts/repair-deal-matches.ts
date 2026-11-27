@@ -43,6 +43,14 @@ async function main() {
     totals.noAnchor += r.mastersWithoutAnchor;
     totals.moved += r.moves.length;
     totals.newMasters += r.newMasters;
+    if (r.titlesCleaned.length > 0) {
+      console.log(`
+Tenant ${t.name} (${t.id}): ${r.titlesCleaned.length} títulos com lixo da captura`);
+      for (const c of r.titlesCleaned.slice(0, EXAMPLES)) {
+        console.log(`  "${c.from}"
+    → "${c.to}"`);
+      }
+    }
     if (r.mastersScanned === 0) continue;
     console.log(
       `\nTenant ${t.name} (${t.id}): ${r.mastersScanned} produtos com >1 oferta, ` +
