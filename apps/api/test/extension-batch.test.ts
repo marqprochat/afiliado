@@ -356,4 +356,82 @@ describe('extensão: enviar produto direto para um lote', () => {
       expect(res.json()).toMatchObject({ queueItem: { selected: true, status: 'PENDING' } });
     });
   });
+
+  describe('oferta copiada de grupo', () => {
+    it('mesmo link com textos diferentes vira produtos diferentes (o lote não mistura ofertas)', async () => {
+      const { batch } = await makeBatch('PAUSED', 0);
+      const url = 'https://www.magazineluiza.com.br/';
+      const a = await capture(batch.id, { url, title: 'Oferta A', customText: 'Texto A' });
+      const b = await capture(batch.id, { url, title: 'Oferta B', customText: 'Texto B' });
+      expect(a.statusCode).toBe(200);
+      expect(b.statusCode).toBe(200);
+      const items = await pendingItems(batch.id);
+      expect(items.map((i) => [i.customText, i.product?.title]).sort()).toEqual([
+        ['Texto A', 'Oferta A'],
+        ['Texto B', 'Oferta B'],
+      ]);
+      expect(items[0]!.productId).not.toBe(items[1]!.productId);
+    });
+  });
+
+  describe('gestão do lote', () => {
+    it('remover selecionados: enviados e com erro saem com o lote rodando; pendentes só pausado', async () => {
+      const cookie = await loginCookie(app, t.email, t.password);
+      const { batch, sent, pending } = await makeBatch('RUNNING', 2, { sent: 1 });
+      const p = await makeProduct();
+      const err = await prisma.batchItem.create({
+        data: {
+          batchId: batch.id,
+          productId: p.id,
+          order: 99,
+          status: 'ERROR',
+          error: 'x',
+          runAt: new Date(),
+        },
+      });
+      const all = [...sent, ...pending, err.id];
+      const r1 = await app.inject({
+        method: 'POST',
+        url: `/api/v1/batches/${batch.id}/items/remove`,
+        headers: { cookie },
+        payload: { itemIds: all },
+      });
+      expect(r1.json()).toEqual({ removed: 2, skipped: 2 });
+      expect(
+        (await prisma.batchItem.findMany({ where: { batchId: batch.id } })).map((i) => i.id).sort(),
+      ).toEqual([...pending].sort());
+
+      await prisma.batch.update({ where: { id: batch.id }, data: { status: 'PAUSED' } });
+      const r2 = await app.inject({
+        method: 'POST',
+        url: `/api/v1/batches/${batch.id}/items/remove`,
+        headers: { cookie },
+        payload: { itemIds: pending },
+      });
+      expect(r2.json()).toEqual({ removed: 2, skipped: 0 });
+      expect(await prisma.batchItem.count({ where: { batchId: batch.id } })).toBe(0);
+    });
+
+    it('prévia mostra o texto próprio quando existe e o template do produto nos demais', async () => {
+      const cookie = await loginCookie(app, t.email, t.password);
+      const { batch, pending } = await makeBatch('PAUSED', 1);
+      const res = await capture(batch.id, { title: 'Oferta X', customText: '🔥 Texto do grupo' });
+      const customId = res.json().batchItem.id as string;
+
+      const custom = await app.inject({
+        method: 'GET',
+        url: `/api/v1/batches/${batch.id}/items/${customId}/preview`,
+        headers: { cookie },
+      });
+      expect(custom.json()).toMatchObject({ kind: 'custom', text: '🔥 Texto do grupo' });
+
+      const prod = await app.inject({
+        method: 'GET',
+        url: `/api/v1/batches/${batch.id}/items/${pending[0]}/preview`,
+        headers: { cookie },
+      });
+      expect(prod.json().kind).toBe('product');
+      expect(prod.json().text).toContain('Produto');
+    });
+  });
 });

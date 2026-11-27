@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { prisma, forTenant, getParentTenantId } from '@afilados/db';
@@ -273,6 +274,15 @@ export async function extensionRoutes(app: FastifyInstance) {
           }
         }
       } catch {}
+    }
+
+    // Oferta copiada de grupo: o que vai para o grupo é o `customText`, o produto só ilustra o item.
+    // Sem chave própria, duas mensagens com o mesmo link (ou sem link: a extensão cai na home da
+    // loja) caíam no mesmo produto, e o lote passava a mostrar uma oferta e enviar outra.
+    if (body.customText) {
+      productData.externalId = `grp-${createHash('sha1')
+        .update(`${body.url}\n${body.customText}`)
+        .digest('hex')}`;
     }
 
     const [savedProduct] = await upsertProducts(tenantDb, tenantId, [productData]);

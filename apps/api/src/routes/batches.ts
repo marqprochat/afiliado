@@ -1,9 +1,15 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Prisma } from '@afilados/db';
-import { scheduleBatch, shuffleInterleaved } from '@afilados/core';
+import {
+  renderCouponTemplate,
+  renderTemplate,
+  scheduleBatch,
+  shuffleInterleaved,
+} from '@afilados/core';
 import {
   ApiError,
+  type ProductData,
   batchAddItemsSchema,
   batchCreateSchema,
   batchOrderSchema,
@@ -28,6 +34,10 @@ import { toApiProduct } from '../lib/products';
 import { enqueueMlLinksPrewarm } from '../lib/ml-links';
 
 const idParam = z.object({ id: z.string().min(1) });
+const batchRemoveItemsSchema = z.object({
+  itemIds: z.array(z.string().min(1)).min(1).max(2000),
+});
+type BatchItemStatusT = 'PENDING' | 'SENDING' | 'SENT' | 'ERROR';
 
 async function findBatch(req: FastifyRequest) {
   const { id } = idParam.parse(req.params);
@@ -523,6 +533,112 @@ export async function batchesRoutes(app: FastifyInstance) {
       });
     }
     return { removed: r.count };
+  });
+
+  /**
+   * Remove vários itens de uma vez. Enviados e com erro saem a qualquer momento; pendentes só com o
+   * lote fora de execução (pausado, concluído ou cancelado); "enviando" nunca. Os que não podem sair
+   * voltam em `skipped`.
+   */
+  app.post('/batches/:id/items/remove', async (req) => {
+    const { itemIds } = batchRemoveItemsSchema.parse(req.body);
+    const b = await findBatch(req);
+    const wanted = new Set(itemIds);
+    const pendingAllowed = b.status !== 'SCHEDULED' && b.status !== 'RUNNING';
+    const allowed: BatchItemStatusT[] = pendingAllowed
+      ? ['SENT', 'ERROR', 'PENDING']
+      : ['SENT', 'ERROR'];
+    const removable = b.items.filter(
+      (i) => wanted.has(i.id) && allowed.includes(i.status as BatchItemStatusT),
+    );
+    if (removable.length === 0) return { removed: 0, skipped: itemIds.length };
+    const ids = removable.map((i) => i.id);
+    await removePendingJobs(ids);
+    const r = await req.db.batchItem.deleteMany({
+      where: { batchId: b.id, id: { in: ids }, status: { in: allowed } },
+    });
+    // Igual ao "Limpar enviados": produto enviado que sai do lote não volta para a triagem.
+    const sentProductIds = removable
+      .filter((i) => i.status === 'SENT')
+      .map((i) => i.productId)
+      .filter((p): p is string => !!p);
+    if (sentProductIds.length) {
+      await req.db.queueItem.deleteMany({ where: { productId: { in: sentProductIds } } });
+    }
+    return { removed: r.count, skipped: itemIds.length - r.count };
+  });
+
+  /** Prévia do que esse item vai mandar: o texto próprio (extensão/manual), o cupom ou o template. */
+  app.get('/batches/:id/items/:itemId/preview', async (req) => {
+    const { id, itemId } = z
+      .object({ id: z.string().min(1), itemId: z.string().min(1) })
+      .parse(req.params);
+    const b = await req.db.batch.findFirst({ where: { id }, include: { template: true } });
+    if (!b) throw ApiError.notFound('Lote não encontrado');
+    const item = await req.db.batchItem.findFirst({
+      where: { id: itemId, batchId: b.id },
+      select: { ...batchItemPublicSelect, product: true, coupon: true },
+    });
+    if (!item) throw ApiError.notFound('Item não encontrado neste lote');
+    const now = new Date().toISOString();
+    const productUrl = item.product?.originalUrl ?? null;
+    const uploaded = Boolean(item.customImageType);
+    if (item.customText) {
+      return {
+        kind: 'custom' as const,
+        text: item.customText,
+        imageUrl: item.customImageUrl ?? null,
+        hasUploadedImage: uploaded,
+        productUrl,
+        note: 'Texto próprio (copiado pela extensão ou escrito à mão): vai exatamente assim. Os links de loja podem ser trocados pelo link do site na hora do envio.',
+      };
+    }
+    if (item.coupon) {
+      return {
+        kind: 'coupon' as const,
+        text: renderCouponTemplate(
+          b.template.body,
+          {
+            store: item.coupon.store,
+            advertiserName: item.coupon.advertiserName,
+            code: item.coupon.code,
+            description: item.coupon.description,
+            expiresAt: item.coupon.expiresAt?.toISOString() ?? null,
+          },
+          { now },
+        ),
+        imageUrl: null,
+        hasUploadedImage: false,
+        productUrl: null,
+        note: null,
+      };
+    }
+    const p = item.product;
+    if (!p) throw ApiError.notFound('O produto deste item não existe mais');
+    const pd: ProductData = {
+      source: p.source,
+      title: p.title,
+      price: Number(p.price),
+      images: p.images,
+      shipping: p.shipping,
+      originalUrl: p.originalUrl,
+      raw: p.raw,
+      ...(p.originalPrice !== null ? { originalPrice: Number(p.originalPrice) } : {}),
+      ...(p.discountPct !== null ? { discountPct: p.discountPct } : {}),
+      ...(p.salesCount !== null ? { salesCount: p.salesCount } : {}),
+      ...(p.commissionPct !== null ? { commissionPct: Number(p.commissionPct) } : {}),
+      ...(p.flashSaleEndsAt ? { flashSaleEndsAt: p.flashSaleEndsAt.toISOString() } : {}),
+      ...(p.couponCode ? { couponCode: p.couponCode } : {}),
+      ...(p.couponValue !== null ? { couponValue: Number(p.couponValue) } : {}),
+    };
+    return {
+      kind: 'product' as const,
+      text: renderTemplate(b.template.body, pd, { affiliateLink: p.originalUrl, now }),
+      imageUrl: b.mediaMode === 'IMAGE' && !uploaded ? (p.images[0] ?? null) : null,
+      hasUploadedImage: uploaded,
+      productUrl,
+      note: 'O link de afiliado (e a chamada da IA, se ligada) é gerado na hora do envio; aqui aparece o link original.',
+    };
   });
 
   app.delete('/batches/:id/items/:itemId', async (req, reply) => {

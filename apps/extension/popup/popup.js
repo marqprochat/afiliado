@@ -724,6 +724,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const target = parseTarget(groupCaptureTarget.value);
     const name = findTargetName(groupCaptureTarget.value) ?? '';
     const finalText = groupEditTextarea.value.trim() || groupPreviewBubble.textContent.trim();
+    // Sem link a oferta chega no grupo sem ter onde comprar (e o produto vira a home da loja).
+    if (!/https?:\/\/\S+/i.test(finalText)) {
+      groupSendStatus.textContent =
+        '❌ A mensagem está sem link. Confira a prévia (ou edite e cole o link) antes de enviar.';
+      groupSendStatus.className = 'msg msg-error';
+      return;
+    }
 
     // Identifica o link principal da mensagem
     const detectedLinks = currentParsedResult.detected?.links || [];

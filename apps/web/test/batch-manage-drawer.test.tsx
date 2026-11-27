@@ -191,15 +191,46 @@ describe('BatchManageDrawer', () => {
       );
     }
 
-    it('lote rodando: checkbox só nos itens de produto e botão desabilitado sem seleção', async () => {
+    it('lote rodando: todo item é selecionável e os botões ficam desabilitados sem seleção', async () => {
       renderRunning();
       expect(await screen.findByLabelText('Selecionar Fone Bluetooth')).toBeTruthy();
       expect(screen.getByLabelText('Selecionar Mouse Gamer')).toBeTruthy();
-      expect(screen.getAllByRole('checkbox', { name: /^Selecionar / })).toHaveLength(2);
+      expect(screen.getByLabelText('Selecionar todos')).toBeTruthy();
       expect(screen.getByRole('button', { name: /Compartilhar selecionados/ })).toHaveProperty(
         'disabled',
         true,
       );
+      expect(screen.getByRole('button', { name: /Remover selecionados/ })).toHaveProperty(
+        'disabled',
+        true,
+      );
+    });
+
+    it('"Selecionar todos" + "Remover selecionados" manda todos os itens para a API', async () => {
+      renderRunning();
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      fireEvent.click(await screen.findByLabelText('Selecionar todos'));
+      const ids = running.items.map((i) => i.id);
+      fireEvent.click(
+        screen.getByRole('button', { name: `Remover selecionados (${ids.length})` }),
+      );
+      await waitFor(() => {
+        expect(apiFetchMock).toHaveBeenCalledWith('/batches/b1/items/remove', {
+          method: 'POST',
+          json: { itemIds: ids },
+        });
+      });
+    });
+
+    it('clicar no item abre a prévia da mensagem', async () => {
+      renderRunning();
+      fireEvent.click(await screen.findByRole('button', { name: /Fone Bluetooth/ }));
+      await waitFor(() => {
+        expect(apiFetchMock).toHaveBeenCalledWith(
+          expect.stringMatching(/^\/batches\/b1\/items\/[^/]+\/preview$/),
+        );
+      });
+      expect(await screen.findByText('Prévia do envio')).toBeTruthy();
     });
 
     it('compartilha os selecionados com outro lote sem pausar o de origem', async () => {

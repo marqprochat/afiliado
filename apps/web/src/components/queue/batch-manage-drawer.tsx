@@ -4,12 +4,23 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronsUp,
+  ExternalLink,
+  Eye,
   GripVertical,
   RotateCw,
   Share2,
   Trash2,
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { StatusPill } from '@/components/app-shell/status-pill';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import {
   Drawer,
@@ -75,27 +86,29 @@ export function BatchManageDrawer({
   const canPause = batch?.status === 'SCHEDULED' || batch?.status === 'RUNNING';
 
   const { data: allBatches } = useBatches();
-  const [shareSelected, setShareSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [shareOpen, setShareOpen] = useState(false);
+  const [previewItem, setPreviewItem] = useState<BatchItem | null>(null);
   useEffect(() => {
-    setShareSelected(new Set());
+    setSelected(new Set());
     setShareOpen(false);
+    setPreviewItem(null);
   }, [batchId]);
   // só vale o que ainda existe no lote
+  const selectedIds = useMemo(() => {
+    const inBatch = new Set((batch?.items ?? []).map((i) => i.id));
+    return [...selected].filter((id) => inBatch.has(id));
+  }, [batch?.items, selected]);
   const shareIds = useMemo(() => {
-    const inBatch = new Set((batch?.items ?? []).map((i) => i.productId).filter(Boolean));
-    return [...shareSelected].filter((id) => inBatch.has(id));
-  }, [batch?.items, shareSelected]);
-  const toggleShare = (productId: string) =>
-    setShareSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(productId)) next.delete(productId);
-      else next.add(productId);
-      return next;
-    });
+    const byId = new Map((batch?.items ?? []).map((i) => [i.id, i]));
+    const ids = selectedIds
+      .map((id) => byId.get(id)?.productId)
+      .filter((p): p is string => !!p);
+    return [...new Set(ids)];
+  }, [batch?.items, selectedIds]);
   const share = useShareToBatches(allBatches ?? [], () => {
     setShareOpen(false);
-    setShareSelected(new Set());
+    setSelected(new Set());
   });
 
   return (
@@ -140,9 +153,11 @@ export function BatchManageDrawer({
                 key={`items-${itemsSignature(batch)}`}
                 batch={batch}
                 editable={editable}
-                shareIds={shareIds}
-                onToggleShare={toggleShare}
+                selectedIds={selectedIds}
+                setSelected={setSelected}
+                shareCount={shareIds.length}
                 onShare={() => setShareOpen(true)}
+                onPreview={setPreviewItem}
               />
               {editable && <AddProductsSection batch={batch} />}
               <ConfigSection
@@ -177,6 +192,13 @@ export function BatchManageDrawer({
           share.mutate({ productIds: shareIds, batchIds, position })
         }
       />
+      {batchId && (
+        <ItemPreviewDialog
+          batchId={batchId}
+          item={previewItem}
+          onClose={() => setPreviewItem(null)}
+        />
+      )}
     </>
   );
 }
@@ -194,15 +216,19 @@ function itemsSignature(b: BatchDetail) {
 function ItemsSection({
   batch,
   editable,
-  shareIds,
-  onToggleShare,
+  selectedIds,
+  setSelected,
+  shareCount,
   onShare,
+  onPreview,
 }: {
   batch: BatchDetail;
   editable: boolean;
-  shareIds: string[];
-  onToggleShare: (productId: string) => void;
+  selectedIds: string[];
+  setSelected: (next: Set<string>) => void;
+  shareCount: number;
   onShare: () => void;
+  onPreview: (item: BatchItem) => void;
 }) {
   const done = useMemo(() => batch.items.filter((i) => i.status !== 'PENDING'), [batch.items]);
   const initialPending = useMemo(
@@ -237,6 +263,44 @@ function ItemsSection({
     () => apiFetch(`/batches/${batch.id}/items?status=SENT`, { method: 'DELETE' }),
     { invalidate: [...INV, ['queue']], success: 'Enviados removidos do lote' },
   );
+  const removeMany = useApiMutation(
+    (itemIds: string[]) =>
+      apiFetch<{ removed: number; skipped: number }>(`/batches/${batch.id}/items/remove`, {
+        method: 'POST',
+        json: { itemIds },
+      }),
+    {
+      invalidate: [...INV, ['queue']],
+      onSuccess: (r) => {
+        setSelected(new Set());
+        if (r.skipped > 0) {
+          toast.warning(
+            `${r.removed} removido(s). ${r.skipped} ficaram: pendentes só saem com o lote pausado e "enviando" nunca.`,
+          );
+        } else toast.success(`${r.removed} item(ns) removido(s) do lote`);
+      },
+    },
+  );
+  const selectedSet = new Set(selectedIds);
+  const allIds = batch.items.map((i) => i.id);
+  const allSelected = allIds.length > 0 && allIds.every((id) => selectedSet.has(id));
+  const toggle = (id: string) => {
+    const next = new Set(selectedSet);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelected(next);
+  };
+  const removeSelected = () => {
+    const runningPending = !editable
+      ? batch.items.filter((i) => selectedSet.has(i.id) && i.status === 'PENDING').length
+      : 0;
+    const msg =
+      `Remover ${selectedIds.length} item(ns) do lote?` +
+      (runningPending > 0
+        ? `\n\n${runningPending} pendente(s) só saem com o lote pausado e vão ficar.`
+        : '');
+    if (window.confirm(msg)) removeMany.mutate(selectedIds);
+  };
   const errorCount = done.filter((i) => i.status === 'ERROR').length;
   const sentCount = done.filter((i) => i.status === 'SENT').length;
   const canRetry = batch.status !== 'CANCELLED';
@@ -258,22 +322,19 @@ function ItemsSection({
     setOverIdx(null);
   };
 
-  const shareProps = (it: BatchItem) =>
-    it.productId && it.product
-      ? {
-          checked: shareIds.includes(it.productId),
-          onChange: () => onToggleShare(it.productId!),
-          label: `Selecionar ${it.product.title}`,
-        }
-      : undefined;
+  const shareProps = (it: BatchItem) => ({
+    checked: selectedSet.has(it.id),
+    onChange: () => toggle(it.id),
+    label: `Selecionar ${it.product?.title ?? (it.coupon ? `cupom ${it.coupon.code}` : `item ${it.order + 1}`)}`,
+  });
 
   return (
     <section className="space-y-2">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <h3 className="font-semibold">Fila do lote ({batch.items.length})</h3>
-        <Button size="sm" variant="secondary" disabled={shareIds.length === 0} onClick={onShare}>
+        <Button size="sm" variant="secondary" disabled={shareCount === 0} onClick={onShare}>
           <Share2 className="size-3.5" />
-          Compartilhar selecionados ({shareIds.length})
+          Compartilhar selecionados ({shareCount})
         </Button>
         {canRetry && errorCount > 0 && (
           <Button
@@ -310,12 +371,59 @@ function ItemsSection({
           </Button>
         )}
       </div>
+      {batch.items.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-xs">
+          <label className="flex cursor-pointer items-center gap-1.5">
+            <NativeCheckbox
+              checked={allSelected}
+              onChange={() => setSelected(allSelected ? new Set() : new Set(allIds))}
+              aria-label="Selecionar todos"
+            />
+            Selecionar todos
+          </label>
+          {errorCount > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() =>
+                setSelected(
+                  new Set(batch.items.filter((i) => i.status === 'ERROR').map((i) => i.id)),
+                )
+              }
+            >
+              Selecionar com erro ({errorCount})
+            </Button>
+          )}
+          {selectedIds.length > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+              Limpar seleção
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="ml-auto text-destructive hover:text-destructive"
+            disabled={selectedIds.length === 0 || removeMany.isPending || dirty}
+            title={dirty ? 'Salve a nova ordem antes de remover itens' : undefined}
+            onClick={removeSelected}
+          >
+            <Trash2 className="size-3.5" />
+            Remover selecionados ({selectedIds.length})
+          </Button>
+        </div>
+      )}
       {batch.items.length === 0 && (
         <p className="text-xs text-muted-foreground">Nenhum item neste lote.</p>
       )}
       <ol className="space-y-1.5">
         {done.map((it, idx) => (
-          <ItemRow key={it.id} item={it} position={idx + 1} select={shareProps(it)}>
+          <ItemRow
+            key={it.id}
+            item={it}
+            position={idx + 1}
+            select={shareProps(it)}
+            onPreview={() => onPreview(it)}
+          >
             {canRetry && it.status === 'ERROR' && (
               <IconBtn
                 label="Tentar novamente"
@@ -325,8 +433,13 @@ function ItemsSection({
                 <RotateCw className="size-3.5" />
               </IconBtn>
             )}
-            {editable && it.status === 'ERROR' && (
-              <IconBtn label="Remover" onClick={() => removeItem.mutate(it.id)} danger>
+            {it.status !== 'SENDING' && (
+              <IconBtn
+                label="Remover"
+                onClick={() => removeMany.mutate([it.id])}
+                disabled={removeMany.isPending}
+                danger
+              >
                 <Trash2 className="size-3.5" />
               </IconBtn>
             )}
@@ -338,6 +451,7 @@ function ItemsSection({
             item={it}
             position={done.length + idx + 1}
             select={shareProps(it)}
+            onPreview={() => onPreview(it)}
             hideRunAt={editable}
             drag={
               editable
@@ -404,10 +518,12 @@ function ItemRow({
   hideRunAt,
   drag,
   select,
+  onPreview,
   children,
 }: {
   item: BatchItem;
   position: number;
+  onPreview?: () => void;
   hideRunAt?: boolean;
   drag?: {
     dragging: boolean;
@@ -420,13 +536,10 @@ function ItemRow({
   select?: { checked: boolean; onChange: () => void; label: string };
   children?: React.ReactNode;
 }) {
-  const title =
-    item.product?.title ??
-    (item.coupon
-      ? `Cupom ${item.coupon.code}`
-      : item.customText
-        ? `Mensagem: ${customTextPreview(item.customText)}`
-        : 'Item removido');
+  // Texto próprio (extensão/manual) é o que vai para o grupo: mostra ele, não o produto vinculado.
+  const title = item.customText
+    ? `Mensagem: ${customTextPreview(item.customText)}`
+    : (item.product?.title ?? (item.coupon ? `Cupom ${item.coupon.code}` : 'Item removido'));
   const img = item.product?.images[0];
   const sent = item.sendLogs.filter((l) => l.status === 'SENT').length;
   const failed = item.sendLogs.length - sent;
@@ -484,7 +597,15 @@ function ItemRow({
         <div className="size-10 shrink-0 rounded bg-surface-2" />
       )}
       <div className="min-w-0 flex-1">
-        <p className="line-clamp-1 text-sm">{title}</p>
+        <button
+          type="button"
+          onClick={onPreview}
+          disabled={!onPreview}
+          className="line-clamp-1 block w-full text-left text-sm hover:text-brand hover:underline"
+          title="Ver a mensagem que será enviada"
+        >
+          {title}
+        </button>
         <div className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
           <StatusPill label={ITEM_STATUS_LABEL[item.status] ?? item.status} status={item.status} />
           {item.status === 'PENDING' && !hideRunAt && (
@@ -499,7 +620,14 @@ function ItemRow({
         </div>
         {item.error && <p className="line-clamp-2 text-[11px] text-destructive">{item.error}</p>}
       </div>
-      <div className="flex shrink-0 gap-1">{children}</div>
+      <div className="flex shrink-0 gap-1">
+        {onPreview && (
+          <IconBtn label="Ver mensagem" onClick={onPreview}>
+            <Eye className="size-3.5" />
+          </IconBtn>
+        )}
+        {children}
+      </div>
     </li>
   );
 }
@@ -733,5 +861,71 @@ function ConfigSection({ batch, editable }: { batch: BatchDetail; editable: bool
         )}
       </fieldset>
     </section>
+  );
+}
+
+interface ItemPreview {
+  kind: 'custom' | 'coupon' | 'product';
+  text: string;
+  imageUrl: string | null;
+  hasUploadedImage: boolean;
+  productUrl: string | null;
+  note: string | null;
+}
+
+/** Mostra exatamente o texto (e a imagem) que esse item vai mandar para os grupos. */
+function ItemPreviewDialog({
+  batchId,
+  item,
+  onClose,
+}: {
+  batchId: string;
+  item: BatchItem | null;
+  onClose: () => void;
+}) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['batches', batchId, 'preview', item?.id],
+    enabled: !!item,
+    queryFn: () => apiFetch<ItemPreview>(`/batches/${batchId}/items/${item!.id}/preview`),
+  });
+  return (
+    <Dialog open={!!item} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Prévia do envio</DialogTitle>
+          <DialogDescription>
+            {item?.product?.title ?? (item?.coupon ? `Cupom ${item.coupon.code}` : 'Mensagem')}
+          </DialogDescription>
+        </DialogHeader>
+        {isLoading && <p className="text-sm text-muted-foreground">Carregando…</p>}
+        {error && <p className="text-sm text-destructive">Não foi possível montar a prévia.</p>}
+        {data && (
+          <div className="space-y-3">
+            {data.imageUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={data.imageUrl} alt="" className="max-h-56 w-full rounded-md object-contain" />
+            )}
+            {data.hasUploadedImage && (
+              <p className="text-xs text-muted-foreground">Vai com a imagem enviada por você.</p>
+            )}
+            <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-surface-2 p-3 font-sans text-sm">
+              {data.text}
+            </pre>
+            {data.note && <p className="text-[11px] text-muted-foreground">{data.note}</p>}
+            {data.productUrl && (
+              <a
+                href={data.productUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-sm text-brand hover:underline"
+              >
+                <ExternalLink className="size-3.5" />
+                Abrir a oferta na loja
+              </a>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
