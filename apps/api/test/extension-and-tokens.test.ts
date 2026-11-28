@@ -444,8 +444,9 @@ describe('API Tokens & Extension Routes (Fase 3)', () => {
 
     expect(res.statusCode).toBe(200);
     const { coupons } = res.json();
-    expect(coupons).toHaveLength(2);
-    expect(coupons.map((c: any) => c.code)).toEqual(['VAL10', 'UNV20']);
+    // UNV20 foi capturado automaticamente pela extensão e nunca verificado: é palpite, não entra.
+    expect(coupons).toHaveLength(1);
+    expect(coupons.map((c: any) => c.code)).toEqual(['VAL10']);
   });
 
   it('cria e atualiza cupons via POST /extension/coupons e verifica via POST /extension/coupons/:id/verification', async () => {
@@ -545,7 +546,8 @@ describe('API Tokens & Extension Routes (Fase 3)', () => {
     expect(coupon).toBeDefined();
     expect(coupon?.origin).toBe('EXTENSION');
     expect(coupon?.status).toBe('UNVERIFIED');
-    expect(Number(coupon?.discountValue)).toBe(15);
+    // O desconto em R$ é do produto capturado, não do cupom: não vira o valor do cupom.
+    expect(coupon?.discountValue).toBeNull();
     expect(coupon?.description).toContain('Produto com Cupom');
   });
 });

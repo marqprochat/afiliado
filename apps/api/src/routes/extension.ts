@@ -182,6 +182,7 @@ export async function extensionRoutes(app: FastifyInstance) {
       images: [],
       shipping: body.shipping ?? 'UNKNOWN',
       couponCode: body.couponCode?.trim() || undefined,
+      couponValue: body.couponValue ?? undefined,
       originalUrl: body.link,
       raw: {},
     };
@@ -312,17 +313,8 @@ export async function extensionRoutes(app: FastifyInstance) {
       productData = first;
     }
 
-    if (body.marketplaceKind === 'AWIN' && !productData.couponCode) {
-      try {
-        const awinCoupons = await getAwinCouponsForTenant(tenantId, { domain: body.url });
-        if (awinCoupons.length > 0 && awinCoupons[0]?.code) {
-          productData.couponCode = awinCoupons[0].code;
-          if (awinCoupons[0].discountValue) {
-            productData.couponValue = Number(awinCoupons[0].discountValue);
-          }
-        }
-      } catch {}
-    }
+    // Nenhum cupom é aplicado por conta própria: só o que o usuário escolheu ou digitou na extensão.
+    // (Antes, capturas da Awin recebiam o primeiro cupom do anunciante mesmo com "Sem cupom".)
 
     // Oferta copiada de grupo: o que vai para o grupo é o `customText`, o produto só ilustra o item.
     // Sem chave própria, duas mensagens com o mesmo link (ou sem link: a extensão cai na home da
@@ -339,6 +331,7 @@ export async function extensionRoutes(app: FastifyInstance) {
     }
 
     if (
+      !body.couponIsOwn &&
       body.couponCode &&
       body.couponCode.trim().length >= 3 &&
       body.couponCode.trim().toUpperCase() !== 'CUPOM AMAZON'
@@ -358,7 +351,8 @@ export async function extensionRoutes(app: FastifyInstance) {
             description: body.title
               ? `Visto em: ${body.title.slice(0, 100)}`
               : 'Cupom capturado pela extensão',
-            discountValue: body.couponValue ?? null,
+            // O desconto em R$ é de ESTE produto, não do cupom: não vira o valor do cupom.
+            discountValue: null,
             sourceUrl: body.url,
             origin: 'EXTENSION',
             status: 'UNVERIFIED',
@@ -371,7 +365,6 @@ export async function extensionRoutes(app: FastifyInstance) {
           where: { id: existingCoupon.id },
           data: {
             lastSeenAt: now,
-            ...(body.couponValue ? { discountValue: body.couponValue } : {}),
           },
         });
         await app.events.publish(tenantId, { type: 'coupons.updated' });
@@ -554,6 +547,8 @@ export async function extensionRoutes(app: FastifyInstance) {
     advertiserId: z.string().optional(),
     scope: z.string().optional(),
     domain: z.string().optional(),
+    // Preço do produto na página: cupons com gasto mínimo acima dele não se aplicam.
+    price: z.coerce.number().positive().optional(),
   });
 
   const extensionCouponCreateSchema = z.object({
@@ -598,7 +593,22 @@ export async function extensionRoutes(app: FastifyInstance) {
       });
     }
 
-    const sorted = [...rows].sort((a, b) => {
+    // Só entra o que realmente pode ser usado agora. Cupom vencido (ainda marcado VALID), que
+    // não começou, sem usos restantes, com gasto mínimo acima do preço, ou capturado
+    // automaticamente pela extensão e nunca verificado, só atrapalha.
+    const now = Date.now();
+    const usable = rows.filter((c) => {
+      if (c.expiresAt && new Date(c.expiresAt).getTime() < now) return false;
+      if (c.startsAt && new Date(c.startsAt).getTime() > now) return false;
+      if (c.remainingUses !== null && c.remainingUses !== undefined && c.remainingUses <= 0) {
+        return false;
+      }
+      if (q.price && c.minSpend && Number(c.minSpend) > q.price) return false;
+      if (c.status === 'UNVERIFIED' && c.origin === 'EXTENSION') return false;
+      return true;
+    });
+
+    const sorted = [...usable].sort((a, b) => {
       const statusDiff = (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99);
       if (statusDiff !== 0) return statusDiff;
       const aTime = a.expiresAt ? a.expiresAt.getTime() : Infinity;
@@ -621,8 +631,9 @@ export async function extensionRoutes(app: FastifyInstance) {
         minSpend: c.minSpend ? Number(c.minSpend) : null,
         discountType: c.discountType,
         discountValue: c.discountValue ? Number(c.discountValue) : null,
-        expiresAt: c.expiresAt ? c.expiresAt.toISOString() : null,
+        expiresAt: c.expiresAt ? new Date(c.expiresAt).toISOString() : null,
         status: c.status,
+        origin: c.origin ?? null,
         lastVerifiedAt: c.lastVerifiedAt ? c.lastVerifiedAt.toISOString() : null,
       })),
     };

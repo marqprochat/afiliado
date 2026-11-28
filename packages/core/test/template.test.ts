@@ -18,6 +18,28 @@ const product: ProductData = {
 };
 const ctx = { affiliateLink: 'https://s.shopee.com.br/abc', now: '2026-09-14T12:00:00.000Z' };
 
+describe('renderTemplate: preco_com_cupom', () => {
+  const body = '{preco}\n{#preco_com_cupom}💸 Com o cupom: {preco_com_cupom}{/preco_com_cupom}\n{link}';
+  const p = { ...product, price: 100, couponCode: 'BLACK10' };
+
+  it('mostra o preço com cupom quando o desconto em R$ é conhecido', () => {
+    const out = renderTemplate(body, { ...p, couponValue: 15 }, ctx);
+    expect(out).toContain('Com o cupom: R$');
+    expect(out).toContain('85,00');
+  });
+
+  it('sem desconto confirmado, a linha some por inteiro', () => {
+    const out = renderTemplate(body, p, ctx);
+    expect(out).not.toContain('cupom');
+    expect(out.split('\n')).toHaveLength(2);
+  });
+
+  it('desconto maior ou igual ao preço é ignorado', () => {
+    const out = renderTemplate(body, { ...p, couponValue: 100 }, ctx);
+    expect(out).not.toContain('Com o cupom');
+  });
+});
+
 describe('renderTemplate', () => {
   it('substitui variáveis básicas', () => {
     const out = renderTemplate(

@@ -1667,7 +1667,7 @@
       let discountText = coupon.description || '';
       if (coupon.discountValue) {
         const valStr =
-          coupon.discountType === 'PERCENTAGE'
+          coupon.discountType === 'PERCENT'
             ? `${coupon.discountValue}% OFF`
             : `R$ ${coupon.discountValue} OFF`;
         discountText = discountText ? `${valStr} - ${discountText}` : valStr;

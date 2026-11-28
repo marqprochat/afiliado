@@ -16,6 +16,7 @@ export const TEMPLATE_VARS = [
   '{vendas}',
   '{link}',
   '{cupom}',
+  '{preco_com_cupom}',
   '{oferta_relampago}',
   '{frete}',
   '{frete_gratis}',

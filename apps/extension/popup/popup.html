@@ -114,6 +114,20 @@
             />
           </div>
 
+          <!-- Preço final com o cupom (opcional; sugerido quando o cupom cadastrado tem tipo e valor) -->
+          <div id="p-coupon-price-box" class="p-own-coupon hidden">
+            <label class="label" for="p-coupon-price" style="margin:0;">Preço com o cupom (opcional)</label>
+            <input
+              id="p-coupon-price"
+              type="text"
+              inputmode="decimal"
+              class="input"
+              placeholder="Ex: 89,90"
+              style="font-family:monospace;"
+            />
+            <div id="p-coupon-price-hint" class="empty-desc"></div>
+          </div>
+
           <label id="capture-target-label" class="label" for="capture-target">Enviar para qual fila (lote)?</label>
           <select id="capture-target" class="input"></select>
 
@@ -224,6 +238,19 @@
           </div>
 
           <div id="group-coupon-suggestions" class="coupon-suggestions hidden"></div>
+
+          <div id="group-coupon-price-box" class="p-own-coupon hidden">
+            <label class="label" for="group-coupon-price" style="margin:0;">Preço com o cupom (opcional)</label>
+            <input
+              id="group-coupon-price"
+              type="text"
+              inputmode="decimal"
+              class="input"
+              placeholder="Ex: 89,90"
+              style="font-family:monospace;"
+            />
+            <div id="group-coupon-price-hint" class="empty-desc"></div>
+          </div>
 
           <div class="card-header-flex" style="margin-top: 6px; margin-bottom: 4px;">
             <label class="label" style="margin: 0;">Prévia da Mensagem Final</label>

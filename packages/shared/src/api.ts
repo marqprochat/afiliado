@@ -243,6 +243,8 @@ export const extensionCaptureSchema = z
     images: z.array(z.string().url()).nullish(),
     couponCode: z.string().max(60).nullish(),
     couponValue: z.number().positive().nullish(),
+    // Cupom digitado pelo próprio usuário: vale só para esta oferta e não entra na Central de Cupons.
+    couponIsOwn: z.boolean().nullish(),
     shipping: z.enum(['NONE', 'FREE', 'FULL', 'UNKNOWN']).nullish(),
     flashSaleEndsAt: z.string().datetime().nullish(),
     affiliateUrl: z.string().url().nullish(),
@@ -280,6 +282,8 @@ export const extensionRenderMessageSchema = z.object({
   originalPrice: z.number().positive().nullish(),
   discountPct: z.number().int().min(1).max(100).nullish(),
   couponCode: z.string().max(60).nullish(),
+  // Desconto do cupom em R$ (preço - preço com cupom), já confirmado pelo usuário.
+  couponValue: z.number().positive().nullish(),
   shipping: z.enum(['NONE', 'FREE', 'FULL', 'UNKNOWN']).nullish(),
 });
 export type ExtensionRenderMessageBody = z.infer<typeof extensionRenderMessageSchema>;

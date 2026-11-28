@@ -540,6 +540,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Cupom
     const detectedCoupon = detected.coupon ? String(detected.coupon).trim().toUpperCase() : '';
     if (groupCouponInput) groupCouponInput.value = detectedCoupon;
+    groupStoreCoupons = [];
+    if (groupPriceInput) groupPriceInput.value = '';
+    syncGroupCouponPrice(true);
     if (detectedCoupon) {
       tagCoupon.classList.remove('hidden');
       valCoupon.textContent = detectedCoupon;
@@ -614,6 +617,42 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Sugere cupons cadastrados da mesma loja dos links colados (clique para aplicar).
   const groupCouponSuggestions = document.getElementById('group-coupon-suggestions');
+  const groupPriceBox = document.getElementById('group-coupon-price-box');
+  const groupPriceInput = document.getElementById('group-coupon-price');
+  const groupPriceHint = document.getElementById('group-coupon-price-hint');
+  let groupStoreCoupons = [];
+
+  // Desconto em R$ confirmado pelo campo "Preço com o cupom" (ou null).
+  function groupCouponValue() {
+    const price = currentParsedResult?.detected?.price;
+    const typed = parseBrNumber(groupPriceInput?.value);
+    if (!groupCouponInput?.value.trim() || !(price > 0) || !typed || typed >= price) return null;
+    return round2(price - typed);
+  }
+
+  function syncGroupCouponPrice(prefill) {
+    if (!groupPriceBox) return;
+    const price = currentParsedResult?.detected?.price;
+    if (!groupCouponInput?.value.trim() || !(price > 0)) {
+      groupPriceBox.classList.add('hidden');
+      return;
+    }
+    groupPriceBox.classList.remove('hidden');
+    if (prefill) {
+      const est = estimateCouponPrice(price, findCouponByCode(groupStoreCoupons, groupCouponInput.value));
+      groupPriceInput.value = est ? formatBrInput(est) : '';
+      groupPriceHint.textContent = est
+        ? 'Estimado pelo cupom cadastrado (sem considerar teto). Confira o valor final e corrija se precisar.'
+        : 'Opcional: informe o preço final com o cupom para ele aparecer na mensagem.';
+    } else if (groupPriceInput.value.trim() && groupCouponValue() === null) {
+      groupPriceHint.textContent = 'Valor inválido: precisa ser menor que o preço da oferta.';
+    }
+  }
+
+  groupPriceInput?.addEventListener('input', () => {
+    syncGroupCouponPrice(false);
+    if (groupAutoRewrite?.checked) void refreshGroupPreview();
+  });
   async function renderGroupCouponSuggestions(data) {
     if (!groupCouponSuggestions) return;
     groupCouponSuggestions.innerHTML = '';
@@ -622,7 +661,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const main = links.find((l) => l.converted) || links[0];
     if (!main || !main.marketplace || main.marketplace === 'UNKNOWN' || !config.apiToken) return;
 
+    groupStoreCoupons = [];
     let query = `store=${encodeURIComponent(main.marketplace)}`;
+    if (data?.detected?.price > 0) query += `&price=${encodeURIComponent(data.detected.price)}`;
     if (main.marketplace === 'AWIN') {
       try {
         query += `&domain=${encodeURIComponent(new URL(main.resolvedUrl || main.originalUrl).hostname)}`;
@@ -634,11 +675,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
       if (!res.ok) return;
       const body = await res.json();
-      const list = (Array.isArray(body) ? body : body?.coupons || [])
-        .filter((c) => c.code && c.status !== 'INVALID')
-        .slice(0, 4);
+      const all = (Array.isArray(body) ? body : body?.coupons || []).filter(
+        (c) => c.code && c.status !== 'INVALID',
+      );
       // Resposta de uma oferta antiga não pode sobrescrever a atual.
-      if (data !== currentParsedResult || list.length === 0) return;
+      if (data !== currentParsedResult) return;
+      groupStoreCoupons = all;
+      const list = all.slice(0, 4);
+      // Cupom já detectado no texto: se for cadastrado, sugere o preço com ele.
+      if (groupCouponInput?.value.trim()) {
+        syncGroupCouponPrice(true);
+        void refreshGroupPreview();
+      }
+      if (list.length === 0) return;
 
       const label = document.createElement('span');
       label.textContent = `Cupons de ${main.marketplace}:`;
@@ -647,8 +696,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const chip = document.createElement('button');
         chip.type = 'button';
         chip.className = 'coupon-suggestion-chip';
-        const discount = c.discountValue ? ` (-R$ ${Number(c.discountValue).toFixed(2)})` : '';
-        chip.textContent = `🎟️ ${c.code}${discount}`;
+        const disc = formatCouponDiscount(c);
+        chip.textContent = `🎟️ ${c.code}${disc ? ` (${disc})` : ''}${c.status === 'VALID' ? ' ✓' : ''}`;
         chip.title = c.description || '';
         chip.addEventListener('click', () => {
           groupCouponInput.value = c.code;
@@ -750,6 +799,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           ...(detected.originalPrice ? { originalPrice: detected.originalPrice } : {}),
           ...(detected.discountPct ? { discountPct: detected.discountPct } : {}),
           ...(coupon ? { couponCode: coupon } : {}),
+          ...(groupCouponValue() ? { couponValue: groupCouponValue() } : {}),
           ...(target.kind === 'rule' ? { automationRuleId: target.id } : {}),
           ...(target.kind === 'batch' ? { batchId: target.id } : {}),
         }),
@@ -810,6 +860,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         tagCoupon.classList.add('hidden');
       }
       if (!currentParsedResult) return;
+      syncGroupCouponPrice(true);
       if (groupAutoRewrite?.checked) void refreshGroupPreview();
     });
   }
@@ -872,6 +923,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               .toUpperCase(),
           }
         : {}),
+      ...(groupCouponValue() ? { couponValue: groupCouponValue() } : {}),
       customText: finalText,
       ...(target.kind === 'rule' ? { automationRuleId: target.id } : {}),
       ...(target.kind === 'batch' ? { batchId: target.id } : {}),
@@ -1144,11 +1196,98 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderProductPreview(currentProduct);
   }
 
+  // ---- Preço com cupom: só estima quando o cupom cadastrado traz tipo e valor ----
+  function round2(n) {
+    return Math.round(n * 100) / 100;
+  }
+
+  function formatBrInput(n) {
+    return n.toFixed(2).replace('.', ',');
+  }
+
+  function parseBrNumber(raw) {
+    const t = String(raw || '').trim().replace(/[^\d,.]/g, '');
+    if (!t) return null;
+    const norm = t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t;
+    const n = Number(norm);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  function findCouponByCode(list, code) {
+    const c = String(code || '').trim().toUpperCase();
+    if (!c) return null;
+    return (list || []).find((x) => String(x.code).toUpperCase() === c) || null;
+  }
+
+  // Sem tipo/valor, ou abaixo do gasto mínimo: não chuta (preço errado é pior que nenhum).
+  // Não conhece teto de desconto, por isso o resultado é sempre apresentado como "estimado".
+  function estimateCouponPrice(price, coupon) {
+    if (!price || !coupon || !coupon.discountValue) return null;
+    if (coupon.minSpend && price < coupon.minSpend) return null;
+    let final = null;
+    if (coupon.discountType === 'PERCENT') final = price * (1 - coupon.discountValue / 100);
+    else if (coupon.discountType === 'FIXED') final = price - coupon.discountValue;
+    if (final === null || !(final > 0) || final >= price) return null;
+    return round2(final);
+  }
+
+  function formatCouponDiscount(c) {
+    if (c.discountType === 'PERCENT' && c.discountValue) return `-${c.discountValue}%`;
+    if (c.discountType === 'FIXED' && c.discountValue) return `-R$ ${Number(c.discountValue).toFixed(2)}`;
+    if (c.discountType === 'FREE_SHIPPING') return 'frete grátis';
+    return '';
+  }
+
+  const pCouponPriceBox = document.getElementById('p-coupon-price-box');
+  const pCouponPriceInput = document.getElementById('p-coupon-price');
+  const pCouponPriceHint = document.getElementById('p-coupon-price-hint');
+
+  // prefill: recalcula a sugestão (cupom mudou); sem prefill só reflete o que foi digitado.
+  function syncCouponPriceField(prefill) {
+    if (!pCouponPriceBox || !currentProduct) return;
+    const price = currentProduct.price;
+    if (!currentProduct.couponCode || !(price > 0)) {
+      pCouponPriceBox.classList.add('hidden');
+      currentProduct.couponValue = null;
+      return;
+    }
+    pCouponPriceBox.classList.remove('hidden');
+
+    if (prefill) {
+      const est = estimateCouponPrice(price, findCouponByCode(activeStoreCoupons, currentProduct.couponCode));
+      if (est) {
+        pCouponPriceInput.value = formatBrInput(est);
+        pCouponPriceHint.textContent =
+          'Estimado pelo cupom cadastrado (sem considerar teto). Confira o valor final no carrinho e corrija se precisar.';
+      } else {
+        pCouponPriceInput.value = '';
+        pCouponPriceHint.textContent =
+          'Opcional: informe o preço final com o cupom para ele aparecer na mensagem.';
+      }
+    }
+
+    const typed = parseBrNumber(pCouponPriceInput.value);
+    if (typed && typed < price) {
+      currentProduct.couponValue = round2(price - typed);
+    } else {
+      currentProduct.couponValue = null;
+      if (pCouponPriceInput.value.trim()) {
+        pCouponPriceHint.textContent = 'Valor inválido: precisa ser menor que o preço do produto.';
+      }
+    }
+  }
+
+  pCouponPriceInput?.addEventListener('input', () => {
+    syncCouponPriceField(false);
+    renderProductPreview(currentProduct);
+  });
+
   async function loadCouponsForCurrentProduct(marketplaceKind, awinPartner, hostname) {
     if (!config.apiToken) return;
     activeStoreCoupons = [];
 
     let queryParams = `store=${encodeURIComponent(marketplaceKind)}`;
+    if (currentProduct?.price > 0) queryParams += `&price=${encodeURIComponent(currentProduct.price)}`;
     if (marketplaceKind === 'AWIN') {
       const advId = awinPartner?.advertiserId;
       if (advId) queryParams += `&advertiserId=${encodeURIComponent(advId)}`;
@@ -1166,20 +1305,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         const data = await res.json();
         const list = Array.isArray(data) ? data : data?.coupons || [];
         if (list.length > 0) {
+          // Nenhum cupom é aplicado sozinho: o usuário escolhe na lista (ou digita o próprio).
           activeStoreCoupons = list;
-
-          // Se o produto não tinha cupom ainda, aplica o primeiro automaticamente
-          if (!currentProduct.couponCode && !ownCouponActive) {
-            currentProduct.couponCode = activeStoreCoupons[0].code;
-            if (activeStoreCoupons[0].discountValue) {
-              currentProduct.couponValue = activeStoreCoupons[0].discountValue;
-            }
-          }
         }
       }
     } catch {}
 
     renderCouponSection();
+    syncCouponPriceField(true);
   }
 
   function renderCouponSection() {
@@ -1199,15 +1332,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       (c) => c.code.toUpperCase() === (currentCode || '').toUpperCase(),
     );
 
+    pCouponSection.classList.remove('hidden');
     if (currentCode) {
-      pCouponSection.classList.remove('hidden');
       pCouponBadge.textContent = currentCode;
       pCouponDesc.textContent =
         matched?.description ||
         matched?.terms ||
-        (currentProduct.couponValue
-          ? `Desconto de R$ ${currentProduct.couponValue.toFixed(2)}`
-          : 'Cupom aplicado à mensagem');
+        (matched && formatCouponDiscount(matched)) ||
+        'Cupom aplicado à mensagem';
     } else {
       pCouponBadge.textContent = 'Nenhum';
       pCouponDesc.textContent = 'Nenhum cupom selecionado';
@@ -1223,11 +1355,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       for (const c of activeStoreCoupons) {
         const opt = document.createElement('option');
         opt.value = c.code;
-        const discountLabel = c.discountValue ? ` (-R$ ${c.discountValue.toFixed(2)})` : '';
+        const disc = formatCouponDiscount(c);
+        const discountLabel = disc ? ` (${disc})` : '';
+        const verified = c.status === 'VALID' ? ' ✓' : ' · não verificado';
         const titleText = c.description || c.advertiserName || '';
-        opt.textContent = `🎟️ ${c.code}${discountLabel}${titleText ? ` — ${titleText}` : ''}`.slice(
+        opt.textContent = `🎟️ ${c.code}${discountLabel}${verified}${titleText ? ` — ${titleText}` : ''}`.slice(
           0,
-          48,
+          64,
         );
         if (currentCode && c.code.toUpperCase() === currentCode.toUpperCase()) {
           opt.selected = true;
@@ -1242,15 +1376,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   pCouponSelect?.addEventListener('change', () => {
     const val = pCouponSelect.value;
-    if (val) {
-      const found = activeStoreCoupons.find((c) => c.code === val);
-      currentProduct.couponCode = val;
-      currentProduct.couponValue = found?.discountValue ?? null;
-    } else {
-      currentProduct.couponCode = null;
-      currentProduct.couponValue = null;
-    }
+    // couponValue é o desconto em R$ deste produto (vem do campo "Preço com o cupom"), nunca o
+    // discountValue cru do cupom (que pode ser porcentagem).
+    currentProduct.couponCode = val || null;
+    currentProduct.couponValue = null;
     renderCouponSection();
+    syncCouponPriceField(true);
     renderProductPreview(currentProduct);
   });
 
@@ -1259,6 +1390,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const code = (ownCouponInput?.value || '').trim().toUpperCase();
     currentProduct.couponCode = code || null;
     currentProduct.couponValue = null;
+    syncCouponPriceField(true);
     renderProductPreview(currentProduct);
   }
 
@@ -1277,6 +1409,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       currentProduct.couponCode = couponBeforeOwn.code;
       currentProduct.couponValue = couponBeforeOwn.value;
       ownCouponInput.value = '';
+      syncCouponPriceField(true);
       renderProductPreview(currentProduct);
     }
     renderCouponSection();
@@ -1288,6 +1421,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     currentProduct.couponCode = null;
     currentProduct.couponValue = null;
     pCouponSection.classList.add('hidden');
+    syncCouponPriceField(true);
     renderProductPreview(currentProduct);
   });
 
@@ -1334,6 +1468,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (p.shipping === 'FULL') extras.push('⚡ FULL');
     else if (p.shipping === 'FREE') extras.push('🚚 Frete Grátis');
     if (p.couponCode) extras.push(`🎟️ ${p.couponCode}`);
+    if (p.couponCode && p.couponValue && p.price > p.couponValue) {
+      extras.push(`💸 R$ ${(p.price - p.couponValue).toFixed(2).replace('.', ',')} com cupom`);
+    }
     extraEl.textContent = extras.join(' • ');
   }
 
@@ -1352,6 +1489,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       ...(product.shipping && product.shipping !== 'UNKNOWN' ? { shipping: product.shipping } : {}),
       ...(product.couponCode ? { couponCode: product.couponCode } : {}),
       ...(product.couponValue ? { couponValue: product.couponValue } : {}),
+      ...(product === currentProduct && ownCouponActive && product.couponCode
+        ? { couponIsOwn: true }
+        : {}),
       ...(target.kind === 'rule' ? { automationRuleId: target.id } : {}),
       ...(target.kind === 'batch'
         ? { batchId: target.id, ...(batchPosition ? { batchPosition } : {}) }

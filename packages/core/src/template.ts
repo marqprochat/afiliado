@@ -23,6 +23,11 @@ function buildVars(p: ProductData, ctx: TemplateContext): Record<string, string>
     vendas: p.salesCount !== undefined ? String(p.salesCount) : '',
     link: ctx.affiliateLink,
     cupom: p.couponCode ?? '',
+    // Só existe quando o desconto do cupom é um valor em R$ confirmado (couponValue), nunca estimado aqui.
+    preco_com_cupom:
+      p.couponValue && p.couponValue > 0 && p.couponValue < p.price
+        ? formatBRL(Math.round((p.price - p.couponValue) * 100) / 100)
+        : '',
     oferta_relampago: flashSaleLabel(p.flashSaleEndsAt, ctx.now),
     frete: p.shipping === 'FREE' ? 'Frete grátis' : p.shipping === 'FULL' ? 'Envio FULL' : '',
     frete_gratis: p.shipping === 'FREE' ? '🚚 FRETE GRÁTIS' : '',
